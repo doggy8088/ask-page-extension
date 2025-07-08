@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "頁問",
+  "version": "0.1.0",
+  "description": "使用 Gemini API 詢問關於目前頁面的問題",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*/*",
+    "https://generativelanguage.googleapis.com/"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*/*"],
+      "js": [
+        "lib/marked.min.js",
+        "lib/purify.min.js",
+        "content.js"
+      ],
+      "css": ["style.css"]
+    }
+  ],
+  "commands": {
+    "toggle-dialog": {
+      "suggested_key": {
+        "default": "Ctrl+I",
+        "mac": "MacCtrl+I"
+      },
+      "description": "Open AskPage dialog"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "lib/marked.min.js",
+        "lib/purify.min.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

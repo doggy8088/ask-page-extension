@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AskPage Settings</title>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 16px;
+      font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif;
+      color: #1f1f1f;
+    }
+    #settings-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    label {
+      font-size: 14px;
+    }
+    input {
+      padding: 8px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      border: none;
+      background: #1a73e8;
+      color: #ffffff;
+      align-self: flex-end;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+      background: #1565c0;
+    }
+    #status {
+      font-size: 12px;
+      min-height: 16px;
+      color: #008000;
+    }
+  </style>
+</head>
+<body>
+  <div id="settings-container">
+    <h3>AskPage Settings</h3>
+    <label for="apiKey">Gemini API Key</label>
+    <input id="apiKey" type="password">
+    <button id="save">Save</button>
+    <div id="status"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

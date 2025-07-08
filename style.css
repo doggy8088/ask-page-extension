@@ -1,0 +1,210 @@
+/* --------------------------------------------------
+    Q&A 對話框樣式
+-------------------------------------------------- */
+#gemini-qna-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647;
+}
+
+/* 明亮主題作為預設 (Light Theme as Default) */
+#gemini-qna-dialog {
+  width: min(700px, 92%);
+  max-height: 85vh;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+}
+#gemini-qna-messages {
+  flex: 1 1 auto;
+  padding: 20px;
+  overflow-y: auto;
+  background: #f5f5f5;
+  color: #000000;
+  line-height: 1.6;
+  font-size: 15px;
+  font-weight: 500;
+}
+.gemini-msg-user {
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #1565c0;
+  border-radius: 8px;
+  color: #ffffff;
+  white-space: pre-wrap;
+  border-left: 3px solid #0d47a1;
+}
+.gemini-msg-assistant {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  color: #000000;
+  border-left: 3px solid #4caf50;
+  white-space: normal;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-weight: 500;
+}
+.gemini-msg-assistant ul,
+.gemini-msg-assistant ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+.gemini-msg-assistant li {
+  margin-bottom: 4px;
+  line-height: 1.5;
+  color: #000000;
+  font-weight: 500;
+}
+.gemini-msg-assistant h1,
+.gemini-msg-assistant h2,
+.gemini-msg-assistant h3,
+.gemini-msg-assistant h4,
+.gemini-msg-assistant h5,
+.gemini-msg-assistant h6 {
+  margin: 12px 0 8px 0;
+  color: #1565c0;
+  font-weight: 700;
+}
+.gemini-msg-assistant p {
+  margin: 8px 0;
+  color: #000000;
+  font-weight: 500;
+}
+.gemini-msg-assistant pre {
+  background: #1e1e1e;
+  color: #ffffff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  overflow: auto;
+  margin: 12px 0;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  border: 1px solid #333333;
+  font-weight: 500;
+}
+.gemini-msg-assistant code {
+  background: #f0f0f0;
+  color: #d32f2f;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #cccccc;
+}
+.gemini-msg-assistant pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  border: none;
+}
+.gemini-msg-assistant strong,
+.gemini-msg-assistant b {
+  color: #000000;
+  font-weight: 700;
+}
+#gemini-qna-input-area {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-top: 1px solid #ddd;
+  gap: 8px;
+  background: #ffffff;
+}
+#gemini-qna-input {
+  flex: 1 1 auto;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #000000;
+}
+#gemini-qna-input::placeholder {
+  color: #666666;
+}
+#gemini-qna-btn {
+  padding: 8px 14px;
+  font-size: 14px;
+  border: none;
+  background: #1a73e8;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* 只有在暗色主題偏好時才覆蓋樣式 (Dark Theme Override Only) */
+@media (prefers-color-scheme: dark) {
+  #gemini-qna-dialog {
+    background: #1f1f1f;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+  #gemini-qna-messages {
+    background: #141414;
+    color: #ffffff;
+  }
+  .gemini-msg-user {
+    background: #2196f3;
+    border-left: 3px solid #1976d2;
+    color: #ffffff;
+  }
+  .gemini-msg-assistant {
+    background: #2a2a2a;
+    border: 1px solid #404040;
+    color: #ffffff;
+    border-left: 3px solid #4caf50;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+  .gemini-msg-assistant li {
+    color: #ffffff;
+  }
+  .gemini-msg-assistant h1,
+  .gemini-msg-assistant h2,
+  .gemini-msg-assistant h3,
+  .gemini-msg-assistant h4,
+  .gemini-msg-assistant h5,
+  .gemini-msg-assistant h6 {
+    color: #64b5f6;
+  }
+  .gemini-msg-assistant p {
+    color: #ffffff;
+  }
+  .gemini-msg-assistant pre {
+    background: #0d1117;
+    color: #f0f6fc;
+    border: 1px solid #30363d;
+  }
+  .gemini-msg-assistant code {
+    background: #21262d;
+    color: #ff6b6b;
+    border: 1px solid #30363d;
+  }
+  .gemini-msg-assistant strong,
+  .gemini-msg-assistant b {
+    color: #ffffff;
+  }
+  #gemini-qna-input-area {
+    background: #1f1f1f;
+    border-top: 1px solid #404040;
+  }
+  #gemini-qna-input {
+    background: #2a2a2a;
+    border: 1px solid #404040;
+    color: #ffffff;
+  }
+  #gemini-qna-input::placeholder {
+    color: #888888;
+  }
+}
