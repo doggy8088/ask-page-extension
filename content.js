@@ -310,14 +310,14 @@ async function createDialog() {
         let systemPrompt;
 
         if (capturedSelectedText) {
-            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for background understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. Answer only in zh-tw.';
+            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for background understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
             contextParts.push(
                 { text: `Full page content for context:\n${fullPageText}` },
                 { text: `Selected text (main focus):\n${capturedSelectedText.slice(0, 5000)}` },
                 { text: question }
             );
         } else {
-            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. Answer only in zh-tw.';
+            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
             contextParts.push(
                 { text: `Page content:\n${fullPageText}` },
                 { text: question }
