@@ -2,25 +2,11 @@
 
 所有重要變更都會記錄在此檔案中。
 
-格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
-並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
+格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
-## [未發布]
+## [0.1.0] - 2025-07-09
 
-### 新增
-- 建立完整的 CI/CD 自動化流程
-- GitHub Actions 工作流程設定
-- 自動化發布到 Chrome Web Store
-- 程式碼品質檢查自動化
-- ESLint 程式碼風格檢查
-- Web Extension 驗證
-
-### 改進
-- 新增詳細的文件說明
-- 建立 PUBLISH.md 發布指南
-- 完善 README.md 使用說明
-
-## [0.1.0] - 2025-01-XX
+Initial release
 
 ### 新增
 - 基本的 Chrome 擴充功能架構
@@ -33,6 +19,17 @@
 - Markdown 渲染支援
 - HTML 內容清理 (DOMPurify)
 - API Key 設定介面
+- 建立完整的 CI/CD 自動化流程
+- GitHub Actions 工作流程設定
+- 自動化發布到 Chrome Web Store
+- 程式碼品質檢查自動化
+- ESLint 程式碼風格檢查
+- Web Extension 驗證
+
+### 改進
+- 新增詳細的文件說明
+- 建立 PUBLISH.md 發布指南
+- 完善 README.md 使用說明
 
 ### 技術規格
 - Manifest V3 架構

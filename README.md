@@ -120,8 +120,7 @@ MIT License - 詳見 [LICENSE](LICENSE) 檔案
 ## 📞 支援
 
 如有問題或建議，請：
-- 開啟 [GitHub Issue](https://github.com/你的用戶名/ask-page-extension/issues)
-- 發送郵件至: 你的郵箱@example.com
+- 開啟 [GitHub Issue](https://github.com/doggy8088/ask-page-extension/issues)
 
 ## 🔄 更新日誌
 
