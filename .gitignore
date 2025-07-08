@@ -49,7 +49,6 @@ secrets.json
 api-keys.json
 
 # 套件管理檔案
-package-lock.json
 yarn.lock
 
 # Chrome 擴充功能相關
