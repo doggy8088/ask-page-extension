@@ -264,6 +264,29 @@ async function createDialog() {
         div.className = role === 'user' ? 'gemini-msg-user' : 'gemini-msg-assistant';
         if (role === 'assistant') {
             div.innerHTML = renderMarkdown(text);
+
+            // 新增複製按鈕到助理訊息
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-btn';
+            copyBtn.innerHTML = '📋';
+            copyBtn.title = '複製到剪貼簿';
+            copyBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                try {
+                    await navigator.clipboard.writeText(text);
+                    copyBtn.innerHTML = '✅';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = '📋';
+                    }, 1000);
+                } catch (err) {
+                    console.error('複製失敗:', err);
+                    copyBtn.innerHTML = '❌';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = '📋';
+                    }, 1000);
+                }
+            });
+            div.appendChild(copyBtn);
         } else {
             div.textContent = '你: ' + text;
         }
