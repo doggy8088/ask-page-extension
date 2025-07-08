@@ -1,0 +1,139 @@
+name: 手動套件建構
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本號 (例如: v1.0.0)'
+        required: true
+        type: string
+      create_release:
+        description: '是否建立 GitHub Release'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 檢出程式碼
+      uses: actions/checkout@v4
+
+    - name: 設定版本號
+      id: version
+      run: |
+        VERSION="${{ github.event.inputs.version }}"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "version_number=${VERSION#v}" >> $GITHUB_OUTPUT
+
+    - name: 更新 manifest.json 版本
+      run: |
+        VERSION_NUMBER="${{ steps.version.outputs.version_number }}"
+        jq --arg version "$VERSION_NUMBER" '.version = $version' manifest.json > manifest_tmp.json
+        mv manifest_tmp.json manifest.json
+        echo "已更新版本號到: $VERSION_NUMBER"
+
+    - name: 檢查檔案完整性
+      run: |
+        echo "檢查檔案完整性..."
+
+        # 檢查基本檔案
+        FILES=("manifest.json" "background.js" "content.js" "popup.html" "popup.js" "style.css")
+        for file in "${FILES[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "❌ 缺少檔案: $file"
+            exit 1
+          fi
+        done
+
+        # 檢查圖示檔案
+        ICONS=("icons/icon16.png" "icons/icon48.png" "icons/icon128.png")
+        for icon in "${ICONS[@]}"; do
+          if [ ! -f "$icon" ]; then
+            echo "❌ 缺少圖示檔案: $icon"
+            exit 1
+          fi
+        done
+
+        # 檢查函式庫檔案
+        LIBS=("lib/marked.min.js" "lib/purify.min.js")
+        for lib in "${LIBS[@]}"; do
+          if [ ! -f "$lib" ]; then
+            echo "❌ 缺少函式庫檔案: $lib"
+            exit 1
+          fi
+        done
+
+        echo "✅ 所有檔案檢查通過"
+
+    - name: 建立套件
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        PACKAGE_NAME="AskPageExtension_${VERSION}.zip"
+
+        # 建立 ZIP 套件
+        zip -r "$PACKAGE_NAME" \
+          manifest.json \
+          background.js \
+          content.js \
+          popup.html \
+          popup.js \
+          style.css \
+          icons/ \
+          lib/ \
+          -x "*.git*" "*.DS_Store*" "*node_modules*"
+
+        # 檢查套件大小
+        SIZE=$(du -k "$PACKAGE_NAME" | cut -f1)
+        echo "套件大小: ${SIZE}KB"
+
+        if [ $SIZE -gt 20480 ]; then  # 20MB
+          echo "⚠️ 警告: 套件大小較大 (${SIZE}KB)"
+        fi
+
+        echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+
+        # 顯示套件內容
+        echo "套件內容:"
+        unzip -l "$PACKAGE_NAME"
+
+    - name: 上傳套件到 Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: extension-package-${{ steps.version.outputs.version }}
+        path: ${{ env.PACKAGE_NAME }}
+
+    - name: 建立 GitHub Release
+      if: ${{ github.event.inputs.create_release == 'true' }}
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: 頁問 ${{ steps.version.outputs.version }}
+        files: ${{ env.PACKAGE_NAME }}
+        generate_release_notes: true
+        draft: true
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 建構總結
+      run: |
+        echo "## 套件建構完成 ✅" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 套件資訊:" >> $GITHUB_STEP_SUMMARY
+        echo "- 📦 檔案名稱: \`${{ env.PACKAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- 🏷️ 版本號: \`${{ steps.version.outputs.version_number }}\`" >> $GITHUB_STEP_SUMMARY
+
+        SIZE=$(du -k "${{ env.PACKAGE_NAME }}" | cut -f1)
+        echo "- 📏 檔案大小: ${SIZE}KB" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ github.event.inputs.create_release }}" = "true" ]; then
+          echo "### 📢 GitHub Release" >> $GITHUB_STEP_SUMMARY
+          echo "已建立草稿 Release，請前往 [Releases](../../releases) 頁面檢查並發布" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### 📥 下載套件" >> $GITHUB_STEP_SUMMARY
+          echo "套件已上傳到 Artifacts，請到 Actions 頁面下載" >> $GITHUB_STEP_SUMMARY
+        fi

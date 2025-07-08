@@ -4,8 +4,8 @@
 let isDialogVisible = false;
 
 // Listen for the message from the background script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "toggle-dialog") {
+chrome.runtime.onMessage.addListener((request) => {
+    if (request.action === 'toggle-dialog') {
         if (isDialogVisible) {
             const overlay = document.getElementById('gemini-qna-overlay');
             if (overlay) {
@@ -13,7 +13,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 isDialogVisible = false;
             }
         } else {
-            if (document.getElementById('gemini-qna-overlay')) return;
+            if (document.getElementById('gemini-qna-overlay')) {return;}
             console.log('[AskPage] Received toggle command, creating dialog.');
             createDialog();
             isDialogVisible = true;
@@ -55,7 +55,7 @@ function renderMarkdown(md) {
     建立對話框
 -------------------------------------------------- */
 async function createDialog() {
-    if (document.getElementById('gemini-qna-overlay')) return;
+    if (document.getElementById('gemini-qna-overlay')) {return;}
 
     const initialSelection = window.getSelection();
     const capturedSelectedText = initialSelection.toString().trim();
@@ -79,15 +79,15 @@ async function createDialog() {
 
     const intelliCommands = [
         { cmd: '/clear', desc: '清除提問歷史紀錄' },
-        { cmd: '/summary', desc: '總結本頁內容' },
+        { cmd: '/summary', desc: '總結本頁內容' }
     ];
     const intelliBox = document.createElement('div');
     intelliBox.id = 'gemini-qna-intellisense';
     Object.assign(intelliBox.style, {
         display: 'none', position: 'fixed', left: '0', top: '0', zIndex: '2147483648',
-        background: '#fff', border: '1px solid #ccc', borderRadius: '8px',
+        border: '1px solid #ccc', borderRadius: '8px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)', minWidth: '180px', fontSize: '14px',
-        maxHeight: '180px', overflowY: 'auto', padding: '4px 0', color: '#222',
+        maxHeight: '180px', overflowY: 'auto', padding: '4px 0',
         fontFamily: 'inherit', cursor: 'pointer', userSelect: 'none',
         background: 'var(--gemini-intellisense-bg, #fff)',
         color: 'var(--gemini-intellisense-color, #222)'
@@ -111,7 +111,7 @@ async function createDialog() {
     if (capturedSelectedText) {
         appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n💡 **可用指令:**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面`);
     } else {
-        appendMessage('assistant', `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。\n\n**可用指令:**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面`);
+        appendMessage('assistant', '💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。\n\n**可用指令:**\n- `/clear` - 清除歷史紀錄\n- `/summary` - 總結整個頁面');
     }
 
     function closeDialog() {
@@ -120,8 +120,7 @@ async function createDialog() {
         isDialogVisible = false;
     }
     overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) closeDialog();
-        else if (!intelliBox.contains(e.target) && !input.contains(e.target)) hideIntelliBox();
+        if (e.target === overlay) {closeDialog();} else if (!intelliBox.contains(e.target) && !input.contains(e.target)) {hideIntelliBox();}
     });
     const escapeKeyListener = (e) => {
         if (e.key === 'Escape') {
@@ -137,7 +136,7 @@ async function createDialog() {
     async function handleAsk() {
         hideIntelliBox();
         let question = input.value.trim();
-        if (!question) return;
+        if (!question) {return;}
 
         if (question === '/clear') {
             promptHistory.length = 0;
@@ -154,7 +153,7 @@ async function createDialog() {
         }
 
         promptHistory.push(question);
-        if (promptHistory.length > 100) promptHistory.shift();
+        if (promptHistory.length > 100) {promptHistory.shift();}
         historyIndex = promptHistory.length;
         await setValue(PROMPT_HISTORY_STORAGE, JSON.stringify(promptHistory));
 
@@ -233,8 +232,7 @@ async function createDialog() {
                     hideIntelliBox();
                     handleAsk();
                 }
-            }
-            else if (e.key === 'Escape') {
+            } else if (e.key === 'Escape') {
                 hideIntelliBox();
             }
             return;
@@ -289,14 +287,14 @@ async function createDialog() {
         let systemPrompt;
 
         if (capturedSelectedText) {
-            systemPrompt = `You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for background understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. Answer only in zh-tw.`;
+            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for background understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. Answer only in zh-tw.';
             contextParts.push(
                 { text: `Full page content for context:\n${fullPageText}` },
                 { text: `Selected text (main focus):\n${capturedSelectedText.slice(0, 5000)}` },
                 { text: question }
             );
         } else {
-            systemPrompt = `You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. Answer only in zh-tw.`;
+            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. Answer only in zh-tw.';
             contextParts.push(
                 { text: `Page content:\n${fullPageText}` },
                 { text: question }
@@ -310,7 +308,7 @@ async function createDialog() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ role: 'user', parts: [{ text: systemPrompt }, ...contextParts] }],
-                    generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens: 2048 },
+                    generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens: 2048 }
                 })
             });
 

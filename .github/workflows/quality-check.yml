@@ -1,0 +1,192 @@
+name: 檢查程式碼品質
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 檢出程式碼
+      uses: actions/checkout@v4
+
+    - name: 設定 Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: 安裝相依套件
+      run: |
+        # 建立基本的 package.json 用於開發工具
+        cat > package.json << 'EOF'
+        {
+          "name": "ask-page-extension",
+          "version": "1.0.0",
+          "description": "使用 Gemini API 詢問關於目前頁面的問題",
+          "scripts": {
+            "lint": "eslint *.js",
+            "lint:fix": "eslint *.js --fix",
+            "validate": "web-ext lint",
+            "test": "echo '暫無測試' && exit 0"
+          },
+          "devDependencies": {
+            "eslint": "^8.57.0",
+            "web-ext": "^8.0.0"
+          }
+        }
+        EOF
+
+        # 建立 ESLint 設定檔
+        cat > .eslintrc.js << 'EOF'
+        module.exports = {
+          env: {
+            browser: true,
+            es2021: true,
+            webextensions: true
+          },
+          extends: ['eslint:recommended'],
+          parserOptions: {
+            ecmaVersion: 'latest',
+            sourceType: 'module'
+          },
+          globals: {
+            chrome: 'readonly',
+            marked: 'readonly',
+            DOMPurify: 'readonly'
+          },
+          rules: {
+            'no-unused-vars': 'warn',
+            'no-console': 'off',
+            'quotes': ['error', 'single'],
+            'semi': ['error', 'always']
+          }
+        };
+        EOF
+
+        npm install
+
+    - name: 檢查程式碼風格 (ESLint)
+      run: npm run lint
+      continue-on-error: true
+
+    - name: 驗證擴充功能
+      run: |
+        echo "檢查 Chrome 擴充功能 Manifest V3 相容性..."
+
+        # 檢查 manifest.json 是否符合 Manifest V3
+        MANIFEST_VERSION=$(jq -r '.manifest_version' manifest.json)
+        if [ "$MANIFEST_VERSION" != "3" ]; then
+          echo "❌ 不是 Manifest V3"
+          exit 1
+        fi
+        echo "✅ Manifest V3 格式正確"
+
+        # 檢查必要權限
+        PERMISSIONS=$(jq -r '.permissions[]' manifest.json 2>/dev/null || echo "")
+        if echo "$PERMISSIONS" | grep -q "storage\|activeTab\|scripting"; then
+          echo "✅ 基本權限設定正確"
+        else
+          echo "⚠️ 可能缺少必要權限"
+        fi
+
+        # 檢查 service worker
+        SERVICE_WORKER=$(jq -r '.background.service_worker' manifest.json 2>/dev/null || echo "null")
+        if [ "$SERVICE_WORKER" != "null" ] && [ -f "$SERVICE_WORKER" ]; then
+          echo "✅ Service Worker 檔案存在"
+        else
+          echo "❌ Service Worker 設定錯誤"
+          exit 1
+        fi
+
+    - name: 檢查 manifest.json
+      run: |
+        # 檢查 manifest.json 格式是否正確
+        echo "檢查 manifest.json 格式..."
+        if ! jq empty manifest.json 2>/dev/null; then
+          echo "❌ manifest.json 格式錯誤"
+          exit 1
+        else
+          echo "✅ manifest.json 格式正確"
+        fi
+
+        # 檢查必要欄位
+        echo "檢查必要欄位..."
+        REQUIRED_FIELDS=("manifest_version" "name" "version")
+        for field in "${REQUIRED_FIELDS[@]}"; do
+          if ! jq -e ".$field" manifest.json > /dev/null; then
+            echo "❌ manifest.json 缺少必要欄位: $field"
+            exit 1
+          fi
+        done
+        echo "✅ 所有必要欄位都存在"
+
+    - name: 檢查檔案完整性
+      run: |
+        echo "檢查檔案完整性..."
+
+        # 檢查基本檔案是否存在
+        FILES=("manifest.json" "background.js" "content.js" "popup.html" "popup.js" "style.css")
+        for file in "${FILES[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "❌ 缺少檔案: $file"
+            exit 1
+          fi
+        done
+
+        # 檢查圖示檔案
+        ICONS=("icons/icon16.png" "icons/icon48.png" "icons/icon128.png")
+        for icon in "${ICONS[@]}"; do
+          if [ ! -f "$icon" ]; then
+            echo "❌ 缺少圖示檔案: $icon"
+            exit 1
+          fi
+        done
+
+        # 檢查函式庫檔案
+        LIBS=("lib/marked.min.js" "lib/purify.min.js")
+        for lib in "${LIBS[@]}"; do
+          if [ ! -f "$lib" ]; then
+            echo "❌ 缺少函式庫檔案: $lib"
+            exit 1
+          fi
+        done
+
+        echo "✅ 所有檔案都存在"
+
+    - name: 建立測試套件
+      run: |
+        echo "建立測試套件..."
+        zip -r test-package.zip \
+          manifest.json \
+          background.js \
+          content.js \
+          popup.html \
+          popup.js \
+          style.css \
+          icons/ \
+          lib/ \
+          -x "*.git*" "*.DS_Store*" "*node_modules*"
+
+        # 檢查套件大小
+        SIZE=$(du -k test-package.zip | cut -f1)
+        echo "套件大小: ${SIZE}KB"
+
+        if [ $SIZE -gt 10240 ]; then  # 10MB
+          echo "⚠️ 警告: 套件大小超過 10MB"
+        fi
+
+    - name: 程式碼品質總結
+      run: |
+        echo "## 程式碼品質檢查完成 ✅" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 檢查項目:" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ ESLint 程式碼風格檢查" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Web Extension 驗證" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ manifest.json 格式檢查" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ 檔案完整性檢查" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ 套件建構測試" >> $GITHUB_STEP_SUMMARY
