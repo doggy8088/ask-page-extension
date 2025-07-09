@@ -9,6 +9,15 @@
 Initial release
 
 ### 新增
+
+- 在設定頁面加入 Gemini 模型選擇下拉選單
+- 支援動態切換 Gemini AI 模型
+- 可選擇的模型包括：
+  - gemini-2.5-pro
+  - gemini-2.5-flash
+  - gemini-2.5-flash-lite-preview-06-17
+- 模型選擇會自動儲存並套用至後續的 AI 請求
+- 預設使用 gemini-2.5-flash-lite-preview-06-17 模型
 - 基本的 Chrome 擴充功能架構
 - Gemini API 整合
 - 對話框介面設計

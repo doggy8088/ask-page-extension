@@ -26,6 +26,7 @@ chrome.runtime.onMessage.addListener((request) => {
     Chrome Extension Replacements for GM functions
 -------------------------------------------------- */
 const API_KEY_STORAGE = 'GEMINI_API_KEY';
+const MODEL_STORAGE = 'GEMINI_MODEL';
 const PROMPT_HISTORY_STORAGE = 'ASKPAGE_PROMPT_HISTORY';
 
 async function getValue(key, defaultValue) {
@@ -296,6 +297,8 @@ async function createDialog() {
 
     async function askGemini(question, capturedSelectedText = '') {
         const apiKey = await getValue(API_KEY_STORAGE, '');
+        const selectedModel = await getValue(MODEL_STORAGE, 'gemini-2.5-flash-lite-preview-06-17');
+
         if (!apiKey) {
             appendMessage('assistant', '請點擊擴充功能圖示設定您的 Gemini API Key。');
             return;
@@ -326,7 +329,7 @@ async function createDialog() {
 
         let responseData;
         try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent?key=${apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

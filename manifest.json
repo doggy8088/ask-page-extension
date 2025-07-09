@@ -1,16 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "頁問",
+  "name": "頁問 AskPage",
   "version": "0.1.0",
   "description": "使用 Gemini API 詢問關於目前頁面的問題",
   "permissions": [
     "storage",
     "activeTab",
     "scripting"
-  ],
-  "host_permissions": [
-    "*://*/*",
-    "https://generativelanguage.googleapis.com/"
   ],
   "action": {
     "default_popup": "popup.html",
