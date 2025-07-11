@@ -5,8 +5,7 @@
   "description": "使用 Gemini API 詢問關於目前頁面的問題",
   "permissions": [
     "storage",
-    "activeTab",
-    "scripting"
+    "activeTab"
   ],
   "action": {
     "default_popup": "popup.html",
