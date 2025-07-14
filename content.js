@@ -1,15 +1,26 @@
 'use strict';
 
+// Log content script loading
+console.log('[AskPage] ===== CONTENT SCRIPT LOADED =====');
+console.log('[AskPage] Content script loaded at:', new Date().toISOString());
+console.log('[AskPage] URL:', window.location.href);
+console.log('[AskPage] Document ready state:', document.readyState);
+
 // Global state to prevent multiple dialogs
 let isDialogVisible = false;
 
 // Listen for the message from the background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('[AskPage] ===== CONTENT SCRIPT MESSAGE RECEIVED =====');
     console.log('[AskPage] Content script received message:', request);
-    
+    console.log('[AskPage] From sender:', sender);
+    console.log('[AskPage] Current URL:', window.location.href);
+    console.log('[AskPage] Document ready state:', document.readyState);
+    console.log('[AskPage] Current dialog state:', isDialogVisible);
+
     if (request.action === 'toggle-dialog') {
         console.log('[AskPage] Processing toggle-dialog command');
-        
+
         if (isDialogVisible) {
             console.log('[AskPage] Dialog is visible, removing it');
             const overlay = document.getElementById('gemini-qna-overlay');
@@ -17,21 +28,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 overlay.remove();
                 isDialogVisible = false;
                 console.log('[AskPage] Dialog removed successfully');
+            } else {
+                console.warn('[AskPage] Dialog state mismatch: isDialogVisible=true but overlay not found');
+                isDialogVisible = false;
             }
         } else {
             console.log('[AskPage] Dialog is not visible, creating it');
-            if (document.getElementById('gemini-qna-overlay')) {
+            const existingOverlay = document.getElementById('gemini-qna-overlay');
+            if (existingOverlay) {
                 console.log('[AskPage] Dialog already exists, skipping creation');
                 return;
             }
             console.log('[AskPage] Received toggle command, creating dialog.');
-            createDialog();
-            isDialogVisible = true;
-            console.log('[AskPage] Dialog created successfully');
+            try {
+                createDialog();
+                isDialogVisible = true;
+                console.log('[AskPage] Dialog created successfully');
+            } catch (error) {
+                console.error('[AskPage] Error creating dialog:', error);
+                sendResponse({ success: false, error: error.message });
+                return;
+            }
         }
-        
+
         // Send response back to background script
-        sendResponse({ success: true, dialogVisible: isDialogVisible });
+        const response = { success: true, dialogVisible: isDialogVisible };
+        console.log('[AskPage] Sending response:', response);
+        sendResponse(response);
+    } else {
+        console.warn('[AskPage] Unknown action received:', request.action);
+        sendResponse({ success: false, error: 'Unknown action' });
     }
 });
 
