@@ -79,6 +79,68 @@ function setValue(key, value) {
 }
 
 /* --------------------------------------------------
+    截圖功能
+-------------------------------------------------- */
+async function captureViewportScreenshot() {
+    console.log('[AskPage] ===== SCREENSHOT CAPTURE STARTED =====');
+    console.log('[AskPage] Starting viewport screenshot capture');
+
+    // 暫時隱藏對話框以避免在截圖中出現
+    const overlay = document.getElementById('gemini-qna-overlay');
+    let wasVisible = false;
+    if (overlay) {
+        wasVisible = overlay.style.display !== 'none';
+        if (wasVisible) {
+            console.log('[AskPage] Temporarily hiding dialog for clean screenshot');
+            overlay.style.display = 'none';
+        }
+    }
+
+    try {
+        // 給瀏覽器一點時間來隱藏對話框
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // 使用 chrome.tabs API 捕獲當前標籤頁的截圖
+        const canvas = await new Promise((resolve, reject) => {
+            console.log('[AskPage] Sending screenshot request to background script');
+            chrome.runtime.sendMessage({ action: 'capture-screenshot' }, (response) => {
+                console.log('[AskPage] Received response from background script:', response);
+
+                if (chrome.runtime.lastError) {
+                    console.error('[AskPage] Chrome runtime error:', chrome.runtime.lastError);
+                    reject(chrome.runtime.lastError);
+                    return;
+                }
+                if (response && response.success) {
+                    console.log('[AskPage] Screenshot capture successful');
+                    console.log('[AskPage] Screenshot data URL length:', response.dataUrl ? response.dataUrl.length : 0);
+                    console.log('[AskPage] Screenshot data URL prefix:', response.dataUrl ? response.dataUrl.substring(0, 50) + '...' : 'N/A');
+                    resolve(response.dataUrl);
+                } else {
+                    console.error('[AskPage] Screenshot capture failed, response:', response);
+                    reject(new Error(response?.error || 'Screenshot capture failed'));
+                }
+            });
+        });
+
+        console.log('[AskPage] Screenshot capture completed successfully');
+        return canvas;
+    } catch (error) {
+        console.error('[AskPage] ===== SCREENSHOT CAPTURE FAILED =====');
+        console.error('[AskPage] 截圖失敗:', error);
+        console.error('[AskPage] Error details:', error.message);
+        console.error('[AskPage] Error stack:', error.stack);
+        return null;
+    } finally {
+        // 恢復對話框顯示
+        if (overlay && wasVisible) {
+            console.log('[AskPage] Restoring dialog visibility after screenshot');
+            overlay.style.display = '';
+        }
+    }
+}
+
+/* --------------------------------------------------
     工具函式
 -------------------------------------------------- */
 function renderMarkdown(md) {
@@ -120,7 +182,8 @@ async function createDialog() {
 
     const intelliCommands = [
         { cmd: '/clear', desc: '清除提問歷史紀錄' },
-        { cmd: '/summary', desc: '總結本頁內容' }
+        { cmd: '/summary', desc: '總結本頁內容' },
+        { cmd: '/screenshot', desc: '測試截圖功能' }
     ];
     const intelliBox = document.createElement('div');
     intelliBox.id = 'gemini-qna-intellisense';
@@ -150,9 +213,9 @@ async function createDialog() {
     input.focus();
 
     if (capturedSelectedText) {
-        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n💡 **可用指令:**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面`);
+        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n📸 **視覺分析:** 系統會自動捕獲當前視窗截圖，提供更完整的頁面分析。\n\n💡 **可用指令:**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 測試截圖功能`);
     } else {
-        appendMessage('assistant', '💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。\n\n**可用指令:**\n- `/clear` - 清除歷史紀錄\n- `/summary` - 總結整個頁面');
+        appendMessage('assistant', '💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。\n\n📸 **視覺分析:** 系統會自動捕獲當前視窗截圖，提供更完整的頁面分析。\n\n**可用指令:**\n- `/clear` - 清除歷史紀錄\n- `/summary` - 總結整個頁面\n- `/screenshot` - 測試截圖功能');
     }
 
     function closeDialog() {
@@ -191,6 +254,40 @@ async function createDialog() {
 
         if (question === '/summary') {
             question = '請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」';
+        }
+
+        if (question === '/screenshot') {
+            appendMessage('user', question);
+            input.value = '';
+
+            // 測試截圖功能
+            appendMessage('assistant', '🔄 正在測試截圖功能...');
+            const screenshotDataUrl = await captureViewportScreenshot();
+
+            if (screenshotDataUrl) {
+                const imageSize = Math.round(screenshotDataUrl.length / 1024);
+
+                // 建立包含截圖的除錯訊息
+                const debugMessage = `✅ **截圖測試成功!**
+
+📸 **截圖資訊:**
+- 📏 圖片大小: ${imageSize} KB
+- 🔗 格式: PNG (Base64)
+- 📊 資料長度: ${screenshotDataUrl.length} 字元
+- 🎯 Base64 資料長度: ${screenshotDataUrl.split(',')[1]?.length || 0} 字元
+
+**捕獲的截圖預覽:**`;
+
+                appendMessage('assistant', debugMessage);
+
+                // 顯示截圖
+                appendScreenshotMessage(screenshotDataUrl);
+
+                appendMessage('assistant', '您現在可以提問關於頁面內容的問題，系統會自動包含截圖進行分析。');
+            } else {
+                appendMessage('assistant', '❌ **截圖測試失敗**\n\n截圖功能目前無法正常運作。請檢查瀏覽器權限設定。');
+            }
+            return;
         }
 
         promptHistory.push(question);
@@ -335,9 +432,107 @@ async function createDialog() {
         messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    function appendScreenshotMessage(screenshotDataUrl) {
+        const div = document.createElement('div');
+        div.className = 'gemini-msg-assistant';
+
+        // 建立截圖容器
+        const screenshotContainer = document.createElement('div');
+        screenshotContainer.style.cssText = `
+            margin: 10px 0;
+            padding: 10px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            background: #f9f9f9;
+            text-align: center;
+        `;
+
+        // 建立截圖圖片元素
+        const img = document.createElement('img');
+        img.src = screenshotDataUrl;
+        img.style.cssText = `
+            max-width: 100%;
+            max-height: 300px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+        `;
+        img.title = '點擊查看原始大小';
+
+        // 點擊圖片時在新視窗中開啟
+        img.addEventListener('click', () => {
+            const newWindow = window.open();
+            newWindow.document.write(`
+                <html>
+                    <head><title>截圖預覽 - AskPage</title></head>
+                    <body style="margin:0; padding:20px; background:#f0f0f0;">
+                        <div style="text-align:center;">
+                            <h3>截圖預覽</h3>
+                            <img src="${screenshotDataUrl}" style="max-width:100%; box-shadow:0 4px 16px rgba(0,0,0,0.2);">
+                            <p><small>圖片大小: ${Math.round(screenshotDataUrl.length / 1024)} KB</small></p>
+                        </div>
+                    </body>
+                </html>
+            `);
+        });
+
+        screenshotContainer.appendChild(img);
+
+        // 添加截圖資訊
+        const info = document.createElement('div');
+        info.style.cssText = `
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+        `;
+        info.textContent = `📊 尺寸資訊: ${img.naturalWidth || '載入中...'}×${img.naturalHeight || '載入中...'} | 檔案大小: ${Math.round(screenshotDataUrl.length / 1024)} KB`;
+
+        // 當圖片載入完成時更新尺寸資訊
+        img.onload = () => {
+            info.textContent = `📊 尺寸資訊: ${img.naturalWidth}×${img.naturalHeight} | 檔案大小: ${Math.round(screenshotDataUrl.length / 1024)} KB`;
+        };
+
+        screenshotContainer.appendChild(info);
+        div.appendChild(screenshotContainer);
+
+        // 添加複製按鈕
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-btn';
+        copyBtn.innerHTML = '📋';
+        copyBtn.title = '複製截圖 Base64 資料';
+        copyBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            try {
+                await navigator.clipboard.writeText(screenshotDataUrl);
+                copyBtn.innerHTML = '✅';
+                setTimeout(() => {
+                    copyBtn.innerHTML = '📋';
+                }, 1000);
+            } catch (err) {
+                console.error('複製失敗:', err);
+                copyBtn.innerHTML = '❌';
+                setTimeout(() => {
+                    copyBtn.innerHTML = '📋';
+                }, 1000);
+            }
+        });
+        div.appendChild(copyBtn);
+
+        messagesEl.appendChild(div);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
     async function askGemini(question, capturedSelectedText = '') {
+        console.log('[AskPage] ===== GEMINI API CALL STARTED =====');
+        console.log('[AskPage] Question:', question);
+        console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
+
         const apiKey = await getValue(API_KEY_STORAGE, '');
         const selectedModel = await getValue(MODEL_STORAGE, 'gemini-2.5-flash-lite-preview-06-17');
+
+        console.log('[AskPage] Selected model:', selectedModel);
+        console.log('[AskPage] API key available:', apiKey ? 'Yes' : 'No');
 
         if (!apiKey) {
             appendMessage('assistant', '請點擊擴充功能圖示設定您的 Gemini API Key。');
@@ -346,52 +541,133 @@ async function createDialog() {
 
         appendMessage('assistant', '...thinking...');
 
+        // 捕獲當前視窗截圖
+        console.log('[AskPage] Starting screenshot capture for Gemini API');
+        const screenshotDataUrl = await captureViewportScreenshot();
+        console.log('[AskPage] Screenshot capture result:', screenshotDataUrl ? 'Success' : 'Failed');
+
         let container = document.querySelector('main') || document.querySelector('article') || document.body;
         const fullPageText = container.innerText.slice(0, 15000);
+        console.log('[AskPage] Full page text length:', fullPageText.length);
 
         let contextParts = [];
         let systemPrompt;
 
         if (capturedSelectedText) {
-            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for background understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context and a screenshot of the current viewport for comprehensive understanding. Please focus primarily on the selected text while using the full page context and visual information to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
             contextParts.push(
                 { text: `Full page content for context:\n${fullPageText}` },
-                { text: `Selected text (main focus):\n${capturedSelectedText.slice(0, 5000)}` },
-                { text: question }
+                { text: `Selected text (main focus):\n${capturedSelectedText.slice(0, 5000)}` }
             );
+            console.log('[AskPage] Context mode: Selected text + full page + screenshot');
         } else {
-            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. You have both the text content and a screenshot of the current viewport to provide comprehensive answers. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
             contextParts.push(
-                { text: `Page content:\n${fullPageText}` },
-                { text: question }
+                { text: `Page content:\n${fullPageText}` }
             );
+            console.log('[AskPage] Context mode: Full page + screenshot');
         }
+
+        // 如果有截圖，將其加入到上下文中
+        if (screenshotDataUrl) {
+            const base64Data = screenshotDataUrl.split(',')[1]; // 移除 data:image/png;base64, 前綴
+            const screenshotPart = {
+                inline_data: {
+                    mime_type: 'image/png',
+                    data: base64Data
+                }
+            };
+            contextParts.push(screenshotPart);
+
+            console.log('[AskPage] ===== SCREENSHOT DATA ADDED TO CONTEXT =====');
+            console.log('[AskPage] Screenshot included in API request: Yes');
+            console.log('[AskPage] Base64 data length:', base64Data.length);
+            console.log('[AskPage] Base64 data preview:', base64Data.substring(0, 100) + '...');
+            console.log('[AskPage] MIME type:', 'image/png');
+        } else {
+            console.log('[AskPage] ===== NO SCREENSHOT DATA =====');
+            console.log('[AskPage] Screenshot included in API request: No');
+            console.log('[AskPage] Reason: Screenshot capture failed or returned null');
+        }
+
+        // 最後加入問題
+        contextParts.push({ text: question });
+
+        console.log('[AskPage] Total context parts:', contextParts.length);
+        console.log('[AskPage] Context parts breakdown:');
+        contextParts.forEach((part, index) => {
+            if (part.text) {
+                console.log(`[AskPage]   Part ${index + 1}: Text (${part.text.length} chars)`);
+            } else if (part.inline_data) {
+                console.log(`[AskPage]   Part ${index + 1}: Image (${part.inline_data.mime_type}, ${part.inline_data.data.length} chars)`);
+            }
+        });
+
+        const requestBody = {
+            contents: [{ role: 'user', parts: [{ text: systemPrompt }, ...contextParts] }],
+            generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens: 2048 }
+        };
+
+        console.log('[AskPage] ===== PREPARING API REQUEST =====');
+        console.log('[AskPage] Request body structure:', {
+            contents_length: requestBody.contents.length,
+            parts_count: requestBody.contents[0].parts.length,
+            has_image: requestBody.contents[0].parts.some(part => part.inline_data),
+            generation_config: requestBody.generationConfig
+        });
 
         let responseData;
         try {
+            console.log('[AskPage] Sending request to Gemini API...');
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ role: 'user', parts: [{ text: systemPrompt }, ...contextParts] }],
-                    generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens: 2048 }
-                })
+                body: JSON.stringify(requestBody)
             });
+
+            console.log('[AskPage] ===== API RESPONSE RECEIVED =====');
+            console.log('[AskPage] Response status:', response.status);
+            console.log('[AskPage] Response ok:', response.ok);
+            console.log('[AskPage] Response headers:', Object.fromEntries(response.headers.entries()));
 
             if (!response.ok) {
                 const errorBody = await response.text();
+                console.error('[AskPage] API Error response body:', errorBody);
                 throw new Error(`${response.status} ${response.statusText}: ${errorBody}`);
             }
+
             responseData = await response.json();
+            console.log('[AskPage] ===== API RESPONSE PARSED =====');
+            console.log('[AskPage] Response data structure:', {
+                has_candidates: !!responseData.candidates,
+                candidates_count: responseData.candidates?.length || 0,
+                first_candidate_has_content: !!responseData.candidates?.[0]?.content,
+                first_candidate_parts_count: responseData.candidates?.[0]?.content?.parts?.length || 0
+            });
+
+            if (responseData.candidates?.[0]?.content?.parts) {
+                console.log('[AskPage] Response parts details:');
+                responseData.candidates[0].content.parts.forEach((part, index) => {
+                    console.log(`[AskPage]   Part ${index + 1}: ${part.text ? `Text (${part.text.length} chars)` : 'Non-text content'}`);
+                });
+            }
+
         } catch (err) {
+            console.error('[AskPage] ===== API CALL FAILED =====');
             console.error('[AskPage] API 呼叫失敗:', err);
+            console.error('[AskPage] Error message:', err.message);
+            console.error('[AskPage] Error stack:', err.stack);
             messagesEl.lastChild.remove();
             appendMessage('assistant', `錯誤: ${err.message}`);
             return;
         }
 
+        console.log('[AskPage] ===== PROCESSING RESPONSE =====');
         messagesEl.lastChild.remove();
         const answer = responseData.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '未取得回應';
+        console.log('[AskPage] Final answer length:', answer.length);
+        console.log('[AskPage] Answer preview:', answer.substring(0, 200) + (answer.length > 200 ? '...' : ''));
         appendMessage('assistant', answer);
+        console.log('[AskPage] ===== GEMINI API CALL COMPLETED =====');
     }
 }
