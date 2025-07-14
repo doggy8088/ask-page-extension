@@ -68,13 +68,22 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Chrome Web Store 自動發布
-      if: ${{ secrets.CHROME_CLIENT_ID && secrets.CHROME_CLIENT_SECRET && secrets.CHROME_REFRESH_TOKEN && secrets.CHROME_EXTENSION_ID }}
       run: |
+        # 檢查必要的 secrets 是否都已設定
+        if [ -z "${{ secrets.CLIENT_ID }}" ] || \
+           [ -z "${{ secrets.CLIENT_SECRET }}" ] || \
+           [ -z "${{ secrets.REFRESH_TOKEN }}" ] || \
+           [ -z "${{ secrets.EXTENSION_ID }}" ]; then
+          echo "❌ Chrome Web Store API 相關 secrets 未完整設定，跳過自動發布"
+          echo "需要設定以下 secrets: CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, EXTENSION_ID"
+          exit 0
+        fi
+
         # 取得 Chrome Web Store API 存取權杖
         ACCESS_TOKEN=$(curl -s -X POST \
-          -d "client_id=${{ secrets.CHROME_CLIENT_ID }}" \
-          -d "client_secret=${{ secrets.CHROME_CLIENT_SECRET }}" \
-          -d "refresh_token=${{ secrets.CHROME_REFRESH_TOKEN }}" \
+          -d "client_id=${{ secrets.CLIENT_ID }}" \
+          -d "client_secret=${{ secrets.CLIENT_SECRET }}" \
+          -d "refresh_token=${{ secrets.REFRESH_TOKEN }}" \
           -d "grant_type=refresh_token" \
           https://oauth2.googleapis.com/token | jq -r .access_token)
 
@@ -89,7 +98,7 @@ jobs:
           -H "Authorization: Bearer $ACCESS_TOKEN" \
           -H "x-goog-api-version: 2" \
           -T "${{ env.PACKAGE_NAME }}" \
-          "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${{ secrets.CHROME_EXTENSION_ID }}")
+          "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${{ secrets.EXTENSION_ID }}")
 
         echo "上傳回應: $UPLOAD_RESPONSE"
 
@@ -106,7 +115,7 @@ jobs:
           -H "Authorization: Bearer $ACCESS_TOKEN" \
           -H "x-goog-api-version: 2" \
           -H "Content-Length: 0" \
-          "https://www.googleapis.com/chromewebstore/v1.1/items/${{ secrets.CHROME_EXTENSION_ID }}/publish")
+          "https://www.googleapis.com/chromewebstore/v1.1/items/${{ secrets.EXTENSION_ID }}/publish")
 
         echo "發布回應: $PUBLISH_RESPONSE"
 
