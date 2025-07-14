@@ -4,20 +4,34 @@
 let isDialogVisible = false;
 
 // Listen for the message from the background script
-chrome.runtime.onMessage.addListener((request) => {
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('[AskPage] Content script received message:', request);
+    
     if (request.action === 'toggle-dialog') {
+        console.log('[AskPage] Processing toggle-dialog command');
+        
         if (isDialogVisible) {
+            console.log('[AskPage] Dialog is visible, removing it');
             const overlay = document.getElementById('gemini-qna-overlay');
             if (overlay) {
                 overlay.remove();
                 isDialogVisible = false;
+                console.log('[AskPage] Dialog removed successfully');
             }
         } else {
-            if (document.getElementById('gemini-qna-overlay')) {return;}
+            console.log('[AskPage] Dialog is not visible, creating it');
+            if (document.getElementById('gemini-qna-overlay')) {
+                console.log('[AskPage] Dialog already exists, skipping creation');
+                return;
+            }
             console.log('[AskPage] Received toggle command, creating dialog.');
             createDialog();
             isDialogVisible = true;
+            console.log('[AskPage] Dialog created successfully');
         }
+        
+        // Send response back to background script
+        sendResponse({ success: true, dialogVisible: isDialogVisible });
     }
 });
 
