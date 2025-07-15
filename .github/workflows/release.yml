@@ -69,6 +69,12 @@ jobs:
 
     - name: Chrome Web Store 自動發布
       run: |
+        # 檢查 jq 是否可用
+        if ! command -v jq &> /dev/null; then
+          echo "❌ jq 工具未安裝，無法解析 JSON 回應"
+          exit 1
+        fi
+        
         # 檢查必要的 secrets 是否都已設定
         if [ -z "${{ secrets.CLIENT_ID }}" ] || \
            [ -z "${{ secrets.CLIENT_SECRET }}" ] || \
@@ -85,7 +91,7 @@ jobs:
           -d "client_secret=${{ secrets.CLIENT_SECRET }}" \
           -d "refresh_token=${{ secrets.REFRESH_TOKEN }}" \
           -d "grant_type=refresh_token" \
-          https://oauth2.googleapis.com/token | jq -r .access_token)
+          https://oauth2.googleapis.com/token | jq -r '.access_token // empty')
 
         if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
           echo "❌ 無法取得 Chrome Web Store API 存取權杖"
@@ -103,7 +109,7 @@ jobs:
         echo "上傳回應: $UPLOAD_RESPONSE"
 
         # 檢查上傳是否成功
-        UPLOAD_STATE=$(echo "$UPLOAD_RESPONSE" | jq -r .uploadState // "FAILURE")
+        UPLOAD_STATE=$(echo "$UPLOAD_RESPONSE" | jq -r '.uploadState // "FAILURE"')
         if [ "$UPLOAD_STATE" != "SUCCESS" ]; then
           echo "❌ 套件上傳失敗: $UPLOAD_RESPONSE"
           exit 1
@@ -120,7 +126,7 @@ jobs:
         echo "發布回應: $PUBLISH_RESPONSE"
 
         # 檢查發布是否成功
-        STATUS=$(echo "$PUBLISH_RESPONSE" | jq -r .status[0] // "FAILURE")
+        STATUS=$(echo "$PUBLISH_RESPONSE" | jq -r '.status[0] // "FAILURE"')
         if [ "$STATUS" = "OK" ]; then
           echo "✅ 成功發布到 Chrome Web Store！"
         else
