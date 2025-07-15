@@ -102,6 +102,12 @@ npm test
 
 詳細設定請參考 [PUBLISH.md](./PUBLISH.md)
 
+若要重新發佈標籤，可以參考以下 `git` 命令：
+
+```sh
+git tag -d v0.2.0 && git push origin :refs/tags/v0.2.0 && git tag v0.2.0 && git push origin v0.2.0
+```
+
 ## 📄 許可證
 
 MIT License - 詳見 [LICENSE](LICENSE) 檔案
