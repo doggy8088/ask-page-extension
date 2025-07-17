@@ -4,88 +4,255 @@
   <title>頁問: 偏好設定</title>
   <meta charset="UTF-8">
   <style>
-    body {
-      width: 300px;
-      padding: 16px;
-      font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif;
-      color: #1f1f1f;
+    :root {
+      --primary-color: #6366f1;
+      --primary-hover: #5b21b6;
+      --secondary-color: #f8fafc;
+      --border-color: #e2e8f0;
+      --text-primary: #1e293b;
+      --text-secondary: #64748b;
+      --success-color: #10b981;
+      --background: #ffffff;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
     }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary-color: #8b5cf6;
+        --primary-hover: #7c3aed;
+        --secondary-color: #1e293b;
+        --border-color: #334155;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --success-color: #34d399;
+        --background: #0f172a;
+        --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 380px;
+      min-height: 480px;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--background);
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+
     #settings-container {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 20px;
+      padding: 24px;
+      height: 100%;
     }
+
     h3 {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 600;
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      text-align: center;
+      padding-bottom: 16px;
+      border-bottom: 2px solid var(--primary-color);
+      position: relative;
     }
+
+    h3::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 40px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
+      border-radius: 1px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
     label {
       font-size: 14px;
-      line-height: 1.4;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
     }
+
     input, select {
-      padding: 8px;
+      padding: 12px 16px;
       font-size: 14px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      line-height: 1.4;
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--background);
+      color: var(--text-primary);
+      transition: all 0.2s ease;
+      outline: none;
     }
+
+    input:focus, select:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    input:hover, select:hover {
+      border-color: var(--primary-color);
+    }
+
+    #gemini-settings, #openai-settings {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 20px;
+      background: var(--secondary-color);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      transition: box-shadow 0.3s ease;
+    }
+
+    #gemini-settings:hover, #openai-settings:hover {
+      box-shadow: var(--shadow);
+    }
+
     button {
-      padding: 8px 16px;
-      border-radius: 6px;
+      padding: 12px 24px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 14px;
+      font-weight: 600;
       border: none;
-      background: #1a73e8;
-      color: #ffffff;
-      align-self: flex-end;
-      transition: background-color 0.2s;
+      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+      color: white;
+      align-self: center;
+      transition: box-shadow 0.2s ease, background 0.2s ease;
+      box-shadow: var(--shadow);
+      min-width: 120px;
     }
+
     button:hover {
-      background: #1565c0;
+      box-shadow: var(--shadow-lg);
+      background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
     }
+
+    button:active {
+      box-shadow: var(--shadow);
+    }
+
     #status {
-      font-size: 12px;
-      min-height: 16px;
-      color: #008000;
+      font-size: 13px;
+      min-height: 20px;
+      color: var(--success-color);
+      text-align: center;
+      font-weight: 500;
+      padding: 8px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    #status:not(:empty) {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* Animation for settings sections */
+    #gemini-settings, #openai-settings {
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--secondary-color);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-secondary);
     }
   </style>
 </head>
 <body>
   <div id="settings-container">
     <h3>頁問: 偏好設定</h3>
-    <label for="providerSelect">AI 提供者</label>
-    <select id="providerSelect">
-      <option value="gemini">Gemini</option>
-      <option value="openai">OpenAI</option>
-    </select>
+
+    <div class="form-group">
+      <label for="providerSelect">AI 提供者</label>
+      <select id="providerSelect">
+        <option value="gemini">Gemini</option>
+        <option value="openai">OpenAI</option>
+      </select>
+    </div>
+
     <div id="gemini-settings">
-      <label for="geminiApiKey">Gemini API Key</label>
-      <input id="geminiApiKey" type="password">
-      <label for="geminiModelSelect">Gemini 模型</label>
-      <select id="geminiModelSelect">
-        <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-        <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-        <option value="gemini-2.5-flash-lite-preview-06-17">gemini-2.5-flash-lite-preview-06-17</option>
-      </select>
+      <div class="form-group">
+        <label for="geminiApiKey">Gemini API Key</label>
+        <input id="geminiApiKey" type="password" placeholder="請輸入您的 Gemini API Key">
+      </div>
+      <div class="form-group">
+        <label for="geminiModelSelect">Gemini 模型</label>
+        <select id="geminiModelSelect">
+          <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+          <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+          <option value="gemini-2.5-flash-lite-preview-06-17">gemini-2.5-flash-lite-preview-06-17</option>
+        </select>
+      </div>
     </div>
+
     <div id="openai-settings" style="display: none;">
-      <label for="openaiApiKey">OpenAI API Key</label>
-      <input id="openaiApiKey" type="password">
-      <label for="openaiModelSelect">OpenAI 模型</label>
-      <select id="openaiModelSelect">
-        <option value="gpt-4o">gpt-4o</option>
-        <option value="gpt-4o-mini">gpt-4o-mini</option>
-        <option value="gpt-4.1">gpt-4.1</option>
-        <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-        <option value="o4-mini">o4-mini</option>
-        <option value="o3">o3</option>
-        <option value="o3-mini">o3-mini</option>
-        <option value="o3-pro">o3-pro</option>
-      </select>
+      <div class="form-group">
+        <label for="openaiApiKey">OpenAI API Key</label>
+        <input id="openaiApiKey" type="password" placeholder="請輸入您的 OpenAI API Key">
+      </div>
+      <div class="form-group">
+        <label for="openaiModelSelect">OpenAI 模型</label>
+        <select id="openaiModelSelect">
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="gpt-4o-mini">gpt-4o-mini</option>
+          <option value="gpt-4.1">gpt-4.1</option>
+          <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+          <option value="o4-mini">o4-mini</option>
+          <option value="o3">o3</option>
+          <option value="o3-mini">o3-mini</option>
+          <option value="o3-pro">o3-pro</option>
+        </select>
+      </div>
     </div>
-    <button id="save">Save</button>
+
+    <button id="save">儲存設定</button>
     <div id="status"></div>
   </div>
   <script src="popup.js"></script>
