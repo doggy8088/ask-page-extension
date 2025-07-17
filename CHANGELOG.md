@@ -4,6 +4,14 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.3.1] - 2025-07-17
+
+### 修正
+
+- **API 金鑰解密問題**: 修正從 OpenAI 切換到 Gemini 時出現「API key not valid」錯誤的問題
+- **統一 API 金鑰處理**: `askGemini` 函式現在正確執行 API 金鑰解密，與 `askOpenAI` 函式保持一致
+- **提升錯誤處理**: 增加更詳細的除錯日誌和錯誤訊息
+
 ## [0.3.0] - 2025-07-17
 
 ### 新增
