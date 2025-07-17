@@ -849,19 +849,27 @@ async function createDialog() {
             console.log('[AskPage] Context mode: Full page');
         }
 
+        // OpenAI o-series models require max_completion_tokens instead of max_tokens
+        const isOSeriesModel = selectedModel.startsWith('o3') || selectedModel.startsWith('o4');
+
         const requestBody = {
             model: selectedModel,
             messages: messages,
-            temperature: 0.7,
-            max_tokens: 2048
+            temperature: 0.7
         };
+
+        if (isOSeriesModel) {
+            requestBody.max_completion_tokens = 2048;
+        } else {
+            requestBody.max_tokens = 2048;
+        }
 
         console.log('[AskPage] ===== PREPARING OPENAI API REQUEST =====');
         console.log('[AskPage] Request body structure:', {
             model: requestBody.model,
             messages_count: requestBody.messages.length,
             temperature: requestBody.temperature,
-            max_tokens: requestBody.max_tokens
+            ...(isOSeriesModel ? { max_completion_tokens: requestBody.max_completion_tokens } : { max_tokens: requestBody.max_tokens })
         });
 
         let responseData;
