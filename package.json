@@ -1,7 +1,7 @@
 {
   "name": "ask-page-extension",
-  "version": "0.1.0",
-  "description": "使用 Gemini API 詢問關於目前頁面的問題",
+  "version": "0.2.0",
+  "description": "使用 Gemini 或 OpenAI API 詢問關於目前頁面的問題",
   "main": "background.js",
   "scripts": {
     "lint": "eslint *.js --ignore-pattern lib/ --ignore-pattern AskPage.user.js",
@@ -17,8 +17,11 @@
     "chrome-extension",
     "ai",
     "gemini",
+    "openai",
     "web-extension",
-    "browser-extension"
+    "browser-extension",
+    "chatgpt",
+    "multi-provider"
   ],
   "author": "AskPage Team",
   "license": "MIT",

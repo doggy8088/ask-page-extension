@@ -4,6 +4,37 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.2.0] - 2025-07-17
+
+### 新增
+- **多 AI 提供者支援**: 新增 OpenAI 作為第二個 AI 提供者選項
+- **提供者切換功能**: 使用 `Ctrl+Shift+P` 快速切換 AI 提供者
+- **OpenAI 模型支援**: 支援 8 種 OpenAI 模型
+  - gpt-4o, gpt-4o-mini
+  - gpt-4.1, gpt-4.1-mini  
+  - o4-mini, o3, o3-mini, o3-pro
+- **API 金鑰加密**: 使用 AES-256-GCM 加密儲存所有 API 金鑰
+- **提供者顯示**: 對話框標題顯示當前使用的 AI 提供者和模型
+- **向後相容性**: 現有 Gemini API 金鑰繼續正常運作
+
+### 改進
+- **錯誤處理增強**: 針對 OpenAI API 的特定錯誤回應 (401, 429, 5xx)
+- **重試機制**: 網路失敗時的指數退讓重試邏輯
+- **安全性提升**: API 金鑰在記錄中僅顯示前後 4 個字元
+- **UI 一致性**: 修正設定頁面的行高一致性問題
+
+### 修正
+- **OpenAI o 系列模型**: 修正 o 系列模型 (o3, o3-mini, o3-pro, o4-mini) 的參數相容性
+  - 使用 `max_completion_tokens` 而非 `max_tokens`
+  - 移除不支援的 `temperature` 參數
+- **CSS 樣式**: 統一設定頁面中標籤和輸入欄位的行高
+
+### 技術細節
+- 新增 `switch-provider` 鍵盤指令
+- 實作工廠模式統一 AI 提供者介面
+- 增強的錯誤處理和使用者回饋
+- 最小化變更：僅新增 494 行，刪除 33 行程式碼
+
 ## [0.1.0] - 2025-07-09
 
 Initial release

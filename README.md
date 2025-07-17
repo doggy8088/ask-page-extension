@@ -1,13 +1,15 @@
 # AskPage 擴充功能
 
-使用 Gemini API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動。
+使用 Gemini 或 OpenAI API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
 
 ## ✨ 功能特色
 
-- 🤖 整合 Gemini AI，智慧回答頁面相關問題
+- 🤖 **多 AI 提供者支援** - 整合 Google Gemini 和 OpenAI，可自由切換
+- 🔐 **加密安全儲存** - API 金鑰使用 AES-256-GCM 加密保護
+- 🎯 **智慧模型選擇** - 支援 Gemini 全系列模型和 OpenAI 8 種模型
 - 📝 支援選取文字進行針對性提問
-- ⌨️ 快速鍵支援 (Ctrl+I / MacCtrl+I)
-- 🎨 美觀的對話介面
+- ⌨️ 快速鍵支援 (Ctrl+I 開啟對話，Ctrl+Shift+P 切換提供者)
+- 🎨 美觀的對話介面，即時顯示當前使用的 AI 提供者
 - 📚 內建指令系統
 - 💾 提問歷史記錄
 
@@ -42,6 +44,7 @@
 
 ### 快速鍵
 - `Ctrl+I` (Windows/Linux) / `MacCtrl+I` (Mac) - 開啟/關閉對話框
+- `Ctrl+Shift+P` (Windows/Linux) / `MacCtrl+Shift+P` (Mac) - 切換 AI 提供者
 - `Escape` - 關閉對話框
 - `↑/↓` 方向鍵 - 瀏覽提問歷史
 
@@ -49,13 +52,39 @@
 
 ### 第一次使用
 1. 點擊擴充功能圖示
-2. 在彈出視窗中輸入您的 Gemini API Key
-3. 點擊「儲存」
+2. 選擇您偏好的 AI 提供者（Gemini 或 OpenAI）
+3. 輸入對應的 API Key
+4. 選擇想要使用的模型
+5. 點擊「儲存」
 
-### 取得 Gemini API Key
+### 取得 API Key
+
+#### Gemini API Key
 1. 前往 [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. 建立新的 API Key
 3. 複製 API Key 並貼到擴充功能設定中
+
+#### OpenAI API Key
+1. 前往 [OpenAI Platform](https://platform.openai.com/api-keys)
+2. 建立新的 API Key
+3. 複製 API Key 並貼到擴充功能設定中
+
+### 支援的模型
+
+#### Gemini 模型
+- gemini-2.5-pro
+- gemini-2.5-flash
+- gemini-2.5-flash-lite-preview-06-17
+
+#### OpenAI 模型
+- gpt-4o
+- gpt-4o-mini
+- gpt-4.1
+- gpt-4.1-mini
+- o4-mini
+- o3
+- o3-mini
+- o3-pro
 
 ## 🛠️ 開發
 
@@ -137,6 +166,7 @@ MIT License - 詳見 [LICENSE](LICENSE) 檔案
 - [marked.js](https://marked.js.org/) - Markdown 解析
 - [DOMPurify](https://github.com/cure53/DOMPurify) - HTML 清理
 - [Google Gemini API](https://ai.google.dev/) - AI 服務
+- [OpenAI API](https://platform.openai.com/) - AI 服務
 
 ---
 
