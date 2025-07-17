@@ -143,10 +143,10 @@ npm test
 1. 建立標籤
 
     ```sh
-    git tag v0.3.0 && git push origin v0.3.0`
+    git tag v0.3.0 && git push origin v0.3.0
     ```
 
-2. GitHub Actions 自動執行行建構和發布
+2. GitHub Actions 自動執行建置和發布
 
 3. 套件自動上傳至 Chrome Web Store (如已設定)
 
