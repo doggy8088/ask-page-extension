@@ -6,46 +6,50 @@
 
 ## [0.3.0] - 2025-07-17
 
+### 新增
+
+- **多 AI 提供者支援**: 新增 OpenAI 作為第二個 AI 提供者選項
+- **提供者切換功能**: 使用 `Ctrl+Shift+P` 快速切換 AI 提供者
+- **OpenAI 模型支援**: 支援 8 種 OpenAI 模型
+  - gpt-4o, gpt-4o-mini
+  - gpt-4.1, gpt-4.1-mini
+  - o4-mini, o3, o3-mini, o3-pro
+- **API 金鑰加密**: 使用 AES-256-GCM 加密儲存所有 API 金鑰
+- **提供者顯示**: 對話框標題顯示當前使用的 AI 提供者和模型
+- **向後相容性**: 現有 Gemini API 金鑰繼續正常運作
+
 ### 修正
+
+- **OpenAI o 系列模型**: 修正 o 系列模型 (o3, o3-mini, o3-pro, o4-mini) 的參數相容性
+  - 使用 `max_completion_tokens` 而非 `max_tokens`
+  - 移除不支援的 `temperature` 參數
+- **CSS 樣式**: 統一設定頁面中標籤和輸入欄位的行高
 - **OpenAI o 系列模型相容性**: 進一步修正 o 系列模型參數問題
   - 修正 `max_tokens` 參數問題，改用 `max_completion_tokens`
   - 完全移除 o 系列模型不支援的 `temperature` 參數
 - **設定頁面 UI**: 修正欄位行高一致性問題，提升視覺體驗
 
 ### 改進
-- **文件更新**: 更新 README.md 和 CHANGELOG.md，完善多提供者支援說明
-- **版本管理**: 統一 package.json 和 manifest.json 版本號
 
-## [0.2.0] - 2025-07-17
-
-### 新增
-- **多 AI 提供者支援**: 新增 OpenAI 作為第二個 AI 提供者選項
-- **提供者切換功能**: 使用 `Ctrl+Shift+P` 快速切換 AI 提供者
-- **OpenAI 模型支援**: 支援 8 種 OpenAI 模型
-  - gpt-4o, gpt-4o-mini
-  - gpt-4.1, gpt-4.1-mini  
-  - o4-mini, o3, o3-mini, o3-pro
-- **API 金鑰加密**: 使用 AES-256-GCM 加密儲存所有 API 金鑰
-- **提供者顯示**: 對話框標題顯示當前使用的 AI 提供者和模型
-- **向後相容性**: 現有 Gemini API 金鑰繼續正常運作
-
-### 改進
 - **錯誤處理增強**: 針對 OpenAI API 的特定錯誤回應 (401, 429, 5xx)
 - **重試機制**: 網路失敗時的指數退讓重試邏輯
 - **安全性提升**: API 金鑰在記錄中僅顯示前後 4 個字元
 - **UI 一致性**: 修正設定頁面的行高一致性問題
-
-### 修正
-- **OpenAI o 系列模型**: 修正 o 系列模型 (o3, o3-mini, o3-pro, o4-mini) 的參數相容性
-  - 使用 `max_completion_tokens` 而非 `max_tokens`
-  - 移除不支援的 `temperature` 參數
-- **CSS 樣式**: 統一設定頁面中標籤和輸入欄位的行高
+- **文件更新**: 更新 README.md 和 CHANGELOG.md，完善多提供者支援說明
+- **版本管理**: 統一 package.json 和 manifest.json 版本號
 
 ### 技術細節
+
 - 新增 `switch-provider` 鍵盤指令
 - 實作工廠模式統一 AI 提供者介面
 - 增強的錯誤處理和使用者回饋
 - 最小化變更：僅新增 494 行，刪除 33 行程式碼
+
+## [0.2.0] - 2025-07-16
+
+### 新增
+
+- 加入「視覺」能力，可以詢問你在當前畫面上看到的東西
 
 ## [0.1.0] - 2025-07-09
 
@@ -79,11 +83,13 @@ Initial release
 - Web Extension 驗證
 
 ### 改進
+
 - 新增詳細的文件說明
 - 建立 PUBLISH.md 發布指南
 - 完善 README.md 使用說明
 
 ### 技術規格
+
 - Manifest V3 架構
 - 支援繁體中文回應
 - 安全的 HTML 渲染
@@ -95,6 +101,7 @@ Initial release
 ## 版本說明
 
 ### 版本號格式
+
 我們使用語意化版本號: `主版本.次版本.修訂版本`
 
 - **主版本**: 不相容的 API 變更
@@ -102,6 +109,7 @@ Initial release
 - **修訂版本**: 向後相容的錯誤修正
 
 ### 變更類型
+
 - **新增**: 新功能
 - **改進**: 現有功能的改善
 - **修正**: 錯誤修正
