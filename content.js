@@ -850,13 +850,18 @@ async function createDialog() {
         }
 
         // OpenAI o-series models require max_completion_tokens instead of max_tokens
+        // and do not support temperature parameter
         const isOSeriesModel = selectedModel.startsWith('o3') || selectedModel.startsWith('o4');
 
         const requestBody = {
             model: selectedModel,
-            messages: messages,
-            temperature: 0.7
+            messages: messages
         };
+
+        // Add temperature parameter only for non-o-series models
+        if (!isOSeriesModel) {
+            requestBody.temperature = 0.7;
+        }
 
         if (isOSeriesModel) {
             requestBody.max_completion_tokens = 2048;
@@ -868,7 +873,7 @@ async function createDialog() {
         console.log('[AskPage] Request body structure:', {
             model: requestBody.model,
             messages_count: requestBody.messages.length,
-            temperature: requestBody.temperature,
+            ...(requestBody.temperature !== undefined && { temperature: requestBody.temperature }),
             ...(isOSeriesModel ? { max_completion_tokens: requestBody.max_completion_tokens } : { max_tokens: requestBody.max_tokens })
         });
 
