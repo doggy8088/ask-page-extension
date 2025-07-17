@@ -4,6 +4,18 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.3.0] - 2025-07-17
+
+### 修正
+- **OpenAI o 系列模型相容性**: 進一步修正 o 系列模型參數問題
+  - 修正 `max_tokens` 參數問題，改用 `max_completion_tokens`
+  - 完全移除 o 系列模型不支援的 `temperature` 參數
+- **設定頁面 UI**: 修正欄位行高一致性問題，提升視覺體驗
+
+### 改進
+- **文件更新**: 更新 README.md 和 CHANGELOG.md，完善多提供者支援說明
+- **版本管理**: 統一 package.json 和 manifest.json 版本號
+
 ## [0.2.0] - 2025-07-17
 
 ### 新增
