@@ -25,6 +25,19 @@ chrome.commands.onCommand.addListener((command, tab) => {
             console.error('[AskPage] Error sending message:', error);
             console.error('[AskPage] Error details:', error.message);
         });
+    } else if (command === 'switch-provider') {
+        console.log('[AskPage] Processing switch-provider command');
+        console.log('[AskPage] Sending switch-provider message to tab:', tab.id);
+
+        // Send a message to the content script in the active tab
+        chrome.tabs.sendMessage(tab.id, { action: 'switch-provider' }).then(
+            (response) => {
+                console.log('[AskPage] Provider switch message sent successfully, response:', response);
+            }
+        ).catch((error) => {
+            console.error('[AskPage] Error sending provider switch message:', error);
+            console.error('[AskPage] Error details:', error.message);
+        });
     } else {
         console.warn('[AskPage] Unknown command received:', command);
     }

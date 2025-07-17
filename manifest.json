@@ -36,6 +36,13 @@
         "mac": "MacCtrl+I"
       },
       "description": "Open AskPage dialog"
+    },
+    "switch-provider": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+P",
+        "mac": "MacCtrl+Shift+P"
+      },
+      "description": "Switch AI provider"
     }
   },
   "web_accessible_resources": [
