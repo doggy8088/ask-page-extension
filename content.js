@@ -657,14 +657,23 @@ async function createDialog() {
         console.log('[AskPage] Question:', question);
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
 
-        const apiKey = await getValue(API_KEY_STORAGE, '');
+        const encryptedApiKey = await getValue(API_KEY_STORAGE, '');
         const selectedModel = await getValue(MODEL_STORAGE, 'gemini-2.5-flash-lite-preview-06-17');
 
         console.log('[AskPage] Selected model:', selectedModel);
-        console.log('[AskPage] API key available:', apiKey ? 'Yes' : 'No');
+        console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
+
+        if (!encryptedApiKey) {
+            appendMessage('assistant', '請點擊擴充功能圖示設定您的 Gemini API Key。');
+            return;
+        }
+
+        const apiKey = await decryptApiKey(encryptedApiKey);
+        console.log('[AskPage] Decrypted API key available:', apiKey ? 'Yes' : 'No');
+        console.log('[AskPage] API key preview:', maskApiKey(apiKey));
 
         if (!apiKey) {
-            appendMessage('assistant', '請點擊擴充功能圖示設定您的 Gemini API Key。');
+            appendMessage('assistant', '無法解密 Gemini API Key，請重新設定。');
             return;
         }
 
