@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "頁問 AskPage",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "使用 Gemini API 詢問關於目前頁面的問題",
   "permissions": [
     "storage",
@@ -36,6 +36,13 @@
         "mac": "MacCtrl+I"
       },
       "description": "Open AskPage dialog"
+    },
+    "switch-provider": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+P",
+        "mac": "MacCtrl+Shift+P"
+      },
+      "description": "Switch AI provider"
     }
   },
   "web_accessible_resources": [

@@ -55,6 +55,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const response = { success: true, dialogVisible: isDialogVisible };
         console.log('[AskPage] Sending response:', response);
         sendResponse(response);
+    } else if (request.action === 'switch-provider') {
+        console.log('[AskPage] Processing switch-provider command');
+        switchProvider();
+        sendResponse({ success: true });
     } else {
         console.warn('[AskPage] Unknown action received:', request.action);
         sendResponse({ success: false, error: 'Unknown action' });
@@ -69,6 +73,11 @@ const API_KEY_STORAGE = 'GEMINI_API_KEY';
 const MODEL_STORAGE = 'GEMINI_MODEL';
 const PROMPT_HISTORY_STORAGE = 'ASKPAGE_PROMPT_HISTORY';
 
+// New storage keys for multi-provider support
+const PROVIDER_STORAGE = 'PROVIDER';
+const OPENAI_API_KEY_STORAGE = 'OPENAI_API_KEY';
+const OPENAI_MODEL_STORAGE = 'OPENAI_MODEL';
+
 async function getValue(key, defaultValue) {
     const result = await chrome.storage.local.get([key]);
     return result[key] || defaultValue;
@@ -76,6 +85,85 @@ async function getValue(key, defaultValue) {
 
 function setValue(key, value) {
     return chrome.storage.local.set({ [key]: value });
+}
+
+// API key masking for console output
+function maskApiKey(apiKey) {
+    if (!apiKey || apiKey.length < 8) {return apiKey;}
+    return apiKey.substring(0, 4) + '****' + apiKey.substring(apiKey.length - 4);
+}
+
+// AES-256-GCM encryption functions
+async function getEncryptionKey() {
+    const result = await chrome.storage.local.get(['ENCRYPTION_KEY']);
+    if (result.ENCRYPTION_KEY) {
+        return await crypto.subtle.importKey(
+            'jwk',
+            result.ENCRYPTION_KEY,
+            { name: 'AES-GCM', length: 256 },
+            true,
+            ['encrypt', 'decrypt']
+        );
+    }
+    return null;
+}
+
+async function decryptApiKey(encryptedData) {
+    if (!encryptedData || typeof encryptedData === 'string') {
+        // Fallback to plaintext for backward compatibility
+        return encryptedData;
+    }
+
+    try {
+        const key = await getEncryptionKey();
+        if (!key) {return encryptedData;}
+
+        const encrypted = new Uint8Array(encryptedData.encrypted);
+        const iv = new Uint8Array(encryptedData.iv);
+
+        const decrypted = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: iv },
+            key,
+            encrypted
+        );
+
+        const decoder = new TextDecoder();
+        return decoder.decode(decrypted);
+    } catch (error) {
+        console.error('[AskPage] Error decrypting API key:', error);
+        return encryptedData;
+    }
+}
+
+// Provider switching function
+async function switchProvider() {
+    const currentProvider = await getValue(PROVIDER_STORAGE, 'gemini');
+    const newProvider = currentProvider === 'gemini' ? 'openai' : 'gemini';
+
+    console.log('[AskPage] Switching provider from', currentProvider, 'to', newProvider);
+    await setValue(PROVIDER_STORAGE, newProvider);
+
+    // Update dialog UI if visible
+    const overlay = document.getElementById('gemini-qna-overlay');
+    if (overlay) {
+        updateProviderDisplay();
+    }
+}
+
+// Update provider display in dialog
+async function updateProviderDisplay() {
+    const provider = await getValue(PROVIDER_STORAGE, 'gemini');
+    const providerDisplayElement = document.getElementById('provider-display');
+
+    if (providerDisplayElement) {
+        let model;
+        if (provider === 'gemini') {
+            model = await getValue(MODEL_STORAGE, 'gemini-2.5-flash-lite-preview-06-17');
+        } else {
+            model = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
+        }
+        providerDisplayElement.textContent = `${provider === 'gemini' ? 'Gemini' : 'OpenAI'} (${model})`;
+    }
 }
 
 /* --------------------------------------------------
@@ -172,6 +260,42 @@ async function createDialog() {
     const messagesEl = document.createElement('div');
     messagesEl.id = 'gemini-qna-messages';
 
+    // Provider display header
+    const providerHeader = document.createElement('div');
+    providerHeader.id = 'provider-header';
+    providerHeader.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 16px;
+        background: var(--gemini-header-bg, #f8f9fa);
+        border-bottom: 1px solid var(--gemini-border-color, #e1e4e8);
+        font-size: 12px;
+        color: var(--gemini-secondary-color, #666);
+    `;
+
+    const providerDisplay = document.createElement('div');
+    providerDisplay.id = 'provider-display';
+    providerDisplay.textContent = 'Loading...';
+
+    const switchProviderBtn = document.createElement('button');
+    switchProviderBtn.textContent = 'Switch Provider';
+    switchProviderBtn.style.cssText = `
+        background: var(--gemini-button-bg, #1a73e8);
+        color: var(--gemini-button-color, #fff);
+        border: none;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+    `;
+    switchProviderBtn.addEventListener('click', async () => {
+        await switchProvider();
+    });
+
+    providerHeader.appendChild(providerDisplay);
+    providerHeader.appendChild(switchProviderBtn);
+
     const inputArea = document.createElement('div');
     inputArea.id = 'gemini-qna-input-area';
 
@@ -205,11 +329,16 @@ async function createDialog() {
 
     inputArea.appendChild(input);
     inputArea.appendChild(btn);
+    dialog.appendChild(providerHeader);
     dialog.appendChild(messagesEl);
     dialog.appendChild(inputArea);
     overlay.appendChild(dialog);
 
     document.body.appendChild(overlay);
+
+    // Initialize provider display
+    await updateProviderDisplay();
+
     input.focus();
 
     if (capturedSelectedText) {
@@ -297,7 +426,7 @@ async function createDialog() {
 
         appendMessage('user', question);
         input.value = '';
-        await askGemini(question, capturedSelectedText);
+        await askAI(question, capturedSelectedText);
     }
 
     let intelliActive = false;
@@ -669,5 +798,155 @@ async function createDialog() {
         console.log('[AskPage] Answer preview:', answer.substring(0, 200) + (answer.length > 200 ? '...' : ''));
         appendMessage('assistant', answer);
         console.log('[AskPage] ===== GEMINI API CALL COMPLETED =====');
+    }
+
+    // OpenAI API calling function
+    async function askOpenAI(question, capturedSelectedText = '') {
+        console.log('[AskPage] ===== OPENAI API CALL STARTED =====');
+        console.log('[AskPage] Question:', question);
+        console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
+
+        const encryptedApiKey = await getValue(OPENAI_API_KEY_STORAGE, '');
+        const selectedModel = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
+
+        console.log('[AskPage] Selected model:', selectedModel);
+        console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
+
+        if (!encryptedApiKey) {
+            appendMessage('assistant', '請點擊擴充功能圖示設定您的 OpenAI API Key。');
+            return;
+        }
+
+        const apiKey = await decryptApiKey(encryptedApiKey);
+        console.log('[AskPage] Decrypted API key available:', apiKey ? 'Yes' : 'No');
+        console.log('[AskPage] API key preview:', maskApiKey(apiKey));
+
+        if (!apiKey) {
+            appendMessage('assistant', '無法解密 OpenAI API Key，請重新設定。');
+            return;
+        }
+
+        appendMessage('assistant', '...thinking...');
+
+        // Get page content
+        let container = document.querySelector('main') || document.querySelector('article') || document.body;
+        const fullPageText = container.innerText.slice(0, 15000);
+        console.log('[AskPage] Full page text length:', fullPageText.length);
+
+        let messages = [];
+        let systemPrompt;
+
+        if (capturedSelectedText) {
+            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for comprehensive understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            const contextText = `Full page content for context:\n${fullPageText}\n\nSelected text (main focus):\n${capturedSelectedText.slice(0, 5000)}`;
+            messages.push({ role: 'system', content: systemPrompt });
+            messages.push({ role: 'user', content: `${contextText}\n\nQuestion: ${question}` });
+            console.log('[AskPage] Context mode: Selected text + full page');
+        } else {
+            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            messages.push({ role: 'system', content: systemPrompt });
+            messages.push({ role: 'user', content: `Page content:\n${fullPageText}\n\nQuestion: ${question}` });
+            console.log('[AskPage] Context mode: Full page');
+        }
+
+        // OpenAI o-series models require max_completion_tokens instead of max_tokens
+        // and do not support temperature parameter
+        const isOSeriesModel = selectedModel.startsWith('o3') || selectedModel.startsWith('o4');
+
+        const requestBody = {
+            model: selectedModel,
+            messages: messages
+        };
+
+        // Add temperature parameter only for non-o-series models
+        if (!isOSeriesModel) {
+            requestBody.temperature = 0.7;
+        }
+
+        if (isOSeriesModel) {
+            requestBody.max_completion_tokens = 2048;
+        } else {
+            requestBody.max_tokens = 2048;
+        }
+
+        console.log('[AskPage] ===== PREPARING OPENAI API REQUEST =====');
+        console.log('[AskPage] Request body structure:', {
+            model: requestBody.model,
+            messages_count: requestBody.messages.length,
+            ...(requestBody.temperature !== undefined && { temperature: requestBody.temperature }),
+            ...(isOSeriesModel ? { max_completion_tokens: requestBody.max_completion_tokens } : { max_tokens: requestBody.max_tokens })
+        });
+
+        let responseData;
+        try {
+            console.log('[AskPage] Sending request to OpenAI API...');
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            console.log('[AskPage] ===== OPENAI API RESPONSE RECEIVED =====');
+            console.log('[AskPage] Response status:', response.status);
+            console.log('[AskPage] Response ok:', response.ok);
+            console.log('[AskPage] Response headers:', Object.fromEntries(response.headers.entries()));
+
+            if (!response.ok) {
+                const errorBody = await response.text();
+                console.error('[AskPage] OpenAI API Error response body:', errorBody);
+
+                // Handle specific error cases
+                if (response.status === 401) {
+                    throw new Error('無效的 API Key，請檢查您的 OpenAI API Key 設定。');
+                } else if (response.status === 429) {
+                    throw new Error('API 請求頻率過高，請稍後再試。');
+                } else if (response.status >= 500) {
+                    throw new Error('OpenAI 服務暫時不可用，請稍後再試。');
+                } else {
+                    throw new Error(`${response.status} ${response.statusText}: ${errorBody}`);
+                }
+            }
+
+            responseData = await response.json();
+            console.log('[AskPage] ===== OPENAI API RESPONSE PARSED =====');
+            console.log('[AskPage] Response data structure:', {
+                has_choices: !!responseData.choices,
+                choices_count: responseData.choices?.length || 0,
+                first_choice_has_message: !!responseData.choices?.[0]?.message,
+                first_choice_content_length: responseData.choices?.[0]?.message?.content?.length || 0
+            });
+
+        } catch (err) {
+            console.error('[AskPage] ===== OPENAI API CALL FAILED =====');
+            console.error('[AskPage] OpenAI API 呼叫失敗:', err);
+            console.error('[AskPage] Error message:', err.message);
+            console.error('[AskPage] Error stack:', err.stack);
+            messagesEl.lastChild.remove();
+            appendMessage('assistant', `錯誤: ${err.message}`);
+            return;
+        }
+
+        console.log('[AskPage] ===== PROCESSING OPENAI RESPONSE =====');
+        messagesEl.lastChild.remove();
+        const answer = responseData.choices?.[0]?.message?.content || '未取得回應';
+        console.log('[AskPage] Final answer length:', answer.length);
+        console.log('[AskPage] Answer preview:', answer.substring(0, 200) + (answer.length > 200 ? '...' : ''));
+        appendMessage('assistant', answer);
+        console.log('[AskPage] ===== OPENAI API CALL COMPLETED =====');
+    }
+
+    // Generic AI asking function that routes to the appropriate provider
+    async function askAI(question, capturedSelectedText = '') {
+        const provider = await getValue(PROVIDER_STORAGE, 'gemini');
+        console.log('[AskPage] Using provider:', provider);
+
+        if (provider === 'openai') {
+            await askOpenAI(question, capturedSelectedText);
+        } else {
+            await askGemini(question, capturedSelectedText);
+        }
     }
 }

@@ -83,3 +83,12 @@ npm run package       # Creates dist/ directory with .zip
 - **Dialog Not Appearing**: Check `isDialogVisible` state, verify content script injection
 - **Markdown Rendering**: Ensure marked.js/DOMPurify are loaded before content script
 - **History Loss**: Check `chrome.storage.local` quota and error handling
+
+## Bump new version rules
+
+- **Patch Version**: For bug fixes, minor improvements, or documentation updates
+- **Minor Version**: For new features, enhancements, or significant changes that do not break existing functionality
+- **Major Version**: For breaking changes, API changes, or significant architectural shifts
+- Update `CHANGELOG.md` with detailed changes
+- Update `package.json` and `manifest.json` with new version number
+- Update `README.md` with new features
