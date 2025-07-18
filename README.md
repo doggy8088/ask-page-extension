@@ -17,7 +17,11 @@
 
 ### 從 Chrome Web Store 安裝 (推薦)
 
-> 開發中，即將上架
+你現在已經可以直接從 Chrome Web Store 安裝 [頁問 AskPage](https://chromewebstore.google.com/detail/lehmnfefdojedijepclonkbajnjonnji) 擴充功能。
+
+這個擴充套件預設會綁定 `Ctrl+I` 快速鍵，你可以在任意網頁按下這個快速鍵以啟用「頁問」的對話框，並對目前網頁詢問任何問題。
+
+如果你按下 `Ctrl+I` 無法啟動對話框的話，那就代表這個 `Ctrl+I` 快速鍵可能與其他 Chrome 擴充套件的快速鍵衝突，你要開啟 `chrome://extensions/shortcuts` 頁面，並手動重新指派你希望設定的快速鍵。
 
 ### 手動安裝開發版本
 
