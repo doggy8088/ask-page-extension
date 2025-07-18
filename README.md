@@ -25,7 +25,7 @@
 
 ### 手動安裝開發版本
 
-1. 下載最新的 [Release](https://github.com/你的用戶名/ask-page-extension/releases)
+1. 下載最新的 [Release](https://github.com/doggy8088/ask-page-extension/releases)
 2. 解壓縮 ZIP 檔案
 3. 開啟 Chrome 瀏覽器，前往 `chrome://extensions/`
 4. 開啟「開發者模式」
@@ -107,7 +107,7 @@
 
 ```bash
 # 複製儲存庫
-git clone https://github.com/你的用戶名/ask-page-extension.git
+git clone https://github.com/doggy8088/ask-page-extension.git
 cd ask-page-extension
 
 # 安裝開發相依套件
