@@ -77,6 +77,7 @@ const PROMPT_HISTORY_STORAGE = 'ASKPAGE_PROMPT_HISTORY';
 const PROVIDER_STORAGE = 'PROVIDER';
 const OPENAI_API_KEY_STORAGE = 'OPENAI_API_KEY';
 const OPENAI_MODEL_STORAGE = 'OPENAI_MODEL';
+const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 
 async function getValue(key, defaultValue) {
     const result = await chrome.storage.local.get([key]);
@@ -164,6 +165,22 @@ async function updateProviderDisplay() {
         }
         providerDisplayElement.textContent = `${provider === 'gemini' ? 'Gemini' : 'OpenAI'} (${model})`;
     }
+}
+
+// Screenshot state management
+async function getScreenshotEnabled() {
+    return await getValue(SCREENSHOT_ENABLED_STORAGE, false);
+}
+
+async function setScreenshotEnabled(enabled) {
+    await setValue(SCREENSHOT_ENABLED_STORAGE, enabled);
+}
+
+async function toggleScreenshotEnabled() {
+    const currentState = await getScreenshotEnabled();
+    const newState = !currentState;
+    await setScreenshotEnabled(newState);
+    return newState;
 }
 
 /* --------------------------------------------------
@@ -304,11 +321,16 @@ async function createDialog() {
     input.type = 'text';
     input.placeholder = '輸入問題後按 Enter 或點擊 Ask 按鈕 (可先選取文字範圍)';
 
-    const intelliCommands = [
-        { cmd: '/clear', desc: '清除提問歷史紀錄' },
-        { cmd: '/summary', desc: '總結本頁內容' },
-        { cmd: '/screenshot', desc: '測試截圖功能' }
-    ];
+    // Dynamic intelliCommands based on screenshot state
+    async function getIntelliCommands() {
+        const screenshotEnabled = await getScreenshotEnabled();
+        return [
+            { cmd: '/clear', desc: '清除提問歷史紀錄' },
+            { cmd: '/summary', desc: '總結本頁內容' },
+            { cmd: '/screenshot', desc: screenshotEnabled ? '停用截圖功能' : '啟用截圖功能' }
+        ];
+    }
+
     const intelliBox = document.createElement('div');
     intelliBox.id = 'gemini-qna-intellisense';
     Object.assign(intelliBox.style, {
@@ -342,9 +364,9 @@ async function createDialog() {
     input.focus();
 
     if (capturedSelectedText) {
-        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n📸 **視覺分析:** 系統會自動捕獲當前視窗截圖，提供更完整的頁面分析。\n\n💡 **可用指令:**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 測試截圖功能`);
+        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n💡 **可用指令:**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 啟用截圖功能 (預設關閉)`);
     } else {
-        appendMessage('assistant', '💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。\n\n📸 **視覺分析:** 系統會自動捕獲當前視窗截圖，提供更完整的頁面分析。\n\n**可用指令:**\n- `/clear` - 清除歷史紀錄\n- `/summary` - 總結整個頁面\n- `/screenshot` - 測試截圖功能');
+        appendMessage('assistant', '💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。\n\n**可用指令:**\n- `/clear` - 清除歷史紀錄\n- `/summary` - 總結整個頁面\n- `/screenshot` - 啟用截圖功能 (預設關閉)');
     }
 
     function closeDialog() {
@@ -389,17 +411,21 @@ async function createDialog() {
             appendMessage('user', question);
             input.value = '';
 
-            // 測試截圖功能
-            appendMessage('assistant', '🔄 正在測試截圖功能...');
-            const screenshotDataUrl = await captureViewportScreenshot();
+            // Toggle screenshot functionality
+            const newState = await toggleScreenshotEnabled();
 
-            if (screenshotDataUrl) {
-                const imageSize = Math.round(screenshotDataUrl.length / 1024);
+            if (newState) {
+                // Screenshot enabled - test it
+                appendMessage('assistant', '✅ **截圖功能已啟用**\n\n🔄 正在測試截圖功能...');
+                const screenshotDataUrl = await captureViewportScreenshot();
 
-                // 建立包含截圖的除錯訊息
-                const debugMessage = `✅ **截圖測試成功!**
+                if (screenshotDataUrl) {
+                    const imageSize = Math.round(screenshotDataUrl.length / 1024);
 
-📸 **截圖資訊:**
+                    // 建立包含截圖的除錯訊息
+                    const debugMessage = `📸 **截圖測試成功!**
+
+**截圖資訊:**
 - 📏 圖片大小: ${imageSize} KB
 - 🔗 格式: PNG (Base64)
 - 📊 資料長度: ${screenshotDataUrl.length} 字元
@@ -407,14 +433,18 @@ async function createDialog() {
 
 **捕獲的截圖預覽:**`;
 
-                appendMessage('assistant', debugMessage);
+                    appendMessage('assistant', debugMessage);
 
-                // 顯示截圖
-                appendScreenshotMessage(screenshotDataUrl);
+                    // 顯示截圖
+                    appendScreenshotMessage(screenshotDataUrl);
 
-                appendMessage('assistant', '您現在可以提問關於頁面內容的問題，系統會自動包含截圖進行分析。');
+                    appendMessage('assistant', '✨ **截圖功能已啟用!** 您現在提問時，系統會自動包含截圖進行分析。此設定會記憶到下次重新載入頁面。');
+                } else {
+                    appendMessage('assistant', '❌ **截圖測試失敗**\n\n截圖功能已啟用，但截圖捕獲失敗。請檢查瀏覽器權限設定。');
+                }
             } else {
-                appendMessage('assistant', '❌ **截圖測試失敗**\n\n截圖功能目前無法正常運作。請檢查瀏覽器權限設定。');
+                // Screenshot disabled
+                appendMessage('assistant', '⭕ **截圖功能已停用**\n\n系統將不再自動捕獲截圖。您的提問將僅使用文字內容進行分析。此設定會記憶到下次重新載入頁面。');
             }
             return;
         }
@@ -431,7 +461,7 @@ async function createDialog() {
 
     let intelliActive = false;
     let intelliIndex = 0;
-    function showIntelliBox(filtered) {
+    async function showIntelliBox(filtered) {
         if (!filtered.length) {
             hideIntelliBox();
             return;
@@ -467,13 +497,14 @@ async function createDialog() {
         intelliActive = false;
         intelliIndex = 0;
     }
-    function filterIntelli(val) {
-        return intelliCommands.filter(c => c.cmd.startsWith(val));
+    async function filterIntelli(val) {
+        const commands = await getIntelliCommands();
+        return commands.filter(c => c.cmd.startsWith(val));
     }
-    input.addEventListener('input', () => {
+    input.addEventListener('input', async () => {
         const val = input.value;
         if (val.startsWith('/')) {
-            const filtered = filterIntelli(val);
+            const filtered = await filterIntelli(val);
             intelliIndex = 0;
             showIntelliBox(filtered);
         } else {
@@ -481,9 +512,9 @@ async function createDialog() {
         }
     });
 
-    input.addEventListener('keydown', (e) => {
+    input.addEventListener('keydown', async (e) => {
         if (intelliActive) {
-            const filtered = filterIntelli(input.value);
+            const filtered = await filterIntelli(input.value);
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 intelliIndex = (intelliIndex + 1) % filtered.length;
@@ -679,10 +710,19 @@ async function createDialog() {
 
         appendMessage('assistant', '...thinking...');
 
-        // 捕獲當前視窗截圖
-        console.log('[AskPage] Starting screenshot capture for Gemini API');
-        const screenshotDataUrl = await captureViewportScreenshot();
-        console.log('[AskPage] Screenshot capture result:', screenshotDataUrl ? 'Success' : 'Failed');
+        // 檢查是否啟用截圖功能
+        const screenshotEnabled = await getScreenshotEnabled();
+        console.log('[AskPage] Screenshot enabled:', screenshotEnabled);
+
+        // 捕獲當前視窗截圖 (僅在啟用時)
+        let screenshotDataUrl = null;
+        if (screenshotEnabled) {
+            console.log('[AskPage] Starting screenshot capture for Gemini API');
+            screenshotDataUrl = await captureViewportScreenshot();
+            console.log('[AskPage] Screenshot capture result:', screenshotDataUrl ? 'Success' : 'Failed');
+        } else {
+            console.log('[AskPage] Screenshot capture skipped (disabled)');
+        }
 
         let container = document.querySelector('main') || document.querySelector('article') || document.body;
         const fullPageText = container.innerText.slice(0, 15000);
@@ -692,18 +732,26 @@ async function createDialog() {
         let systemPrompt;
 
         if (capturedSelectedText) {
-            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context and a screenshot of the current viewport for comprehensive understanding. Please focus primarily on the selected text while using the full page context and visual information to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            if (screenshotDataUrl) {
+                systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context and a screenshot of the current viewport for comprehensive understanding. Please focus primarily on the selected text while using the full page context and visual information to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            } else {
+                systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for comprehensive understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            }
             contextParts.push(
                 { text: `Full page content for context:\n${fullPageText}` },
                 { text: `Selected text (main focus):\n${capturedSelectedText.slice(0, 5000)}` }
             );
-            console.log('[AskPage] Context mode: Selected text + full page + screenshot');
+            console.log('[AskPage] Context mode: Selected text + full page' + (screenshotDataUrl ? ' + screenshot' : ''));
         } else {
-            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. You have both the text content and a screenshot of the current viewport to provide comprehensive answers. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            if (screenshotDataUrl) {
+                systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. You have both the text content and a screenshot of the current viewport to provide comprehensive answers. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            } else {
+                systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            }
             contextParts.push(
                 { text: `Page content:\n${fullPageText}` }
             );
-            console.log('[AskPage] Context mode: Full page + screenshot');
+            console.log('[AskPage] Context mode: Full page' + (screenshotDataUrl ? ' + screenshot' : ''));
         }
 
         // 如果有截圖，將其加入到上下文中
