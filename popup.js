@@ -74,7 +74,6 @@ const resetButton = document.getElementById('reset');
 const statusDiv = document.getElementById('status');
 
 // Custom prompt elements
-const clearPromptInput = document.getElementById('clearPrompt');
 const summaryPromptInput = document.getElementById('summaryPrompt');
 
 // Tab navigation
@@ -115,7 +114,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.storage.local.get([
         'PROVIDER', 'GEMINI_API_KEY', 'GEMINI_MODEL',
         'OPENAI_API_KEY', 'OPENAI_MODEL',
-        'CUSTOM_CLEAR_PROMPT', 'CUSTOM_SUMMARY_PROMPT'
+        'CUSTOM_SUMMARY_PROMPT'
     ], async (result) => {
         // Set provider
         if (result.PROVIDER) {
@@ -168,7 +167,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Load custom prompts
-        clearPromptInput.value = result.CUSTOM_CLEAR_PROMPT || '';
         summaryPromptInput.value = result.CUSTOM_SUMMARY_PROMPT || '';
     });
 });
@@ -183,14 +181,12 @@ saveButton.addEventListener('click', async () => {
     const openaiModel = openaiModelSelect.value;
 
     // Get custom prompts
-    const clearPrompt = clearPromptInput.value.trim();
     const summaryPrompt = summaryPromptInput.value.trim();
 
     const settings = {
         'PROVIDER': provider,
         'GEMINI_MODEL': geminiModel,
         'OPENAI_MODEL': openaiModel,
-        'CUSTOM_CLEAR_PROMPT': clearPrompt,
         'CUSTOM_SUMMARY_PROMPT': summaryPrompt
     };
 

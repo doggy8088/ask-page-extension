@@ -80,7 +80,6 @@ const OPENAI_MODEL_STORAGE = 'OPENAI_MODEL';
 const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 
 // Storage keys for custom slash command prompts
-const CUSTOM_CLEAR_PROMPT_STORAGE = 'CUSTOM_CLEAR_PROMPT';
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 
 async function getValue(key, defaultValue) {
@@ -402,9 +401,7 @@ async function createDialog() {
             historyIndex = 0;
             await setValue(PROMPT_HISTORY_STORAGE, '[]');
             messagesEl.innerHTML = '';
-            // Use custom message if available, otherwise use default
-            const customMessage = await getValue(CUSTOM_CLEAR_PROMPT_STORAGE, '');
-            appendMessage('assistant', customMessage || '已清除您的提問歷史紀錄。');
+            appendMessage('assistant', '已清除您的提問歷史紀錄。');
             input.value = '';
             return;
         }
