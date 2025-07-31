@@ -15,6 +15,8 @@
       --background: #ffffff;
       --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --tab-active-bg: #ffffff;
+      --tab-inactive-bg: #f1f5f9;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -29,6 +31,8 @@
         --background: #0f172a;
         --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
         --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+        --tab-active-bg: #0f172a;
+        --tab-inactive-bg: #1e293b;
       }
     }
 
@@ -37,8 +41,8 @@
     }
 
     body {
-      width: 380px;
-      min-height: 480px;
+      width: 420px;
+      min-height: 520px;
       margin: 0;
       padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -50,20 +54,19 @@
     #settings-container {
       display: flex;
       flex-direction: column;
-      gap: 20px;
-      padding: 24px;
       height: 100%;
     }
 
     h3 {
-      margin: 0 0 8px 0;
+      margin: 0;
+      padding: 20px 24px;
       font-size: 20px;
       font-weight: 700;
       color: var(--text-primary);
       text-align: center;
-      padding-bottom: 16px;
       border-bottom: 2px solid var(--primary-color);
       position: relative;
+      background: var(--background);
     }
 
     h3::after {
@@ -78,10 +81,69 @@
       border-radius: 1px;
     }
 
+    /* Tab navigation */
+    .tab-nav {
+      display: flex;
+      background: var(--secondary-color);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 12px 16px;
+      background: var(--tab-inactive-bg);
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      background: var(--tab-active-bg);
+      color: var(--text-primary);
+    }
+
+    .tab-btn.active {
+      background: var(--tab-active-bg);
+      color: var(--primary-color);
+      border-bottom-color: var(--primary-color);
+    }
+
+    /* Tab content */
+    .tab-content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
     .form-group {
       display: flex;
       flex-direction: column;
       gap: 8px;
+      margin-bottom: 16px;
     }
 
     label {
@@ -91,7 +153,7 @@
       margin-bottom: 4px;
     }
 
-    input, select {
+    input, select, textarea {
       padding: 12px 16px;
       font-size: 14px;
       border: 2px solid var(--border-color);
@@ -100,18 +162,24 @@
       color: var(--text-primary);
       transition: all 0.2s ease;
       outline: none;
+      font-family: inherit;
     }
 
-    input:focus, select:focus {
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    input:focus, select:focus, textarea:focus {
       border-color: var(--primary-color);
       box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
     }
 
-    input:hover, select:hover {
+    input:hover, select:hover, textarea:hover {
       border-color: var(--primary-color);
     }
 
-    #gemini-settings, #openai-settings {
+    .provider-settings {
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -122,8 +190,15 @@
       transition: box-shadow 0.3s ease;
     }
 
-    #gemini-settings:hover, #openai-settings:hover {
+    .provider-settings:hover {
       box-shadow: var(--shadow);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 20px;
     }
 
     button {
@@ -133,17 +208,30 @@
       font-size: 14px;
       font-weight: 600;
       border: none;
-      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
-      color: white;
-      align-self: center;
-      transition: box-shadow 0.2s ease, background 0.2s ease;
+      transition: all 0.2s ease;
       box-shadow: var(--shadow);
       min-width: 120px;
     }
 
-    button:hover {
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+      color: white;
+    }
+
+    .btn-primary:hover {
       box-shadow: var(--shadow-lg);
       background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
+    }
+
+    .btn-secondary {
+      background: var(--secondary-color);
+      color: var(--text-primary);
+      border: 2px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border-color);
+      border-color: var(--primary-color);
     }
 
     button:active {
@@ -163,6 +251,7 @@
       opacity: 0;
       visibility: hidden;
       transition: opacity 0.3s ease, visibility 0.3s ease;
+      margin-top: 16px;
     }
 
     #status:not(:empty) {
@@ -170,20 +259,24 @@
       visibility: visible;
     }
 
-    /* Animation for settings sections */
-    #gemini-settings, #openai-settings {
-      animation: slideIn 0.3s ease-out;
+    .command-setting {
+      background: var(--secondary-color);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
     }
 
-    @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+    .command-header {
+      font-weight: 600;
+      color: var(--primary-color);
+      margin-bottom: 8px;
+    }
+
+    .command-description {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
     }
 
     /* Scrollbar styling */
@@ -209,50 +302,88 @@
   <div id="settings-container">
     <h3>頁問: 偏好設定</h3>
 
-    <div class="form-group">
-      <label for="providerSelect">AI 提供者</label>
-      <select id="providerSelect">
-        <option value="gemini">Gemini</option>
-        <option value="openai">OpenAI</option>
-      </select>
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="provider">AI 提供者</button>
+      <button class="tab-btn" data-tab="commands">自訂斜線命令</button>
     </div>
 
-    <div id="gemini-settings">
-      <div class="form-group">
-        <label for="geminiApiKey">Gemini API Key</label>
-        <input id="geminiApiKey" type="password" placeholder="請輸入您的 Gemini API Key">
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <!-- AI Provider Tab -->
+      <div id="provider-tab" class="tab-pane active">
+        <div class="form-group">
+          <label for="providerSelect">選擇 AI 提供者</label>
+          <select id="providerSelect">
+            <option value="gemini">Gemini</option>
+            <option value="openai">OpenAI</option>
+          </select>
+        </div>
+
+        <div id="gemini-settings" class="provider-settings">
+          <div class="form-group">
+            <label for="geminiApiKey">Gemini API Key</label>
+            <input id="geminiApiKey" type="password" placeholder="請輸入您的 Gemini API Key">
+          </div>
+          <div class="form-group">
+            <label for="geminiModelSelect">Gemini 模型</label>
+            <select id="geminiModelSelect">
+              <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+              <option value="gemini-2.5-flash-lite-preview-06-17">gemini-2.5-flash-lite-preview-06-17</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="openai-settings" class="provider-settings" style="display: none;">
+          <div class="form-group">
+            <label for="openaiApiKey">OpenAI API Key</label>
+            <input id="openaiApiKey" type="password" placeholder="請輸入您的 OpenAI API Key">
+          </div>
+          <div class="form-group">
+            <label for="openaiModelSelect">OpenAI 模型</label>
+            <select id="openaiModelSelect">
+              <option value="gpt-4o">gpt-4o</option>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+              <option value="gpt-4.1">gpt-4.1</option>
+              <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+              <option value="o4-mini">o4-mini</option>
+              <option value="o3">o3</option>
+              <option value="o3-mini">o3-mini</option>
+              <option value="o3-pro">o3-pro</option>
+            </select>
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <label for="geminiModelSelect">Gemini 模型</label>
-        <select id="geminiModelSelect">
-          <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-          <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-          <option value="gemini-2.5-flash-lite-preview-06-17">gemini-2.5-flash-lite-preview-06-17</option>
-        </select>
+
+      <!-- Custom Commands Tab -->
+      <div id="commands-tab" class="tab-pane">
+        <div class="command-setting">
+          <div class="command-header">/clear 命令</div>
+          <div class="command-description">自訂清除歷史記錄時顯示的訊息</div>
+          <div class="form-group">
+            <label for="clearPrompt">清除提示訊息</label>
+            <textarea id="clearPrompt" placeholder="請輸入自訂的清除提示訊息，留空則使用預設訊息"></textarea>
+          </div>
+        </div>
+
+        <div class="command-setting">
+          <div class="command-header">/summary 命令</div>
+          <div class="command-description">自訂總結頁面內容的提示語</div>
+          <div class="form-group">
+            <label for="summaryPrompt">總結提示語</label>
+            <textarea id="summaryPrompt" placeholder="請輸入自訂的總結提示語，留空則使用預設提示"></textarea>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div id="openai-settings" style="display: none;">
-      <div class="form-group">
-        <label for="openaiApiKey">OpenAI API Key</label>
-        <input id="openaiApiKey" type="password" placeholder="請輸入您的 OpenAI API Key">
-      </div>
-      <div class="form-group">
-        <label for="openaiModelSelect">OpenAI 模型</label>
-        <select id="openaiModelSelect">
-          <option value="gpt-4o">gpt-4o</option>
-          <option value="gpt-4o-mini">gpt-4o-mini</option>
-          <option value="gpt-4.1">gpt-4.1</option>
-          <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-          <option value="o4-mini">o4-mini</option>
-          <option value="o3">o3</option>
-          <option value="o3-mini">o3-mini</option>
-          <option value="o3-pro">o3-pro</option>
-        </select>
-      </div>
+    <!-- Action Buttons -->
+    <div class="button-group">
+      <button id="save" class="btn-primary">儲存設定</button>
+      <button id="reset" class="btn-secondary">重置設定</button>
     </div>
-
-    <button id="save">儲存設定</button>
+    
     <div id="status"></div>
   </div>
   <script src="popup.js"></script>

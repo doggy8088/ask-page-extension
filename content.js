@@ -79,6 +79,10 @@ const OPENAI_API_KEY_STORAGE = 'OPENAI_API_KEY';
 const OPENAI_MODEL_STORAGE = 'OPENAI_MODEL';
 const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 
+// Storage keys for custom slash command prompts
+const CUSTOM_CLEAR_PROMPT_STORAGE = 'CUSTOM_CLEAR_PROMPT';
+const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
+
 async function getValue(key, defaultValue) {
     const result = await chrome.storage.local.get([key]);
     return result[key] || defaultValue;
@@ -364,9 +368,9 @@ async function createDialog() {
     input.focus();
 
     if (capturedSelectedText) {
-        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n💡 **可用指令:**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 啟用截圖功能 (預設關閉)`);
+        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n💡 **內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 啟用截圖功能 (預設關閉)`);
     } else {
-        appendMessage('assistant', '💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。\n\n**可用指令:**\n- `/clear` - 清除歷史紀錄\n- `/summary` - 總結整個頁面\n- `/screenshot` - 啟用截圖功能 (預設關閉)');
+        appendMessage('assistant', '💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。\n\n**內建斜線命令：**\n- `/clear` - 清除歷史紀錄\n- `/summary` - 總結整個頁面\n- `/screenshot` - 啟用截圖功能 (預設關閉)');
     }
 
     function closeDialog() {
@@ -398,13 +402,17 @@ async function createDialog() {
             historyIndex = 0;
             await setValue(PROMPT_HISTORY_STORAGE, '[]');
             messagesEl.innerHTML = '';
-            appendMessage('assistant', '已清除您的提問歷史紀錄。');
+            // Use custom message if available, otherwise use default
+            const customMessage = await getValue(CUSTOM_CLEAR_PROMPT_STORAGE, '');
+            appendMessage('assistant', customMessage || '已清除您的提問歷史紀錄。');
             input.value = '';
             return;
         }
 
         if (question === '/summary') {
-            question = '請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」';
+            // Use custom prompt if available, otherwise use default
+            const customPrompt = await getValue(CUSTOM_SUMMARY_PROMPT_STORAGE, '');
+            question = customPrompt || '請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」';
         }
 
         if (question === '/screenshot') {
