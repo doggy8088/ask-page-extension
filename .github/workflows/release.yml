@@ -2,135 +2,86 @@ name: 自動化發布
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      version:
-        description: '發布版本 (例如: v1.0.0)'
-        required: true
-        type: string
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
-    - name: 檢出程式碼
+    - name: 取出程式碼
       uses: actions/checkout@v4
 
-    - name: 設定版本號
-      id: version
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Get version
+      id: get_version
       run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          VERSION="${{ github.event.inputs.version }}"
-        else
-          VERSION=${GITHUB_REF#refs/tags/}
-        fi
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "version_number=${VERSION#v}" >> $GITHUB_OUTPUT
-
-    - name: 更新 manifest.json 版本
-      run: |
-        VERSION_NUMBER="${{ steps.version.outputs.version_number }}"
-        jq --arg version "$VERSION_NUMBER" '.version = $version' manifest.json > manifest_tmp.json
-        mv manifest_tmp.json manifest.json
-
-    - name: 建立套件
-      run: |
-        VERSION="${{ steps.version.outputs.version }}"
-        PACKAGE_NAME="AskPageExtension_${VERSION}.zip"
-
-        # 建立 ZIP 套件
-        zip -r "$PACKAGE_NAME" \
-          manifest.json \
-          background.js \
-          content.js \
-          popup.html \
-          popup.js \
-          style.css \
-          icons/ \
-          lib/ \
-          -x "*.git*" "*.DS_Store*" "*node_modules*"
-
-        echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+        version=$(jq -r '.version' manifest.json)
+        echo "version=$version" >> $GITHUB_OUTPUT
 
     - name: 建立 GitHub Release
-      uses: softprops/action-gh-release@v2
+      id: create_release
+      uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ steps.version.outputs.version }}
-        name: 頁問 ${{ steps.version.outputs.version }}
-        files: ${{ env.PACKAGE_NAME }}
-        generate_release_notes: true
+        tag_name: v${{ steps.get_version.outputs.version }}
+        name: 頁問 v${{ steps.get_version.outputs.version }}
         draft: false
         prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Chrome Web Store 自動發布
+    - name: Create ZIP package
       run: |
-        # 檢查 jq 是否可用
-        if ! command -v jq &> /dev/null; then
-          echo "❌ jq 工具未安裝，無法解析 JSON 回應"
+        filePath="AskPageExtension_v${{ steps.get_version.outputs.version }}.zip"
+        zip -r "$filePath" manifest.json background.js content.js popup.html popup.js style.css icons lib CHANGELOG.md README.md
+
+    - name: Upload Release Asset
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.get_version.outputs.version }}
+        files: ./AskPageExtension_v${{ steps.get_version.outputs.version }}.zip
+
+    - name: Check Chrome Web Store Secrets
+      run: |
+        missing_secrets=()
+
+        if [ -z "${{ secrets.EXTENSION_ID }}" ]; then
+          missing_secrets+=("EXTENSION_ID")
+        fi
+        if [ -z "${{ secrets.CLIENT_ID }}" ]; then
+          missing_secrets+=("CLIENT_ID")
+        fi
+        if [ -z "${{ secrets.CLIENT_SECRET }}" ]; then
+          missing_secrets+=("CLIENT_SECRET")
+        fi
+        if [ -z "${{ secrets.REFRESH_TOKEN }}" ]; then
+          missing_secrets+=("REFRESH_TOKEN")
+        fi
+
+        if [ ${#missing_secrets[@]} -gt 0 ]; then
+          echo "❌ Chrome Web Store API 相關 secrets 未完整設定"
+          echo "缺少的 secrets: $(IFS=', '; echo "${missing_secrets[*]}")"
+          echo "請到 GitHub Repository Settings > Secrets and variables > Actions 設定以下 secrets:"
+          for secret in "${missing_secrets[@]}"; do
+            echo "  - $secret"
+          done
           exit 1
-        fi
-        
-        # 檢查必要的 secrets 是否都已設定
-        if [ -z "${{ secrets.CLIENT_ID }}" ] || \
-           [ -z "${{ secrets.CLIENT_SECRET }}" ] || \
-           [ -z "${{ secrets.REFRESH_TOKEN }}" ] || \
-           [ -z "${{ secrets.EXTENSION_ID }}" ]; then
-          echo "❌ Chrome Web Store API 相關 secrets 未完整設定，跳過自動發布"
-          echo "需要設定以下 secrets: CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, EXTENSION_ID"
-          exit 0
-        fi
-
-        # 取得 Chrome Web Store API 存取權杖
-        ACCESS_TOKEN=$(curl -s -X POST \
-          -d "client_id=${{ secrets.CLIENT_ID }}" \
-          -d "client_secret=${{ secrets.CLIENT_SECRET }}" \
-          -d "refresh_token=${{ secrets.REFRESH_TOKEN }}" \
-          -d "grant_type=refresh_token" \
-          https://oauth2.googleapis.com/token | jq -r '.access_token // empty')
-
-        if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
-          echo "❌ 無法取得 Chrome Web Store API 存取權杖"
-          exit 1
-        fi
-
-        # 上傳套件到 Chrome Web Store
-        echo "🚀 上傳套件到 Chrome Web Store..."
-        UPLOAD_RESPONSE=$(curl -s -X PUT \
-          -H "Authorization: Bearer $ACCESS_TOKEN" \
-          -H "x-goog-api-version: 2" \
-          -T "${{ env.PACKAGE_NAME }}" \
-          "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${{ secrets.EXTENSION_ID }}")
-
-        echo "上傳回應: $UPLOAD_RESPONSE"
-
-        # 檢查上傳是否成功
-        UPLOAD_STATE=$(echo "$UPLOAD_RESPONSE" | jq -r '.uploadState // "FAILURE"')
-        if [ "$UPLOAD_STATE" != "SUCCESS" ]; then
-          echo "❌ 套件上傳失敗: $UPLOAD_RESPONSE"
-          exit 1
-        fi
-
-        # 發布到 Chrome Web Store
-        echo "📢 發布到 Chrome Web Store..."
-        PUBLISH_RESPONSE=$(curl -s -X POST \
-          -H "Authorization: Bearer $ACCESS_TOKEN" \
-          -H "x-goog-api-version: 2" \
-          -H "Content-Length: 0" \
-          "https://www.googleapis.com/chromewebstore/v1.1/items/${{ secrets.EXTENSION_ID }}/publish")
-
-        echo "發布回應: $PUBLISH_RESPONSE"
-
-        # 檢查發布是否成功
-        STATUS=$(echo "$PUBLISH_RESPONSE" | jq -r '.status[0] // "FAILURE"')
-        if [ "$STATUS" = "OK" ]; then
-          echo "✅ 成功發布到 Chrome Web Store！"
         else
-          echo "❌ Chrome Web Store 發布失敗: $PUBLISH_RESPONSE"
-          # 不讓 Chrome Web Store 發布失敗影響整個工作流程
-          # exit 1
+          echo "✅ 所有必要的 Chrome Web Store secrets 都已設定"
         fi
+
+    - name: Publish to Chrome Web Store
+      uses: mnao305/chrome-extension-upload@v4.0.1
+      with:
+        file-path: 'AskPageExtension_v${{ steps.get_version.outputs.version }}.zip'
+        extension-id: ${{ secrets.EXTENSION_ID }}
+        client-id: ${{ secrets.CLIENT_ID }}
+        client-secret: ${{ secrets.CLIENT_SECRET }}
+        refresh-token: ${{ secrets.REFRESH_TOKEN }}
