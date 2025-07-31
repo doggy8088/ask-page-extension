@@ -366,10 +366,15 @@ async function createDialog() {
 
     input.focus();
 
+    // Generate dynamic welcome message based on screenshot state
+    const screenshotEnabled = await getScreenshotEnabled();
+    const screenshotStatus = screenshotEnabled ? '📸 **截圖功能已啟用** - 停用截圖功能' : '啟用截圖功能 (預設關閉)';
+    const screenshotNotice = screenshotEnabled ? '\n\n⚠️ **提醒：截圖功能目前為啟用狀態**\n系統會自動在您的提問中包含當前頁面截圖進行分析。' : '';
+
     if (capturedSelectedText) {
-        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n💡 **內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 啟用截圖功能 (預設關閉)`);
+        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}\n\n💡 **內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}`);
     } else {
-        appendMessage('assistant', '💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。\n\n**內建斜線命令：**\n- `/clear` - 清除歷史紀錄\n- `/summary` - 總結整個頁面\n- `/screenshot` - 啟用截圖功能 (預設關閉)');
+        appendMessage('assistant', `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}\n\n**內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}`);
     }
 
     function closeDialog() {
