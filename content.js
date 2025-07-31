@@ -408,6 +408,7 @@ async function createDialog() {
             messagesEl.innerHTML = '';
             appendMessage('assistant', '已清除您的提問歷史紀錄。');
             input.value = '';
+            input.focus();
             return;
         }
 
@@ -420,6 +421,7 @@ async function createDialog() {
         if (question === '/screenshot') {
             appendMessage('user', question);
             input.value = '';
+            input.focus();
 
             // Toggle screenshot functionality
             const newState = await toggleScreenshotEnabled();
@@ -466,6 +468,7 @@ async function createDialog() {
 
         appendMessage('user', question);
         input.value = '';
+        input.focus();
         await askAI(question, capturedSelectedText);
     }
 
