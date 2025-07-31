@@ -76,6 +76,9 @@ const statusDiv = document.getElementById('status');
 // Custom prompt elements
 const summaryPromptInput = document.getElementById('summaryPrompt');
 
+// Default prompts (should match the ones in content.js)
+const DEFAULT_SUMMARY_PROMPT = '請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」';
+
 // Tab navigation
 const tabButtons = document.querySelectorAll('.tab-btn');
 const tabPanes = document.querySelectorAll('.tab-pane');
@@ -167,7 +170,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Load custom prompts
-        summaryPromptInput.value = result.CUSTOM_SUMMARY_PROMPT || '';
+        summaryPromptInput.value = result.CUSTOM_SUMMARY_PROMPT || DEFAULT_SUMMARY_PROMPT;
     });
 });
 
