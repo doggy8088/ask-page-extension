@@ -806,6 +806,18 @@ async function createDialog() {
         contextParts.push({ text: question });
 
         console.log('[AskPage] Total context parts:', contextParts.length);
+
+        // show all context parts for debugging
+        contextParts.forEach((part, index) => {
+            if (part.text) {
+                console.log(`[AskPage]   Part ${index + 1}: Text (${part.text.length} chars)`);
+                console.log(`[AskPage]   Part ${index + 1}: Text content: ${part.text}`);
+            } else if (part.inline_data) {
+                console.log(`[AskPage]   Part ${index + 1}: Image (${part.inline_data.mime_type}, ${part.inline_data.data.length} chars)`);
+            }
+        });
+
+        console.log('[AskPage] ===== CONTEXT PARTS PREPARED =====');
         console.log('[AskPage] Context parts breakdown:');
         contextParts.forEach((part, index) => {
             if (part.text) {
