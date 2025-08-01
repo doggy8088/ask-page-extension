@@ -142,8 +142,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 geminiApiKeyInput.value = decryptedKey;
             } catch (error) {
                 console.error('Error decrypting Gemini API key:', error);
-                // Fallback to plaintext for backward compatibility
-                geminiApiKeyInput.value = result.GEMINI_API_KEY;
+                // Check if this looks like encrypted data that failed to decrypt
+                if (typeof result.GEMINI_API_KEY === 'object' && result.GEMINI_API_KEY.encrypted) {
+                    geminiApiKeyInput.value = '';
+                    geminiApiKeyInput.placeholder = '解密失敗，請重新輸入 API Key';
+                    statusDiv.textContent = 'API Key 解密失敗，請重新設定';
+                    statusDiv.style.color = 'red';
+                } else {
+                    // Fallback to plaintext for backward compatibility
+                    geminiApiKeyInput.value = result.GEMINI_API_KEY;
+                }
             }
         }
 
@@ -160,6 +168,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 openaiApiKeyInput.value = decryptedKey;
             } catch (error) {
                 console.error('Error decrypting OpenAI API key:', error);
+                // Check if this looks like encrypted data that failed to decrypt
+                if (typeof result.OPENAI_API_KEY === 'object' && result.OPENAI_API_KEY.encrypted) {
+                    openaiApiKeyInput.value = '';
+                    openaiApiKeyInput.placeholder = '解密失敗，請重新輸入 API Key';
+                    if (!statusDiv.textContent) { // Only set if not already showing an error
+                        statusDiv.textContent = 'API Key 解密失敗，請重新設定';
+                        statusDiv.style.color = 'red';
+                    }
+                } else {
+                    openaiApiKeyInput.value = result.OPENAI_API_KEY;
+                }
             }
         }
 
@@ -227,17 +246,20 @@ saveButton.addEventListener('click', async () => {
 // Reset settings functionality
 resetButton.addEventListener('click', () => {
     if (confirm('確定要重置所有設定嗎？\n\n注意：API Key 不會被清除，但其他所有設定將恢復為預設值。')) {
-        // Get current API keys first to preserve them
-        chrome.storage.local.get(['GEMINI_API_KEY', 'OPENAI_API_KEY'], (result) => {
-            // Clear all settings except API keys
+        // Get current API keys and encryption key first to preserve them
+        chrome.storage.local.get(['GEMINI_API_KEY', 'OPENAI_API_KEY', 'ENCRYPTION_KEY'], (result) => {
+            // Clear all settings except API keys and encryption key
             chrome.storage.local.clear(() => {
-                // Restore API keys
+                // Restore API keys and encryption key
                 const settingsToRestore = {};
                 if (result.GEMINI_API_KEY) {
                     settingsToRestore.GEMINI_API_KEY = result.GEMINI_API_KEY;
                 }
                 if (result.OPENAI_API_KEY) {
                     settingsToRestore.OPENAI_API_KEY = result.OPENAI_API_KEY;
+                }
+                if (result.ENCRYPTION_KEY) {
+                    settingsToRestore.ENCRYPTION_KEY = result.ENCRYPTION_KEY;
                 }
 
                 chrome.storage.local.set(settingsToRestore, () => {
