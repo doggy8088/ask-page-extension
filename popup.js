@@ -70,7 +70,33 @@ const openaiModelSelect = document.getElementById('openaiModelSelect');
 const geminiSettings = document.getElementById('gemini-settings');
 const openaiSettings = document.getElementById('openai-settings');
 const saveButton = document.getElementById('save');
+const resetButton = document.getElementById('reset');
 const statusDiv = document.getElementById('status');
+
+// Custom prompt elements
+const summaryPromptInput = document.getElementById('summaryPrompt');
+
+// Default prompts (should match the ones in content.js)
+const DEFAULT_SUMMARY_PROMPT = '請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」';
+
+// Tab navigation
+const tabButtons = document.querySelectorAll('.tab-btn');
+const tabPanes = document.querySelectorAll('.tab-pane');
+
+// Handle tab switching
+tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        const targetTab = button.dataset.tab;
+
+        // Update tab buttons
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+
+        // Update tab panes
+        tabPanes.forEach(pane => pane.classList.remove('active'));
+        document.getElementById(`${targetTab}-tab`).classList.add('active');
+    });
+});
 
 // Handle provider switching
 providerSelect.addEventListener('change', () => {
@@ -90,7 +116,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     chrome.storage.local.get([
         'PROVIDER', 'GEMINI_API_KEY', 'GEMINI_MODEL',
-        'OPENAI_API_KEY', 'OPENAI_MODEL'
+        'OPENAI_API_KEY', 'OPENAI_MODEL',
+        'CUSTOM_SUMMARY_PROMPT'
     ], async (result) => {
         // Set provider
         if (result.PROVIDER) {
@@ -141,6 +168,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             openaiModelSelect.value = 'gpt-4o-mini';
         }
+
+        // Load custom prompts
+        summaryPromptInput.value = result.CUSTOM_SUMMARY_PROMPT || DEFAULT_SUMMARY_PROMPT;
     });
 });
 
@@ -153,10 +183,14 @@ saveButton.addEventListener('click', async () => {
     const openaiApiKey = openaiApiKeyInput.value.trim();
     const openaiModel = openaiModelSelect.value;
 
+    // Get custom prompts
+    const summaryPrompt = summaryPromptInput.value.trim();
+
     const settings = {
         'PROVIDER': provider,
         'GEMINI_MODEL': geminiModel,
-        'OPENAI_MODEL': openaiModel
+        'OPENAI_MODEL': openaiModel,
+        'CUSTOM_SUMMARY_PROMPT': summaryPrompt
     };
 
     // Encrypt and save API keys
@@ -188,4 +222,31 @@ saveButton.addEventListener('click', async () => {
             window.close();
         }, 1500);
     });
+});
+
+// Reset settings functionality
+resetButton.addEventListener('click', () => {
+    if (confirm('確定要重置所有設定嗎？\n\n注意：API Key 不會被清除，但其他所有設定將恢復為預設值。')) {
+        // Get current API keys first to preserve them
+        chrome.storage.local.get(['GEMINI_API_KEY', 'OPENAI_API_KEY'], (result) => {
+            // Clear all settings except API keys
+            chrome.storage.local.clear(() => {
+                // Restore API keys
+                const settingsToRestore = {};
+                if (result.GEMINI_API_KEY) {
+                    settingsToRestore.GEMINI_API_KEY = result.GEMINI_API_KEY;
+                }
+                if (result.OPENAI_API_KEY) {
+                    settingsToRestore.OPENAI_API_KEY = result.OPENAI_API_KEY;
+                }
+
+                chrome.storage.local.set(settingsToRestore, () => {
+                    statusDiv.textContent = '設定已重置！';
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                });
+            });
+        });
+    }
 });

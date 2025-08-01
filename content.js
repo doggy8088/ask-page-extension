@@ -79,6 +79,9 @@ const OPENAI_API_KEY_STORAGE = 'OPENAI_API_KEY';
 const OPENAI_MODEL_STORAGE = 'OPENAI_MODEL';
 const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 
+// Storage keys for custom slash command prompts
+const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
+
 async function getValue(key, defaultValue) {
     const result = await chrome.storage.local.get([key]);
     return result[key] || defaultValue;
@@ -363,10 +366,15 @@ async function createDialog() {
 
     input.focus();
 
+    // Generate dynamic welcome message based on screenshot state
+    const screenshotEnabled = await getScreenshotEnabled();
+    const screenshotStatus = screenshotEnabled ? '📸 **截圖功能已啟用** - 停用截圖功能' : '啟用截圖功能 (預設關閉)';
+    const screenshotNotice = screenshotEnabled ? '\n\n⚠️ **提醒：截圖功能目前為啟用狀態**\n系統會自動在您的提問中包含當前頁面截圖進行分析。' : '';
+
     if (capturedSelectedText) {
-        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n💡 **可用指令:**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 啟用截圖功能 (預設關閉)`);
+        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}\n\n💡 **內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}`);
     } else {
-        appendMessage('assistant', '💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。\n\n**可用指令:**\n- `/clear` - 清除歷史紀錄\n- `/summary` - 總結整個頁面\n- `/screenshot` - 啟用截圖功能 (預設關閉)');
+        appendMessage('assistant', `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}\n\n**內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}`);
     }
 
     function closeDialog() {
@@ -400,16 +408,20 @@ async function createDialog() {
             messagesEl.innerHTML = '';
             appendMessage('assistant', '已清除您的提問歷史紀錄。');
             input.value = '';
+            input.focus();
             return;
         }
 
         if (question === '/summary') {
-            question = '請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」';
+            // Use custom prompt if available, otherwise use default
+            const customPrompt = await getValue(CUSTOM_SUMMARY_PROMPT_STORAGE, '');
+            question = customPrompt || '請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」';
         }
 
         if (question === '/screenshot') {
             appendMessage('user', question);
             input.value = '';
+            input.focus();
 
             // Toggle screenshot functionality
             const newState = await toggleScreenshotEnabled();
@@ -456,6 +468,7 @@ async function createDialog() {
 
         appendMessage('user', question);
         input.value = '';
+        input.focus();
         await askAI(question, capturedSelectedText);
     }
 
