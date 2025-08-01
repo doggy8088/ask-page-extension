@@ -737,7 +737,20 @@ async function createDialog() {
             console.log('[AskPage] Screenshot capture skipped (disabled)');
         }
 
-        let container = document.querySelector('main') || document.querySelector('article') || document.body;
+        let container;
+        // 1. 優先選取 main
+        if (document.querySelector('main')) {
+            container = document.querySelector('main');
+        } else {
+            // 2. 若只有一個 article，則選取該 article
+            const articles = document.querySelectorAll('article');
+            if (articles.length === 1) {
+                container = articles[0];
+            } else {
+                // 3. 否則 fallback 到 body
+                container = document.body;
+            }
+        }
         const fullPageText = container.innerText.slice(0, 15000);
         console.log('[AskPage] Full page text length:', fullPageText.length);
 
@@ -899,7 +912,21 @@ async function createDialog() {
         appendMessage('assistant', '...thinking...');
 
         // Get page content
-        let container = document.querySelector('main') || document.querySelector('article') || document.body;
+
+        let container;
+        // 1. 優先選取 main
+        if (document.querySelector('main')) {
+            container = document.querySelector('main');
+        } else {
+            // 2. 若只有一個 article，則選取該 article
+            const articles = document.querySelectorAll('article');
+            if (articles.length === 1) {
+                container = articles[0];
+            } else {
+                // 3. 否則 fallback 到 body
+                container = document.body;
+            }
+        }
         const fullPageText = container.innerText.slice(0, 15000);
         console.log('[AskPage] Full page text length:', fullPageText.length);
 
