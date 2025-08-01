@@ -93,7 +93,7 @@ function setValue(key, value) {
 
 // API key masking for console output
 function maskApiKey(apiKey) {
-    if (!apiKey || apiKey.length < 8) {return apiKey;}
+    if (!apiKey || apiKey.length < 8) { return apiKey; }
     return apiKey.substring(0, 4) + '****' + apiKey.substring(apiKey.length - 4);
 }
 
@@ -120,7 +120,7 @@ async function decryptApiKey(encryptedData) {
 
     try {
         const key = await getEncryptionKey();
-        if (!key) {return encryptedData;}
+        if (!key) { return encryptedData; }
 
         const encrypted = new Uint8Array(encryptedData.encrypted);
         const iv = new Uint8Array(encryptedData.iv);
@@ -266,7 +266,7 @@ function renderMarkdown(md) {
     建立對話框
 -------------------------------------------------- */
 async function createDialog() {
-    if (document.getElementById('gemini-qna-overlay')) {return;}
+    if (document.getElementById('gemini-qna-overlay')) { return; }
 
     const initialSelection = window.getSelection();
     const capturedSelectedText = initialSelection.toString().trim();
@@ -383,7 +383,7 @@ async function createDialog() {
         isDialogVisible = false;
     }
     overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {closeDialog();} else if (!intelliBox.contains(e.target) && !input.contains(e.target)) {hideIntelliBox();}
+        if (e.target === overlay) { closeDialog(); } else if (!intelliBox.contains(e.target) && !input.contains(e.target)) { hideIntelliBox(); }
     });
     const escapeKeyListener = (e) => {
         if (e.key === 'Escape') {
@@ -399,7 +399,7 @@ async function createDialog() {
     async function handleAsk() {
         hideIntelliBox();
         let question = input.value.trim();
-        if (!question) {return;}
+        if (!question) { return; }
 
         if (question === '/clear') {
             promptHistory.length = 0;
@@ -462,7 +462,7 @@ async function createDialog() {
         }
 
         promptHistory.push(question);
-        if (promptHistory.length > 100) {promptHistory.shift();}
+        if (promptHistory.length > 100) { promptHistory.shift(); }
         historyIndex = promptHistory.length;
         await setValue(PROMPT_HISTORY_STORAGE, JSON.stringify(promptHistory));
 
