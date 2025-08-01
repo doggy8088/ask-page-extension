@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <title>頁問: 偏好設定</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --primary-color: #6366f1;
+      --primary-hover: #5b21b6;
+      --secondary-color: #f8fafc;
+      --border-color: #e2e8f0;
+      --text-primary: #1e293b;
+      --text-secondary: #64748b;
+      --success-color: #10b981;
+      --danger-color: #ef4444;
+      --warning-color: #f59e0b;
+      --background: #ffffff;
+      --card-background: #ffffff;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --tab-active-bg: #ffffff;
+      --tab-inactive-bg: #f1f5f9;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary-color: #8b5cf6;
+        --primary-hover: #7c3aed;
+        --secondary-color: #1e293b;
+        --border-color: #334155;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --success-color: #34d399;
+        --danger-color: #f87171;
+        --warning-color: #fbbf24;
+        --background: #0f172a;
+        --card-background: #1e293b;
+        --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+        --tab-active-bg: #0f172a;
+        --tab-inactive-bg: #1e293b;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--background);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding: 32px 0;
+      border-bottom: 2px solid var(--border-color);
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--primary-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .header p {
+      margin: 8px 0 0;
+      color: var(--text-secondary);
+      font-size: 16px;
+    }
+
+    .settings-content {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Tab navigation */
+    .tab-nav {
+      display: flex;
+      background: var(--secondary-color);
+      border-radius: 12px;
+      padding: 4px;
+      box-shadow: var(--shadow);
+      gap: 4px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 16px 24px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      color: var(--text-secondary);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .tab-btn:hover {
+      background: var(--tab-active-bg);
+      color: var(--text-primary);
+    }
+
+    .tab-btn.active {
+      background: var(--tab-active-bg);
+      color: var(--primary-color);
+      box-shadow: var(--shadow);
+    }
+
+    /* Tab content */
+    .tab-content {
+      margin-top: 24px;
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .card {
+      background: var(--card-background);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+      transition: box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow-lg);
+    }
+
+    .card-header {
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-description {
+      margin: 8px 0 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    input, select, textarea {
+      padding: 12px 16px;
+      font-size: 14px;
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--background);
+      color: var(--text-primary);
+      transition: all 0.2s ease;
+      outline: none;
+      font-family: inherit;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    input:hover, select:hover, textarea:hover {
+      border-color: var(--primary-color);
+    }
+
+    .provider-settings {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 24px;
+      background: var(--secondary-color);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+    }
+
+    /* Custom Commands */
+    .commands-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .command-item {
+      background: var(--secondary-color);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      transition: all 0.2s ease;
+    }
+
+    .command-item:hover {
+      border-color: var(--primary-color);
+      box-shadow: var(--shadow);
+    }
+
+    .command-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .command-name {
+      font-weight: 600;
+      color: var(--primary-color);
+      font-size: 16px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .command-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .built-in-badge {
+      background: var(--warning-color);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .add-command {
+      border: 2px dashed var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: transparent;
+    }
+
+    .add-command:hover {
+      border-color: var(--primary-color);
+      background: var(--secondary-color);
+    }
+
+    .add-command-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-secondary);
+    }
+
+    .add-command-icon {
+      font-size: 24px;
+      color: var(--primary-color);
+    }
+
+    /* Buttons */
+    .button-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 32px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      transition: all 0.2s ease;
+      box-shadow: var(--shadow);
+      min-width: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+      color: white;
+    }
+
+    .btn-primary:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--secondary-color);
+      color: var(--text-primary);
+      border: 2px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border-color);
+      border-color: var(--primary-color);
+    }
+
+    .btn-danger {
+      background: var(--danger-color);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .btn-small {
+      padding: 8px 16px;
+      font-size: 12px;
+      min-width: auto;
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .status {
+      font-size: 14px;
+      min-height: 20px;
+      text-align: center;
+      font-weight: 500;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 20px;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .status:not(:empty) {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .status.success {
+      color: var(--success-color);
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .status.error {
+      color: var(--danger-color);
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .tab-btn {
+        padding: 12px 16px;
+        font-size: 14px;
+      }
+
+      .card {
+        padding: 16px;
+      }
+
+      .command-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .command-actions {
+        align-self: flex-end;
+      }
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--secondary-color);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-secondary);
+    }
+
+    .icon {
+      font-style: normal;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>
+        <span class="icon">⚙️</span>
+        頁問: 偏好設定
+      </h1>
+      <p>設定您的 AI 提供者和自訂斜線命令</p>
+    </div>
+
+    <div class="settings-content">
+      <!-- Tab Navigation -->
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="provider">
+          <span class="icon">🤖</span>
+          AI 提供者
+        </button>
+        <button class="tab-btn" data-tab="commands">
+          <span class="icon">⚡</span>
+          自訂斜線命令
+        </button>
+      </div>
+
+      <!-- Tab Content -->
+      <div class="tab-content">
+        <!-- AI Provider Tab -->
+        <div id="provider-tab" class="tab-pane active">
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">
+                <span class="icon">🔧</span>
+                AI 提供者設定
+              </h2>
+              <p class="card-description">選擇您偏好的 AI 提供者並設定相關參數</p>
+            </div>
+
+            <div class="form-group">
+              <label for="providerSelect">選擇 AI 提供者</label>
+              <select id="providerSelect">
+                <option value="gemini">Google Gemini</option>
+                <option value="openai">OpenAI</option>
+              </select>
+            </div>
+
+            <div id="gemini-settings" class="provider-settings">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="geminiApiKey">Gemini API Key</label>
+                  <input id="geminiApiKey" type="password" placeholder="請輸入您的 Gemini API Key">
+                </div>
+                <div class="form-group">
+                  <label for="geminiModelSelect">Gemini 模型</label>
+                  <select id="geminiModelSelect">
+                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                    <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                    <option value="gemini-2.5-flash-lite-preview-06-17">gemini-2.5-flash-lite-preview-06-17</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div id="openai-settings" class="provider-settings" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="openaiApiKey">OpenAI API Key</label>
+                  <input id="openaiApiKey" type="password" placeholder="請輸入您的 OpenAI API Key">
+                </div>
+                <div class="form-group">
+                  <label for="openaiModelSelect">OpenAI 模型</label>
+                  <select id="openaiModelSelect">
+                    <option value="gpt-4o">gpt-4o</option>
+                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                    <option value="gpt-4.1">gpt-4.1</option>
+                    <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                    <option value="o4-mini">o4-mini</option>
+                    <option value="o3">o3</option>
+                    <option value="o3-mini">o3-mini</option>
+                    <option value="o3-pro">o3-pro</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom Commands Tab -->
+        <div id="commands-tab" class="tab-pane">
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">
+                <span class="icon">⚡</span>
+                斜線命令管理
+              </h2>
+              <p class="card-description">管理內建和自訂的斜線命令</p>
+            </div>
+
+            <div class="commands-list" id="commandsList">
+              <!-- Built-in commands will be loaded here -->
+              <!-- Custom commands will be loaded here -->
+            </div>
+
+            <div class="add-command" id="addCommand">
+              <div class="add-command-content">
+                <div class="add-command-icon">➕</div>
+                <div>新增自訂斜線命令</div>
+                <small>點擊新增您專屬的斜線命令</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="button-group">
+        <button id="save" class="btn-primary">
+          <span class="icon">💾</span>
+          儲存設定
+        </button>
+        <button id="reset" class="btn-secondary">
+          <span class="icon">🔄</span>
+          重置設定
+        </button>
+      </div>
+      
+      <div id="status" class="status"></div>
+    </div>
+  </div>
+
+  <!-- Command Edit Modal -->
+  <div id="commandModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; padding: 20px;">
+    <div style="max-width: 600px; margin: 50px auto; background: var(--card-background); border-radius: 16px; padding: 24px; max-height: 80vh; overflow-y: auto;">
+      <h3 id="modalTitle" style="margin: 0 0 20px; color: var(--text-primary);">編輯斜線命令</h3>
+      
+      <div class="form-group">
+        <label for="modalCommandName">命令名稱</label>
+        <input id="modalCommandName" type="text" placeholder="例如：/help" pattern="^/[a-zA-Z0-9_-]+$">
+        <small style="color: var(--text-secondary);">命令必須以 / 開頭，只能包含字母、數字、底線和連字符</small>
+      </div>
+      
+      <div class="form-group">
+        <label for="modalCommandPrompt">提示內容</label>
+        <textarea id="modalCommandPrompt" placeholder="請輸入當使用者執行此命令時要傳送給 AI 的提示內容..."></textarea>
+      </div>
+      
+      <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+        <button id="modalCancel" class="btn-secondary">取消</button>
+        <button id="modalSave" class="btn-primary">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

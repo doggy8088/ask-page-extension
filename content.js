@@ -81,6 +81,7 @@ const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 
 // Storage keys for custom slash command prompts
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
+const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
 
 async function getValue(key, defaultValue) {
     const result = await chrome.storage.local.get([key]);
@@ -324,14 +325,23 @@ async function createDialog() {
     input.type = 'text';
     input.placeholder = '輸入問題後按 Enter 或點擊 Ask 按鈕 (可先選取文字範圍)';
 
-    // Dynamic intelliCommands based on screenshot state
+    // Dynamic intelliCommands based on screenshot state and custom commands
     async function getIntelliCommands() {
         const screenshotEnabled = await getScreenshotEnabled();
-        return [
+        const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+
+        const builtInCommands = [
             { cmd: '/clear', desc: '清除提問歷史紀錄' },
             { cmd: '/summary', desc: '總結本頁內容' },
             { cmd: '/screenshot', desc: screenshotEnabled ? '停用截圖功能' : '啟用截圖功能' }
         ];
+
+        const customCommandsForIntellisense = customCommands.map(cmd => ({
+            cmd: cmd.cmd,
+            desc: cmd.prompt ? cmd.prompt.substring(0, 50) + (cmd.prompt.length > 50 ? '...' : '') : '自訂命令'
+        }));
+
+        return [...builtInCommands, ...customCommandsForIntellisense];
     }
 
     const intelliBox = document.createElement('div');
@@ -366,15 +376,21 @@ async function createDialog() {
 
     input.focus();
 
-    // Generate dynamic welcome message based on screenshot state
+    // Generate dynamic welcome message based on screenshot state and custom commands
     const screenshotEnabled = await getScreenshotEnabled();
     const screenshotStatus = screenshotEnabled ? '📸 **截圖功能已啟用** - 停用截圖功能' : '啟用截圖功能 (預設關閉)';
     const screenshotNotice = screenshotEnabled ? '\n\n⚠️ **提醒：截圖功能目前為啟用狀態**\n系統會自動在您的提問中包含當前頁面截圖進行分析。' : '';
 
+    // Get custom commands for welcome message
+    const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+    const customCommandsList = customCommands.length > 0 ?
+        '\n\n**您的自訂命令：**\n' + customCommands.map(cmd => `- \`${cmd.cmd}\` - ${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`).join('\n') :
+        '';
+
     if (capturedSelectedText) {
-        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}\n\n💡 **內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}`);
+        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}\n\n💡 **內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}${customCommandsList}\n\n點擊擴充功能圖示可設定更多自訂命令。`);
     } else {
-        appendMessage('assistant', `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}\n\n**內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}`);
+        appendMessage('assistant', `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}\n\n**內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}${customCommandsList}\n\n點擊擴充功能圖示可設定更多自訂命令。`);
     }
 
     function closeDialog() {
@@ -459,6 +475,28 @@ async function createDialog() {
                 appendMessage('assistant', '⭕ **截圖功能已停用**\n\n系統將不再自動捕獲截圖。您的提問將僅使用文字內容進行分析。此設定會記憶到下次重新載入頁面。');
             }
             return;
+        }
+
+        // Handle custom commands
+        if (question.startsWith('/')) {
+            const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+            const customCommand = customCommands.find(cmd => cmd.cmd === question);
+
+            if (customCommand) {
+                // Replace the command with its prompt
+                question = customCommand.prompt;
+                appendMessage('user', customCommand.cmd);
+                input.value = '';
+                input.focus();
+                // Continue with AI processing using the custom prompt
+            } else {
+                // Unknown command
+                appendMessage('user', question);
+                appendMessage('assistant', `❌ **未知命令: ${question}**\n\n可用的命令：\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 切換截圖功能\n\n您也可以在設定中新增自訂命令。`);
+                input.value = '';
+                input.focus();
+                return;
+            }
         }
 
         promptHistory.push(question);
