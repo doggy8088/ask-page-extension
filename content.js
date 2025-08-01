@@ -93,7 +93,7 @@ function setValue(key, value) {
 
 // API key masking for console output
 function maskApiKey(apiKey) {
-    if (!apiKey || apiKey.length < 8) {return apiKey;}
+    if (!apiKey || apiKey.length < 8) { return apiKey; }
     return apiKey.substring(0, 4) + '****' + apiKey.substring(apiKey.length - 4);
 }
 
@@ -120,7 +120,7 @@ async function decryptApiKey(encryptedData) {
 
     try {
         const key = await getEncryptionKey();
-        if (!key) {return encryptedData;}
+        if (!key) { return encryptedData; }
 
         const encrypted = new Uint8Array(encryptedData.encrypted);
         const iv = new Uint8Array(encryptedData.iv);
@@ -266,7 +266,7 @@ function renderMarkdown(md) {
     建立對話框
 -------------------------------------------------- */
 async function createDialog() {
-    if (document.getElementById('gemini-qna-overlay')) {return;}
+    if (document.getElementById('gemini-qna-overlay')) { return; }
 
     const initialSelection = window.getSelection();
     const capturedSelectedText = initialSelection.toString().trim();
@@ -383,7 +383,7 @@ async function createDialog() {
         isDialogVisible = false;
     }
     overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {closeDialog();} else if (!intelliBox.contains(e.target) && !input.contains(e.target)) {hideIntelliBox();}
+        if (e.target === overlay) { closeDialog(); } else if (!intelliBox.contains(e.target) && !input.contains(e.target)) { hideIntelliBox(); }
     });
     const escapeKeyListener = (e) => {
         if (e.key === 'Escape') {
@@ -399,7 +399,7 @@ async function createDialog() {
     async function handleAsk() {
         hideIntelliBox();
         let question = input.value.trim();
-        if (!question) {return;}
+        if (!question) { return; }
 
         if (question === '/clear') {
             promptHistory.length = 0;
@@ -462,7 +462,7 @@ async function createDialog() {
         }
 
         promptHistory.push(question);
-        if (promptHistory.length > 100) {promptHistory.shift();}
+        if (promptHistory.length > 100) { promptHistory.shift(); }
         historyIndex = promptHistory.length;
         await setValue(PROMPT_HISTORY_STORAGE, JSON.stringify(promptHistory));
 
@@ -737,7 +737,20 @@ async function createDialog() {
             console.log('[AskPage] Screenshot capture skipped (disabled)');
         }
 
-        let container = document.querySelector('main') || document.querySelector('article') || document.body;
+        let container;
+        // 1. 優先選取 main
+        if (document.querySelector('main')) {
+            container = document.querySelector('main');
+        } else {
+            // 2. 若只有一個 article，則選取該 article
+            const articles = document.querySelectorAll('article');
+            if (articles.length === 1) {
+                container = articles[0];
+            } else {
+                // 3. 否則 fallback 到 body
+                container = document.body;
+            }
+        }
         const fullPageText = container.innerText.slice(0, 15000);
         console.log('[AskPage] Full page text length:', fullPageText.length);
 
@@ -793,6 +806,18 @@ async function createDialog() {
         contextParts.push({ text: question });
 
         console.log('[AskPage] Total context parts:', contextParts.length);
+
+        // show all context parts for debugging
+        contextParts.forEach((part, index) => {
+            if (part.text) {
+                console.log(`[AskPage]   Part ${index + 1}: Text (${part.text.length} chars)`);
+                console.log(`[AskPage]   Part ${index + 1}: Text content: ${part.text}`);
+            } else if (part.inline_data) {
+                console.log(`[AskPage]   Part ${index + 1}: Image (${part.inline_data.mime_type}, ${part.inline_data.data.length} chars)`);
+            }
+        });
+
+        console.log('[AskPage] ===== CONTEXT PARTS PREPARED =====');
         console.log('[AskPage] Context parts breakdown:');
         contextParts.forEach((part, index) => {
             if (part.text) {
@@ -899,7 +924,21 @@ async function createDialog() {
         appendMessage('assistant', '...thinking...');
 
         // Get page content
-        let container = document.querySelector('main') || document.querySelector('article') || document.body;
+
+        let container;
+        // 1. 優先選取 main
+        if (document.querySelector('main')) {
+            container = document.querySelector('main');
+        } else {
+            // 2. 若只有一個 article，則選取該 article
+            const articles = document.querySelectorAll('article');
+            if (articles.length === 1) {
+                container = articles[0];
+            } else {
+                // 3. 否則 fallback 到 body
+                container = document.body;
+            }
+        }
         const fullPageText = container.innerText.slice(0, 15000);
         console.log('[AskPage] Full page text length:', fullPageText.length);
 
