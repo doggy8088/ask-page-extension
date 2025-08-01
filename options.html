@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <title>頁問 AskPage - 偏好設定</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --primary-color: #6366f1;
+      --primary-hover: #5b21b6;
+      --secondary-color: #f8fafc;
+      --border-color: #e2e8f0;
+      --text-primary: #1e293b;
+      --text-secondary: #64748b;
+      --success-color: #10b981;
+      --error-color: #ef4444;
+      --warning-color: #f59e0b;
+      --background: #ffffff;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --tab-active-bg: #ffffff;
+      --tab-inactive-bg: #f1f5f9;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary-color: #8b5cf6;
+        --primary-hover: #7c3aed;
+        --secondary-color: #1e293b;
+        --border-color: #334155;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --success-color: #34d399;
+        --error-color: #f87171;
+        --warning-color: #fbbf24;
+        --background: #0f172a;
+        --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+        --tab-active-bg: #0f172a;
+        --tab-inactive-bg: #1e293b;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--background);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      padding: 40px 0;
+      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+      color: white;
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 2.5rem;
+      font-weight: 700;
+    }
+
+    .header p {
+      margin: 10px 0 0 0;
+      font-size: 1.1rem;
+      opacity: 0.9;
+    }
+
+    /* Tab navigation */
+    .tab-nav {
+      display: flex;
+      background: var(--secondary-color);
+      border-radius: 12px;
+      padding: 8px;
+      margin-bottom: 40px;
+      box-shadow: var(--shadow);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 16px 24px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      color: var(--text-secondary);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-align: center;
+    }
+
+    .tab-btn:hover {
+      background: var(--tab-active-bg);
+      color: var(--text-primary);
+      transform: translateY(-2px);
+    }
+
+    .tab-btn.active {
+      background: var(--primary-color);
+      color: white;
+      box-shadow: var(--shadow);
+    }
+
+    /* Tab content */
+    .tab-content {
+      min-height: 500px;
+    }
+
+    .tab-pane {
+      display: none;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .settings-section {
+      background: var(--background);
+      border: 2px solid var(--border-color);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 32px;
+      box-shadow: var(--shadow);
+      transition: all 0.3s ease;
+    }
+
+    .settings-section:hover {
+      box-shadow: var(--shadow-lg);
+      border-color: var(--primary-color);
+    }
+
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--primary-color);
+      margin: 0 0 20px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-description {
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      font-size: 1rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    input, select, textarea {
+      padding: 16px 20px;
+      font-size: 16px;
+      border: 2px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--background);
+      color: var(--text-primary);
+      transition: all 0.3s ease;
+      outline: none;
+      font-family: inherit;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+      line-height: 1.5;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      transform: translateY(-2px);
+    }
+
+    input:hover, select:hover, textarea:hover {
+      border-color: var(--primary-color);
+    }
+
+    .provider-settings {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 24px;
+      background: var(--secondary-color);
+      border-radius: 16px;
+      border: 2px solid var(--border-color);
+      transition: all 0.3s ease;
+    }
+
+    .provider-settings:hover {
+      box-shadow: var(--shadow);
+      border-color: var(--primary-color);
+    }
+
+    /* Custom Commands Specific Styles */
+    .command-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .command-item {
+      background: var(--secondary-color);
+      border: 2px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      transition: all 0.3s ease;
+    }
+
+    .command-item:hover {
+      border-color: var(--primary-color);
+      box-shadow: var(--shadow);
+    }
+
+    .command-header {
+      display: flex;
+      justify-content: between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .command-info {
+      flex: 1;
+    }
+
+    .command-name {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--primary-color);
+      margin: 0 0 4px 0;
+    }
+
+    .command-command {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      background: var(--background);
+      color: var(--primary-color);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .command-description {
+      color: var(--text-secondary);
+      margin: 8px 0;
+    }
+
+    .command-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .command-prompt {
+      background: var(--background);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+      font-family: inherit;
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    .add-command-section {
+      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+      color: white;
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 32px;
+    }
+
+    .add-command-section h3 {
+      margin: 0 0 16px 0;
+      font-size: 1.3rem;
+    }
+
+    .add-command-section input,
+    .add-command-section textarea {
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      color: white;
+    }
+
+    .add-command-section input::placeholder,
+    .add-command-section textarea::placeholder {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .add-command-section input:focus,
+    .add-command-section textarea:focus {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.5);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+    }
+
+    /* Buttons */
+    .button-group {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      margin-top: 40px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 16px 32px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow);
+      min-width: 140px;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+      color: white;
+    }
+
+    .btn-primary:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: var(--secondary-color);
+      color: var(--text-primary);
+      border: 2px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border-color);
+      border-color: var(--primary-color);
+      transform: translateY(-2px);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--error-color), #dc2626);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-2px);
+    }
+
+    .btn-small {
+      padding: 8px 16px;
+      font-size: 14px;
+      min-width: auto;
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* Status message */
+    #status {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-weight: 600;
+      box-shadow: var(--shadow-lg);
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+      transform: translateX(100px);
+    }
+
+    #status.success {
+      background: var(--success-color);
+      color: white;
+    }
+
+    #status.error {
+      background: var(--error-color);
+      color: white;
+    }
+
+    #status.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(0);
+    }
+
+    /* Built-in commands */
+    .builtin-commands {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .builtin-command {
+      background: var(--secondary-color);
+      border: 2px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      transition: all 0.3s ease;
+    }
+
+    .builtin-command:hover {
+      border-color: var(--primary-color);
+      box-shadow: var(--shadow);
+    }
+
+    .builtin-command h4 {
+      margin: 0 0 12px 0;
+      color: var(--primary-color);
+      font-size: 1.1rem;
+    }
+
+    .builtin-command .command-code {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      background: var(--background);
+      color: var(--primary-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: inline-block;
+      margin-bottom: 12px;
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px;
+      }
+
+      .header h1 {
+        font-size: 2rem;
+      }
+
+      .tab-nav {
+        flex-direction: column;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      .command-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .command-actions {
+        width: 100%;
+        justify-content: flex-end;
+      }
+
+      .button-group {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--secondary-color);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-secondary);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔧 頁問 AskPage</h1>
+      <p>偏好設定 - 自訂您的 AI 助手體驗</p>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="provider">🤖 AI 提供者</button>
+      <button class="tab-btn" data-tab="builtin">⚡ 內建命令</button>
+      <button class="tab-btn" data-tab="custom">✨ 自訂命令</button>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <!-- AI Provider Tab -->
+      <div id="provider-tab" class="tab-pane active">
+        <div class="settings-section">
+          <h2 class="section-title">🤖 AI 提供者設定</h2>
+          <p class="section-description">選擇您偏好的 AI 提供者，並設定對應的 API Key 和模型。</p>
+          
+          <div class="form-group">
+            <label for="providerSelect">選擇 AI 提供者</label>
+            <select id="providerSelect">
+              <option value="gemini">Google Gemini</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+
+          <div id="gemini-settings" class="provider-settings">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="geminiApiKey">Gemini API Key</label>
+                <input id="geminiApiKey" type="password" placeholder="請輸入您的 Gemini API Key">
+              </div>
+              <div class="form-group">
+                <label for="geminiModelSelect">Gemini 模型</label>
+                <select id="geminiModelSelect">
+                  <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                  <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                  <option value="gemini-2.5-flash-lite-preview-06-17">gemini-2.5-flash-lite-preview-06-17</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div id="openai-settings" class="provider-settings" style="display: none;">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="openaiApiKey">OpenAI API Key</label>
+                <input id="openaiApiKey" type="password" placeholder="請輸入您的 OpenAI API Key">
+              </div>
+              <div class="form-group">
+                <label for="openaiModelSelect">OpenAI 模型</label>
+                <select id="openaiModelSelect">
+                  <option value="gpt-4o">gpt-4o</option>
+                  <option value="gpt-4o-mini">gpt-4o-mini</option>
+                  <option value="gpt-4.1">gpt-4.1</option>
+                  <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                  <option value="o4-mini">o4-mini</option>
+                  <option value="o3">o3</option>
+                  <option value="o3-mini">o3-mini</option>
+                  <option value="o3-pro">o3-pro</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Built-in Commands Tab -->
+      <div id="builtin-tab" class="tab-pane">
+        <div class="settings-section">
+          <h2 class="section-title">⚡ 內建斜線命令</h2>
+          <p class="section-description">自訂內建命令的行為和提示語。</p>
+          
+          <div class="builtin-commands">
+            <div class="builtin-command">
+              <h4>/summary 總結命令</h4>
+              <div class="command-code">/summary</div>
+              <p class="command-description">總結當前頁面的內容</p>
+              <div class="form-group">
+                <label for="summaryPrompt">總結提示語</label>
+                <textarea id="summaryPrompt" placeholder="請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」"></textarea>
+              </div>
+            </div>
+            
+            <div class="builtin-command">
+              <h4>/clear 清除命令</h4>
+              <div class="command-code">/clear</div>
+              <p class="command-description">清除對話歷史記錄（無法自訂）</p>
+            </div>
+            
+            <div class="builtin-command">
+              <h4>/screenshot 截圖命令</h4>
+              <div class="command-code">/screenshot</div>
+              <p class="command-description">切換截圖功能開關（無法自訂）</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Commands Tab -->
+      <div id="custom-tab" class="tab-pane">
+        <div class="add-command-section">
+          <h3>➕ 新增自訂斜線命令</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="newCommandName">命令名稱</label>
+              <input id="newCommandName" type="text" placeholder="例如：翻譯助手">
+            </div>
+            <div class="form-group">
+              <label for="newCommandCommand">斜線命令</label>
+              <input id="newCommandCommand" type="text" placeholder="例如：/translate">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="newCommandDescription">命令描述</label>
+            <input id="newCommandDescription" type="text" placeholder="例如：將選取的文字翻譯為繁體中文">
+          </div>
+          <div class="form-group">
+            <label for="newCommandPrompt">提示語</label>
+            <textarea id="newCommandPrompt" placeholder="例如：請將以下內容翻譯為繁體中文，並以清楚易懂的方式呈現："></textarea>
+          </div>
+          <button id="addCommand" class="btn-primary">新增命令</button>
+        </div>
+
+        <div class="settings-section">
+          <h2 class="section-title">✨ 您的自訂命令</h2>
+          <p class="section-description">管理您建立的自訂斜線命令。</p>
+          
+          <div id="customCommandsList" class="command-list">
+            <!-- Custom commands will be loaded here -->
+          </div>
+          
+          <div id="noCustomCommands" style="text-align: center; color: var(--text-secondary); padding: 40px;">
+            <p>📝 您還沒有建立任何自訂命令</p>
+            <p>使用上方的表單新增您的第一個自訂命令</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="button-group">
+      <button id="save" class="btn-primary">💾 儲存所有設定</button>
+      <button id="reset" class="btn-secondary">🔄 重置設定</button>
+      <button id="exportSettings" class="btn-secondary">📤 匯出設定</button>
+      <button id="importSettings" class="btn-secondary">📥 匯入設定</button>
+    </div>
+    
+    <div id="status"></div>
+  </div>
+  
+  <!-- Hidden file input for import -->
+  <input type="file" id="importFile" accept=".json" style="display: none;">
+  
+  <script src="options.js"></script>
+</body>
+</html>

@@ -81,6 +81,7 @@ const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 
 // Storage keys for custom slash command prompts
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
+const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
 
 async function getValue(key, defaultValue) {
     const result = await chrome.storage.local.get([key]);
@@ -324,14 +325,26 @@ async function createDialog() {
     input.type = 'text';
     input.placeholder = '輸入問題後按 Enter 或點擊 Ask 按鈕 (可先選取文字範圍)';
 
-    // Dynamic intelliCommands based on screenshot state
+    // Dynamic intelliCommands based on screenshot state and custom commands
     async function getIntelliCommands() {
         const screenshotEnabled = await getScreenshotEnabled();
-        return [
+        const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+
+        const builtinCommands = [
             { cmd: '/clear', desc: '清除提問歷史紀錄' },
             { cmd: '/summary', desc: '總結本頁內容' },
             { cmd: '/screenshot', desc: screenshotEnabled ? '停用截圖功能' : '啟用截圖功能' }
         ];
+
+        const customCommandsList = customCommands
+            .filter(cmd => cmd.enabled !== false)
+            .map(cmd => ({
+                cmd: cmd.command,
+                desc: cmd.description,
+                isCustom: true
+            }));
+
+        return [...builtinCommands, ...customCommandsList];
     }
 
     const intelliBox = document.createElement('div');
@@ -366,15 +379,22 @@ async function createDialog() {
 
     input.focus();
 
-    // Generate dynamic welcome message based on screenshot state
+    // Generate dynamic welcome message based on screenshot state and custom commands
     const screenshotEnabled = await getScreenshotEnabled();
+    const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+    const enabledCustomCommands = customCommands.filter(cmd => cmd.enabled !== false);
+
     const screenshotStatus = screenshotEnabled ? '📸 **截圖功能已啟用** - 停用截圖功能' : '啟用截圖功能 (預設關閉)';
     const screenshotNotice = screenshotEnabled ? '\n\n⚠️ **提醒：截圖功能目前為啟用狀態**\n系統會自動在您的提問中包含當前頁面截圖進行分析。' : '';
 
+    const customCommandsText = enabledCustomCommands.length > 0
+        ? '\n\n**您的自訂命令：**\n' + enabledCustomCommands.map(cmd => `- \`${cmd.command}\` - ${cmd.description}`).join('\n')
+        : '';
+
     if (capturedSelectedText) {
-        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}\n\n💡 **內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}`);
+        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}\n\n💡 **內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}${customCommandsText}`);
     } else {
-        appendMessage('assistant', `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}\n\n**內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}`);
+        appendMessage('assistant', `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}\n\n**內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}${customCommandsText}`);
     }
 
     function closeDialog() {
@@ -461,12 +481,23 @@ async function createDialog() {
             return;
         }
 
-        promptHistory.push(question);
+        // Check for custom commands
+        const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+        const customCommand = customCommands.find(cmd => cmd.command === question && cmd.enabled !== false);
+
+        if (customCommand) {
+            console.log('[AskPage] Executing custom command:', customCommand.command);
+            question = customCommand.prompt;
+            appendMessage('user', customCommand.command);
+        } else {
+            appendMessage('user', question);
+        }
+
+        promptHistory.push(input.value.trim());
         if (promptHistory.length > 100) {promptHistory.shift();}
         historyIndex = promptHistory.length;
         await setValue(PROMPT_HISTORY_STORAGE, JSON.stringify(promptHistory));
 
-        appendMessage('user', question);
         input.value = '';
         input.focus();
         await askAI(question, capturedSelectedText);
