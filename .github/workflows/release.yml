@@ -40,7 +40,7 @@ jobs:
     - name: Create ZIP package
       run: |
         filePath="AskPageExtension_v${{ steps.get_version.outputs.version }}.zip"
-        zip -r "$filePath" manifest.json background.js content.js popup.html popup.js style.css icons lib CHANGELOG.md README.md
+        zip -r "$filePath" manifest.json background.js content.js popup.html popup.js settings.html settings.js style.css icons lib CHANGELOG.md README.md
 
     - name: Upload Release Asset
       uses: softprops/action-gh-release@v1

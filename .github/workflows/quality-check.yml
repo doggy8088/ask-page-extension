@@ -167,6 +167,8 @@ jobs:
           content.js \
           popup.html \
           popup.js \
+          settings.html \
+          settings.js \
           style.css \
           icons/ \
           lib/ \
