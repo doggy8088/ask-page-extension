@@ -135,14 +135,12 @@ npm install
 # 執行行程式碼檢查
 npm run lint
 
-# 驗證擴充功能
-npm run validate
 ```
 
 ### 建構和測試
 
 ```bash
-# 建立測試套件
+# 進行基本檢查（lint）
 npm run build
 
 # 執行行品質檢查
