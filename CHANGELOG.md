@@ -4,6 +4,15 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.7.0] - 2025-09-19
+
+### 新增
+
+- **在特定網域停用此擴充功能**: 在 GitHub.dev 網域自動停用 AskPage 擴充功能
+  - 當目前分頁網址為 `github.dev` 或任何 `*.github.dev` 子網域時，不會傳送指令給內容腳本
+  - 以避免在 GitHub.dev（瀏覽器 IDE）環境造成快捷鍵衝突與視覺干擾
+  - 相關日誌以 `[AskPage]` 前綴清楚記錄目前網址與停用原因
+
 ## [0.6.0] - 2025-08-02
 
 ### 新增
@@ -248,6 +257,8 @@ Initial release
 - **廢棄**: 即將移除的功能
 
 <!-- 版本鏈接 -->
+[0.7.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/doggy8088/ask-page-extension/compare/v0.3.0...v0.3.1

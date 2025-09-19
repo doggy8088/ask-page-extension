@@ -9,6 +9,25 @@ chrome.commands.onCommand.addListener((command, tab) => {
 
     if (command === 'toggle-dialog') {
         console.log('[AskPage] Processing toggle-dialog command');
+
+        // Check if the current URL is github.dev and disable the extension
+        if (tab?.url) {
+            try {
+                const url = new URL(tab.url);
+                const hostname = url.hostname.toLowerCase();
+
+                // Check for github.dev and *.github.dev domains
+                if (hostname === 'github.dev' || hostname.endsWith('.github.dev')) {
+                    console.log('[AskPage] AskPage is disabled on github.dev domains:', hostname);
+                    console.log('[AskPage] Current URL:', tab.url);
+                    return; // Exit early, do not send message to content script
+                }
+            } catch (error) {
+                console.warn('[AskPage] Error parsing URL:', tab.url, error);
+                // Continue execution if URL parsing fails
+            }
+        }
+
         console.log('[AskPage] Sending toggle-dialog message to tab:', tab.id);
 
         // Check if tab is ready
@@ -27,6 +46,25 @@ chrome.commands.onCommand.addListener((command, tab) => {
         });
     } else if (command === 'switch-provider') {
         console.log('[AskPage] Processing switch-provider command');
+
+        // Check if the current URL is github.dev and disable the extension
+        if (tab?.url) {
+            try {
+                const url = new URL(tab.url);
+                const hostname = url.hostname.toLowerCase();
+
+                // Check for github.dev and *.github.dev domains
+                if (hostname === 'github.dev' || hostname.endsWith('.github.dev')) {
+                    console.log('[AskPage] AskPage is disabled on github.dev domains:', hostname);
+                    console.log('[AskPage] Current URL:', tab.url);
+                    return; // Exit early, do not send message to content script
+                }
+            } catch (error) {
+                console.warn('[AskPage] Error parsing URL:', tab.url, error);
+                // Continue execution if URL parsing fails
+            }
+        }
+
         console.log('[AskPage] Sending switch-provider message to tab:', tab.id);
 
         // Send a message to the content script in the active tab
