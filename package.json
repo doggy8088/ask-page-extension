@@ -1,6 +1,6 @@
 {
   "name": "ask-page-extension",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "使用 Gemini 或 OpenAI API 詢問關於目前頁面的問題",
   "main": "background.js",
   "scripts": {

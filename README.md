@@ -166,7 +166,7 @@ npm test
 1. 建立標籤
 
     ```sh
-    git tag v0.6.0 && git push origin v0.6.0
+    git tag v0.7.0 && git push origin v0.7.0
     ```
 
 2. GitHub Actions 自動執行建置和發布
@@ -178,7 +178,7 @@ npm test
 若要重新發佈標籤，可以參考以下 `git` 命令：
 
 ```sh
-git tag -d v0.6.0 && git push origin :refs/tags/v0.6.0 && git tag v0.6.0 && git push origin v0.6.0
+git tag -d v0.7.0 && git push origin :refs/tags/v0.7.0 && git tag v0.7.0 && git push origin v0.7.0
 ```
 
 ## 📄 許可證
