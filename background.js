@@ -87,6 +87,16 @@ chrome.runtime.onStartup.addListener(() => {
     console.log('[AskPage] Service worker started at:', new Date().toISOString());
 });
 
+// 點擊擴充功能圖示時開啟/聚焦 Options 頁面（不需額外權限）
+chrome.action.onClicked.addListener(async () => {
+    try {
+        await chrome.runtime.openOptionsPage();
+        console.log('[AskPage] Opened or focused Options page');
+    } catch (error) {
+        console.error('[AskPage] Failed to open/focus Options page:', error);
+    }
+});
+
 // Add listener for extension installation
 chrome.runtime.onInstalled.addListener((details) => {
     console.log('[AskPage] ===== EXTENSION INSTALLED/UPDATED =====');

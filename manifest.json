@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "頁問 AskPage",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "使用 Gemini API 詢問關於目前頁面的問題",
   "permissions": [
     "storage",
@@ -14,7 +14,10 @@
       "128": "icons/icon128.png"
     }
   },
-  "options_page": "settings.html",
+  "options_ui": {
+    "page": "settings.html",
+    "open_in_tab": true
+  },
   "background": {
     "service_worker": "background.js"
   },

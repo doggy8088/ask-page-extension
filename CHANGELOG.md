@@ -4,6 +4,15 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.7.1] - 2025-09-19
+
+### 新增
+
+- 點擊擴充功能圖示（Toolbar Icon）將會直接開啟或聚焦設定頁（Options，`settings.html`）
+  - 使用 `chrome.action.onClicked` 觸發，透過 `chrome.runtime.openOptionsPage()` 實作
+  - 不新增任何權限，符合 Manifest V3 與專案安全規範
+  - 既有快捷鍵（Ctrl+I）與內容腳本行為不受影響
+
 ## [0.7.0] - 2025-09-19
 
 ### 新增
@@ -258,6 +267,7 @@ Initial release
 
 <!-- 版本鏈接 -->
 [0.7.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.6.0...v0.7.0
+[0.7.1]: https://github.com/doggy8088/ask-page-extension/compare/v0.7.0...v0.7.1
 [0.6.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.3.1...v0.4.0
