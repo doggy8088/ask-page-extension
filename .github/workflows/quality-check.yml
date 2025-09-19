@@ -31,12 +31,10 @@ jobs:
           "scripts": {
             "lint": "eslint *.js",
             "lint:fix": "eslint *.js --fix",
-            "validate": "web-ext lint",
             "test": "echo '暫無測試' && exit 0"
           },
           "devDependencies": {
-            "eslint": "^8.57.0",
-            "web-ext": "^8.0.0"
+            "eslint": "^8.57.0"
           }
         }
         EOF
@@ -74,7 +72,7 @@ jobs:
       run: npm run lint
       continue-on-error: true
 
-    - name: 驗證擴充功能
+    - name: 驗證擴充功能 (基本檢查，無 web-ext)
       run: |
         echo "檢查 Chrome 擴充功能 Manifest V3 相容性..."
 
@@ -188,7 +186,7 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 檢查項目:" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ ESLint 程式碼風格檢查" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Web Extension 驗證" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ 基本 Manifest/檔案檢查 (無 web-ext)" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ manifest.json 格式檢查" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ 檔案完整性檢查" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ 套件建構測試" >> $GITHUB_STEP_SUMMARY

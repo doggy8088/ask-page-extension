@@ -16,7 +16,7 @@
 - **觸發條件**: 推送到 main/develop 分支或建立 Pull Request
 - **功能**:
   - ESLint 程式碼風格檢查
-  - Web Extension 驗證
+  - 基本檢查（ESLint）
   - manifest.json 格式檢查
   - 檔案完整性檢查
   - 套件建構測試
@@ -148,11 +148,8 @@ npm install
 # 執行行程式碼檢查
 npm run lint
 
-# 驗證擴充功能
-npm run validate
-
-# 建立測試套件
-zip -r test-package.zip manifest.json background.js content.js popup.html popup.js style.css icons/ lib/
+# 建立測試套件（手動壓縮需上傳至 CWS 的檔案）
+zip -r test-package.zip manifest.json background.js content.js popup.html popup.js settings.html settings.js style.css icons/ lib/
 ```
 
 ## 參考資源

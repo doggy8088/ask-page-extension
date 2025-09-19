@@ -21,20 +21,17 @@ AskPage is a Chrome Extension (Manifest V3) that integrates with Google's Gemini
 ### Development Commands
 ```bash
 npm run lint          # ESLint with webextensions environment
-npm run validate      # Web-ext validation (limited MV3 support)
-npm run build         # Full lint + validate + package
-npm run package       # Creates dist/ directory with .zip
+npm run build         # Currently just runs lint
 ```
 
 ### Testing & Debugging
-- Load unpacked extension: Use `dist/` output from `npm run package`
+- Load unpacked extension: Open Chrome > Extensions > Developer Mode > Load unpacked > select project root folder
 - Console debugging: All logs prefixed with `[AskPage]`
 - API testing: Check popup settings if API calls fail
 
 ### Release Process
-- Git tags trigger GitHub Actions: `git tag v1.0.0 && git push origin v1.0.0`
-- Automated CI/CD with quality checks, building, and Chrome Web Store upload
-- Manual builds available via GitHub Actions workflow
+- Git tags trigger GitHub Actions (quality checks without web-ext)
+- Manual packaging: Use Chrome Web Store Developer Dashboard to upload a ZIP you create manually (exclude dev files)
 
 ## Project-Specific Conventions
 

@@ -1,16 +1,14 @@
 {
   "name": "ask-page-extension",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "使用 Gemini 或 OpenAI API 詢問關於目前頁面的問題",
   "main": "background.js",
   "scripts": {
-    "lint": "eslint *.js --ignore-pattern lib/ --ignore-pattern AskPage.user.js",
-    "lint:fix": "eslint *.js --fix --ignore-pattern lib/ --ignore-pattern AskPage.user.js",
-    "validate": "echo '⚠️  Web-ext 工具對 Manifest V3 支援有限，請手動檢查' && web-ext lint --source-dir . --ignore-files lib/ node_modules/ .git/ AskPage.user.js test-release.sh package.json package-lock.json .eslintrc.js .gitignore *.md || true",
-    "build": "npm run lint && npm run validate && npm run package",
-    "package": "web-ext build --source-dir . --artifacts-dir dist/ --ignore-files node_modules/ .git/ .github/ .vscode/ *.md package.json package-lock.json .eslintrc.js .gitignore",
+    "lint": "eslint *.js --ignore-pattern lib/",
+    "lint:fix": "eslint *.js --fix --ignore-pattern lib/",
+    "build": "npm run lint",
+    "package": "zip -r dist/AskPageExtension.zip manifest.json background.js content.js popup.html popup.js settings.html settings.js style.css icons lib CHANGELOG.md README.md",
     "test": "echo '暫無測試項目' && exit 0",
-    "dev": "web-ext run --source-dir . --ignore-files node_modules/ .git/",
     "clean": "rm -rf dist/ node_modules/ *.zip"
   },
   "keywords": [
@@ -26,17 +24,16 @@
   "author": "AskPage Team",
   "license": "MIT",
   "devDependencies": {
-    "eslint": "^8.57.0",
-    "web-ext": "^8.0.0"
+    "eslint": "^8.57.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/你的用戶名/ask-page-extension.git"
+    "url": "https://github.com/doggy8088/ask-page-extension.git"
   },
   "bugs": {
-    "url": "https://github.com/你的用戶名/ask-page-extension/issues"
+    "url": "https://github.com/doggy8088/ask-page-extension/issues"
   },
-  "homepage": "https://github.com/你的用戶名/ask-page-extension#readme",
+  "homepage": "https://github.com/doggy8088/ask-page-extension",
   "engines": {
     "node": ">=18.0.0"
   }

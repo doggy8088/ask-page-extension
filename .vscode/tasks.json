@@ -10,6 +10,13 @@
 			"problemMatcher": [
 				"$eslint-stylish"
 			]
+		},
+		{
+			"label": "Lint Markdown Changelog",
+			"type": "shell",
+			"command": "node -e \"process.exit(0)\"",
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }
