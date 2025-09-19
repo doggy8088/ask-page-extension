@@ -1,13 +1,13 @@
 {
   "name": "ask-page-extension",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "使用 Gemini 或 OpenAI API 詢問關於目前頁面的問題",
   "main": "background.js",
   "scripts": {
     "lint": "eslint *.js --ignore-pattern lib/",
     "lint:fix": "eslint *.js --fix --ignore-pattern lib/",
     "build": "npm run lint",
-    "package": "zip -r dist/AskPageExtension_vX.X.X.zip manifest.json background.js content.js popup.html popup.js settings.html settings.js style.css icons lib CHANGELOG.md README.md",
+    "package": "zip -r dist/AskPageExtension.zip manifest.json background.js content.js popup.html popup.js settings.html settings.js style.css icons lib CHANGELOG.md README.md",
     "test": "echo '暫無測試項目' && exit 0",
     "clean": "rm -rf dist/ node_modules/ *.zip"
   },
@@ -28,12 +28,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/你的用戶名/ask-page-extension.git"
+    "url": "https://github.com/doggy8088/ask-page-extension.git"
   },
   "bugs": {
-    "url": "https://github.com/你的用戶名/ask-page-extension/issues"
+    "url": "https://github.com/doggy8088/ask-page-extension/issues"
   },
-  "homepage": "https://github.com/你的用戶名/ask-page-extension#readme",
+  "homepage": "https://github.com/doggy8088/ask-page-extension",
   "engines": {
     "node": ">=18.0.0"
   }

@@ -4,6 +4,20 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.8.0] - 2025-09-20
+
+### 新增 / 改進
+
+- 維運流程調整：移除 web-ext 驗證與打包流程，改為輕量化建置
+  - `npm run build` 目前僅執行 ESLint 程式碼檢查
+  - 提供手動打包指引，改由開發者手動壓縮上傳至 Chrome Web Store
+- CI 品質檢查工作流程更新（.github/workflows/quality-check.yml）
+  - 移除對 web-ext 的依賴，改為基本 Manifest/檔案完整性檢查
+  - 檢查摘要輸出更清晰，便於審閱
+- 文件同步更新
+  - README 與 PUBLISH 說明同步到新流程（移除 validate、調整打包步驟）
+  - 專案說明（copilot-instructions）已更新為最新開發/發布流程
+
 ## [0.7.1] - 2025-09-19
 
 ### 新增
@@ -266,6 +280,7 @@ Initial release
 - **廢棄**: 即將移除的功能
 
 <!-- 版本鏈接 -->
+[0.8.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.7.1...v0.8.0
 [0.7.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.6.0...v0.7.0
 [0.7.1]: https://github.com/doggy8088/ask-page-extension/compare/v0.7.0...v0.7.1
 [0.6.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.5.0...v0.6.0

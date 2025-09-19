@@ -33,8 +33,6 @@ tags: [feature, ux, chrome-extension, mv3]
 
 Completion criteria:
 
-Completion criteria:
-
 - 移除 `manifest.json` 中 `action.default_popup` 欄位；保留 `action` 物件
 - 新增 `options_ui.page: 'settings.html'` 並啟用 `open_in_tab: true`
 - 套件可成功載入，無 Manifest 驗證錯誤。
