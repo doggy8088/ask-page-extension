@@ -1,7 +1,7 @@
 {
   "name": "ask-page-extension",
-  "version": "0.8.0",
-  "description": "使用 Gemini 或 OpenAI API 詢問關於目前頁面的問題",
+  "version": "0.9.0",
+  "description": "使用 Gemini API 或 OpenAI API 詢問關於目前頁面的問題",
   "main": "background.js",
   "scripts": {
     "lint": "eslint *.js --ignore-pattern lib/",

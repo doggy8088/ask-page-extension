@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "頁問 AskPage",
-  "version": "0.8.0",
-  "description": "使用 Gemini API 詢問關於目前頁面的問題",
+  "version": "0.9.0",
+  "description": "使用 Gemini API 或 OpenAI API 詢問關於目前頁面的問題",
   "permissions": [
     "storage",
     "activeTab"
@@ -23,27 +23,31 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*/*"],
+      "matches": [
+        "*://*/*"
+      ],
       "js": [
         "lib/marked.min.js",
         "lib/purify.min.js",
         "content.js"
       ],
-      "css": ["style.css"]
+      "css": [
+        "style.css"
+      ]
     }
   ],
   "commands": {
     "toggle-dialog": {
       "suggested_key": {
-      "default": "Ctrl+Alt+Shift+I",
-      "mac": "MacCtrl+Alt+Shift+I"
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
       },
       "description": "Open AskPage dialog"
     },
     "switch-provider": {
       "suggested_key": {
-        "default": "Ctrl+Shift+P",
-        "mac": "MacCtrl+Shift+P"
+        "default": "Ctrl+Shift+S",
+        "mac": "MacCtrl+Shift+S"
       },
       "description": "Switch AI provider"
     }
@@ -54,7 +58,9 @@
         "lib/marked.min.js",
         "lib/purify.min.js"
       ],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "icons": {

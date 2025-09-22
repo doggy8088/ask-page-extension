@@ -4,6 +4,15 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.9.0] - 2025-09-22
+
+### 新增 / 改進
+
+- 觸發按鍵：預設快速鍵從 Ctrl+I 改到 Ctrl+Shift+Y
+  - 避免與其他擴充功能或特定網站本身的快捷鍵衝突
+  - 使用者依然可在 Chrome 擴充功能頁面自訂快捷鍵
+- 體驗優化：點擊工具列圖示始終開啟或聚焦「設定」分頁，減少第一次使用的困惑
+
 ## [0.8.0] - 2025-09-20
 
 ### 新增 / 改進
@@ -280,6 +289,7 @@ Initial release
 - **廢棄**: 即將移除的功能
 
 <!-- 版本鏈接 -->
+[0.9.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.7.1...v0.8.0
 [0.7.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.6.0...v0.7.0
 [0.7.1]: https://github.com/doggy8088/ask-page-extension/compare/v0.7.0...v0.7.1
