@@ -35,8 +35,8 @@
   "commands": {
     "toggle-dialog": {
       "suggested_key": {
-        "default": "Ctrl+I",
-        "mac": "MacCtrl+I"
+      "default": "Ctrl+Alt+Shift+I",
+      "mac": "MacCtrl+Alt+Shift+I"
       },
       "description": "Open AskPage dialog"
     },
