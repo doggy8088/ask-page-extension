@@ -533,7 +533,8 @@
                   <select id="geminiModelSelect">
                     <option value="gemini-2.5-pro">gemini-2.5-pro</option>
                     <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-                    <option value="gemini-2.5-flash-lite-preview-06-17">gemini-2.5-flash-lite-preview-06-17</option>
+                    <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+                    <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
                   </select>
                 </div>
               </div>
@@ -601,7 +602,7 @@
           重置設定
         </button>
       </div>
-      
+
       <div id="status" class="status"></div>
     </div>
   </div>
@@ -610,18 +611,18 @@
   <div id="commandModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; padding: 20px;">
     <div style="max-width: 600px; margin: 50px auto; background: var(--card-background); border-radius: 16px; padding: 24px; max-height: 80vh; overflow-y: auto;">
       <h3 id="modalTitle" style="margin: 0 0 20px; color: var(--text-primary);">編輯斜線命令</h3>
-      
+
       <div class="form-group">
         <label for="modalCommandName">命令名稱</label>
         <input id="modalCommandName" type="text" placeholder="例如：/help" pattern="^/[a-zA-Z0-9_-]+$">
         <small style="color: var(--text-secondary);">命令必須以 / 開頭，只能包含字母、數字、底線和連字符</small>
       </div>
-      
+
       <div class="form-group">
         <label for="modalCommandPrompt">提示內容</label>
         <textarea id="modalCommandPrompt" placeholder="請輸入當使用者執行此命令時要傳送給 AI 的提示內容..."></textarea>
       </div>
-      
+
       <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
         <button id="modalCancel" class="btn-secondary">取消</button>
         <button id="modalSave" class="btn-primary">儲存</button>

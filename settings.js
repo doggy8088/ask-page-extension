@@ -488,7 +488,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (result.GEMINI_MODEL) {
             geminiModelSelect.value = result.GEMINI_MODEL;
         } else {
-            geminiModelSelect.value = 'gemini-2.5-flash-lite-preview-06-17';
+            geminiModelSelect.value = 'gemini-flash-lite-latest';
         }
 
         // Load OpenAI settings

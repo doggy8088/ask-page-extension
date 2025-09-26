@@ -55,7 +55,8 @@ npm run build         # Currently just runs lint
 ## Integration Points & External Dependencies
 
 ### Gemini API Integration
-- **Endpoint**: `generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17`
+- **Endpoint**: `generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest`
+- **Fallback Endpoint**: `generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite`
 - **Context Strategy**: Selected text (5000 chars) + full page (15000 chars) for comprehensive understanding
 - **Error Handling**: Network failures show user-friendly errors in dialog
 

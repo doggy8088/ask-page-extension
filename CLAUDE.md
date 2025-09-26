@@ -117,7 +117,7 @@ npm test
 - Prevents multiple dialog instances
 
 ### Gemini API Integration
-- Uses `gemini-2.5-flash-lite-preview-06-17` model
+- Uses `gemini-2.5-flash-lite` and `gemini-flash-lite-latest` models (default is `gemini-flash-lite-latest`)
 - Includes both full page content and selected text context
 - Responses default to Traditional Chinese (zh-tw)
 - 15000 character limit for page content, 5000 for selections

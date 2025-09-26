@@ -163,7 +163,7 @@ async function updateProviderDisplay() {
     if (providerDisplayElement) {
         let model;
         if (provider === 'gemini') {
-            model = await getValue(MODEL_STORAGE, 'gemini-2.5-flash-lite-preview-06-17');
+            model = await getValue(MODEL_STORAGE, 'gemini-flash-lite-latest');
         } else {
             model = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
         }
@@ -740,7 +740,7 @@ async function createDialog() {
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
 
         const encryptedApiKey = await getValue(API_KEY_STORAGE, '');
-        const selectedModel = await getValue(MODEL_STORAGE, 'gemini-2.5-flash-lite-preview-06-17');
+        const selectedModel = await getValue(MODEL_STORAGE, 'gemini-flash-lite-latest');
 
         console.log('[AskPage] Selected model:', selectedModel);
         console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
