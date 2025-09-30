@@ -8,7 +8,7 @@
 - 🔐 **加密安全儲存** - API 金鑰使用 AES-256-GCM 加密保護
 - 🎯 **智慧模型選擇** - 支援 Gemini 全系列模型和 OpenAI 8 種模型
 - 📝 支援選取文字進行針對性提問
-- ⌨️ 快速鍵支援 (Ctrl+I 開啟對話，Ctrl+Shift+P 切換提供者)
+- ⌨️ 快速鍵支援 (Ctrl+Shift+Y 開啟對話，Ctrl+Shift+P 切換提供者)
 - 🎨 美觀的對話介面，即時顯示當前使用的 AI 提供者
 - ⚡ 自訂斜線命令系統 - 新增、編輯、刪除個人專屬命令
 - 📚 智慧命令提示 - 內建和自訂命令的自動完成功能
@@ -20,9 +20,9 @@
 
 你現在已經可以直接從 Chrome Web Store 安裝 [頁問 AskPage](https://chromewebstore.google.com/detail/lehmnfefdojedijepclonkbajnjonnji) 擴充功能。
 
-這個擴充套件預設會綁定 `Ctrl+I` 快速鍵，你可以在任意網頁按下這個快速鍵以啟用「頁問」的對話框，並對目前網頁詢問任何問題。
+這個擴充套件預設會綁定 `Ctrl+Shift+Y` 快速鍵，你可以在任意網頁按下這個快速鍵以啟用「頁問」的對話框，並對目前網頁詢問任何問題。
 
-如果你按下 `Ctrl+I` 無法啟動對話框的話，那就代表這個 `Ctrl+I` 快速鍵可能與其他 Chrome 擴充套件的快速鍵衝突，你要開啟 `chrome://extensions/shortcuts` 頁面，並手動重新指派你希望設定的快速鍵。
+如果你按下 `Ctrl+Shift+Y` 無法啟動對話框的話，那就代表這個 `Ctrl+Shift+Y` 快速鍵可能與其他 Chrome 擴充套件的快速鍵衝突，你要開啟 `chrome://extensions/shortcuts` 頁面，並手動重新指派你希望設定的快速鍵。
 
 ### 手動安裝開發版本
 
@@ -37,7 +37,7 @@
 
 ### 基本使用
 
-1. 在任何網頁上使用快速鍵 `Ctrl+I` 開啟對話框（點擊圖示現在會開啟設定頁）
+1. 在任何網頁上使用快速鍵 `Ctrl+Shift+Y` 開啟對話框（點擊圖示現在會開啟設定頁）
 2. 在對話框中輸入您的問題
 3. 按下 Enter 或點擊 Ask 按鈕獲得 AI 回答
 
@@ -64,8 +64,8 @@
 
 ### 快速鍵
 
-- `Ctrl+I` (Windows/Linux) / `MacCtrl+I` (Mac) - 開啟 / 關閉對話框
-- `Ctrl+Shift+P` (Windows/Linux) / `MacCtrl+Shift+P` (Mac) - 切換 AI 提供者
+- `Ctrl+Shift+Y` (Windows/Linux) / `Command+Shift+Y` (Mac) - 開啟 / 關閉對話框
+- `Ctrl+Shift+S` (Windows/Linux) / `MacCtrl+Shift+S` (Mac) - 切換 AI 提供者
 - `Escape` - 關閉對話框
 - `↑/↓` 方向鍵 - 瀏覽提問歷史
 
@@ -166,7 +166,7 @@ npm test
 1. 建立標籤
 
     ```sh
-    git tag v0.9.0 && git push origin v0.9.0
+    git tag v0.9.1 && git push origin v0.9.1
     ```
 
 2. GitHub Actions 自動執行建置和發布
@@ -178,7 +178,7 @@ npm test
 若要重新發佈標籤，可以參考以下 `git` 命令：
 
 ```sh
-git tag -d v0.9.0 && git push origin :refs/tags/v0.9.0 && git tag v0.9.0 && git push origin v0.9.0
+git tag -d v0.9.1 && git push origin :refs/tags/v0.9.1 && git tag v0.9.1 && git push origin v0.9.1
 ```
 
 ## 📄 許可證

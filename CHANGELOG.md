@@ -4,6 +4,12 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.9.2] - 2025-10-01
+
+### 修正 / 更新（v0.9.2）
+
+- 文件維護更新與小幅改進
+
 ## [0.9.1] - 2025-09-26
 
 ### 修正 / 更新（v0.9.1）
@@ -298,6 +304,8 @@ Initial release
 - **廢棄**: 即將移除的功能
 
 <!-- 版本鏈接 -->
+[0.9.2]: https://github.com/doggy8088/ask-page-extension/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/doggy8088/ask-page-extension/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.7.1...v0.8.0
 [0.7.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.6.0...v0.7.0
