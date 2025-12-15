@@ -195,7 +195,8 @@
 
 - **多 AI 提供者支援**: 新增 OpenAI 作為第二個 AI 提供者選項
 - **提供者切換功能**: 使用 `Ctrl+Shift+P` 快速切換 AI 提供者
-- **OpenAI 模型支援**: 支援 8 種 OpenAI 模型
+- **OpenAI 模型支援**: 支援 14 種 OpenAI 模型
+  - gpt-5.2, gpt-5.1, gpt-5, gpt-5-chat-latest, gpt-5-mini, gpt-5-nano
   - gpt-4o, gpt-4o-mini
   - gpt-4.1, gpt-4.1-mini
   - o4-mini, o3, o3-mini, o3-pro
