@@ -4,6 +4,27 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.11.0] - 2025-12-15
+
+### 新增 / 改進（v0.11.0）
+
+- **🎉 新增 Azure OpenAI 提供者支援**
+  - 新增第三個 AI 提供者：Azure OpenAI
+  - 支援自訂 Azure OpenAI Endpoint、Deployment Name 和 API Version
+  - 提供者切換快速鍵 (Ctrl+Shift+S) 現在會在 Gemini → OpenAI → Azure OpenAI 之間循環
+  - 設定頁面新增 Azure OpenAI 專屬設定區塊，包含：
+    - API Key (使用 AES-256-GCM 加密)
+    - Endpoint URL
+    - Deployment Name
+    - API Version 選擇器（支援多個版本）
+  - 對話框即時顯示當前使用的 Azure OpenAI 部署名稱
+  - 完整的錯誤處理，包含 401、404、429 和 5xx 錯誤的友善提示
+
+- **📚 文件更新**
+  - README.md 新增 Azure OpenAI 設定說明
+  - 新增 Azure Portal 設定步驟指引
+  - 更新支援的 API 版本列表
+
 ## [0.10.0] - 2025-12-15
 
 ### 修正 / 更新（v0.10.0）
