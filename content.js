@@ -996,21 +996,24 @@ async function createDialog() {
             console.log('[AskPage] Context mode: Full page');
         }
 
-        // OpenAI o-series models require max_completion_tokens instead of max_tokens
-        // and do not support temperature parameter
-        const isOSeriesModel = selectedModel.startsWith('o3') || selectedModel.startsWith('o4');
+        // OpenAI models differ in which token limit parameter they accept:
+        // - gpt-5* and o-series models require max_completion_tokens (max_tokens is rejected)
+        // - other chat models use max_tokens
+        // Also, o-series models do not support the temperature parameter.
+        const usesMaxCompletionTokens = selectedModel.startsWith('gpt-5') || selectedModel.startsWith('o3') || selectedModel.startsWith('o4');
+        const supportsTemperature = !(selectedModel.startsWith('o3') || selectedModel.startsWith('o4'));
 
         const requestBody = {
             model: selectedModel,
             messages: messages
         };
 
-        // Add temperature parameter only for non-o-series models
-        if (!isOSeriesModel) {
+        // Add temperature parameter only for models that support it
+        if (supportsTemperature) {
             requestBody.temperature = 0.7;
         }
 
-        if (isOSeriesModel) {
+        if (usesMaxCompletionTokens) {
             requestBody.max_completion_tokens = 2048;
         } else {
             requestBody.max_tokens = 2048;
@@ -1021,7 +1024,7 @@ async function createDialog() {
             model: requestBody.model,
             messages_count: requestBody.messages.length,
             ...(requestBody.temperature !== undefined && { temperature: requestBody.temperature }),
-            ...(isOSeriesModel ? { max_completion_tokens: requestBody.max_completion_tokens } : { max_tokens: requestBody.max_tokens })
+            ...(usesMaxCompletionTokens ? { max_completion_tokens: requestBody.max_completion_tokens } : { max_tokens: requestBody.max_tokens })
         });
 
         let responseData;

@@ -4,6 +4,12 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.10.0] - 2025-12-15
+
+### 修正 / 更新（v0.10.0）
+
+- 調整 OpenAI 參數處理：gpt-5 與 o 系列模型統一使用 `max_completion_tokens`，並僅在支援的模型上送出 `temperature`，避免請求被 API 拒絕
+
 ## [0.9.2] - 2025-10-01
 
 ### 修正 / 更新（v0.9.2）
@@ -195,7 +201,8 @@
 
 - **多 AI 提供者支援**: 新增 OpenAI 作為第二個 AI 提供者選項
 - **提供者切換功能**: 使用 `Ctrl+Shift+P` 快速切換 AI 提供者
-- **OpenAI 模型支援**: 支援 8 種 OpenAI 模型
+- **OpenAI 模型支援**: 支援 14 種 OpenAI 模型
+  - gpt-5.2, gpt-5.1, gpt-5, gpt-5-chat-latest, gpt-5-mini, gpt-5-nano
   - gpt-4o, gpt-4o-mini
   - gpt-4.1, gpt-4.1-mini
   - o4-mini, o3, o3-mini, o3-pro
@@ -304,6 +311,7 @@ Initial release
 - **廢棄**: 即將移除的功能
 
 <!-- 版本鏈接 -->
+[0.10.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/doggy8088/ask-page-extension/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/doggy8088/ask-page-extension/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.8.0...v0.9.0
