@@ -64,7 +64,8 @@ async function getOrCreateEncryptionKey() {
 
 // DOM elements - 將在 DOMContentLoaded 中初始化
 let providerSelect, geminiApiKeyInput, geminiModelSelect, openaiApiKeyInput, openaiModelSelect;
-let geminiSettings, openaiSettings, saveButton, resetButton, statusDiv;
+let azureApiKeyInput, azureEndpointInput, azureDeploymentInput, azureApiVersionSelect;
+let geminiSettings, openaiSettings, azureSettings, saveButton, resetButton, statusDiv;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
 let modalSave, modalCancel;
 
@@ -91,8 +92,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     geminiModelSelect = document.getElementById('geminiModelSelect');
     openaiApiKeyInput = document.getElementById('openaiApiKey');
     openaiModelSelect = document.getElementById('openaiModelSelect');
+    azureApiKeyInput = document.getElementById('azureApiKey');
+    azureEndpointInput = document.getElementById('azureEndpoint');
+    azureDeploymentInput = document.getElementById('azureDeployment');
+    azureApiVersionSelect = document.getElementById('azureApiVersion');
     geminiSettings = document.getElementById('gemini-settings');
     openaiSettings = document.getElementById('openai-settings');
+    azureSettings = document.getElementById('azure-settings');
     saveButton = document.getElementById('save');
     resetButton = document.getElementById('reset');
     statusDiv = document.getElementById('status');
@@ -131,9 +137,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (provider === 'gemini') {
             geminiSettings.style.display = 'block';
             openaiSettings.style.display = 'none';
-        } else {
+            azureSettings.style.display = 'none';
+        } else if (provider === 'openai') {
             geminiSettings.style.display = 'none';
             openaiSettings.style.display = 'block';
+            azureSettings.style.display = 'none';
+        } else if (provider === 'azure') {
+            geminiSettings.style.display = 'none';
+            openaiSettings.style.display = 'none';
+            azureSettings.style.display = 'block';
         }
     });
 
@@ -168,11 +180,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         const geminiModel = geminiModelSelect.value;
         const openaiApiKey = openaiApiKeyInput.value.trim();
         const openaiModel = openaiModelSelect.value;
+        const azureApiKey = azureApiKeyInput.value.trim();
+        const azureEndpoint = azureEndpointInput.value.trim();
+        const azureDeployment = azureDeploymentInput.value.trim();
+        const azureApiVersion = azureApiVersionSelect.value;
 
         const settings = {
             'PROVIDER': provider,
             'GEMINI_MODEL': geminiModel,
             'OPENAI_MODEL': openaiModel,
+            'AZURE_OPENAI_ENDPOINT': azureEndpoint,
+            'AZURE_OPENAI_DEPLOYMENT': azureDeployment,
+            'AZURE_OPENAI_API_VERSION': azureApiVersion,
             [CUSTOM_COMMANDS_STORAGE]: customCommands
         };
 
@@ -197,6 +216,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+        if (azureApiKey) {
+            try {
+                const encryptedAzureKey = await encryptApiKey(azureApiKey, encryptionKey);
+                settings['AZURE_OPENAI_API_KEY'] = encryptedAzureKey;
+            } catch (error) {
+                console.error('Error encrypting Azure OpenAI API key:', error);
+                settings['AZURE_OPENAI_API_KEY'] = azureApiKey;
+            }
+        }
+
         chrome.storage.local.set(settings, () => {
             showStatus('設定已儲存！', 'success');
             setTimeout(() => {
@@ -208,7 +237,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Reset settings functionality
     resetButton.addEventListener('click', () => {
         if (confirm('確定要重置所有設定嗎？\n\n注意：API Key 不會被清除，但其他所有設定將恢復為預設值。')) {
-            chrome.storage.local.get(['GEMINI_API_KEY', 'OPENAI_API_KEY', 'ENCRYPTION_KEY'], (result) => {
+            chrome.storage.local.get(['GEMINI_API_KEY', 'OPENAI_API_KEY', 'AZURE_OPENAI_API_KEY', 'ENCRYPTION_KEY'], (result) => {
                 chrome.storage.local.clear(() => {
                     const settingsToRestore = {};
                     if (result.GEMINI_API_KEY) {
@@ -216,6 +245,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                     if (result.OPENAI_API_KEY) {
                         settingsToRestore.OPENAI_API_KEY = result.OPENAI_API_KEY;
+                    }
+                    if (result.AZURE_OPENAI_API_KEY) {
+                        settingsToRestore.AZURE_OPENAI_API_KEY = result.AZURE_OPENAI_API_KEY;
                     }
                     if (result.ENCRYPTION_KEY) {
                         settingsToRestore.ENCRYPTION_KEY = result.ENCRYPTION_KEY;
@@ -450,6 +482,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.storage.local.get([
         'PROVIDER', 'GEMINI_API_KEY', 'GEMINI_MODEL',
         'OPENAI_API_KEY', 'OPENAI_MODEL',
+        'AZURE_OPENAI_API_KEY', 'AZURE_OPENAI_ENDPOINT',
+        'AZURE_OPENAI_DEPLOYMENT', 'AZURE_OPENAI_API_VERSION',
         'CUSTOM_SUMMARY_PROMPT', CUSTOM_COMMANDS_STORAGE
     ], async (result) => {
         // Set provider
@@ -463,9 +497,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (providerSelect.value === 'gemini') {
             geminiSettings.style.display = 'block';
             openaiSettings.style.display = 'none';
-        } else {
+            azureSettings.style.display = 'none';
+        } else if (providerSelect.value === 'openai') {
             geminiSettings.style.display = 'none';
             openaiSettings.style.display = 'block';
+            azureSettings.style.display = 'none';
+        } else if (providerSelect.value === 'azure') {
+            geminiSettings.style.display = 'none';
+            openaiSettings.style.display = 'none';
+            azureSettings.style.display = 'block';
         }
 
         // Load Gemini settings
@@ -514,6 +554,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             openaiModelSelect.value = result.OPENAI_MODEL;
         } else {
             openaiModelSelect.value = 'gpt-4o-mini';
+        }
+
+        // Load Azure OpenAI settings
+        if (result.AZURE_OPENAI_API_KEY) {
+            try {
+                const decryptedKey = await decryptApiKey(result.AZURE_OPENAI_API_KEY, encryptionKey);
+                azureApiKeyInput.value = decryptedKey;
+            } catch (error) {
+                console.error('Error decrypting Azure OpenAI API key:', error);
+                if (typeof result.AZURE_OPENAI_API_KEY === 'object' && result.AZURE_OPENAI_API_KEY.encrypted) {
+                    azureApiKeyInput.value = '';
+                    azureApiKeyInput.placeholder = '解密失敗，請重新輸入 API Key';
+                    if (!statusDiv.textContent) {
+                        showStatus('API Key 解密失敗，請重新設定', 'error');
+                    }
+                } else {
+                    azureApiKeyInput.value = result.AZURE_OPENAI_API_KEY;
+                }
+            }
+        }
+
+        if (result.AZURE_OPENAI_ENDPOINT) {
+            azureEndpointInput.value = result.AZURE_OPENAI_ENDPOINT;
+        }
+
+        if (result.AZURE_OPENAI_DEPLOYMENT) {
+            azureDeploymentInput.value = result.AZURE_OPENAI_DEPLOYMENT;
+        }
+
+        if (result.AZURE_OPENAI_API_VERSION) {
+            azureApiVersionSelect.value = result.AZURE_OPENAI_API_VERSION;
+        } else {
+            azureApiVersionSelect.value = '2024-02-15-preview';
         }
 
         // Load custom commands

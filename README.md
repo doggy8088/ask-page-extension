@@ -1,14 +1,14 @@
 # AskPage 擴充功能
 
-使用 Gemini 或 OpenAI API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
+使用 Gemini、OpenAI 或 Azure OpenAI API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
 
 ## ✨ 功能特色
 
-- 🤖 **多 AI 提供者支援** - 整合 Google Gemini 和 OpenAI，可自由切換
+- 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI 和 Azure OpenAI，可自由切換
 - 🔐 **加密安全儲存** - API 金鑰使用 AES-256-GCM 加密保護
-- 🎯 **智慧模型選擇** - 支援 Gemini 全系列模型和 OpenAI 8 種模型
+- 🎯 **智慧模型選擇** - 支援 Gemini 全系列模型、OpenAI 8 種模型和 Azure OpenAI 部署
 - 📝 支援選取文字進行針對性提問
-- ⌨️ 快速鍵支援 (Ctrl+Shift+Y 開啟對話，Ctrl+Shift+P 切換提供者)
+- ⌨️ 快速鍵支援 (Ctrl+Shift+Y 開啟對話，Ctrl+Shift+S 切換提供者)
 - 🎨 美觀的對話介面，即時顯示當前使用的 AI 提供者
 - ⚡ 自訂斜線命令系統 - 新增、編輯、刪除個人專屬命令
 - 📚 智慧命令提示 - 內建和自訂命令的自動完成功能
@@ -74,9 +74,9 @@
 ### 第一次使用
 
 1. 直接點擊擴充功能圖示即可在新分頁開啟設定頁面（或聚焦已開啟的設定分頁）
-2. 在「AI 提供者」頁籤中選擇您偏好的 AI 提供者 (Gemini 或 OpenAI)
-3. 輸入對應的 API Key
-4. 選擇想要使用的模型
+2. 在「AI 提供者」頁籤中選擇您偏好的 AI 提供者 (Gemini、OpenAI 或 Azure OpenAI)
+3. 輸入對應的 API Key 和相關設定
+4. 選擇想要使用的模型或部署
 5. 點擊「儲存設定」
 
 ### 自訂斜線命令設定
@@ -101,6 +101,16 @@
 1. 前往 [OpenAI Platform](https://platform.openai.com/api-keys)
 2. 建立新的 API Key
 3. 複製 API Key 並貼到擴充功能設定中
+
+#### Azure OpenAI API Key
+
+1. 前往 [Azure Portal](https://portal.azure.com/)
+2. 導航到您的 Azure OpenAI 資源
+3. 在「Keys and Endpoint」頁面中取得：
+   - API Key (Key 1 或 Key 2)
+   - Endpoint URL (例如：`https://your-resource.openai.azure.com`)
+4. 在「Model deployments」中查看您的部署名稱
+5. 將這些資訊填入擴充功能設定中
 
 ### 支援的模型
 
@@ -127,6 +137,22 @@
 - o3
 - o3-mini
 - o3-pro
+
+#### Azure OpenAI
+
+- 支援所有 Azure OpenAI 部署的模型
+- 需要提供：
+  - API Key
+  - Endpoint URL (例如：`https://your-resource.openai.azure.com`)
+  - Deployment Name (您在 Azure 中建立的部署名稱)
+  - API Version (預設：`2024-02-15-preview`)
+
+支援的 API 版本：
+- 2024-02-15-preview
+- 2024-05-01-preview
+- 2024-06-01
+- 2024-08-01-preview
+- 2024-10-21
 
 ## 🛠️ 開發
 
@@ -219,6 +245,7 @@ MIT License - 詳見 [LICENSE](LICENSE) 檔案
 - [DOMPurify](https://github.com/cure53/DOMPurify) - HTML 清理
 - [Google Gemini API](https://ai.google.dev/) - AI 服務
 - [OpenAI API](https://platform.openai.com/) - AI 服務
+- [Azure OpenAI Service](https://azure.microsoft.com/products/ai-services/openai-service) - AI 服務
 
 ---
 

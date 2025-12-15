@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "頁問 AskPage",
   "version": "0.10.0",
-  "description": "使用 Gemini API 或 OpenAI API 詢問關於目前頁面的問題",
+  "description": "使用 Gemini API、OpenAI API 或 Azure OpenAI API 詢問關於目前頁面的問題",
   "permissions": [
     "storage",
     "activeTab"
