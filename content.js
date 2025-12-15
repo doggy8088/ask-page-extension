@@ -1187,15 +1187,23 @@ async function createDialog() {
 
         const requestBody = {
             messages: messages,
-            temperature: 0.7,
-            max_tokens: 2048
+            temperature: 0.7
         };
+
+        // Azure OpenAI models differ in which token limit parameter they accept:
+        // - gpt-5* models require max_completion_tokens
+        // - other models use max_tokens
+        if (deployment.startsWith('gpt-5')) {
+            requestBody.max_completion_tokens = 2048;
+        } else {
+            requestBody.max_tokens = 2048;
+        }
 
         console.log('[AskPage] ===== PREPARING AZURE OPENAI API REQUEST =====');
         console.log('[AskPage] Request body structure:', {
             messages_count: requestBody.messages.length,
             temperature: requestBody.temperature,
-            max_tokens: requestBody.max_tokens
+            ...(requestBody.max_completion_tokens !== undefined ? { max_completion_tokens: requestBody.max_completion_tokens } : { max_tokens: requestBody.max_tokens })
         });
 
         // Construct Azure OpenAI endpoint URL
