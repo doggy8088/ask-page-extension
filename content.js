@@ -1118,7 +1118,7 @@ async function createDialog() {
         const encryptedApiKey = await getValue(AZURE_OPENAI_API_KEY_STORAGE, '');
         const endpoint = await getValue(AZURE_OPENAI_ENDPOINT_STORAGE, '');
         const deployment = await getValue(AZURE_OPENAI_DEPLOYMENT_STORAGE, '');
-        const apiVersion = await getValue(AZURE_OPENAI_API_VERSION_STORAGE, '2024-02-15-preview');
+        const apiVersion = await getValue(AZURE_OPENAI_API_VERSION_STORAGE, '2024-10-21');
 
         console.log('[AskPage] Endpoint:', endpoint);
         console.log('[AskPage] Deployment:', deployment);

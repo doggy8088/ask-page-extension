@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (result.AZURE_OPENAI_API_VERSION) {
             azureApiVersionSelect.value = result.AZURE_OPENAI_API_VERSION;
         } else {
-            azureApiVersionSelect.value = '2024-02-15-preview';
+            azureApiVersionSelect.value = '2024-10-21';
         }
 
         // Load custom prompts

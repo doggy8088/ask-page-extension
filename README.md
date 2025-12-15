@@ -145,14 +145,15 @@
   - API Key
   - Endpoint URL (例如：`https://your-resource.openai.azure.com`)
   - Deployment Name (您在 Azure 中建立的部署名稱)
-  - API Version (預設：`2024-02-15-preview`)
+  - API Version (預設：`2024-10-21`)
 
 支援的 API 版本：
-- 2024-02-15-preview
-- 2024-05-01-preview
-- 2024-06-01
-- 2024-08-01-preview
 - 2024-10-21
+- 2024-12-01-preview
+- 2025-01-01-preview
+- 2025-02-01-preview
+- 2025-03-01-preview
+- 2025-04-01-preview
 
 ## 🛠️ 開發
 
