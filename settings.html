@@ -517,8 +517,9 @@
             <div class="form-group">
               <label for="providerSelect">選擇 AI 提供者</label>
               <select id="providerSelect">
-                <option value="gemini">Google Gemini</option>
                 <option value="openai">OpenAI</option>
+                <option value="azure">Azure OpenAI</option>
+                <option value="gemini">Google Gemini</option>
               </select>
             </div>
 
@@ -563,6 +564,35 @@
                     <option value="o3">o3</option>
                     <option value="o3-mini">o3-mini</option>
                     <option value="o3-pro">o3-pro</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div id="azure-settings" class="provider-settings" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="azureApiKey">Azure OpenAI API Key</label>
+                  <input id="azureApiKey" type="password" placeholder="請輸入您的 Azure OpenAI API Key">
+                </div>
+                <div class="form-group">
+                  <label for="azureEndpoint">Azure OpenAI Endpoint</label>
+                  <input id="azureEndpoint" type="text" placeholder="例如: https://your-resource.openai.azure.com">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="azureDeployment">Deployment Name</label>
+                  <input id="azureDeployment" type="text" placeholder="例如: gpt-4o-mini">
+                </div>
+                <div class="form-group">
+                  <label for="azureApiVersion">API Version</label>
+                  <select id="azureApiVersion">
+                    <option value="2024-02-15-preview">2024-02-15-preview</option>
+                    <option value="2024-05-01-preview">2024-05-01-preview</option>
+                    <option value="2024-06-01">2024-06-01</option>
+                    <option value="2024-08-01-preview">2024-08-01-preview</option>
+                    <option value="2024-10-21">2024-10-21</option>
                   </select>
                 </div>
               </div>

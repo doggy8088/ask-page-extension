@@ -77,6 +77,10 @@ const PROMPT_HISTORY_STORAGE = 'ASKPAGE_PROMPT_HISTORY';
 const PROVIDER_STORAGE = 'PROVIDER';
 const OPENAI_API_KEY_STORAGE = 'OPENAI_API_KEY';
 const OPENAI_MODEL_STORAGE = 'OPENAI_MODEL';
+const AZURE_OPENAI_API_KEY_STORAGE = 'AZURE_OPENAI_API_KEY';
+const AZURE_OPENAI_ENDPOINT_STORAGE = 'AZURE_OPENAI_ENDPOINT';
+const AZURE_OPENAI_DEPLOYMENT_STORAGE = 'AZURE_OPENAI_DEPLOYMENT';
+const AZURE_OPENAI_API_VERSION_STORAGE = 'AZURE_OPENAI_API_VERSION';
 const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 
 // Storage keys for custom slash command prompts
@@ -143,7 +147,16 @@ async function decryptApiKey(encryptedData) {
 // Provider switching function
 async function switchProvider() {
     const currentProvider = await getValue(PROVIDER_STORAGE, 'gemini');
-    const newProvider = currentProvider === 'gemini' ? 'openai' : 'gemini';
+    let newProvider;
+
+    // Cycle through providers: gemini -> openai -> azure -> gemini
+    if (currentProvider === 'gemini') {
+        newProvider = 'openai';
+    } else if (currentProvider === 'openai') {
+        newProvider = 'azure';
+    } else {
+        newProvider = 'gemini';
+    }
 
     console.log('[AskPage] Switching provider from', currentProvider, 'to', newProvider);
     await setValue(PROVIDER_STORAGE, newProvider);
@@ -162,12 +175,20 @@ async function updateProviderDisplay() {
 
     if (providerDisplayElement) {
         let model;
+        let displayName;
+
         if (provider === 'gemini') {
             model = await getValue(MODEL_STORAGE, 'gemini-flash-lite-latest');
-        } else {
+            displayName = 'Gemini';
+        } else if (provider === 'openai') {
             model = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
+            displayName = 'OpenAI';
+        } else if (provider === 'azure') {
+            model = await getValue(AZURE_OPENAI_DEPLOYMENT_STORAGE, 'gpt-4o-mini');
+            displayName = 'Azure OpenAI';
         }
-        providerDisplayElement.textContent = `${provider === 'gemini' ? 'Gemini' : 'OpenAI'} (${model})`;
+
+        providerDisplayElement.textContent = `${displayName} (${model})`;
     }
 }
 
@@ -1088,6 +1109,176 @@ async function createDialog() {
         console.log('[AskPage] ===== OPENAI API CALL COMPLETED =====');
     }
 
+    // Azure OpenAI API calling function
+    async function askAzureOpenAI(question, capturedSelectedText = '') {
+        console.log('[AskPage] ===== AZURE OPENAI API CALL STARTED =====');
+        console.log('[AskPage] Question:', question);
+        console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
+
+        const encryptedApiKey = await getValue(AZURE_OPENAI_API_KEY_STORAGE, '');
+        const endpoint = await getValue(AZURE_OPENAI_ENDPOINT_STORAGE, '');
+        const deployment = await getValue(AZURE_OPENAI_DEPLOYMENT_STORAGE, '');
+        const apiVersion = await getValue(AZURE_OPENAI_API_VERSION_STORAGE, '2024-02-15-preview');
+
+        console.log('[AskPage] Endpoint:', endpoint);
+        console.log('[AskPage] Deployment:', deployment);
+        console.log('[AskPage] API Version:', apiVersion);
+        console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
+
+        if (!encryptedApiKey) {
+            appendMessage('assistant', '請點擊擴充功能圖示設定您的 Azure OpenAI API Key。');
+            return;
+        }
+
+        if (!endpoint) {
+            appendMessage('assistant', '請點擊擴充功能圖示設定您的 Azure OpenAI Endpoint。');
+            return;
+        }
+
+        if (!deployment) {
+            appendMessage('assistant', '請點擊擴充功能圖示設定您的 Azure OpenAI Deployment Name。');
+            return;
+        }
+
+        const apiKey = await decryptApiKey(encryptedApiKey);
+        console.log('[AskPage] Decrypted API key available:', apiKey ? 'Yes' : 'No');
+        console.log('[AskPage] API key preview:', maskApiKey(apiKey));
+
+        if (!apiKey) {
+            appendMessage('assistant', '無法解密 Azure OpenAI API Key，請重新設定。');
+            return;
+        }
+
+        appendMessage('assistant', '...thinking...');
+
+        // Get page content
+        let container;
+        // 1. 優先選取 main
+        if (document.querySelector('main')) {
+            container = document.querySelector('main');
+        } else {
+            // 2. 若只有一個 article，則選取該 article
+            const articles = document.querySelectorAll('article');
+            if (articles.length === 1) {
+                container = articles[0];
+            } else {
+                // 3. 否則 fallback 到 body
+                container = document.body;
+            }
+        }
+        const fullPageText = container.innerText.slice(0, 15000);
+        console.log('[AskPage] Full page text length:', fullPageText.length);
+
+        let messages = [];
+        let systemPrompt;
+
+        if (capturedSelectedText) {
+            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for comprehensive understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            const contextText = `Full page content for context:\n${fullPageText}\n\nSelected text (main focus):\n${capturedSelectedText.slice(0, 5000)}`;
+            messages.push({ role: 'system', content: systemPrompt });
+            messages.push({ role: 'user', content: `${contextText}\n\nQuestion: ${question}` });
+            console.log('[AskPage] Context mode: Selected text + full page');
+        } else {
+            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            messages.push({ role: 'system', content: systemPrompt });
+            messages.push({ role: 'user', content: `Page content:\n${fullPageText}\n\nQuestion: ${question}` });
+            console.log('[AskPage] Context mode: Full page');
+        }
+
+        const requestBody = {
+            messages: messages,
+            temperature: 0.7
+        };
+
+        // Azure OpenAI models differ in which token limit parameter they accept:
+        // - gpt-5* models require max_completion_tokens
+        // - other models use max_tokens
+        if (deployment.startsWith('gpt-5')) {
+            requestBody.max_completion_tokens = 2048;
+        } else {
+            requestBody.max_tokens = 2048;
+        }
+
+        console.log('[AskPage] ===== PREPARING AZURE OPENAI API REQUEST =====');
+        console.log('[AskPage] Request body structure:', {
+            messages_count: requestBody.messages.length,
+            temperature: requestBody.temperature,
+            ...(requestBody.max_completion_tokens !== undefined ? { max_completion_tokens: requestBody.max_completion_tokens } : { max_tokens: requestBody.max_tokens })
+        });
+
+        // Construct Azure OpenAI endpoint URL
+        // Format: https://{endpoint}/openai/deployments/{deployment-id}/chat/completions?api-version={api-version}
+        let azureEndpoint = endpoint.trim();
+        // Remove trailing slash if present
+        if (azureEndpoint.endsWith('/')) {
+            azureEndpoint = azureEndpoint.slice(0, -1);
+        }
+        const apiUrl = `${azureEndpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
+        console.log('[AskPage] Full API URL:', apiUrl);
+
+        let responseData;
+        try {
+            console.log('[AskPage] Sending request to Azure OpenAI API...');
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'api-key': apiKey
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            console.log('[AskPage] ===== AZURE OPENAI API RESPONSE RECEIVED =====');
+            console.log('[AskPage] Response status:', response.status);
+            console.log('[AskPage] Response ok:', response.ok);
+            console.log('[AskPage] Response headers:', Object.fromEntries(response.headers.entries()));
+
+            if (!response.ok) {
+                const errorBody = await response.text();
+                console.error('[AskPage] Azure OpenAI API Error response body:', errorBody);
+
+                // Handle specific error cases
+                if (response.status === 401) {
+                    throw new Error('無效的 API Key，請檢查您的 Azure OpenAI API Key 設定。');
+                } else if (response.status === 404) {
+                    throw new Error('找不到指定的部署，請檢查您的 Endpoint 和 Deployment Name 設定。');
+                } else if (response.status === 429) {
+                    throw new Error('API 請求頻率過高，請稍後再試。');
+                } else if (response.status >= 500) {
+                    throw new Error('Azure OpenAI 服務暫時不可用，請稍後再試。');
+                } else {
+                    throw new Error(`${response.status} ${response.statusText}: ${errorBody}`);
+                }
+            }
+
+            responseData = await response.json();
+            console.log('[AskPage] ===== AZURE OPENAI API RESPONSE PARSED =====');
+            console.log('[AskPage] Response data structure:', {
+                has_choices: !!responseData.choices,
+                choices_count: responseData.choices?.length || 0,
+                first_choice_has_message: !!responseData.choices?.[0]?.message,
+                first_choice_content_length: responseData.choices?.[0]?.message?.content?.length || 0
+            });
+
+        } catch (err) {
+            console.error('[AskPage] ===== AZURE OPENAI API CALL FAILED =====');
+            console.error('[AskPage] Azure OpenAI API 呼叫失敗:', err);
+            console.error('[AskPage] Error message:', err.message);
+            console.error('[AskPage] Error stack:', err.stack);
+            messagesEl.lastChild.remove();
+            appendMessage('assistant', `錯誤: ${err.message}`);
+            return;
+        }
+
+        console.log('[AskPage] ===== PROCESSING AZURE OPENAI RESPONSE =====');
+        messagesEl.lastChild.remove();
+        const answer = responseData.choices?.[0]?.message?.content || '未取得回應';
+        console.log('[AskPage] Final answer length:', answer.length);
+        console.log('[AskPage] Answer preview:', answer.substring(0, 200) + (answer.length > 200 ? '...' : ''));
+        appendMessage('assistant', answer);
+        console.log('[AskPage] ===== AZURE OPENAI API CALL COMPLETED =====');
+    }
+
     // Generic AI asking function that routes to the appropriate provider
     async function askAI(question, capturedSelectedText = '') {
         const provider = await getValue(PROVIDER_STORAGE, 'gemini');
@@ -1095,6 +1286,8 @@ async function createDialog() {
 
         if (provider === 'openai') {
             await askOpenAI(question, capturedSelectedText);
+        } else if (provider === 'azure') {
+            await askAzureOpenAI(question, capturedSelectedText);
         } else {
             await askGemini(question, capturedSelectedText);
         }
