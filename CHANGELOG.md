@@ -4,6 +4,13 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.11.2] - 2025-12-16
+
+### 修正 / 更新（v0.11.2）
+
+- 修正 gpt-5 系列模型的 `temperature` 參數問題：gpt-5 系列模型不支援自訂 temperature 值，現已移除該參數以避免 API 400 錯誤
+- 同時修正 OpenAI 和 Azure OpenAI 提供者的參數處理邏輯
+
 ## [0.11.1] - 2025-12-16
 
 ### 修正 / 更新（v0.11.1）

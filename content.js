@@ -1020,9 +1020,9 @@ async function createDialog() {
         // OpenAI models differ in which token limit parameter they accept:
         // - gpt-5* and o-series models require max_completion_tokens (max_tokens is rejected)
         // - other chat models use max_tokens
-        // Also, o-series models do not support the temperature parameter.
+        // Also, gpt-5* and o-series models do not support the temperature parameter.
         const usesMaxCompletionTokens = selectedModel.startsWith('gpt-5') || selectedModel.startsWith('o3') || selectedModel.startsWith('o4');
-        const supportsTemperature = !(selectedModel.startsWith('o3') || selectedModel.startsWith('o4'));
+        const supportsTemperature = !(selectedModel.startsWith('gpt-5') || selectedModel.startsWith('o3') || selectedModel.startsWith('o4'));
 
         const requestBody = {
             model: selectedModel,
@@ -1185,15 +1185,21 @@ async function createDialog() {
             console.log('[AskPage] Context mode: Full page');
         }
 
+        // Azure OpenAI models differ in which token limit parameter they accept:
+        // - gpt-5* models require max_completion_tokens and do not support temperature
+        // - other models use max_tokens
+        const isGpt5Model = deployment.startsWith('gpt-5');
+
         const requestBody = {
-            messages: messages,
-            temperature: 0.7
+            messages: messages
         };
 
-        // Azure OpenAI models differ in which token limit parameter they accept:
-        // - gpt-5* models require max_completion_tokens
-        // - other models use max_tokens
-        if (deployment.startsWith('gpt-5')) {
+        // Add temperature parameter only for models that support it
+        if (!isGpt5Model) {
+            requestBody.temperature = 0.7;
+        }
+
+        if (isGpt5Model) {
             requestBody.max_completion_tokens = 2048;
         } else {
             requestBody.max_tokens = 2048;
@@ -1202,7 +1208,7 @@ async function createDialog() {
         console.log('[AskPage] ===== PREPARING AZURE OPENAI API REQUEST =====');
         console.log('[AskPage] Request body structure:', {
             messages_count: requestBody.messages.length,
-            temperature: requestBody.temperature,
+            ...(requestBody.temperature !== undefined && { temperature: requestBody.temperature }),
             ...(requestBody.max_completion_tokens !== undefined ? { max_completion_tokens: requestBody.max_completion_tokens } : { max_tokens: requestBody.max_tokens })
         });
 
