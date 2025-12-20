@@ -63,10 +63,8 @@
   border-radius: 8px;
   color: #ffffff;
   white-space: pre-wrap;
+  border: none;
   border-left: 3px solid #0d47a1;
-  border-top: none;
-  border-right: none;
-  border-bottom: none;
   box-sizing: border-box;
   font-size: 15px;
   line-height: 1.6;
@@ -230,8 +228,8 @@
   color: #000000;
   font-weight: 700;
   display: inline;
-  font-size: inherit;
-  line-height: inherit;
+  font-size: 15px;
+  line-height: 1.6;
 }
 #gemini-qna-input-area {
   all: initial;
