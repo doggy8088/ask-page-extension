@@ -4,6 +4,18 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.11.3] - 2025-12-20
+
+### 修正 / 更新（v0.11.3）
+
+- **CSS 樣式隔離修復**: 修正擴充功能的 CSS 樣式會影響宿主頁面樣式的問題
+  - 在所有主要擴充功能元素（`#gemini-qna-overlay`、`#gemini-qna-dialog`、`#gemini-qna-messages` 等）上添加 `all: initial` 重置，完全隔離擴充功能樣式
+  - 更新所有 CSS 選擇器以使用更嚴格的作用域（例如 `#gemini-qna-messages .gemini-msg-assistant` 而非 `.gemini-msg-assistant`）
+  - 確保擴充功能內部的樣式（ul、ol、li、h1-h6、p、pre、code、strong、b 等元素）不會洩漏到宿主頁面
+  - 重新設定所有必要的樣式屬性（字體、顏色、間距等），確保擴充功能外觀不變
+  - 更新深色主題的 CSS 選擇器以匹配新的作用域規則
+  - 所有擴充功能元素現在完全獨立於宿主頁面的 CSS，不會受到影響也不會影響宿主頁面
+
 ## [0.11.2] - 2025-12-16
 
 ### 修正 / 更新（v0.11.2）
