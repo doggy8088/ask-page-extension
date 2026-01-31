@@ -1,9 +1,12 @@
 {
   "name": "ask-page-extension",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "description": "使用 Gemini API、OpenAI API 或 Azure OpenAI API 詢問關於目前頁面的問題",
   "main": "background.js",
   "scripts": {
+    "bump:patch": "node scripts/bump-version.js patch",
+    "bump:minor": "node scripts/bump-version.js minor",
+    "bump:major": "node scripts/bump-version.js major",
     "lint": "eslint *.js --ignore-pattern lib/",
     "lint:fix": "eslint *.js --fix --ignore-pattern lib/",
     "build": "npm run lint",
