@@ -81,6 +81,9 @@ const AZURE_OPENAI_API_KEY_STORAGE = 'AZURE_OPENAI_API_KEY';
 const AZURE_OPENAI_ENDPOINT_STORAGE = 'AZURE_OPENAI_ENDPOINT';
 const AZURE_OPENAI_DEPLOYMENT_STORAGE = 'AZURE_OPENAI_DEPLOYMENT';
 const AZURE_OPENAI_API_VERSION_STORAGE = 'AZURE_OPENAI_API_VERSION';
+const OPENAI_COMPATIBLE_API_KEY_STORAGE = 'OPENAI_COMPATIBLE_API_KEY';
+const OPENAI_COMPATIBLE_ENDPOINT_STORAGE = 'OPENAI_COMPATIBLE_ENDPOINT';
+const OPENAI_COMPATIBLE_MODEL_STORAGE = 'OPENAI_COMPATIBLE_MODEL';
 const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 
 // Storage keys for custom slash command prompts
@@ -149,11 +152,13 @@ async function switchProvider() {
     const currentProvider = await getValue(PROVIDER_STORAGE, 'gemini');
     let newProvider;
 
-    // Cycle through providers: gemini -> openai -> azure -> gemini
+    // Cycle through providers: gemini -> openai -> azure -> openai-compatible -> gemini
     if (currentProvider === 'gemini') {
         newProvider = 'openai';
     } else if (currentProvider === 'openai') {
         newProvider = 'azure';
+    } else if (currentProvider === 'azure') {
+        newProvider = 'openai-compatible';
     } else {
         newProvider = 'gemini';
     }
@@ -186,6 +191,9 @@ async function updateProviderDisplay() {
         } else if (provider === 'azure') {
             model = await getValue(AZURE_OPENAI_DEPLOYMENT_STORAGE, 'gpt-4o-mini');
             displayName = 'Azure OpenAI';
+        } else if (provider === 'openai-compatible') {
+            model = await getValue(OPENAI_COMPATIBLE_MODEL_STORAGE, '');
+            displayName = 'OpenAI Compatible';
         }
 
         providerDisplayElement.textContent = `${displayName} (${model})`;
@@ -1285,6 +1293,102 @@ async function createDialog() {
         console.log('[AskPage] ===== AZURE OPENAI API CALL COMPLETED =====');
     }
 
+    async function askOpenAICompatible(question, capturedSelectedText = '') {
+        const messagesEl = document.getElementById('gemini-qna-messages');
+        console.log('[AskPage] ===== OPENAI COMPATIBLE API CALL STARTED =====');
+        console.log('[AskPage] Question:', question);
+
+        const encryptedApiKey = await getValue(OPENAI_COMPATIBLE_API_KEY_STORAGE, '');
+        const endpoint = await getValue(OPENAI_COMPATIBLE_ENDPOINT_STORAGE, 'http://localhost:11434/v1');
+        const selectedModel = await getValue(OPENAI_COMPATIBLE_MODEL_STORAGE, '');
+
+        console.log('[AskPage] Selected model:', selectedModel);
+        console.log('[AskPage] Endpoint:', endpoint);
+
+        // API Key is optional for some compatible providers (e.g. Ollama)
+        let apiKey = '';
+        if (encryptedApiKey) {
+            apiKey = await decryptApiKey(encryptedApiKey);
+        }
+
+        appendMessage('assistant', '...thinking...');
+
+        // Get page content
+        let container;
+        if (document.querySelector('main')) {
+            container = document.querySelector('main');
+        } else {
+            const articles = document.querySelectorAll('article');
+            if (articles.length === 1) {
+                container = articles[0];
+            } else {
+                container = document.body;
+            }
+        }
+        const fullPageText = container.innerText.slice(0, 15000);
+
+        let messages = [];
+        let systemPrompt;
+
+        if (capturedSelectedText) {
+            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for comprehensive understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            const contextText = `Full page content for context:\n${fullPageText}\n\nSelected text (main focus):\n${capturedSelectedText.slice(0, 5000)}`;
+            messages.push({ role: 'system', content: systemPrompt });
+            messages.push({ role: 'user', content: `${contextText}\n\nQuestion: ${question}` });
+        } else {
+            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+            messages.push({ role: 'system', content: systemPrompt });
+            messages.push({ role: 'user', content: `Page content:\n${fullPageText}\n\nQuestion: ${question}` });
+        }
+
+        const requestBody = {
+            messages: messages,
+            temperature: 0.7
+        };
+        
+        if (selectedModel) {
+            requestBody.model = selectedModel;
+        }
+
+        // Construct full URL
+        // Remove trailing slash if present
+        const cleanEndpoint = endpoint.replace(/\/$/, '');
+        const url = cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`;
+
+        console.log('[AskPage] Request URL:', url);
+
+        try {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (apiKey) {
+                headers['Authorization'] = `Bearer ${apiKey}`;
+            }
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw new Error(`${response.status} ${response.statusText}: ${errorBody}`);
+            }
+
+            const responseData = await response.json();
+            messagesEl.lastChild.remove();
+            
+            const answer = responseData.choices?.[0]?.message?.content || '未取得回應';
+            appendMessage('assistant', answer);
+
+        } catch (err) {
+            console.error('[AskPage] OpenAI Compatible API call failed:', err);
+            messagesEl.lastChild.remove();
+            appendMessage('assistant', `錯誤: ${err.message}`);
+        }
+    }
+
     // Generic AI asking function that routes to the appropriate provider
     async function askAI(question, capturedSelectedText = '') {
         const provider = await getValue(PROVIDER_STORAGE, 'gemini');
@@ -1294,6 +1398,8 @@ async function createDialog() {
             await askOpenAI(question, capturedSelectedText);
         } else if (provider === 'azure') {
             await askAzureOpenAI(question, capturedSelectedText);
+        } else if (provider === 'openai-compatible') {
+            await askOpenAICompatible(question, capturedSelectedText);
         } else {
             await askGemini(question, capturedSelectedText);
         }

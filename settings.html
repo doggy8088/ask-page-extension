@@ -476,6 +476,24 @@
     .icon {
       font-style: normal;
     }
+
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-color);
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .footer a {
+      color: var(--primary-color);
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -520,6 +538,7 @@
                 <option value="openai">OpenAI</option>
                 <option value="azure">Azure OpenAI</option>
                 <option value="gemini">Google Gemini</option>
+                <option value="openai-compatible">OpenAI 相容端點</option>
               </select>
             </div>
 
@@ -600,6 +619,23 @@
                 </div>
               </div>
             </div>
+
+            <div id="openai-compatible-settings" class="provider-settings" style="display: none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="openaiCompatibleEndpoint">API Endpoint</label>
+                  <input id="openaiCompatibleEndpoint" type="text" placeholder="例如: http://localhost:11434/v1">
+                </div>
+                <div class="form-group">
+                  <label for="openaiCompatibleApiKey">API Key (選填)</label>
+                  <input id="openaiCompatibleApiKey" type="password" placeholder="若不需要可留空">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="openaiCompatibleModel">模型名稱</label>
+                <input id="openaiCompatibleModel" type="text" placeholder="例如: llama3, mistral">
+              </div>
+            </div>
           </div>
         </div>
 
@@ -640,9 +676,22 @@
           <span class="icon">🔄</span>
           重置設定
         </button>
+        <button id="export" class="btn-secondary">
+          <span class="icon">📤</span>
+          匯出設定
+        </button>
+        <button id="import" class="btn-secondary">
+          <span class="icon">📥</span>
+          匯入設定
+        </button>
+        <input type="file" id="importFile" accept=".json" style="display: none;">
       </div>
 
       <div id="status" class="status"></div>
+
+      <footer class="footer">
+        <p>© 2026 本工具由 <a href="https://www.facebook.com/will.fans/" target="_blank">Will 保哥的技術交流中心</a> 設計、開發與維護 v<span id="appVersion"></span></p>
+      </footer>
     </div>
   </div>
 

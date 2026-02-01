@@ -65,7 +65,9 @@ async function getOrCreateEncryptionKey() {
 // DOM elements - 將在 DOMContentLoaded 中初始化
 let providerSelect, geminiApiKeyInput, geminiModelSelect, openaiApiKeyInput, openaiModelSelect;
 let azureApiKeyInput, azureEndpointInput, azureDeploymentInput, azureApiVersionSelect;
-let geminiSettings, openaiSettings, azureSettings, saveButton, resetButton, statusDiv;
+let openaiCompatibleEndpointInput, openaiCompatibleApiKeyInput, openaiCompatibleModelInput;
+let geminiSettings, openaiSettings, azureSettings, openaiCompatibleSettings;
+let saveButton, resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
 let modalSave, modalCancel;
 
@@ -99,9 +101,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     geminiSettings = document.getElementById('gemini-settings');
     openaiSettings = document.getElementById('openai-settings');
     azureSettings = document.getElementById('azure-settings');
+    openaiCompatibleSettings = document.getElementById('openai-compatible-settings');
+    
+    // OpenAI Compatible inputs
+    openaiCompatibleEndpointInput = document.getElementById('openaiCompatibleEndpoint');
+    openaiCompatibleApiKeyInput = document.getElementById('openaiCompatibleApiKey');
+    openaiCompatibleModelInput = document.getElementById('openaiCompatibleModel');
+
     saveButton = document.getElementById('save');
     resetButton = document.getElementById('reset');
+    exportButton = document.getElementById('export');
+    importButton = document.getElementById('import');
+    importFileInput = document.getElementById('importFile');
     statusDiv = document.getElementById('status');
+    appVersionSpan = document.getElementById('appVersion');
+
+    // Display version
+    const manifest = chrome.runtime.getManifest();
+    if (appVersionSpan) {
+        appVersionSpan.textContent = manifest.version;
+    }
 
     commandsList = document.getElementById('commandsList');
     addCommandBtn = document.getElementById('addCommand');
@@ -138,14 +157,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             geminiSettings.style.display = 'block';
             openaiSettings.style.display = 'none';
             azureSettings.style.display = 'none';
+            openaiCompatibleSettings.style.display = 'none';
         } else if (provider === 'openai') {
             geminiSettings.style.display = 'none';
             openaiSettings.style.display = 'block';
             azureSettings.style.display = 'none';
+            openaiCompatibleSettings.style.display = 'none';
         } else if (provider === 'azure') {
             geminiSettings.style.display = 'none';
             openaiSettings.style.display = 'none';
             azureSettings.style.display = 'block';
+            openaiCompatibleSettings.style.display = 'none';
+        } else if (provider === 'openai-compatible') {
+            geminiSettings.style.display = 'none';
+            openaiSettings.style.display = 'none';
+            azureSettings.style.display = 'none';
+            openaiCompatibleSettings.style.display = 'block';
         }
     });
 
@@ -184,14 +211,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         const azureEndpoint = azureEndpointInput.value.trim();
         const azureDeployment = azureDeploymentInput.value.trim();
         const azureApiVersion = azureApiVersionSelect.value;
+        
+        // OpenAI Compatible values
+        const openaiCompatibleEndpoint = openaiCompatibleEndpointInput.value.trim();
+        const openaiCompatibleApiKey = openaiCompatibleApiKeyInput.value.trim();
+        const openaiCompatibleModel = openaiCompatibleModelInput.value.trim();
 
         const settings = {
             'PROVIDER': provider,
-            'GEMINI_MODEL': geminiModel,
-            'OPENAI_MODEL': openaiModel,
+            'GEMINI_MODEL': geminiModelSelect.value, // re-read value to ensure current
+            'OPENAI_MODEL': openaiModelSelect.value, // re-read value
             'AZURE_OPENAI_ENDPOINT': azureEndpoint,
             'AZURE_OPENAI_DEPLOYMENT': azureDeployment,
             'AZURE_OPENAI_API_VERSION': azureApiVersion,
+            'OPENAI_COMPATIBLE_ENDPOINT': openaiCompatibleEndpoint,
+            'OPENAI_COMPATIBLE_MODEL': openaiCompatibleModel,
             [CUSTOM_COMMANDS_STORAGE]: customCommands
         };
 
@@ -226,11 +260,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+        if (openaiCompatibleApiKey) {
+            try {
+                const encryptedCompatibleKey = await encryptApiKey(openaiCompatibleApiKey, encryptionKey);
+                settings['OPENAI_COMPATIBLE_API_KEY'] = encryptedCompatibleKey;
+            } catch (error) {
+                console.error('Error encrypting OpenAI Compatible API key:', error);
+                settings['OPENAI_COMPATIBLE_API_KEY'] = openaiCompatibleApiKey;
+            }
+        }
+
         chrome.storage.local.set(settings, () => {
             showStatus('設定已儲存！', 'success');
-            setTimeout(() => {
-                window.close();
-            }, 1500);
         });
     });
 
@@ -262,6 +303,58 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             });
         }
+    });
+
+    // Export Settings
+    exportButton.addEventListener('click', () => {
+        chrome.storage.local.get(null, (items) => {
+            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            a.download = `ask-page-settings-${timestamp}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showStatus('設定已匯出！', 'success');
+        });
+    });
+
+    // Import Settings Trigger
+    importButton.addEventListener('click', () => {
+        importFileInput.click();
+    });
+
+    // Handle File Import
+    importFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const settings = JSON.parse(event.target.result);
+                // Basic validation
+                if (typeof settings !== 'object') {
+                    throw new Error('Invalid settings format');
+                }
+
+                if (confirm('確定要匯入此設定檔嗎？這將會覆蓋您目前的設定。')) {
+                    chrome.storage.local.set(settings, () => {
+                        showStatus('設定匯入成功！正在重新載入...', 'success');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    });
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                showStatus('匯入失敗：檔案格式錯誤', 'error');
+            }
+            // Reset input value to allow importing same file again
+            importFileInput.value = '';
+        };
+        reader.readAsText(file);
     });
 
     // 載入設定的其餘代碼
@@ -484,6 +577,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         'OPENAI_API_KEY', 'OPENAI_MODEL',
         'AZURE_OPENAI_API_KEY', 'AZURE_OPENAI_ENDPOINT',
         'AZURE_OPENAI_DEPLOYMENT', 'AZURE_OPENAI_API_VERSION',
+        'OPENAI_COMPATIBLE_API_KEY', 'OPENAI_COMPATIBLE_ENDPOINT', 'OPENAI_COMPATIBLE_MODEL',
         'CUSTOM_SUMMARY_PROMPT', CUSTOM_COMMANDS_STORAGE
     ], async (result) => {
         // Set provider
@@ -498,14 +592,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             geminiSettings.style.display = 'block';
             openaiSettings.style.display = 'none';
             azureSettings.style.display = 'none';
+            openaiCompatibleSettings.style.display = 'none';
         } else if (providerSelect.value === 'openai') {
             geminiSettings.style.display = 'none';
             openaiSettings.style.display = 'block';
             azureSettings.style.display = 'none';
+            openaiCompatibleSettings.style.display = 'none';
         } else if (providerSelect.value === 'azure') {
             geminiSettings.style.display = 'none';
             openaiSettings.style.display = 'none';
             azureSettings.style.display = 'block';
+            openaiCompatibleSettings.style.display = 'none';
+        } else if (providerSelect.value === 'openai-compatible') {
+            geminiSettings.style.display = 'none';
+            openaiSettings.style.display = 'none';
+            azureSettings.style.display = 'none';
+            openaiCompatibleSettings.style.display = 'block';
         }
 
         // Load Gemini settings
@@ -587,6 +689,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             azureApiVersionSelect.value = result.AZURE_OPENAI_API_VERSION;
         } else {
             azureApiVersionSelect.value = '2024-10-21';
+        }
+
+        // Load OpenAI Compatible settings
+        if (result.OPENAI_COMPATIBLE_API_KEY) {
+            try {
+                const decryptedKey = await decryptApiKey(result.OPENAI_COMPATIBLE_API_KEY, encryptionKey);
+                openaiCompatibleApiKeyInput.value = decryptedKey;
+            } catch (error) {
+                console.error('Error decrypting OpenAI Compatible API key:', error);
+                if (typeof result.OPENAI_COMPATIBLE_API_KEY === 'object' && result.OPENAI_COMPATIBLE_API_KEY.encrypted) {
+                    openaiCompatibleApiKeyInput.value = '';
+                    openaiCompatibleApiKeyInput.placeholder = '解密失敗，請重新輸入 API Key';
+                } else {
+                    openaiCompatibleApiKeyInput.value = result.OPENAI_COMPATIBLE_API_KEY;
+                }
+            }
+        }
+
+        if (result.OPENAI_COMPATIBLE_ENDPOINT) {
+            openaiCompatibleEndpointInput.value = result.OPENAI_COMPATIBLE_ENDPOINT;
+        } else {
+            // Default value as requested
+            openaiCompatibleEndpointInput.value = 'http://localhost:11434/v1';
+        }
+
+        if (result.OPENAI_COMPATIBLE_MODEL) {
+            openaiCompatibleModelInput.value = result.OPENAI_COMPATIBLE_MODEL;
         }
 
         // Load custom commands
