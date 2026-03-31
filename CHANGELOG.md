@@ -4,6 +4,12 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.12.1] - 2026-04-01
+
+### 修正 / 更新（v0.12.1）
+
+- **設定頁 Gemini 模型更新**：將設定頁 `Gemini 模型` 選項中的 `gemini-3-pro-preview` 與 `gemini-3-flash-preview` 更換為 `gemini-3.1-pro-preview` 與 `gemini-3.1-flash-lite-preview`，其餘模型選項不變。
+
 ## [0.11.3] - 2025-12-20
 
 ### 修正 / 更新（v0.11.3）
