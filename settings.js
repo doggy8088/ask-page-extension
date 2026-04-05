@@ -88,6 +88,9 @@ let customCommands = [];
 
 // Load the saved settings when the page loads
 document.addEventListener('DOMContentLoaded', async () => {
+    // 標記設定頁已被開啟過，供 background.js 判斷圖示點擊行為
+    chrome.storage.local.set({ 'SETTINGS_OPENED': true });
+
     // 初始化 DOM 元素
     providerSelect = document.getElementById('providerSelect');
     geminiApiKeyInput = document.getElementById('geminiApiKey');
@@ -219,8 +222,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const settings = {
             'PROVIDER': provider,
-            'GEMINI_MODEL': geminiModelSelect.value, // re-read value to ensure current
-            'OPENAI_MODEL': openaiModelSelect.value, // re-read value
+            'GEMINI_MODEL': geminiModel,
+            'OPENAI_MODEL': openaiModel,
             'AZURE_OPENAI_ENDPOINT': azureEndpoint,
             'AZURE_OPENAI_DEPLOYMENT': azureDeployment,
             'AZURE_OPENAI_API_VERSION': azureApiVersion,

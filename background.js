@@ -87,14 +87,46 @@ chrome.runtime.onStartup.addListener(() => {
     console.log('[AskPage] Service worker started at:', new Date().toISOString());
 });
 
-// 點擊擴充功能圖示時開啟/聚焦 Options 頁面（不需額外權限）
-chrome.action.onClicked.addListener(async () => {
-    try {
-        await chrome.runtime.openOptionsPage();
-        console.log('[AskPage] Opened or focused Options page');
-    } catch (error) {
-        console.error('[AskPage] Failed to open/focus Options page:', error);
-    }
+// 點擊擴充功能圖示：若使用者從未開過設定頁，則先開啟設定頁；否則觸發當前頁面的提問視窗
+chrome.action.onClicked.addListener((tab) => {
+    chrome.storage.local.get(['SETTINGS_OPENED'], (result) => {
+        if (!result.SETTINGS_OPENED) {
+            // 第一次使用，開啟設定頁
+            chrome.runtime.openOptionsPage().then(() => {
+                console.log('[AskPage] First use: opened Options page');
+            }).catch((error) => {
+                console.error('[AskPage] Failed to open Options page:', error);
+            });
+            return;
+        }
+
+        // 已開過設定頁，觸發當前頁面的提問視窗
+        if (!tab?.url) {
+            console.warn('[AskPage] No tab URL available');
+            return;
+        }
+
+        try {
+            const url = new URL(tab.url);
+            const hostname = url.hostname.toLowerCase();
+
+            if (hostname === 'github.dev' || hostname.endsWith('.github.dev')) {
+                console.log('[AskPage] AskPage is disabled on github.dev domains:', hostname);
+                return;
+            }
+        } catch (error) {
+            console.warn('[AskPage] Error parsing URL:', tab.url, error);
+        }
+
+        console.log('[AskPage] Icon clicked: sending toggle-dialog to tab:', tab.id);
+        chrome.tabs.sendMessage(tab.id, { action: 'toggle-dialog' }).then(
+            (response) => {
+                console.log('[AskPage] toggle-dialog sent via icon click, response:', response);
+            }
+        ).catch((error) => {
+            console.error('[AskPage] Error sending toggle-dialog via icon click:', error);
+        });
+    });
 });
 
 // Add listener for extension installation

@@ -4,6 +4,15 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.13.0] - 2026-04-05
+
+### 新增 / 改進（v0.13.0）
+
+- **點擊圖示觸發提問視窗**：點擊擴充功能工具列圖示時，行為改為直接觸發當前頁面的提問對話框
+  - 若使用者從未開啟過設定頁面（第一次使用），點擊圖示仍會先開啟設定頁以完成初始設定
+  - 設定頁一旦被開啟過，後續點擊圖示即直接在當前頁面彈出提問視窗，體驗與快速鍵一致
+  - github.dev 及 *.github.dev 網域維持停用行為不受影響
+
 ## [0.12.1] - 2026-04-01
 
 ### 修正 / 更新（v0.12.1）
@@ -364,6 +373,7 @@ Initial release
 - **廢棄**: 即將移除的功能
 
 <!-- 版本鏈接 -->
+[0.13.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.12.1...v0.13.0
 [0.10.0]: https://github.com/doggy8088/ask-page-extension/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/doggy8088/ask-page-extension/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/doggy8088/ask-page-extension/compare/v0.9.0...v0.9.1
