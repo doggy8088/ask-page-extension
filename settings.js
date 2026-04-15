@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     openaiSettings = document.getElementById('openai-settings');
     azureSettings = document.getElementById('azure-settings');
     openaiCompatibleSettings = document.getElementById('openai-compatible-settings');
-    
+
     // OpenAI Compatible inputs
     openaiCompatibleEndpointInput = document.getElementById('openaiCompatibleEndpoint');
     openaiCompatibleApiKeyInput = document.getElementById('openaiCompatibleApiKey');
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const azureEndpoint = azureEndpointInput.value.trim();
         const azureDeployment = azureDeploymentInput.value.trim();
         const azureApiVersion = azureApiVersionSelect.value;
-        
+
         // OpenAI Compatible values
         const openaiCompatibleEndpoint = openaiCompatibleEndpointInput.value.trim();
         const openaiCompatibleApiKey = openaiCompatibleApiKeyInput.value.trim();
@@ -331,7 +331,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Handle File Import
     importFileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (!file) return;
+        if (!file) {
+            return;
+        }
 
         const reader = new FileReader();
         reader.onload = (event) => {
