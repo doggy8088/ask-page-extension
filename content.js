@@ -440,6 +440,26 @@ async function createDialog() {
 
     const promptHistory = JSON.parse(await getValue(PROMPT_HISTORY_STORAGE, '[]'));
     let historyIndex = promptHistory.length;
+    let isInputComposing = false;
+    let justEndedComposition = false;
+    let compositionEndGuardTimer = null;
+
+    function clearCompositionEndGuard() {
+        justEndedComposition = false;
+        if (compositionEndGuardTimer !== null) {
+            clearTimeout(compositionEndGuardTimer);
+            compositionEndGuardTimer = null;
+        }
+    }
+
+    function armCompositionEndGuard() {
+        clearCompositionEndGuard();
+        justEndedComposition = true;
+        compositionEndGuardTimer = setTimeout(() => {
+            justEndedComposition = false;
+            compositionEndGuardTimer = null;
+        }, 0);
+    }
 
     async function handleAsk() {
         hideIntelliBox();
@@ -592,7 +612,29 @@ async function createDialog() {
         }
     });
 
+    input.addEventListener('compositionstart', () => {
+        isInputComposing = true;
+        clearCompositionEndGuard();
+    });
+
+    input.addEventListener('compositionend', () => {
+        isInputComposing = false;
+        armCompositionEndGuard();
+    });
+
     input.addEventListener('keydown', async (e) => {
+        const isImeActive = isInputComposing || e.isComposing || e.keyCode === 229;
+        if (isImeActive) {
+            return;
+        }
+
+        if (justEndedComposition && e.key === 'Enter') {
+            clearCompositionEndGuard();
+            return;
+        }
+
+        clearCompositionEndGuard();
+
         if (intelliActive) {
             const filtered = await filterIntelli(input.value);
             if (e.key === 'ArrowDown') {
@@ -1345,7 +1387,7 @@ async function createDialog() {
             messages: messages,
             temperature: 0.7
         };
-        
+
         if (selectedModel) {
             requestBody.model = selectedModel;
         }
@@ -1378,7 +1420,7 @@ async function createDialog() {
 
             const responseData = await response.json();
             messagesEl.lastChild.remove();
-            
+
             const answer = responseData.choices?.[0]?.message?.content || '未取得回應';
             appendMessage('assistant', answer);
 
