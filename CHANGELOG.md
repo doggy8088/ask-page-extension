@@ -4,6 +4,15 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.13.2] - 2026-04-16
+
+### 修正 / 更新（v0.13.2）
+
+- **Code Fence 換行修正**：修正助理訊息中的 Markdown code fence 在顯示程式碼時，因樣式重設導致無法正確保留原始換行的問題。
+  - 保留程式碼區塊原本的水平捲動行為，避免過長單行被硬性折行。
+  - 調整 `.gemini-msg-assistant pre code` 的樣式，讓 fenced code 重新繼承 `<pre>` 的 `white-space` 與排版設定。
+  - 維持 inline code 與 fenced code 的樣式分流，避免修正 code block 時影響段落內反引號內容。
+
 ## [0.13.1] - 2026-04-15
 
 ### 修正 / 更新（v0.13.1）

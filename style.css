@@ -217,9 +217,12 @@
   color: inherit;
   padding: 0;
   border: none;
-  display: inline;
-  font-size: 13px;
-  line-height: 1.4;
+  display: block;
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  white-space: inherit;
+  box-sizing: border-box;
 }
 #gemini-qna-messages .gemini-msg-assistant strong,
 #gemini-qna-messages .gemini-msg-assistant b {
