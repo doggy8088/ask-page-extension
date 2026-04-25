@@ -355,7 +355,7 @@
   all: initial;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   padding: 12px;
   border-top: 1px solid #ddd;
   gap: 8px;
@@ -375,6 +375,13 @@
   box-sizing: border-box;
   line-height: 1.5;
   display: block;
+  height: calc(1.5em + 18px);
+  min-height: calc(1.5em + 18px);
+  max-height: calc((1.5em * 5) + 18px);
+  resize: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: pre;
 }
 #gemini-qna-input::placeholder {
   color: #666666;
@@ -394,6 +401,7 @@
   display: inline-block;
   line-height: 1.5;
   text-align: center;
+  align-self: flex-end;
 }
 
 /* 只有在暗色主題偏好時才覆蓋樣式 (Dark Theme Override Only) */

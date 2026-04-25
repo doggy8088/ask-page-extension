@@ -14,6 +14,7 @@ const MAX_CONVERSATION_MESSAGES = 20;
 const MAX_PAGE_TEXT_CONTEXT_LENGTH = 15000;
 const MAX_SELECTED_TEXT_CONTEXT_LENGTH = 5000;
 const MAX_HTML_CONTEXT_WITH_SELECTION_LENGTH = 15000;
+const MAX_INPUT_VISIBLE_LINES = 5;
 const HTML_CONTEXT_NOISE_SELECTOR = 'script, style, noscript, template';
 
 // Listen for the message from the background script
@@ -928,10 +929,11 @@ async function createDialog() {
     const inputArea = document.createElement('div');
     inputArea.id = 'gemini-qna-input-area';
 
-    const input = document.createElement('input');
+    const input = document.createElement('textarea');
     input.id = 'gemini-qna-input';
-    input.type = 'text';
     input.placeholder = '輸入問題後按 Enter 或點擊 Ask 按鈕 (可先選取文字範圍)';
+    input.rows = 1;
+    input.wrap = 'off';
 
     // Dynamic intelliCommands based on screenshot state and custom commands
     async function getIntelliCommands() {
@@ -987,6 +989,7 @@ async function createDialog() {
         updateModeToggleButtons()
     ]);
 
+    resizeQuestionInput({ resetToSingleLine: true });
     input.focus();
 
     function createInlineSlashCommandMarkup(command) {
@@ -1002,7 +1005,7 @@ async function createDialog() {
     }
 
     async function triggerInlineSlashCommand(command) {
-        input.value = command;
+        setInputValue(command);
         hideIntelliBox();
         await handleAsk();
     }
@@ -1089,6 +1092,74 @@ async function createDialog() {
     let isInputComposing = false;
     let justEndedComposition = false;
     let compositionEndGuardTimer = null;
+
+    function getQuestionInputMetrics() {
+        const computedStyle = window.getComputedStyle(input);
+        const lineHeight = parseFloat(computedStyle.lineHeight) || 21;
+        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+        const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+        const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+        const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
+        const baseHeight = lineHeight + paddingTop + paddingBottom + borderTop + borderBottom;
+
+        return {
+            singleLineHeight: Math.ceil(baseHeight),
+            maxHeight: Math.ceil((lineHeight * MAX_INPUT_VISIBLE_LINES) + paddingTop + paddingBottom + borderTop + borderBottom)
+        };
+    }
+
+    function resizeQuestionInput(options = {}) {
+        const resetToSingleLine = options.resetToSingleLine || false;
+        const inputMetrics = getQuestionInputMetrics();
+
+        if (resetToSingleLine) {
+            input.style.height = `${inputMetrics.singleLineHeight}px`;
+            input.style.overflowY = 'hidden';
+            return;
+        }
+
+        input.style.height = 'auto';
+        const nextHeight = Math.min(
+            Math.max(input.scrollHeight, inputMetrics.singleLineHeight),
+            inputMetrics.maxHeight
+        );
+
+        input.style.height = `${nextHeight}px`;
+        input.style.overflowY = input.scrollHeight > inputMetrics.maxHeight ? 'auto' : 'hidden';
+    }
+
+    function setInputValue(value, options = {}) {
+        input.value = value;
+        resizeQuestionInput({ resetToSingleLine: options.resetToSingleLine || value === '' });
+
+        if (options.moveCaretToEnd !== false) {
+            const caretPosition = input.value.length;
+            input.setSelectionRange(caretPosition, caretPosition);
+        }
+    }
+
+    function shouldUsePromptHistoryNavigation(key) {
+        if (input.value.includes('\n')) {
+            return false;
+        }
+
+        const selectionStart = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+        const selectionEnd = typeof input.selectionEnd === 'number' ? input.selectionEnd : selectionStart;
+
+        if (selectionStart !== selectionEnd) {
+            return false;
+        }
+
+        if (key === 'ArrowUp') {
+            return selectionStart === 0;
+        }
+
+        if (key === 'ArrowDown') {
+            return selectionEnd === input.value.length;
+        }
+
+        return false;
+    }
 
     function clearCompositionEndGuard() {
         justEndedComposition = false;
@@ -1201,7 +1272,7 @@ async function createDialog() {
             clearConversationHistory();
             messagesEl.innerHTML = '';
             await appendUsagePromptMessage({ showUsageTipOnly: true });
-            input.value = '';
+            setInputValue('', { resetToSingleLine: true });
             input.focus();
             return;
         }
@@ -1215,7 +1286,7 @@ async function createDialog() {
 
         if (question === '/screenshot') {
             appendMessage('user', question);
-            input.value = '';
+            setInputValue('', { resetToSingleLine: true });
             input.focus();
 
             await handleScreenshotModeToggle({ feedback: 'detailed' });
@@ -1224,7 +1295,7 @@ async function createDialog() {
 
         if (question === '/html') {
             appendMessage('user', question);
-            input.value = '';
+            setInputValue('', { resetToSingleLine: true });
             input.focus();
 
             await handleHtmlModeToggle({ feedback: 'detailed' });
@@ -1245,7 +1316,7 @@ async function createDialog() {
                 // Unknown command
                 appendMessage('user', question);
                 appendMessage('assistant', `❌ **未知命令: ${question}**\n\n可用的命令：\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 切換截圖功能\n- \`/html\` - 切換 HTML 模式\n\n您也可以在設定中新增自訂命令。`);
-                input.value = '';
+                setInputValue('', { resetToSingleLine: true });
                 input.focus();
                 return;
             }
@@ -1257,7 +1328,7 @@ async function createDialog() {
         await setValue(PROMPT_HISTORY_STORAGE, JSON.stringify(promptHistory));
 
         appendMessage('user', displayedQuestion);
-        input.value = '';
+        setInputValue('', { resetToSingleLine: true });
         input.focus();
         await askAI(question, getActiveSelectedText(capturedSelectedText), displayedQuestion);
     }
@@ -1283,7 +1354,7 @@ async function createDialog() {
             el.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                input.value = item.cmd;
+                setInputValue(item.cmd);
                 hideIntelliBox();
                 handleAsk();
             });
@@ -1305,8 +1376,9 @@ async function createDialog() {
         return commands.filter(c => c.cmd.startsWith(val));
     }
     input.addEventListener('input', async () => {
+        resizeQuestionInput();
         const val = input.value;
-        if (val.startsWith('/')) {
+        if (!val.includes('\n') && val.startsWith('/')) {
             const filtered = await filterIntelli(val);
             intelliIndex = 0;
             showIntelliBox(filtered);
@@ -1348,35 +1420,40 @@ async function createDialog() {
                 e.preventDefault();
                 intelliIndex = (intelliIndex - 1 + filtered.length) % filtered.length;
                 showIntelliBox(filtered);
-            } else if (e.key === 'Enter' || e.key === 'Tab') {
+            } else if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
                 if (filtered.length) {
                     e.preventDefault();
-                    input.value = filtered[intelliIndex].cmd;
+                    setInputValue(filtered[intelliIndex].cmd);
                     hideIntelliBox();
                     handleAsk();
                 }
+            } else if (e.key === 'Enter' && e.shiftKey) {
+                hideIntelliBox();
             } else if (e.key === 'Escape') {
                 hideIntelliBox();
             }
             return;
         }
         if (e.key === 'Enter') {
+            if (e.shiftKey) {
+                return;
+            }
             e.preventDefault();
             handleAsk();
-        } else if (e.key === 'ArrowUp') {
+        } else if (e.key === 'ArrowUp' && shouldUsePromptHistoryNavigation('ArrowUp')) {
             e.preventDefault();
             if (historyIndex > 0) {
                 historyIndex--;
-                input.value = promptHistory[historyIndex];
+                setInputValue(promptHistory[historyIndex]);
             }
-        } else if (e.key === 'ArrowDown') {
+        } else if (e.key === 'ArrowDown' && shouldUsePromptHistoryNavigation('ArrowDown')) {
             e.preventDefault();
             if (historyIndex < promptHistory.length - 1) {
                 historyIndex++;
-                input.value = promptHistory[historyIndex];
+                setInputValue(promptHistory[historyIndex]);
             } else {
                 historyIndex = promptHistory.length;
-                input.value = '';
+                setInputValue('', { resetToSingleLine: true });
             }
         }
     }, true);
