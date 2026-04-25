@@ -5,6 +5,7 @@
 ## ✨ 功能特色
 
 - 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI 和 Azure OpenAI，可自由切換
+- 💬 **多輪對話脈絡延續** - 追問時會自動帶入前文，切換不同 AI Provider 也能延續同一段對話
 - 🔐 **加密安全儲存** - API 金鑰使用 AES-256-GCM 加密保護
 - 🎯 **智慧模型選擇** - 支援 Gemini 全系列模型、OpenAI 8 種模型和 Azure OpenAI 部署
 - 📝 支援選取文字進行針對性提問
