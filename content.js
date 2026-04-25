@@ -8,6 +8,9 @@ console.log('[AskPage] Document ready state:', document.readyState);
 
 // Global state to prevent multiple dialogs
 let isDialogVisible = false;
+let conversationHistory = [];
+let conversationSelectedText = '';
+const MAX_CONVERSATION_MESSAGES = 20;
 
 // Listen for the message from the background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -292,6 +295,82 @@ function renderMarkdown(md) {
     }
 }
 
+function getPageContextContainer() {
+    if (document.querySelector('main')) {
+        return document.querySelector('main');
+    }
+
+    const articles = document.querySelectorAll('article');
+    if (articles.length === 1) {
+        return articles[0];
+    }
+
+    return document.body;
+}
+
+function getFullPageText() {
+    return getPageContextContainer().innerText.slice(0, 15000);
+}
+
+function getActiveSelectedText(capturedSelectedText = '') {
+    return capturedSelectedText || conversationSelectedText;
+}
+
+function buildSystemPrompt(capturedSelectedText = '', includeScreenshot = false) {
+    if (capturedSelectedText) {
+        if (includeScreenshot) {
+            return 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context and a screenshot of the current viewport for comprehensive understanding. Please focus primarily on the selected text while using the full page context and visual information to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+        }
+
+        return 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for comprehensive understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+    }
+
+    if (includeScreenshot) {
+        return 'You are a helpful assistant that answers questions about the provided web page content. You have both the text content and a screenshot of the current viewport to provide comprehensive answers. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+    }
+
+    return 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+}
+
+function buildConversationContextText(fullPageText, capturedSelectedText = '') {
+    if (capturedSelectedText) {
+        return `Use the following web page context for this conversation.\n\nFull page content:\n${fullPageText}\n\nSelected text (main focus):\n${capturedSelectedText.slice(0, 5000)}`;
+    }
+
+    return `Use the following web page content for this conversation.\n\nPage content:\n${fullPageText}`;
+}
+
+function buildConversationHistoryTranscript() {
+    if (!conversationHistory.length) {
+        return '';
+    }
+
+    const transcript = conversationHistory
+        .map((turn) => `${turn.role === 'assistant' ? 'Assistant' : 'User'}: ${turn.content}`)
+        .join('\n\n');
+
+    return `\n\nConversation history:\n${transcript}`;
+}
+
+function getConversationMessagesForTextProviders() {
+    return conversationHistory.map((turn) => ({
+        role: turn.role,
+        content: turn.content
+    }));
+}
+
+function addConversationTurn(role, content, displayContent = content) {
+    conversationHistory.push({ role, content, displayContent });
+    if (conversationHistory.length > MAX_CONVERSATION_MESSAGES) {
+        conversationHistory = conversationHistory.slice(-MAX_CONVERSATION_MESSAGES);
+    }
+}
+
+function clearConversationHistory() {
+    conversationHistory = [];
+    conversationSelectedText = '';
+}
+
 /* --------------------------------------------------
     建立對話框
 -------------------------------------------------- */
@@ -416,8 +495,14 @@ async function createDialog() {
         '\n\n**您的自訂命令：**\n' + customCommands.map(cmd => `- \`${cmd.cmd}\` - ${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`).join('\n') :
         '';
 
-    if (capturedSelectedText) {
-        appendMessage('assistant', `🎯 **已偵測到選取文字** (${capturedSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}\n\n💡 **內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}${customCommandsList}\n\n點擊擴充功能圖示可設定更多自訂命令。`);
+    const activeSelectedText = getActiveSelectedText(capturedSelectedText);
+
+    if (conversationHistory.length > 0) {
+        conversationHistory.forEach((turn) => {
+            appendMessage(turn.role, turn.displayContent || turn.content);
+        });
+    } else if (activeSelectedText) {
+        appendMessage('assistant', `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}\n\n💡 **內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}${customCommandsList}\n\n點擊擴充功能圖示可設定更多自訂命令。`);
     } else {
         appendMessage('assistant', `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}\n\n**內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}${customCommandsList}\n\n點擊擴充功能圖示可設定更多自訂命令。`);
     }
@@ -464,12 +549,14 @@ async function createDialog() {
     async function handleAsk() {
         hideIntelliBox();
         let question = input.value.trim();
+        let displayedQuestion = question;
         if (!question) { return; }
 
         if (question === '/clear') {
             promptHistory.length = 0;
             historyIndex = 0;
             await setValue(PROMPT_HISTORY_STORAGE, '[]');
+            clearConversationHistory();
             messagesEl.innerHTML = '';
             appendMessage('assistant', '已清除您的提問歷史紀錄。');
             input.value = '';
@@ -481,6 +568,7 @@ async function createDialog() {
             // Use custom prompt if available, otherwise use default
             const customPrompt = await getValue(CUSTOM_SUMMARY_PROMPT_STORAGE, '');
             question = customPrompt || '請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」';
+            displayedQuestion = question;
         }
 
         if (question === '/screenshot') {
@@ -534,9 +622,7 @@ async function createDialog() {
             if (customCommand) {
                 // Replace the command with its prompt
                 question = customCommand.prompt;
-                appendMessage('user', customCommand.cmd);
-                input.value = '';
-                input.focus();
+                displayedQuestion = customCommand.cmd;
                 // Continue with AI processing using the custom prompt
             } else {
                 // Unknown command
@@ -553,10 +639,10 @@ async function createDialog() {
         historyIndex = promptHistory.length;
         await setValue(PROMPT_HISTORY_STORAGE, JSON.stringify(promptHistory));
 
-        appendMessage('user', question);
+        appendMessage('user', displayedQuestion);
         input.value = '';
         input.focus();
-        await askAI(question, capturedSelectedText);
+        await askAI(question, getActiveSelectedText(capturedSelectedText), displayedQuestion);
     }
 
     let intelliActive = false;
@@ -805,7 +891,7 @@ async function createDialog() {
         messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    async function askGemini(question, capturedSelectedText = '') {
+    async function askGemini(question, capturedSelectedText = '', displayedQuestion = question) {
         console.log('[AskPage] ===== GEMINI API CALL STARTED =====');
         console.log('[AskPage] Question:', question);
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
@@ -846,48 +932,15 @@ async function createDialog() {
             console.log('[AskPage] Screenshot capture skipped (disabled)');
         }
 
-        let container;
-        // 1. 優先選取 main
-        if (document.querySelector('main')) {
-            container = document.querySelector('main');
-        } else {
-            // 2. 若只有一個 article，則選取該 article
-            const articles = document.querySelectorAll('article');
-            if (articles.length === 1) {
-                container = articles[0];
-            } else {
-                // 3. 否則 fallback 到 body
-                container = document.body;
-            }
-        }
-        const fullPageText = container.innerText.slice(0, 15000);
+        const fullPageText = getFullPageText();
         console.log('[AskPage] Full page text length:', fullPageText.length);
 
-        let contextParts = [];
-        let systemPrompt;
-
-        if (capturedSelectedText) {
-            if (screenshotDataUrl) {
-                systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context and a screenshot of the current viewport for comprehensive understanding. Please focus primarily on the selected text while using the full page context and visual information to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-            } else {
-                systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for comprehensive understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-            }
-            contextParts.push(
-                { text: `Full page content for context:\n${fullPageText}` },
-                { text: `Selected text (main focus):\n${capturedSelectedText.slice(0, 5000)}` }
-            );
-            console.log('[AskPage] Context mode: Selected text + full page' + (screenshotDataUrl ? ' + screenshot' : ''));
-        } else {
-            if (screenshotDataUrl) {
-                systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. You have both the text content and a screenshot of the current viewport to provide comprehensive answers. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-            } else {
-                systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-            }
-            contextParts.push(
-                { text: `Page content:\n${fullPageText}` }
-            );
-            console.log('[AskPage] Context mode: Full page' + (screenshotDataUrl ? ' + screenshot' : ''));
-        }
+        const systemPrompt = buildSystemPrompt(capturedSelectedText, !!screenshotDataUrl);
+        let contextParts = [{
+            text: `${buildConversationContextText(fullPageText, capturedSelectedText)}${buildConversationHistoryTranscript()}\n\nCurrent question:\n${question}`
+        }];
+        console.log('[AskPage] Context mode:', capturedSelectedText ? 'Selected text + full page' + (screenshotDataUrl ? ' + screenshot' : '') : 'Full page' + (screenshotDataUrl ? ' + screenshot' : ''));
+        console.log('[AskPage] Conversation history messages:', conversationHistory.length);
 
         // 如果有截圖，將其加入到上下文中
         if (screenshotDataUrl) {
@@ -910,9 +963,6 @@ async function createDialog() {
             console.log('[AskPage] Screenshot included in API request: No');
             console.log('[AskPage] Reason: Screenshot capture failed or returned null');
         }
-
-        // 最後加入問題
-        contextParts.push({ text: question });
 
         console.log('[AskPage] Total context parts:', contextParts.length);
 
@@ -1001,11 +1051,14 @@ async function createDialog() {
         console.log('[AskPage] Final answer length:', answer.length);
         console.log('[AskPage] Answer preview:', answer.substring(0, 200) + (answer.length > 200 ? '...' : ''));
         appendMessage('assistant', answer);
+        conversationSelectedText = capturedSelectedText;
+        addConversationTurn('user', question, displayedQuestion);
+        addConversationTurn('assistant', answer);
         console.log('[AskPage] ===== GEMINI API CALL COMPLETED =====');
     }
 
     // OpenAI API calling function
-    async function askOpenAI(question, capturedSelectedText = '') {
+    async function askOpenAI(question, capturedSelectedText = '', displayedQuestion = question) {
         console.log('[AskPage] ===== OPENAI API CALL STARTED =====');
         console.log('[AskPage] Question:', question);
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
@@ -1032,40 +1085,19 @@ async function createDialog() {
 
         appendMessage('assistant', '...thinking...');
 
-        // Get page content
-
-        let container;
-        // 1. 優先選取 main
-        if (document.querySelector('main')) {
-            container = document.querySelector('main');
-        } else {
-            // 2. 若只有一個 article，則選取該 article
-            const articles = document.querySelectorAll('article');
-            if (articles.length === 1) {
-                container = articles[0];
-            } else {
-                // 3. 否則 fallback 到 body
-                container = document.body;
-            }
-        }
-        const fullPageText = container.innerText.slice(0, 15000);
+        const fullPageText = getFullPageText();
         console.log('[AskPage] Full page text length:', fullPageText.length);
 
-        let messages = [];
-        let systemPrompt;
-
-        if (capturedSelectedText) {
-            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for comprehensive understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-            const contextText = `Full page content for context:\n${fullPageText}\n\nSelected text (main focus):\n${capturedSelectedText.slice(0, 5000)}`;
-            messages.push({ role: 'system', content: systemPrompt });
-            messages.push({ role: 'user', content: `${contextText}\n\nQuestion: ${question}` });
-            console.log('[AskPage] Context mode: Selected text + full page');
-        } else {
-            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-            messages.push({ role: 'system', content: systemPrompt });
-            messages.push({ role: 'user', content: `Page content:\n${fullPageText}\n\nQuestion: ${question}` });
-            console.log('[AskPage] Context mode: Full page');
-        }
+        const messages = [
+            {
+                role: 'system',
+                content: `${buildSystemPrompt(capturedSelectedText)}\n\n${buildConversationContextText(fullPageText, capturedSelectedText)}`
+            },
+            ...getConversationMessagesForTextProviders(),
+            { role: 'user', content: question }
+        ];
+        console.log('[AskPage] Context mode:', capturedSelectedText ? 'Selected text + full page' : 'Full page');
+        console.log('[AskPage] Conversation history messages:', conversationHistory.length);
 
         // OpenAI models differ in which token limit parameter they accept:
         // - gpt-5* and o-series models require max_completion_tokens (max_tokens is rejected)
@@ -1156,11 +1188,14 @@ async function createDialog() {
         console.log('[AskPage] Final answer length:', answer.length);
         console.log('[AskPage] Answer preview:', answer.substring(0, 200) + (answer.length > 200 ? '...' : ''));
         appendMessage('assistant', answer);
+        conversationSelectedText = capturedSelectedText;
+        addConversationTurn('user', question, displayedQuestion);
+        addConversationTurn('assistant', answer);
         console.log('[AskPage] ===== OPENAI API CALL COMPLETED =====');
     }
 
     // Azure OpenAI API calling function
-    async function askAzureOpenAI(question, capturedSelectedText = '') {
+    async function askAzureOpenAI(question, capturedSelectedText = '', displayedQuestion = question) {
         console.log('[AskPage] ===== AZURE OPENAI API CALL STARTED =====');
         console.log('[AskPage] Question:', question);
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
@@ -1201,39 +1236,19 @@ async function createDialog() {
 
         appendMessage('assistant', '...thinking...');
 
-        // Get page content
-        let container;
-        // 1. 優先選取 main
-        if (document.querySelector('main')) {
-            container = document.querySelector('main');
-        } else {
-            // 2. 若只有一個 article，則選取該 article
-            const articles = document.querySelectorAll('article');
-            if (articles.length === 1) {
-                container = articles[0];
-            } else {
-                // 3. 否則 fallback 到 body
-                container = document.body;
-            }
-        }
-        const fullPageText = container.innerText.slice(0, 15000);
+        const fullPageText = getFullPageText();
         console.log('[AskPage] Full page text length:', fullPageText.length);
 
-        let messages = [];
-        let systemPrompt;
-
-        if (capturedSelectedText) {
-            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for comprehensive understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-            const contextText = `Full page content for context:\n${fullPageText}\n\nSelected text (main focus):\n${capturedSelectedText.slice(0, 5000)}`;
-            messages.push({ role: 'system', content: systemPrompt });
-            messages.push({ role: 'user', content: `${contextText}\n\nQuestion: ${question}` });
-            console.log('[AskPage] Context mode: Selected text + full page');
-        } else {
-            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-            messages.push({ role: 'system', content: systemPrompt });
-            messages.push({ role: 'user', content: `Page content:\n${fullPageText}\n\nQuestion: ${question}` });
-            console.log('[AskPage] Context mode: Full page');
-        }
+        const messages = [
+            {
+                role: 'system',
+                content: `${buildSystemPrompt(capturedSelectedText)}\n\n${buildConversationContextText(fullPageText, capturedSelectedText)}`
+            },
+            ...getConversationMessagesForTextProviders(),
+            { role: 'user', content: question }
+        ];
+        console.log('[AskPage] Context mode:', capturedSelectedText ? 'Selected text + full page' : 'Full page');
+        console.log('[AskPage] Conversation history messages:', conversationHistory.length);
 
         // Azure OpenAI models differ in which token limit parameter they accept:
         // - gpt-5* models require max_completion_tokens and do not support temperature
@@ -1332,10 +1347,13 @@ async function createDialog() {
         console.log('[AskPage] Final answer length:', answer.length);
         console.log('[AskPage] Answer preview:', answer.substring(0, 200) + (answer.length > 200 ? '...' : ''));
         appendMessage('assistant', answer);
+        conversationSelectedText = capturedSelectedText;
+        addConversationTurn('user', question, displayedQuestion);
+        addConversationTurn('assistant', answer);
         console.log('[AskPage] ===== AZURE OPENAI API CALL COMPLETED =====');
     }
 
-    async function askOpenAICompatible(question, capturedSelectedText = '') {
+    async function askOpenAICompatible(question, capturedSelectedText = '', displayedQuestion = question) {
         const messagesEl = document.getElementById('gemini-qna-messages');
         console.log('[AskPage] ===== OPENAI COMPATIBLE API CALL STARTED =====');
         console.log('[AskPage] Question:', question);
@@ -1355,33 +1373,17 @@ async function createDialog() {
 
         appendMessage('assistant', '...thinking...');
 
-        // Get page content
-        let container;
-        if (document.querySelector('main')) {
-            container = document.querySelector('main');
-        } else {
-            const articles = document.querySelectorAll('article');
-            if (articles.length === 1) {
-                container = articles[0];
-            } else {
-                container = document.body;
-            }
-        }
-        const fullPageText = container.innerText.slice(0, 15000);
-
-        let messages = [];
-        let systemPrompt;
-
-        if (capturedSelectedText) {
-            systemPrompt = 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for comprehensive understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-            const contextText = `Full page content for context:\n${fullPageText}\n\nSelected text (main focus):\n${capturedSelectedText.slice(0, 5000)}`;
-            messages.push({ role: 'system', content: systemPrompt });
-            messages.push({ role: 'user', content: `${contextText}\n\nQuestion: ${question}` });
-        } else {
-            systemPrompt = 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-            messages.push({ role: 'system', content: systemPrompt });
-            messages.push({ role: 'user', content: `Page content:\n${fullPageText}\n\nQuestion: ${question}` });
-        }
+        const fullPageText = getFullPageText();
+        const messages = [
+            {
+                role: 'system',
+                content: `${buildSystemPrompt(capturedSelectedText)}\n\n${buildConversationContextText(fullPageText, capturedSelectedText)}`
+            },
+            ...getConversationMessagesForTextProviders(),
+            { role: 'user', content: question }
+        ];
+        console.log('[AskPage] Context mode:', capturedSelectedText ? 'Selected text + full page' : 'Full page');
+        console.log('[AskPage] Conversation history messages:', conversationHistory.length);
 
         const requestBody = {
             messages: messages,
@@ -1423,6 +1425,9 @@ async function createDialog() {
 
             const answer = responseData.choices?.[0]?.message?.content || '未取得回應';
             appendMessage('assistant', answer);
+            conversationSelectedText = capturedSelectedText;
+            addConversationTurn('user', question, displayedQuestion);
+            addConversationTurn('assistant', answer);
 
         } catch (err) {
             console.error('[AskPage] OpenAI Compatible API call failed:', err);
@@ -1432,18 +1437,18 @@ async function createDialog() {
     }
 
     // Generic AI asking function that routes to the appropriate provider
-    async function askAI(question, capturedSelectedText = '') {
+    async function askAI(question, capturedSelectedText = '', displayedQuestion = question) {
         const provider = await getValue(PROVIDER_STORAGE, 'gemini');
         console.log('[AskPage] Using provider:', provider);
 
         if (provider === 'openai') {
-            await askOpenAI(question, capturedSelectedText);
+            await askOpenAI(question, capturedSelectedText, displayedQuestion);
         } else if (provider === 'azure') {
-            await askAzureOpenAI(question, capturedSelectedText);
+            await askAzureOpenAI(question, capturedSelectedText, displayedQuestion);
         } else if (provider === 'openai-compatible') {
-            await askOpenAICompatible(question, capturedSelectedText);
+            await askOpenAICompatible(question, capturedSelectedText, displayedQuestion);
         } else {
-            await askGemini(question, capturedSelectedText);
+            await askGemini(question, capturedSelectedText, displayedQuestion);
         }
     }
 }
