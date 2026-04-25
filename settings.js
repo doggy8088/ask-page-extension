@@ -69,7 +69,7 @@ let openaiCompatibleEndpointInput, openaiCompatibleApiKeyInput, openaiCompatible
 let geminiSettings, openaiSettings, azureSettings, openaiCompatibleSettings;
 let saveButton, resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
-let modalSave, modalCancel;
+let modalSave, modalCancel, modalCommandNameError;
 
 // Storage keys
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
@@ -79,7 +79,8 @@ const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const BUILT_IN_COMMANDS = [
     { cmd: '/clear', desc: '清除提問歷史紀錄', builtin: true },
     { cmd: '/summary', desc: '總結本頁內容', builtin: true, editable: true },
-    { cmd: '/screenshot', desc: '切換截圖功能狀態', builtin: true }
+    { cmd: '/screenshot', desc: '切換截圖功能狀態', builtin: true },
+    { cmd: '/html', desc: '切換 HTML 模式狀態（啟用後使用頁面 HTML 內容分析）', builtin: true }
 ];
 
 // Current edit state
@@ -130,6 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     commandModal = document.getElementById('commandModal');
     modalTitle = document.getElementById('modalTitle');
     modalCommandName = document.getElementById('modalCommandName');
+    modalCommandNameError = document.getElementById('modalCommandNameError');
     modalCommandPrompt = document.getElementById('modalCommandPrompt');
     modalSave = document.getElementById('modalSave');
     modalCancel = document.getElementById('modalCancel');
@@ -183,6 +185,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     addCommandBtn.addEventListener('click', () => openModal());
     modalCancel.addEventListener('click', closeModal);
     modalSave.addEventListener('click', saveCommand);
+    modalCommandName.addEventListener('input', () => {
+        validateCommandNameInput({ showEmptyError: true });
+    });
 
     // Close modal when clicking outside
     commandModal.addEventListener('click', (e) => {
@@ -381,13 +386,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalCommandPrompt.value = '';
         }
 
+        clearCommandNameValidation();
         commandModal.style.display = 'block';
-        modalCommandName.focus();
+        if (!modalCommandName.disabled) {
+            modalCommandName.focus();
+        } else {
+            modalCommandPrompt.focus();
+        }
     }
 
     function closeModal() {
         commandModal.style.display = 'none';
         currentEditingCommand = null;
+        clearCommandNameValidation();
     }
 
     // Validate command name
@@ -396,12 +407,64 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Check if command already exists
-    function commandExists(name, excludeCurrent = false) {
+    function findExistingCommand(name, excludeCurrent = false) {
         const allCommands = [...BUILT_IN_COMMANDS, ...customCommands];
-        return allCommands.some(cmd =>
+        return allCommands.find(cmd =>
             cmd.cmd === name &&
             (!excludeCurrent || !currentEditingCommand || cmd.cmd !== currentEditingCommand.cmd)
         );
+    }
+
+    function clearCommandNameValidation() {
+        modalCommandName.classList.remove('input-error');
+        modalCommandName.removeAttribute('aria-invalid');
+        modalCommandNameError.textContent = '';
+    }
+
+    function setCommandNameValidationError(message) {
+        if (message) {
+            modalCommandName.classList.add('input-error');
+            modalCommandName.setAttribute('aria-invalid', 'true');
+            modalCommandNameError.textContent = message;
+            return false;
+        }
+
+        clearCommandNameValidation();
+        return true;
+    }
+
+    function getCommandNameValidationMessage(name, { showEmptyError = true, excludeCurrent = false } = {}) {
+        if (modalCommandName.disabled) {
+            return '';
+        }
+
+        if (!name) {
+            return showEmptyError ? '請輸入命令名稱' : '';
+        }
+
+        if (!isValidCommandName(name)) {
+            return '命令名稱格式不正確，必須以 / 開頭且只能包含字母、數字、底線和連字符';
+        }
+
+        const existingCommand = findExistingCommand(name, excludeCurrent);
+        if (existingCommand) {
+            return existingCommand.builtin ?
+                '命令名稱不能與內建命令重複' :
+                '命令名稱已被既有自訂命令使用';
+        }
+
+        return '';
+    }
+
+    function validateCommandNameInput(options = {}) {
+        const name = modalCommandName.value.trim();
+        const excludeCurrent = Boolean(currentEditingCommand && !currentEditingCommand.builtin);
+        const message = getCommandNameValidationMessage(name, {
+            showEmptyError: options.showEmptyError !== false,
+            excludeCurrent
+        });
+
+        return setCommandNameValidationError(message);
     }
 
     // Save command from modal
@@ -409,13 +472,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const name = modalCommandName.value.trim();
         const prompt = modalCommandPrompt.value.trim();
 
-        if (!name) {
-            showStatus('請輸入命令名稱', 'error');
-            return;
-        }
-
-        if (!isValidCommandName(name)) {
-            showStatus('命令名稱格式不正確，必須以 / 開頭且只能包含字母、數字、底線和連字符', 'error');
+        if (!validateCommandNameInput({ showEmptyError: true })) {
             return;
         }
 
@@ -435,11 +492,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             } else {
                 // Editing custom command
-                if (name !== currentEditingCommand.cmd && commandExists(name, true)) {
-                    showStatus('命令名稱已存在', 'error');
-                    return;
-                }
-
                 const index = customCommands.findIndex(cmd => cmd.cmd === currentEditingCommand.cmd);
                 if (index !== -1) {
                     customCommands[index] = { cmd: name, prompt: prompt };
@@ -447,11 +499,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } else {
             // Adding new command
-            if (commandExists(name)) {
-                showStatus('命令名稱已存在', 'error');
-                return;
-            }
-
             customCommands.push({ cmd: name, prompt: prompt });
         }
 

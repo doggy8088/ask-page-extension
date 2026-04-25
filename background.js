@@ -192,6 +192,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // 返回 true 表示將異步發送響應
         return true;
     }
+
+    if (request.action === 'open-options-page') {
+        chrome.runtime.openOptionsPage().then(() => {
+            sendResponse({ success: true });
+        }).catch((error) => {
+            console.error('[AskPage] Failed to open Options page:', error);
+            sendResponse({ success: false, error: error.message });
+        });
+
+        return true;
+    }
 });
 
 // Log when service worker starts

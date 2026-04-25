@@ -243,6 +243,22 @@
       border-color: var(--primary-color);
     }
 
+    .input-error,
+    .input-error:hover,
+    .input-error:focus {
+      border-color: var(--danger-color);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+    }
+
+    .field-error {
+      display: block;
+      min-height: 20px;
+      color: var(--danger-color);
+      font-size: 12px;
+      font-weight: 500;
+      margin-top: 4px;
+    }
+
     .provider-settings {
       display: flex;
       flex-direction: column;
@@ -702,7 +718,8 @@
 
       <div class="form-group">
         <label for="modalCommandName">命令名稱</label>
-        <input id="modalCommandName" type="text" placeholder="例如：/help" pattern="^/[a-zA-Z0-9_-]+$">
+        <input id="modalCommandName" type="text" placeholder="例如：/help" pattern="^/[a-zA-Z0-9_-]+$" aria-describedby="modalCommandNameError">
+        <small id="modalCommandNameError" class="field-error"></small>
         <small style="color: var(--text-secondary);">命令必須以 / 開頭，只能包含字母、數字、底線和連字符</small>
       </div>
 

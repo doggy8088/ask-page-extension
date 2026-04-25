@@ -11,6 +11,10 @@ let isDialogVisible = false;
 let conversationHistory = [];
 let conversationSelectedText = '';
 const MAX_CONVERSATION_MESSAGES = 20;
+const MAX_PAGE_TEXT_CONTEXT_LENGTH = 15000;
+const MAX_SELECTED_TEXT_CONTEXT_LENGTH = 5000;
+const MAX_HTML_CONTEXT_WITH_SELECTION_LENGTH = 15000;
+const HTML_CONTEXT_NOISE_SELECTOR = 'script, style, noscript, template';
 
 // Listen for the message from the background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -88,6 +92,7 @@ const OPENAI_COMPATIBLE_API_KEY_STORAGE = 'OPENAI_COMPATIBLE_API_KEY';
 const OPENAI_COMPATIBLE_ENDPOINT_STORAGE = 'OPENAI_COMPATIBLE_ENDPOINT';
 const OPENAI_COMPATIBLE_MODEL_STORAGE = 'OPENAI_COMPATIBLE_MODEL';
 const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
+const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
 
 // Storage keys for custom slash command prompts
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
@@ -219,6 +224,22 @@ async function toggleScreenshotEnabled() {
     return newState;
 }
 
+// HTML mode state management
+async function getHtmlModeEnabled() {
+    return await getValue(HTML_MODE_ENABLED_STORAGE, false);
+}
+
+async function setHtmlModeEnabled(enabled) {
+    await setValue(HTML_MODE_ENABLED_STORAGE, enabled);
+}
+
+async function toggleHtmlModeEnabled() {
+    const currentState = await getHtmlModeEnabled();
+    const newState = !currentState;
+    await setHtmlModeEnabled(newState);
+    return newState;
+}
+
 /* --------------------------------------------------
     截圖功能
 -------------------------------------------------- */
@@ -308,36 +329,144 @@ function getPageContextContainer() {
     return document.body;
 }
 
-function getFullPageText() {
-    return getPageContextContainer().innerText.slice(0, 15000);
+function createFilteredHtmlContextContainer(container) {
+    const clone = container.cloneNode(true);
+    clone.querySelectorAll(HTML_CONTEXT_NOISE_SELECTOR).forEach((element) => {
+        element.remove();
+    });
+
+    [clone, ...clone.querySelectorAll('*')].forEach((element) => {
+        Array.from(element.attributes).forEach((attribute) => {
+            const attributeName = attribute.name.toLowerCase();
+            const normalizedAttributeValue = attribute.value
+                .trim()
+                .replace(/\s+/g, '')
+                .toLowerCase();
+            const isJavascriptUrl = normalizedAttributeValue.startsWith('javascript:');
+            if (attributeName === 'style' || attributeName.startsWith('on') || isJavascriptUrl) {
+                element.removeAttribute(attribute.name);
+            }
+        });
+    });
+
+    const commentWalker = document.createTreeWalker(clone, NodeFilter.SHOW_COMMENT);
+    const commentsToRemove = [];
+    while (commentWalker.nextNode()) {
+        commentsToRemove.push(commentWalker.currentNode);
+    }
+    commentsToRemove.forEach((comment) => {
+        comment.remove();
+    });
+
+    return clone;
+}
+
+function getFilteredHtmlPageContext(container, { hasSelectedText = false } = {}) {
+    const filteredContainer = createFilteredHtmlContextContainer(container);
+    const content = filteredContainer.outerHTML;
+
+    return {
+        content: hasSelectedText ? content.slice(0, MAX_HTML_CONTEXT_WITH_SELECTION_LENGTH) : content,
+        isFiltered: true,
+        isTruncated: hasSelectedText && content.length > MAX_HTML_CONTEXT_WITH_SELECTION_LENGTH
+    };
+}
+
+async function getPageContext(capturedSelectedText = '') {
+    const container = getPageContextContainer();
+    const htmlModeEnabled = await getHtmlModeEnabled();
+
+    if (htmlModeEnabled) {
+        const htmlContext = getFilteredHtmlPageContext(container, {
+            hasSelectedText: Boolean(capturedSelectedText)
+        });
+
+        return {
+            content: htmlContext.content,
+            format: 'html',
+            isFiltered: htmlContext.isFiltered,
+            isTruncated: htmlContext.isTruncated
+        };
+    }
+
+    return {
+        content: container.innerText.slice(0, MAX_PAGE_TEXT_CONTEXT_LENGTH),
+        format: 'text',
+        isFiltered: false,
+        isTruncated: true
+    };
 }
 
 function getActiveSelectedText(capturedSelectedText = '') {
     return capturedSelectedText || conversationSelectedText;
 }
 
-function buildSystemPrompt(capturedSelectedText = '', includeScreenshot = false) {
-    if (capturedSelectedText) {
-        if (includeScreenshot) {
-            return 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context and a screenshot of the current viewport for comprehensive understanding. Please focus primarily on the selected text while using the full page context and visual information to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-        }
+function buildSystemPrompt({
+    hasSelectedText = false,
+    includeScreenshot = false,
+    pageContextFormat = 'text',
+    pageContextIsFiltered = false,
+    pageContextIsTruncated = false
+} = {}) {
+    const pageContextDescription = pageContextFormat === 'html'
+        ? `The page context is provided as ${pageContextIsTruncated ? 'filtered HTML markup' : 'filtered full-page HTML markup'} from the page container rather than plain text.${pageContextIsFiltered ? ' Script/style blocks, template-like noise, inline JavaScript URLs, inline event handlers, and inline styles have already been removed so you can focus on useful DOM structure for web automation.' : ''}`
+        : 'The full page context is provided as extracted page text.';
+    const selectedTextDescription = hasSelectedText
+        ? (pageContextFormat === 'html'
+            ? 'The selected text is plain text and should remain the main focus while you use the HTML context as supporting reference.'
+            : 'The user has selected specific text that should remain the main focus while you use the full page context as supporting reference.')
+        : 'Use the provided full page context as your primary reference.';
+    const screenshotDescription = includeScreenshot
+        ? 'You also have a screenshot of the current viewport for additional visual context.'
+        : '';
 
-        return 'You are a helpful assistant that answers questions about web page content. The user has selected specific text that they want to focus on, but you also have the full page context for comprehensive understanding. Please focus primarily on the selected text while using the full page context to provide comprehensive answers. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-    }
-
-    if (includeScreenshot) {
-        return 'You are a helpful assistant that answers questions about the provided web page content. You have both the text content and a screenshot of the current viewport to provide comprehensive answers. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
-    }
-
-    return 'You are a helpful assistant that answers questions about the provided web page content. Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.';
+    return `You are a helpful assistant that answers questions about web page content. ${pageContextDescription} ${selectedTextDescription} ${screenshotDescription} Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.`;
 }
 
-function buildConversationContextText(fullPageText, capturedSelectedText = '') {
+function buildConversationContextText(pageContext, capturedSelectedText = '') {
+    const fullPageLabel = pageContext.format === 'html'
+        ? (pageContext.isTruncated
+            ? 'Filtered page HTML context (HTML markup, truncated):'
+            : 'Filtered full page HTML context (HTML markup):')
+        : 'Full page content:';
+    const introText = pageContext.format === 'html'
+        ? 'Use the following web page context for this conversation. The page context is provided as filtered HTML markup from the selected page container with script/style-related noise and inline JavaScript removed.'
+        : 'Use the following web page context for this conversation.';
+
     if (capturedSelectedText) {
-        return `Use the following web page context for this conversation.\n\nFull page content:\n${fullPageText}\n\nSelected text (main focus):\n${capturedSelectedText.slice(0, 5000)}`;
+        const selectedTextLabel = pageContext.format === 'html'
+            ? 'Selected text (plain text, main focus):'
+            : 'Selected text (main focus):';
+
+        return `${introText}\n\n${fullPageLabel}\n${pageContext.content}\n\n${selectedTextLabel}\n${capturedSelectedText.slice(0, MAX_SELECTED_TEXT_CONTEXT_LENGTH)}`;
     }
 
-    return `Use the following web page content for this conversation.\n\nPage content:\n${fullPageText}`;
+    return `${introText}\n\n${fullPageLabel}\n${pageContext.content}`;
+}
+
+async function preparePageConversationContext(capturedSelectedText = '', includeScreenshot = false) {
+    const pageContext = await getPageContext(capturedSelectedText);
+    const hasSelectedText = Boolean(capturedSelectedText);
+    const contextMode = [
+        hasSelectedText ? 'Selected text' : null,
+        pageContext.format === 'html'
+            ? (pageContext.isTruncated ? 'Filtered page HTML' : 'Filtered full page HTML')
+            : 'Full page text',
+        includeScreenshot ? 'screenshot' : null
+    ].filter(Boolean).join(' + ');
+
+    return {
+        pageContext,
+        systemPrompt: buildSystemPrompt({
+            hasSelectedText,
+            includeScreenshot,
+            pageContextFormat: pageContext.format,
+            pageContextIsFiltered: pageContext.isFiltered,
+            pageContextIsTruncated: pageContext.isTruncated
+        }),
+        conversationContextText: buildConversationContextText(pageContext, capturedSelectedText),
+        contextMode
+    };
 }
 
 function buildConversationHistoryTranscript() {
@@ -371,6 +500,10 @@ function clearConversationHistory() {
     conversationSelectedText = '';
 }
 
+function requestOpenOptionsPage() {
+    return chrome.runtime.sendMessage({ action: 'open-options-page' });
+}
+
 /* --------------------------------------------------
     建立對話框
 -------------------------------------------------- */
@@ -379,6 +512,81 @@ async function createDialog() {
 
     const initialSelection = window.getSelection();
     const capturedSelectedText = initialSelection.toString().trim();
+    const modeToggleButtonBaseStyle = `
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        background: transparent;
+        cursor: pointer;
+        line-height: 1;
+        flex-shrink: 0;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+    `;
+    const modeToggleIconBaseStyle = `
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        flex-shrink: 0;
+        font-style: normal;
+        line-height: 1;
+        pointer-events: none;
+        user-select: none;
+    `;
+    const modeToggleTextBaseStyle = `
+        display: inline-flex;
+        align-items: center;
+        line-height: 1.2;
+        pointer-events: none;
+    `;
+    const modeToggleConfigs = {
+        screenshot: {
+            label: '截圖模式',
+            activeText: '啟用螢幕截圖',
+            inactiveText: '無螢幕截圖',
+            activeColor: '#1a73e8',
+            activeBackground: 'rgba(26, 115, 232, 0.16)',
+            activeBorder: 'rgba(26, 115, 232, 0.42)',
+            activeShadow: '0 0 0 1px rgba(26, 115, 232, 0.1)',
+            inactiveColor: '#6f7e96',
+            inactiveBackground: 'rgba(26, 115, 232, 0.06)',
+            inactiveBorder: 'rgba(111, 126, 150, 0.24)',
+            inactiveShadow: 'none',
+            icon: '🖵',
+            iconFontSize: '15px',
+            iconFontWeight: '600',
+            iconFontFamily: '\'Segoe UI Symbol\', \'Apple Symbols\', sans-serif',
+            iconTransform: 'translateY(-0.5px)'
+        },
+        html: {
+            label: 'HTML 模式',
+            activeText: 'HTML',
+            inactiveText: '純文字',
+            activeColor: '#c16700',
+            activeBackground: 'rgba(246, 178, 74, 0.18)',
+            activeBorder: 'rgba(193, 103, 0, 0.42)',
+            activeShadow: '0 0 0 1px rgba(193, 103, 0, 0.1)',
+            inactiveColor: '#8a7352',
+            inactiveBackground: 'rgba(193, 103, 0, 0.06)',
+            inactiveBorder: 'rgba(138, 115, 82, 0.24)',
+            inactiveShadow: 'none',
+            icon: '</>',
+            iconFontSize: '13px',
+            iconFontWeight: '700',
+            iconFontFamily: 'ui-monospace, \'SFMono-Regular\', Consolas, \'Liberation Mono\', Menlo, monospace',
+            iconLetterSpacing: '-0.04em',
+            iconTransform: 'translateY(-0.5px)'
+        }
+    };
 
     const overlay = document.createElement('div');
     overlay.id = 'gemini-qna-overlay';
@@ -407,23 +615,144 @@ async function createDialog() {
     providerDisplay.id = 'provider-display';
     providerDisplay.textContent = 'Loading...';
 
-    const switchProviderBtn = document.createElement('button');
-    switchProviderBtn.textContent = 'Switch Provider';
-    switchProviderBtn.style.cssText = `
-        background: var(--gemini-button-bg, #1a73e8);
-        color: var(--gemini-button-color, #fff);
-        border: none;
-        padding: 4px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 11px;
+    const providerActions = document.createElement('div');
+    providerActions.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
     `;
+
+    function createModeToggleButton(config) {
+        const button = document.createElement('button');
+        const icon = document.createElement('span');
+        const text = document.createElement('span');
+
+        button.type = 'button';
+        button.style.cssText = modeToggleButtonBaseStyle;
+        button.setAttribute('aria-pressed', 'false');
+        button.title = `${config.label}：目前為${config.inactiveText}，點擊切換為${config.activeText}`;
+        button.setAttribute('aria-label', button.title);
+
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = config.icon;
+        icon.style.cssText = `
+            ${modeToggleIconBaseStyle}
+            font-family: ${config.iconFontFamily || 'inherit'};
+            font-size: ${config.iconFontSize || '16px'};
+            font-weight: ${config.iconFontWeight || '400'};
+            letter-spacing: ${config.iconLetterSpacing || '0'};
+            transform: ${config.iconTransform || 'none'};
+        `;
+        text.setAttribute('data-mode-toggle-text', 'true');
+        text.textContent = config.inactiveText;
+        text.style.cssText = modeToggleTextBaseStyle;
+
+        button.appendChild(icon);
+        button.appendChild(text);
+        return button;
+    }
+
+    function applyModeToggleButtonState(button, config, isActive) {
+        const currentText = isActive ? config.activeText : config.inactiveText;
+        const nextText = isActive ? config.inactiveText : config.activeText;
+        const toggleLabel = `${config.label}：目前為${currentText}，點擊切換為${nextText}`;
+        const text = button.querySelector('[data-mode-toggle-text="true"]');
+
+        button.style.color = isActive ? config.activeColor : config.inactiveColor;
+        button.style.background = isActive ? config.activeBackground : config.inactiveBackground;
+        button.style.borderColor = isActive ? config.activeBorder : config.inactiveBorder;
+        button.style.boxShadow = isActive ? config.activeShadow : config.inactiveShadow;
+        button.style.transform = isActive ? 'translateY(-1px)' : 'none';
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        button.title = toggleLabel;
+        button.setAttribute('aria-label', toggleLabel);
+        if (text) {
+            text.textContent = currentText;
+        }
+    }
+
+    const screenshotModeBtn = createModeToggleButton(modeToggleConfigs.screenshot);
+    const htmlModeBtn = createModeToggleButton(modeToggleConfigs.html);
+
+    async function updateModeToggleButtons() {
+        const [screenshotEnabled, htmlModeEnabled] = await Promise.all([
+            getScreenshotEnabled(),
+            getHtmlModeEnabled()
+        ]);
+
+        applyModeToggleButtonState(screenshotModeBtn, modeToggleConfigs.screenshot, screenshotEnabled);
+        applyModeToggleButtonState(htmlModeBtn, modeToggleConfigs.html, htmlModeEnabled);
+    }
+
+    const switchProviderBtn = document.createElement('button');
+    const switchProviderIcon = document.createElement('span');
+    const switchProviderText = document.createElement('span');
+    const optionsBtn = document.createElement('button');
+    const optionsBtnIcon = document.createElement('span');
+    switchProviderBtn.type = 'button';
+    switchProviderBtn.title = '切換提供者';
+    switchProviderBtn.setAttribute('aria-label', '切換提供者');
+    switchProviderBtn.style.cssText = `
+        ${modeToggleButtonBaseStyle}
+        color: #3559c7;
+        background: rgba(53, 89, 199, 0.11);
+        border-color: rgba(53, 89, 199, 0.22);
+        box-shadow: 0 0 0 1px rgba(53, 89, 199, 0.06);
+    `;
+    switchProviderIcon.setAttribute('aria-hidden', 'true');
+    switchProviderIcon.textContent = '⇄';
+    switchProviderIcon.style.cssText = `
+        ${modeToggleIconBaseStyle}
+        font-size: 14px;
+        font-weight: 700;
+        font-family: 'Segoe UI Symbol', 'Apple Symbols', sans-serif;
+        transform: translateY(-0.5px);
+    `;
+    switchProviderText.textContent = '切換提供者';
+    switchProviderText.style.cssText = modeToggleTextBaseStyle;
+    switchProviderBtn.appendChild(switchProviderIcon);
+    switchProviderBtn.appendChild(switchProviderText);
     switchProviderBtn.addEventListener('click', async () => {
         await switchProvider();
     });
 
+    optionsBtn.type = 'button';
+    optionsBtn.title = '開啟選項';
+    optionsBtn.setAttribute('aria-label', '開啟選項');
+    optionsBtn.style.cssText = `
+        ${modeToggleButtonBaseStyle}
+        min-width: 34px;
+        padding-left: 8px;
+        padding-right: 8px;
+        color: #5f6368;
+        background: rgba(95, 99, 104, 0.08);
+        border-color: rgba(95, 99, 104, 0.18);
+        box-shadow: none;
+    `;
+    optionsBtnIcon.setAttribute('aria-hidden', 'true');
+    optionsBtnIcon.textContent = '⚙️';
+    optionsBtnIcon.style.cssText = `
+        ${modeToggleIconBaseStyle}
+        width: auto;
+        font-size: 15px;
+        font-family: 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif;
+    `;
+    optionsBtn.appendChild(optionsBtnIcon);
+    optionsBtn.addEventListener('click', async () => {
+        try {
+            await requestOpenOptionsPage();
+        } catch (error) {
+            console.error('[AskPage] Failed to open options page:', error);
+            appendMessage('assistant', '❌ **無法開啟選項畫面**\n\n請稍後再試一次。');
+        }
+    });
+
+    providerActions.appendChild(screenshotModeBtn);
+    providerActions.appendChild(htmlModeBtn);
+    providerActions.appendChild(switchProviderBtn);
+    providerActions.appendChild(optionsBtn);
     providerHeader.appendChild(providerDisplay);
-    providerHeader.appendChild(switchProviderBtn);
+    providerHeader.appendChild(providerActions);
 
     const inputArea = document.createElement('div');
     inputArea.id = 'gemini-qna-input-area';
@@ -436,12 +765,14 @@ async function createDialog() {
     // Dynamic intelliCommands based on screenshot state and custom commands
     async function getIntelliCommands() {
         const screenshotEnabled = await getScreenshotEnabled();
+        const htmlModeEnabled = await getHtmlModeEnabled();
         const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
 
         const builtInCommands = [
             { cmd: '/clear', desc: '清除提問歷史紀錄' },
             { cmd: '/summary', desc: '總結本頁內容' },
-            { cmd: '/screenshot', desc: screenshotEnabled ? '停用截圖功能' : '啟用截圖功能' }
+            { cmd: '/screenshot', desc: screenshotEnabled ? '停用截圖功能' : '啟用截圖功能' },
+            { cmd: '/html', desc: htmlModeEnabled ? '停用 HTML 模式（改用純文字內容分析）' : '啟用 HTML 模式（使用頁面 HTML 內容分析）' }
         ];
 
         const customCommandsForIntellisense = customCommands.map(cmd => ({
@@ -480,31 +811,90 @@ async function createDialog() {
     document.body.appendChild(overlay);
 
     // Initialize provider display
-    await updateProviderDisplay();
+    await Promise.all([
+        updateProviderDisplay(),
+        updateModeToggleButtons()
+    ]);
 
     input.focus();
 
-    // Generate dynamic welcome message based on screenshot state and custom commands
-    const screenshotEnabled = await getScreenshotEnabled();
-    const screenshotStatus = screenshotEnabled ? '📸 **截圖功能已啟用** - 停用截圖功能' : '啟用截圖功能 (預設關閉)';
-    const screenshotNotice = screenshotEnabled ? '\n\n⚠️ **提醒：截圖功能目前為啟用狀態**\n系統會自動在您的提問中包含當前頁面截圖進行分析。' : '';
+    function createInlineSlashCommandMarkup(command) {
+        return `<span data-askpage-command="${command}"><code>${command}</code></span>`;
+    }
 
-    // Get custom commands for welcome message
-    const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
-    const customCommandsList = customCommands.length > 0 ?
-        '\n\n**您的自訂命令：**\n' + customCommands.map(cmd => `- \`${cmd.cmd}\` - ${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`).join('\n') :
-        '';
+    function buildPromptCommandListMarkdown() {
+        return `**內建斜線命令：**\n- ${createInlineSlashCommandMarkup('/clear')} - 清除歷史紀錄\n- ${createInlineSlashCommandMarkup('/summary')} - 總結整個頁面`;
+    }
 
-    const activeSelectedText = getActiveSelectedText(capturedSelectedText);
+    function buildPromptCommandListCopyText() {
+        return '**內建斜線命令：**\n- /clear - 清除歷史紀錄\n- /summary - 總結整個頁面';
+    }
+
+    async function triggerInlineSlashCommand(command) {
+        input.value = command;
+        hideIntelliBox();
+        await handleAsk();
+    }
+
+    function bindInteractiveCommandElements(container) {
+        container.querySelectorAll('[data-askpage-command]').forEach((element) => {
+            const command = element.getAttribute('data-askpage-command');
+            if (!command) {
+                return;
+            }
+
+            element.style.cursor = 'pointer';
+            element.style.display = 'inline-flex';
+            element.style.alignItems = 'center';
+
+            const codeElement = element.querySelector('code');
+            if (codeElement) {
+                codeElement.style.cursor = 'pointer';
+            }
+
+            element.addEventListener('click', async (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                await triggerInlineSlashCommand(command);
+            });
+        });
+    }
+
+    async function appendUsagePromptMessage(options = {}) {
+        const showUsageTipOnly = options.showUsageTipOnly || false;
+        const screenshotEnabled = await getScreenshotEnabled();
+        const htmlModeEnabled = await getHtmlModeEnabled();
+        const screenshotNotice = screenshotEnabled ? '\n\n⚠️ **提醒：截圖功能目前為啟用狀態**\n系統會自動在您的提問中包含當前頁面截圖進行分析。' : '';
+        const htmlModeNotice = htmlModeEnabled ?
+            '\n\n🧩 **HTML 模式目前為啟用狀態**\n系統會優先使用頁面 HTML 內容作為分析依據。' :
+            '\n\n🧩 **HTML 模式目前為關閉狀態**\n系統會使用整理後的頁面文字內容作為分析依據。';
+        const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+        const customCommandsList = customCommands.length > 0 ?
+            '\n\n**您的自訂命令：**\n' + customCommands.map(cmd => `- \`${cmd.cmd}\` - ${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`).join('\n') :
+            '';
+        const activeSelectedText = showUsageTipOnly ? '' : getActiveSelectedText(capturedSelectedText);
+        const builtInCommandsText = buildPromptCommandListMarkdown();
+        const builtInCommandsCopyText = buildPromptCommandListCopyText();
+        const optionsHintText = '\n\n滑鼠右鍵點擊擴充功能可透過選項功能設定更多自訂命令。';
+
+        if (activeSelectedText) {
+            const messageText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}${htmlModeNotice}\n\n💡 ${builtInCommandsText}${customCommandsList}${optionsHintText}`;
+            const copyText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}${htmlModeNotice}\n\n💡 ${builtInCommandsCopyText}${customCommandsList}${optionsHintText}`;
+            appendMessage('assistant', copyText, { renderedHtml: renderMarkdown(messageText), copyText });
+            return;
+        }
+
+        const messageText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}${htmlModeNotice}\n\n${builtInCommandsText}${customCommandsList}${optionsHintText}`;
+        const copyText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}${htmlModeNotice}\n\n${builtInCommandsCopyText}${customCommandsList}${optionsHintText}`;
+        appendMessage('assistant', copyText, { renderedHtml: renderMarkdown(messageText), copyText });
+    }
 
     if (conversationHistory.length > 0) {
         conversationHistory.forEach((turn) => {
             appendMessage(turn.role, turn.displayContent || turn.content);
         });
-    } else if (activeSelectedText) {
-        appendMessage('assistant', `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}\n\n💡 **內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}${customCommandsList}\n\n點擊擴充功能圖示可設定更多自訂命令。`);
     } else {
-        appendMessage('assistant', `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}\n\n**內建斜線命令：**\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - ${screenshotStatus}${customCommandsList}\n\n點擊擴充功能圖示可設定更多自訂命令。`);
+        await appendUsagePromptMessage();
     }
 
     function closeDialog() {
@@ -546,6 +936,87 @@ async function createDialog() {
         }, 0);
     }
 
+    async function toggleModeWithUi(toggleModeFn, afterToggle) {
+        const newState = await toggleModeFn();
+        await updateModeToggleButtons();
+
+        if (afterToggle) {
+            await afterToggle(newState);
+        }
+
+        return newState;
+    }
+
+    async function handleScreenshotModeToggle(options = {}) {
+        const feedbackMode = options.feedback || 'none';
+
+        return await toggleModeWithUi(toggleScreenshotEnabled, async (newState) => {
+            if (feedbackMode === 'brief') {
+                appendMessage('assistant', newState ? '📸 **截圖模式已啟用**' : '⭕ **截圖模式已停用**');
+                return;
+            }
+
+            if (feedbackMode !== 'detailed') {
+                return;
+            }
+
+            if (newState) {
+                appendMessage('assistant', '✅ **截圖功能已啟用**\n\n🔄 正在測試截圖功能...');
+                const screenshotDataUrl = await captureViewportScreenshot();
+
+                if (screenshotDataUrl) {
+                    const imageSize = Math.round(screenshotDataUrl.length / 1024);
+                    const debugMessage = `📸 **截圖測試成功!**
+
+**截圖資訊:**
+- 📏 圖片大小: ${imageSize} KB
+- 🔗 格式: PNG (Base64)
+- 📊 資料長度: ${screenshotDataUrl.length} 字元
+- 🎯 Base64 資料長度: ${screenshotDataUrl.split(',')[1]?.length || 0} 字元
+
+**捕獲的截圖預覽:**`;
+
+                    appendMessage('assistant', debugMessage);
+                    appendScreenshotMessage(screenshotDataUrl);
+                    appendMessage('assistant', '✨ **截圖功能已啟用!** 您現在提問時，系統會自動包含截圖進行分析。此設定會記憶到下次重新載入頁面。');
+                } else {
+                    appendMessage('assistant', '❌ **截圖測試失敗**\n\n截圖功能已啟用，但截圖捕獲失敗。請檢查瀏覽器權限設定。');
+                }
+            } else {
+                appendMessage('assistant', '⭕ **截圖功能已停用**\n\n系統將不再自動捕獲截圖。您的提問將僅使用文字內容進行分析。此設定會記憶到下次重新載入頁面。');
+            }
+        });
+    }
+
+    async function handleHtmlModeToggle(options = {}) {
+        const feedbackMode = options.feedback || 'none';
+
+        return await toggleModeWithUi(toggleHtmlModeEnabled, async (newState) => {
+            if (feedbackMode === 'brief') {
+                appendMessage('assistant', newState ? '🧩 **HTML 模式已啟用**' : '⭕ **HTML 模式已停用**');
+                return;
+            }
+
+            if (feedbackMode !== 'detailed') {
+                return;
+            }
+
+            if (newState) {
+                appendMessage('assistant', '✅ **HTML 模式已啟用**\n\n目前已將 HTML 模式開關設為開啟。此設定已寫入瀏覽器儲存空間，會套用到所有頁面，重新載入後仍會保留。');
+            } else {
+                appendMessage('assistant', '⭕ **HTML 模式已停用**\n\n目前已將 HTML 模式開關設為關閉。此設定已寫入瀏覽器儲存空間，會套用到所有頁面，重新載入後仍會保留。');
+            }
+        });
+    }
+
+    screenshotModeBtn.addEventListener('click', async () => {
+        await handleScreenshotModeToggle();
+    });
+
+    htmlModeBtn.addEventListener('click', async () => {
+        await handleHtmlModeToggle();
+    });
+
     async function handleAsk() {
         hideIntelliBox();
         let question = input.value.trim();
@@ -558,7 +1029,7 @@ async function createDialog() {
             await setValue(PROMPT_HISTORY_STORAGE, '[]');
             clearConversationHistory();
             messagesEl.innerHTML = '';
-            appendMessage('assistant', '已清除您的提問歷史紀錄。');
+            await appendUsagePromptMessage({ showUsageTipOnly: true });
             input.value = '';
             input.focus();
             return;
@@ -576,41 +1047,16 @@ async function createDialog() {
             input.value = '';
             input.focus();
 
-            // Toggle screenshot functionality
-            const newState = await toggleScreenshotEnabled();
+            await handleScreenshotModeToggle({ feedback: 'detailed' });
+            return;
+        }
 
-            if (newState) {
-                // Screenshot enabled - test it
-                appendMessage('assistant', '✅ **截圖功能已啟用**\n\n🔄 正在測試截圖功能...');
-                const screenshotDataUrl = await captureViewportScreenshot();
+        if (question === '/html') {
+            appendMessage('user', question);
+            input.value = '';
+            input.focus();
 
-                if (screenshotDataUrl) {
-                    const imageSize = Math.round(screenshotDataUrl.length / 1024);
-
-                    // 建立包含截圖的除錯訊息
-                    const debugMessage = `📸 **截圖測試成功!**
-
-**截圖資訊:**
-- 📏 圖片大小: ${imageSize} KB
-- 🔗 格式: PNG (Base64)
-- 📊 資料長度: ${screenshotDataUrl.length} 字元
-- 🎯 Base64 資料長度: ${screenshotDataUrl.split(',')[1]?.length || 0} 字元
-
-**捕獲的截圖預覽:**`;
-
-                    appendMessage('assistant', debugMessage);
-
-                    // 顯示截圖
-                    appendScreenshotMessage(screenshotDataUrl);
-
-                    appendMessage('assistant', '✨ **截圖功能已啟用!** 您現在提問時，系統會自動包含截圖進行分析。此設定會記憶到下次重新載入頁面。');
-                } else {
-                    appendMessage('assistant', '❌ **截圖測試失敗**\n\n截圖功能已啟用，但截圖捕獲失敗。請檢查瀏覽器權限設定。');
-                }
-            } else {
-                // Screenshot disabled
-                appendMessage('assistant', '⭕ **截圖功能已停用**\n\n系統將不再自動捕獲截圖。您的提問將僅使用文字內容進行分析。此設定會記憶到下次重新載入頁面。');
-            }
+            await handleHtmlModeToggle({ feedback: 'detailed' });
             return;
         }
 
@@ -627,7 +1073,7 @@ async function createDialog() {
             } else {
                 // Unknown command
                 appendMessage('user', question);
-                appendMessage('assistant', `❌ **未知命令: ${question}**\n\n可用的命令：\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 切換截圖功能\n\n您也可以在設定中新增自訂命令。`);
+                appendMessage('assistant', `❌ **未知命令: ${question}**\n\n可用的命令：\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 切換截圖功能\n- \`/html\` - 切換 HTML 模式\n\n您也可以在設定中新增自訂命令。`);
                 input.value = '';
                 input.focus();
                 return;
@@ -765,11 +1211,12 @@ async function createDialog() {
     }, true);
     btn.addEventListener('click', handleAsk);
 
-    function appendMessage(role, text) {
+    function appendMessage(role, text, options = {}) {
         const div = document.createElement('div');
         div.className = role === 'user' ? 'gemini-msg-user' : 'gemini-msg-assistant';
         if (role === 'assistant') {
-            div.innerHTML = renderMarkdown(text);
+            div.innerHTML = options.renderedHtml || renderMarkdown(text);
+            bindInteractiveCommandElements(div);
 
             // 新增複製按鈕到助理訊息
             const copyBtn = document.createElement('button');
@@ -779,7 +1226,7 @@ async function createDialog() {
             copyBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 try {
-                    await navigator.clipboard.writeText(text);
+                    await navigator.clipboard.writeText(options.copyText || text);
                     copyBtn.innerHTML = '✅';
                     setTimeout(() => {
                         copyBtn.innerHTML = '📋';
@@ -932,14 +1379,14 @@ async function createDialog() {
             console.log('[AskPage] Screenshot capture skipped (disabled)');
         }
 
-        const fullPageText = getFullPageText();
-        console.log('[AskPage] Full page text length:', fullPageText.length);
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, !!screenshotDataUrl);
+        console.log('[AskPage] Full page context length:', pageConversationContext.pageContext.content.length);
 
-        const systemPrompt = buildSystemPrompt(capturedSelectedText, !!screenshotDataUrl);
+        const systemPrompt = pageConversationContext.systemPrompt;
         let contextParts = [{
-            text: `${buildConversationContextText(fullPageText, capturedSelectedText)}${buildConversationHistoryTranscript()}\n\nCurrent question:\n${question}`
+            text: `${pageConversationContext.conversationContextText}${buildConversationHistoryTranscript()}\n\nCurrent question:\n${question}`
         }];
-        console.log('[AskPage] Context mode:', capturedSelectedText ? 'Selected text + full page' + (screenshotDataUrl ? ' + screenshot' : '') : 'Full page' + (screenshotDataUrl ? ' + screenshot' : ''));
+        console.log('[AskPage] Context mode:', pageConversationContext.contextMode);
         console.log('[AskPage] Conversation history messages:', conversationHistory.length);
 
         // 如果有截圖，將其加入到上下文中
@@ -1085,18 +1532,18 @@ async function createDialog() {
 
         appendMessage('assistant', '...thinking...');
 
-        const fullPageText = getFullPageText();
-        console.log('[AskPage] Full page text length:', fullPageText.length);
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
+        console.log('[AskPage] Full page context length:', pageConversationContext.pageContext.content.length);
 
         const messages = [
             {
                 role: 'system',
-                content: `${buildSystemPrompt(capturedSelectedText)}\n\n${buildConversationContextText(fullPageText, capturedSelectedText)}`
+                content: `${pageConversationContext.systemPrompt}\n\n${pageConversationContext.conversationContextText}`
             },
             ...getConversationMessagesForTextProviders(),
             { role: 'user', content: question }
         ];
-        console.log('[AskPage] Context mode:', capturedSelectedText ? 'Selected text + full page' : 'Full page');
+        console.log('[AskPage] Context mode:', pageConversationContext.contextMode);
         console.log('[AskPage] Conversation history messages:', conversationHistory.length);
 
         // OpenAI models differ in which token limit parameter they accept:
@@ -1236,18 +1683,18 @@ async function createDialog() {
 
         appendMessage('assistant', '...thinking...');
 
-        const fullPageText = getFullPageText();
-        console.log('[AskPage] Full page text length:', fullPageText.length);
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
+        console.log('[AskPage] Full page context length:', pageConversationContext.pageContext.content.length);
 
         const messages = [
             {
                 role: 'system',
-                content: `${buildSystemPrompt(capturedSelectedText)}\n\n${buildConversationContextText(fullPageText, capturedSelectedText)}`
+                content: `${pageConversationContext.systemPrompt}\n\n${pageConversationContext.conversationContextText}`
             },
             ...getConversationMessagesForTextProviders(),
             { role: 'user', content: question }
         ];
-        console.log('[AskPage] Context mode:', capturedSelectedText ? 'Selected text + full page' : 'Full page');
+        console.log('[AskPage] Context mode:', pageConversationContext.contextMode);
         console.log('[AskPage] Conversation history messages:', conversationHistory.length);
 
         // Azure OpenAI models differ in which token limit parameter they accept:
@@ -1373,16 +1820,17 @@ async function createDialog() {
 
         appendMessage('assistant', '...thinking...');
 
-        const fullPageText = getFullPageText();
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
         const messages = [
             {
                 role: 'system',
-                content: `${buildSystemPrompt(capturedSelectedText)}\n\n${buildConversationContextText(fullPageText, capturedSelectedText)}`
+                content: `${pageConversationContext.systemPrompt}\n\n${pageConversationContext.conversationContextText}`
             },
             ...getConversationMessagesForTextProviders(),
             { role: 'user', content: question }
         ];
-        console.log('[AskPage] Context mode:', capturedSelectedText ? 'Selected text + full page' : 'Full page');
+        console.log('[AskPage] Full page context length:', pageConversationContext.pageContext.content.length);
+        console.log('[AskPage] Context mode:', pageConversationContext.contextMode);
         console.log('[AskPage] Conversation history messages:', conversationHistory.length);
 
         const requestBody = {
