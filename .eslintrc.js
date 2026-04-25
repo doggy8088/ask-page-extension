@@ -15,7 +15,8 @@ module.exports = {
 
     // 外部函式庫
     marked: 'readonly',
-    DOMPurify: 'readonly'
+    DOMPurify: 'readonly',
+    hljs: 'readonly'
   },
   rules: {
     // 程式碼風格

@@ -27,6 +27,7 @@
         "*://*/*"
       ],
       "js": [
+        "lib/highlight.min.js",
         "lib/marked.min.js",
         "lib/purify.min.js",
         "content.js"

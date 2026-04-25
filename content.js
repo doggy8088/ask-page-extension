@@ -316,6 +316,177 @@ function renderMarkdown(md) {
     }
 }
 
+function getCodeLanguage(codeElement) {
+    const languageClass = Array.from(codeElement.classList).find((className) => (
+        className.startsWith('language-') || className.startsWith('lang-')
+    ));
+
+    if (!languageClass) {
+        return '';
+    }
+
+    return languageClass
+        .replace(/^language-/, '')
+        .replace(/^lang-/, '')
+        .trim()
+        .toLowerCase();
+}
+
+function formatCodeLanguageLabel(language, isAutoDetected = false) {
+    const labels = {
+        bash: 'Bash',
+        c: 'C',
+        cpp: 'C++',
+        cs: 'C#',
+        csharp: 'C#',
+        css: 'CSS',
+        diff: 'Diff',
+        go: 'Go',
+        html: 'HTML',
+        java: 'Java',
+        javascript: 'JavaScript',
+        js: 'JavaScript',
+        json: 'JSON',
+        markdown: 'Markdown',
+        md: 'Markdown',
+        php: 'PHP',
+        plaintext: '純文字',
+        powershell: 'PowerShell',
+        ps1: 'PowerShell',
+        py: 'Python',
+        python: 'Python',
+        rb: 'Ruby',
+        ruby: 'Ruby',
+        rust: 'Rust',
+        shell: 'Shell',
+        sh: 'Shell',
+        sql: 'SQL',
+        text: '純文字',
+        ts: 'TypeScript',
+        typescript: 'TypeScript',
+        xml: 'XML',
+        yaml: 'YAML',
+        yml: 'YAML'
+    };
+    const normalizedLanguage = (language || '').toLowerCase();
+    const baseLabel = labels[normalizedLanguage] || (language ? language.toUpperCase() : '程式碼');
+
+    if (!language) {
+        return '程式碼';
+    }
+
+    return isAutoDetected ? `自動判斷：${baseLabel}` : baseLabel;
+}
+
+function highlightCodeBlock(codeElement) {
+    const codeText = codeElement.textContent || '';
+    const explicitLanguage = getCodeLanguage(codeElement);
+
+    if (!codeText.trim() || typeof hljs === 'undefined') {
+        return {
+            language: explicitLanguage,
+            isAutoDetected: false
+        };
+    }
+
+    let highlightedResult = null;
+    let isAutoDetected = false;
+
+    if (explicitLanguage && hljs.getLanguage(explicitLanguage)) {
+        highlightedResult = hljs.highlight(codeText, {
+            language: explicitLanguage,
+            ignoreIllegals: true
+        });
+    } else {
+        highlightedResult = hljs.highlightAuto(codeText);
+        isAutoDetected = true;
+    }
+
+    if (!highlightedResult || !highlightedResult.value) {
+        return {
+            language: explicitLanguage,
+            isAutoDetected: false
+        };
+    }
+
+    codeElement.innerHTML = highlightedResult.value;
+    codeElement.classList.add('hljs');
+
+    if (highlightedResult.language) {
+        codeElement.classList.add(`language-${highlightedResult.language}`);
+    }
+
+    return {
+        language: highlightedResult.language || explicitLanguage,
+        isAutoDetected
+    };
+}
+
+async function copyTextWithFeedback(button, text, options = {}) {
+    const defaultLabel = options.defaultLabel || '📋';
+    const successLabel = options.successLabel || '✅';
+    const errorLabel = options.errorLabel || '❌';
+    const resetDelay = options.resetDelay || 1000;
+
+    try {
+        await navigator.clipboard.writeText(text);
+        button.innerHTML = successLabel;
+    } catch (error) {
+        console.error('複製失敗:', error);
+        button.innerHTML = errorLabel;
+    }
+
+    setTimeout(() => {
+        button.innerHTML = defaultLabel;
+    }, resetDelay);
+}
+
+function enhanceCodeBlocks(container) {
+    const codeBlocks = container.querySelectorAll('pre > code');
+
+    codeBlocks.forEach((codeElement) => {
+        if (codeElement.dataset.askpageCodeEnhanced === 'true') {
+            return;
+        }
+
+        const preElement = codeElement.parentElement;
+        if (!preElement || !preElement.parentElement) {
+            return;
+        }
+
+        const highlightMeta = highlightCodeBlock(codeElement);
+        const wrapper = document.createElement('div');
+        const header = document.createElement('div');
+        const languageLabel = document.createElement('span');
+        const copyButton = document.createElement('button');
+
+        wrapper.className = 'askpage-code-block';
+        header.className = 'askpage-code-block-header';
+        languageLabel.className = 'askpage-code-block-language';
+        languageLabel.textContent = formatCodeLanguageLabel(highlightMeta.language, highlightMeta.isAutoDetected);
+
+        copyButton.type = 'button';
+        copyButton.className = 'askpage-code-block-copy';
+        copyButton.innerHTML = '📋';
+        copyButton.title = '複製程式碼';
+        copyButton.setAttribute('aria-label', '複製程式碼');
+        copyButton.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            await copyTextWithFeedback(copyButton, codeElement.textContent || '');
+        });
+
+        header.appendChild(languageLabel);
+        header.appendChild(copyButton);
+
+        preElement.parentElement.insertBefore(wrapper, preElement);
+        wrapper.appendChild(header);
+        wrapper.appendChild(preElement);
+
+        codeElement.dataset.askpageCodeEnhanced = 'true';
+    });
+}
+
 function getPageContextContainer() {
     if (document.querySelector('main')) {
         return document.querySelector('main');
@@ -1216,6 +1387,7 @@ async function createDialog() {
         div.className = role === 'user' ? 'gemini-msg-user' : 'gemini-msg-assistant';
         if (role === 'assistant') {
             div.innerHTML = options.renderedHtml || renderMarkdown(text);
+            enhanceCodeBlocks(div);
             bindInteractiveCommandElements(div);
 
             // 新增複製按鈕到助理訊息
@@ -1225,19 +1397,7 @@ async function createDialog() {
             copyBtn.title = '複製到剪貼簿';
             copyBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                try {
-                    await navigator.clipboard.writeText(options.copyText || text);
-                    copyBtn.innerHTML = '✅';
-                    setTimeout(() => {
-                        copyBtn.innerHTML = '📋';
-                    }, 1000);
-                } catch (err) {
-                    console.error('複製失敗:', err);
-                    copyBtn.innerHTML = '❌';
-                    setTimeout(() => {
-                        copyBtn.innerHTML = '📋';
-                    }, 1000);
-                }
+                await copyTextWithFeedback(copyBtn, options.copyText || text);
             });
             div.appendChild(copyBtn);
         } else {

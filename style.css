@@ -224,6 +224,123 @@
   white-space: inherit;
   box-sizing: border-box;
 }
+#gemini-qna-messages .gemini-msg-assistant .askpage-code-block {
+  all: initial;
+  display: block;
+  margin: 12px 0;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-code-block-header {
+  all: initial;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #111827;
+  color: #dbe4ee;
+  border: 1px solid #333333;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-code-block-language {
+  all: initial;
+  display: inline-block;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-code-block-copy {
+  all: initial;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  cursor: pointer;
+  box-sizing: border-box;
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-code-block-copy:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.24);
+  transform: translateY(-1px);
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-code-block-copy:focus-visible {
+  outline: 2px solid #90caf9;
+  outline-offset: 2px;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-code-block pre {
+  margin: 0;
+  border-radius: 0 0 8px 8px;
+  border-top: none;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-code-block pre code.hljs {
+  display: block;
+}
+#gemini-qna-messages .gemini-msg-assistant .hljs {
+  color: #e5edf5;
+}
+#gemini-qna-messages .gemini-msg-assistant .hljs-comment,
+#gemini-qna-messages .gemini-msg-assistant .hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+#gemini-qna-messages .gemini-msg-assistant .hljs-keyword,
+#gemini-qna-messages .gemini-msg-assistant .hljs-selector-tag,
+#gemini-qna-messages .gemini-msg-assistant .hljs-type,
+#gemini-qna-messages .gemini-msg-assistant .hljs-built_in {
+  color: #ff7b72;
+}
+#gemini-qna-messages .gemini-msg-assistant .hljs-title,
+#gemini-qna-messages .gemini-msg-assistant .hljs-title.class_,
+#gemini-qna-messages .gemini-msg-assistant .hljs-title.function_ {
+  color: #d2a8ff;
+}
+#gemini-qna-messages .gemini-msg-assistant .hljs-string,
+#gemini-qna-messages .gemini-msg-assistant .hljs-regexp,
+#gemini-qna-messages .gemini-msg-assistant .hljs-attribute,
+#gemini-qna-messages .gemini-msg-assistant .hljs-template-tag,
+#gemini-qna-messages .gemini-msg-assistant .hljs-template-variable {
+  color: #a5d6ff;
+}
+#gemini-qna-messages .gemini-msg-assistant .hljs-number,
+#gemini-qna-messages .gemini-msg-assistant .hljs-literal,
+#gemini-qna-messages .gemini-msg-assistant .hljs-symbol,
+#gemini-qna-messages .gemini-msg-assistant .hljs-bullet {
+  color: #79c0ff;
+}
+#gemini-qna-messages .gemini-msg-assistant .hljs-variable,
+#gemini-qna-messages .gemini-msg-assistant .hljs-property,
+#gemini-qna-messages .gemini-msg-assistant .hljs-params {
+  color: #ffa657;
+}
+#gemini-qna-messages .gemini-msg-assistant .hljs-subst {
+  color: #e5edf5;
+}
+#gemini-qna-messages .gemini-msg-assistant .hljs-meta,
+#gemini-qna-messages .gemini-msg-assistant .hljs-meta .hljs-keyword {
+  color: #f2cc60;
+}
+#gemini-qna-messages .gemini-msg-assistant .hljs-function,
+#gemini-qna-messages .gemini-msg-assistant .hljs-section,
+#gemini-qna-messages .gemini-msg-assistant .hljs-tag .hljs-name {
+  color: #7ee787;
+}
 #gemini-qna-messages .gemini-msg-assistant strong,
 #gemini-qna-messages .gemini-msg-assistant b {
   all: initial;
@@ -349,5 +466,67 @@
   #gemini-qna-messages .gemini-msg-assistant .copy-btn:hover {
     background: rgba(42, 42, 42, 1);
     border-color: #777;
+  }
+  #gemini-qna-messages .gemini-msg-assistant .askpage-code-block-header {
+    background: #161b22;
+    color: #e6edf3;
+    border-color: #30363d;
+  }
+  #gemini-qna-messages .gemini-msg-assistant .askpage-code-block-copy {
+    background: rgba(240, 246, 252, 0.06);
+    color: #e6edf3;
+    border-color: rgba(240, 246, 252, 0.12);
+  }
+  #gemini-qna-messages .gemini-msg-assistant .askpage-code-block-copy:hover {
+    background: rgba(240, 246, 252, 0.12);
+    border-color: rgba(240, 246, 252, 0.24);
+  }
+  #gemini-qna-messages .gemini-msg-assistant .hljs {
+    color: #f0f6fc;
+  }
+  #gemini-qna-messages .gemini-msg-assistant .hljs-comment,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-quote {
+    color: #8b949e;
+  }
+  #gemini-qna-messages .gemini-msg-assistant .hljs-keyword,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-selector-tag,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-type,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-built_in {
+    color: #ff7b72;
+  }
+  #gemini-qna-messages .gemini-msg-assistant .hljs-title,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-title.class_,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-title.function_ {
+    color: #d2a8ff;
+  }
+  #gemini-qna-messages .gemini-msg-assistant .hljs-string,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-regexp,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-attribute,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-template-tag,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-template-variable {
+    color: #a5d6ff;
+  }
+  #gemini-qna-messages .gemini-msg-assistant .hljs-number,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-literal,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-symbol,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-bullet {
+    color: #79c0ff;
+  }
+  #gemini-qna-messages .gemini-msg-assistant .hljs-variable,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-property,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-params {
+    color: #ffa657;
+  }
+  #gemini-qna-messages .gemini-msg-assistant .hljs-subst {
+    color: #f0f6fc;
+  }
+  #gemini-qna-messages .gemini-msg-assistant .hljs-meta,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-meta .hljs-keyword {
+    color: #f2cc60;
+  }
+  #gemini-qna-messages .gemini-msg-assistant .hljs-function,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-section,
+  #gemini-qna-messages .gemini-msg-assistant .hljs-tag .hljs-name {
+    color: #7ee787;
   }
 }
