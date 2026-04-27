@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "頁問 AskPage",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "使用 Gemini API、OpenAI API、Azure OpenAI API 或 OpenAI Compatible API 詢問關於目前頁面的問題",
   "permissions": [
     "storage",
@@ -32,9 +32,6 @@
         "lib/marked.min.js",
         "lib/purify.min.js",
         "content.js"
-      ],
-      "css": [
-        "style.css"
       ]
     }
   ],
@@ -57,6 +54,7 @@
   "web_accessible_resources": [
     {
       "resources": [
+        "style.css",
         "lib/marked.min.js",
         "lib/purify.min.js"
       ],

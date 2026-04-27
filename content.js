@@ -10,14 +10,145 @@ console.log('[AskPage] Document ready state:', document.readyState);
 let isDialogVisible = false;
 let conversationHistory = [];
 let conversationSelectedText = '';
+let activeDialogState = null;
+let dialogStylesTextPromise = null;
 const MAX_CONVERSATION_MESSAGES = 20;
+const MAX_DIALOG_HISTORY_MESSAGES = 200;
 const MAX_PAGE_TEXT_CONTEXT_LENGTH = 15000;
 const MAX_SELECTED_TEXT_CONTEXT_LENGTH = 5000;
 const MAX_HTML_CONTEXT_WITH_SELECTION_LENGTH = 15000;
 const MAX_INPUT_VISIBLE_LINES = 5;
 const MAX_FORM_FIELD_DISCOVERY = 80;
 const MAX_TOOL_CALL_ROUNDS = 50;
+const GEMINI_INITIAL_MAX_OUTPUT_TOKENS = 2048;
+const GEMINI_RETRY_MAX_OUTPUT_TOKENS = 4096;
+const GEMINI_EMPTY_RESPONSE_RETRY_LIMIT = 1;
+const DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS = 32768;
+const OPENAI_STYLE_EMPTY_RESPONSE_RETRY_LIMIT = 1;
+const MAX_LLM_API_SERVICE_RETRIES = 5;
+const LLM_API_RETRY_BASE_DELAY_MS = 1000;
+const LLM_API_RETRY_MAX_DELAY_MS = 16000;
 const HTML_CONTEXT_NOISE_SELECTOR = 'script, style, noscript, template';
+const OPENAI_STYLE_MODEL_MAX_OUTPUT_TOKENS = {
+    'gpt-4o': 16384,
+    'gpt-4o-mini': 16384,
+    'gpt-4.1': 32768,
+    'gpt-4.1-mini': 32768,
+    'gpt-5': 32768,
+    'gpt-5.1': 32768,
+    'gpt-5.2': 32768,
+    'gpt-5.3': 32768,
+    'gpt-5.4': 32768,
+    'gpt-5.5': 32768,
+    'gpt-5-chat-latest': 32768,
+    'gpt-5-mini': 32768,
+    'gpt-5-nano': 32768,
+    'o3': 32768,
+    'o3-mini': 32768,
+    'o3-pro': 32768,
+    'o4-mini': 32768
+};
+const DIALOG_HOST_ID = 'askpage-dialog-host';
+const DIALOG_OVERLAY_ID = 'gemini-qna-overlay';
+const DIALOG_MESSAGES_ID = 'gemini-qna-messages';
+const DIALOG_STYLESHEET_PATH = 'style.css';
+
+async function getDialogStylesText() {
+    if (!dialogStylesTextPromise) {
+        dialogStylesTextPromise = fetch(chrome.runtime.getURL(DIALOG_STYLESHEET_PATH))
+            .then(async (response) => {
+                if (!response.ok) {
+                    throw new Error(`Unable to load dialog stylesheet: ${response.status} ${response.statusText}`);
+                }
+                return await response.text();
+            })
+            .catch((error) => {
+                console.error('[AskPage] Failed to load dialog stylesheet:', error);
+                dialogStylesTextPromise = null;
+                return '';
+            });
+    }
+
+    return await dialogStylesTextPromise;
+}
+
+function getActiveDialogHost() {
+    if (activeDialogState?.host?.isConnected) {
+        return activeDialogState.host;
+    }
+
+    return document.getElementById(DIALOG_HOST_ID);
+}
+
+function getActiveDialogShadowRoot() {
+    if (activeDialogState?.shadowRoot) {
+        return activeDialogState.shadowRoot;
+    }
+
+    const host = getActiveDialogHost();
+    return host?.shadowRoot || null;
+}
+
+function getActiveDialogElementById(id) {
+    if (activeDialogState?.elements?.[id]?.isConnected) {
+        return activeDialogState.elements[id];
+    }
+
+    const shadowRoot = getActiveDialogShadowRoot();
+    return shadowRoot?.getElementById(id) || null;
+}
+
+function getActiveDialogOverlay() {
+    if (activeDialogState?.overlay?.isConnected) {
+        return activeDialogState.overlay;
+    }
+
+    return getActiveDialogElementById(DIALOG_OVERLAY_ID);
+}
+
+function getActiveMessagesElement(fallbackMessagesEl) {
+    if (activeDialogState && activeDialogState.messagesEl && activeDialogState.messagesEl.isConnected) {
+        return activeDialogState.messagesEl;
+    }
+
+    const activeMessagesEl = getActiveDialogElementById(DIALOG_MESSAGES_ID);
+    if (activeMessagesEl) {
+        return activeMessagesEl;
+    }
+
+    if (fallbackMessagesEl && fallbackMessagesEl.isConnected) {
+        return fallbackMessagesEl;
+    }
+
+    return null;
+}
+
+function appendNodeToActiveMessages(messageNode, fallbackMessagesEl) {
+    const targetMessagesEl = getActiveMessagesElement(fallbackMessagesEl);
+    if (!targetMessagesEl) {
+        return false;
+    }
+
+    targetMessagesEl.appendChild(messageNode);
+    targetMessagesEl.scrollTop = targetMessagesEl.scrollHeight;
+    return true;
+}
+
+function closeActiveDialog() {
+    if (activeDialogState && activeDialogState.host && activeDialogState.host.isConnected && typeof activeDialogState.close === 'function') {
+        activeDialogState.close();
+        return true;
+    }
+
+    const host = getActiveDialogHost();
+    if (host) {
+        host.remove();
+    }
+
+    activeDialogState = null;
+    isDialogVisible = false;
+    return Boolean(host);
+}
 
 // Listen for the message from the background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -33,9 +164,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         if (isDialogVisible) {
             console.log('[AskPage] Dialog is visible, removing it');
-            const overlay = document.getElementById('gemini-qna-overlay');
-            if (overlay) {
-                overlay.remove();
+            if (closeActiveDialog()) {
                 isDialogVisible = false;
                 console.log('[AskPage] Dialog removed successfully');
             } else {
@@ -44,21 +173,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
         } else {
             console.log('[AskPage] Dialog is not visible, creating it');
-            const existingOverlay = document.getElementById('gemini-qna-overlay');
-            if (existingOverlay) {
+            const existingHost = getActiveDialogHost();
+            if (existingHost) {
                 console.log('[AskPage] Dialog already exists, skipping creation');
+                isDialogVisible = true;
+                const response = { success: true, dialogVisible: true };
+                console.log('[AskPage] Sending response:', response);
+                sendResponse(response);
                 return;
             }
             console.log('[AskPage] Received toggle command, creating dialog.');
-            try {
-                createDialog();
+            createDialog().then(() => {
                 isDialogVisible = true;
                 console.log('[AskPage] Dialog created successfully');
-            } catch (error) {
+                const response = { success: true, dialogVisible: isDialogVisible };
+                console.log('[AskPage] Sending response:', response);
+                sendResponse(response);
+            }).catch((error) => {
                 console.error('[AskPage] Error creating dialog:', error);
                 sendResponse({ success: false, error: error.message });
-                return;
-            }
+            });
+            return true;
         }
 
         // Send response back to background script
@@ -100,10 +235,16 @@ const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
 // Storage keys for custom slash command prompts
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
+const SWITCHABLE_PROVIDERS = ['gemini', 'openai', 'azure', 'openai-compatible'];
 
 async function getValue(key, defaultValue) {
     const result = await chrome.storage.local.get([key]);
     return result[key] || defaultValue;
+}
+
+async function getStoredValue(key) {
+    const result = await chrome.storage.local.get([key]);
+    return result[key];
 }
 
 function setValue(key, value) {
@@ -114,6 +255,54 @@ function setValue(key, value) {
 function maskApiKey(apiKey) {
     if (!apiKey || apiKey.length < 8) { return apiKey; }
     return apiKey.substring(0, 4) + '****' + apiKey.substring(apiKey.length - 4);
+}
+
+function normalizeModelIdentifier(model = '') {
+    return String(model || '')
+        .trim()
+        .toLowerCase()
+        .replace(/-\d{4}-\d{2}-\d{2}$/, '');
+}
+
+function isGpt5FamilyModel(model = '') {
+    return normalizeModelIdentifier(model).startsWith('gpt-5');
+}
+
+function shouldUseResponsesApi(model = '') {
+    return isGpt5FamilyModel(model);
+}
+
+function getOpenAIStyleMaxOutputTokens(model = '') {
+    const normalizedModel = normalizeModelIdentifier(model);
+    if (!normalizedModel) {
+        return DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS;
+    }
+
+    if (OPENAI_STYLE_MODEL_MAX_OUTPUT_TOKENS[normalizedModel]) {
+        return OPENAI_STYLE_MODEL_MAX_OUTPUT_TOKENS[normalizedModel];
+    }
+
+    if (normalizedModel.startsWith('gpt-4o')) {
+        return 16384;
+    }
+
+    if (normalizedModel.startsWith('gpt-4.1')) {
+        return 32768;
+    }
+
+    if (normalizedModel.startsWith('gpt-5') || normalizedModel.startsWith('o3') || normalizedModel.startsWith('o4')) {
+        return 32768;
+    }
+
+    return DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS;
+}
+
+function getAzureResponsesApiVersion(apiVersion = '') {
+    const normalizedVersion = String(apiVersion || '').trim().toLowerCase();
+    if (normalizedVersion === 'preview' || normalizedVersion === 'v1') {
+        return normalizedVersion;
+    }
+    return 'preview';
 }
 
 // AES-256-GCM encryption functions
@@ -161,24 +350,47 @@ async function decryptApiKey(encryptedData) {
 // Provider switching function
 async function switchProvider() {
     const currentProvider = await getValue(PROVIDER_STORAGE, 'gemini');
-    let newProvider;
+    const providerModelStorageMap = {
+        gemini: MODEL_STORAGE,
+        openai: OPENAI_MODEL_STORAGE,
+        azure: AZURE_OPENAI_DEPLOYMENT_STORAGE,
+        'openai-compatible': OPENAI_COMPATIBLE_MODEL_STORAGE
+    };
+    const currentProviderIndex = Math.max(0, SWITCHABLE_PROVIDERS.indexOf(currentProvider));
+    let newProvider = currentProvider;
 
-    // Cycle through providers: gemini -> openai -> azure -> openai-compatible -> gemini
-    if (currentProvider === 'gemini') {
-        newProvider = 'openai';
-    } else if (currentProvider === 'openai') {
-        newProvider = 'azure';
-    } else if (currentProvider === 'azure') {
-        newProvider = 'openai-compatible';
-    } else {
-        newProvider = 'gemini';
+    const isProviderSwitchable = async (provider) => {
+        if (provider === 'gemini') {
+            return true;
+        }
+
+        const modelStorageKey = providerModelStorageMap[provider];
+        if (!modelStorageKey) {
+            return false;
+        }
+
+        const modelValue = await getStoredValue(modelStorageKey);
+        return typeof modelValue === 'string' && modelValue.trim().length > 0;
+    };
+
+    for (let offset = 1; offset <= SWITCHABLE_PROVIDERS.length; offset++) {
+        const candidateProvider = SWITCHABLE_PROVIDERS[(currentProviderIndex + offset) % SWITCHABLE_PROVIDERS.length];
+        if (await isProviderSwitchable(candidateProvider)) {
+            newProvider = candidateProvider;
+            break;
+        }
+    }
+
+    if (newProvider === currentProvider) {
+        console.log('[AskPage] No other provider has a configured model. Keeping current provider:', currentProvider);
+        return;
     }
 
     console.log('[AskPage] Switching provider from', currentProvider, 'to', newProvider);
     await setValue(PROVIDER_STORAGE, newProvider);
 
     // Update dialog UI if visible
-    const overlay = document.getElementById('gemini-qna-overlay');
+    const overlay = getActiveDialogOverlay();
     if (overlay) {
         updateProviderDisplay();
     }
@@ -187,9 +399,10 @@ async function switchProvider() {
 // Update provider display in dialog
 async function updateProviderDisplay() {
     const provider = await getValue(PROVIDER_STORAGE, 'gemini');
-    const providerDisplayElement = document.getElementById('provider-display');
+    const providerNameElement = getActiveDialogElementById('provider-display-name');
+    const providerModelElement = getActiveDialogElementById('provider-display-model');
 
-    if (providerDisplayElement) {
+    if (providerNameElement || providerModelElement) {
         let model;
         let displayName;
 
@@ -207,7 +420,12 @@ async function updateProviderDisplay() {
             displayName = 'OpenAI Compatible';
         }
 
-        providerDisplayElement.textContent = `${displayName} (${model})`;
+        if (providerNameElement) {
+            providerNameElement.textContent = displayName;
+        }
+        if (providerModelElement) {
+            providerModelElement.textContent = model || '未設定模型';
+        }
     }
 }
 
@@ -243,6 +461,14 @@ async function toggleHtmlModeEnabled() {
     return newState;
 }
 
+async function getAgentModeEnabled() {
+    return await getHtmlModeEnabled();
+}
+
+async function toggleAgentModeEnabled() {
+    return await toggleHtmlModeEnabled();
+}
+
 /* --------------------------------------------------
     截圖功能
 -------------------------------------------------- */
@@ -251,7 +477,7 @@ async function captureViewportScreenshot() {
     console.log('[AskPage] Starting viewport screenshot capture');
 
     // 暫時隱藏對話框以避免在截圖中出現
-    const overlay = document.getElementById('gemini-qna-overlay');
+    const overlay = getActiveDialogOverlay();
     let wasVisible = false;
     if (overlay) {
         wasVisible = overlay.style.display !== 'none';
@@ -317,6 +543,15 @@ function renderMarkdown(md) {
         // Fallback to plain text if marked.js fails
         return md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
     }
+}
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function getCodeLanguage(codeElement) {
@@ -594,7 +829,36 @@ function buildSystemPrompt({
         ? 'You also have a screenshot of the current viewport for additional visual context.'
         : '';
 
-    return `You are a helpful assistant that answers questions about web page content. ${pageContextDescription} ${selectedTextDescription} ${screenshotDescription} Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Use the available page tools whenever the user asks you to inspect or modify the current page, selected text, or form fields. Never claim that a page change succeeded unless the corresponding tool result confirms it. For non-trivial form filling, inspect the form fields first before mutating them. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.`;
+    return [
+        'You are a helpful assistant that answers questions about web page content.',
+        pageContextDescription,
+        selectedTextDescription,
+        screenshotDescription,
+        'Think before acting: state assumptions explicitly, surface ambiguity, and ask a concise clarifying question instead of guessing when the request is unclear or has multiple valid interpretations.',
+        'Prefer the simplest solution that fully satisfies the request. Avoid speculative features, unnecessary abstractions, extra configurability, and impossible-scenario handling.',
+        'Make surgical changes only. Do not refactor or improve unrelated code, formatting, or comments. Clean up only what your own changes make obsolete.',
+        'Before using tools, make only the minimum necessary plan. Keep it short, action-oriented, and focused on the next concrete step.',
+        'When the task is clear, move quickly to the first visible result instead of spending many turns on planning. Do not burn output budget on long internal planning monologues.',
+        'For non-trivial tasks, keep success criteria brief and practical so you can act, verify, and continue without over-explaining.',
+        'If a reasoning or progress summary may be shown to the user, make it concrete, task-specific, and immediately useful. Avoid generic meta statements about planning.',
+        'If there is a simpler or safer approach than the user implied, say so briefly and prefer it unless the user clearly asked otherwise.',
+        pageContextFormat === 'html'
+            ? 'You are in agent mode. Use the available page tools whenever the user asks you to inspect or modify the current page, selected text, or form fields. In particular, you can use run_js to read or modify the current page DOM, inline styles, classes, attributes, text, layout, and behavior.'
+            : 'You are in inquiry mode. Do not use page tools in this mode. Answer only from the provided page content, selected text, and screenshot context. If the user asks for page modifications, say that agent mode can do it rather than claiming the page cannot be modified at all.',
+        pageContextFormat === 'html'
+            ? 'Do not say that you cannot directly modify the page, HTML, DOM, or CSS when the change can be done through the available tools. Prefer performing the change with tools instead of refusing for capability reasons.'
+            : '',
+        pageContextFormat === 'html'
+            ? 'Never claim that a page change succeeded unless the corresponding tool result confirms it.'
+            : '',
+        pageContextFormat === 'html'
+            ? 'For non-trivial form filling, inspect the form fields first before mutating them.'
+            : '',
+        'Please format your answer using Markdown when appropriate.',
+        'As a default, provide responses in zh-tw unless specified otherwise.',
+        'Do not provide any additional explanations or disclaimers unless explicitly asked.',
+        'No prefix or suffix is needed for the response.'
+    ].filter(Boolean).join(' ');
 }
 
 function buildConversationContextText(pageContext, capturedSelectedText = '') {
@@ -644,11 +908,13 @@ async function preparePageConversationContext(capturedSelectedText = '', include
 }
 
 function buildConversationHistoryTranscript() {
-    if (!conversationHistory.length) {
+    const modelHistory = conversationHistory.filter((turn) => turn.includeInModelContext !== false);
+    if (!modelHistory.length) {
         return '';
     }
 
-    const transcript = conversationHistory
+    const transcript = modelHistory
+        .slice(-MAX_CONVERSATION_MESSAGES)
         .map((turn) => `${turn.role === 'assistant' ? 'Assistant' : 'User'}: ${turn.content}`)
         .join('\n\n');
 
@@ -656,16 +922,27 @@ function buildConversationHistoryTranscript() {
 }
 
 function getConversationMessagesForTextProviders() {
-    return conversationHistory.map((turn) => ({
-        role: turn.role,
-        content: turn.content
-    }));
+    return conversationHistory
+        .filter((turn) => turn.includeInModelContext !== false)
+        .slice(-MAX_CONVERSATION_MESSAGES)
+        .map((turn) => ({
+            role: turn.role,
+            content: turn.content
+        }));
 }
 
-function addConversationTurn(role, content, displayContent = content) {
-    conversationHistory.push({ role, content, displayContent });
-    if (conversationHistory.length > MAX_CONVERSATION_MESSAGES) {
-        conversationHistory = conversationHistory.slice(-MAX_CONVERSATION_MESSAGES);
+function addConversationTurn(role, content, displayContent = content, options = {}) {
+    conversationHistory.push({
+        role,
+        content,
+        displayContent,
+        renderedHtml: options.renderedHtml || '',
+        includeInModelContext: options.includeInModelContext !== false,
+        suppressCopyButton: options.suppressCopyButton === true,
+        extraClassName: options.extraClassName || ''
+    });
+    if (conversationHistory.length > MAX_DIALOG_HISTORY_MESSAGES) {
+        conversationHistory = conversationHistory.slice(-MAX_DIALOG_HISTORY_MESSAGES);
     }
 }
 
@@ -682,54 +959,52 @@ function requestOpenOptionsPage() {
     建立對話框
 -------------------------------------------------- */
 async function createDialog() {
-    if (document.getElementById('gemini-qna-overlay')) { return; }
+    if (getActiveDialogHost()) { return; }
 
     const initialSelection = window.getSelection();
     const initialSelectionRange = initialSelection.rangeCount > 0
         ? initialSelection.getRangeAt(0).cloneRange()
         : null;
     const capturedSelectedText = initialSelection.toString().trim();
+    const dialogStylesText = await getDialogStylesText();
     const modeToggleButtonBaseStyle = `
-        min-height: 34px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 0 12px;
-        border-radius: 999px;
-        border: 1px solid transparent;
-        background: transparent;
-        cursor: pointer;
-        line-height: 1;
-        flex-shrink: 0;
-        white-space: nowrap;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.01em;
-        transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+        color: #41536b;
+        background: #ffffff;
+        border-color: #cfdae8;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
     `;
     const modeToggleIconBaseStyle = `
+        box-sizing: border-box;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         width: 16px;
         flex-shrink: 0;
         font-style: normal;
+        font-family: inherit;
+        font-size: inherit;
+        color: inherit;
         line-height: 1;
         pointer-events: none;
         user-select: none;
     `;
     const modeToggleTextBaseStyle = `
+        box-sizing: border-box;
         display: inline-flex;
         align-items: center;
+        font-family: inherit;
+        font-size: inherit;
+        color: inherit;
         line-height: 1.2;
         pointer-events: none;
     `;
     const modeToggleConfigs = {
         screenshot: {
             label: '截圖模式',
-            activeText: '啟用螢幕截圖',
-            inactiveText: '無螢幕截圖',
+            activeText: '截圖',
+            inactiveText: '截圖',
+            activeStateLabel: '含截圖',
+            inactiveStateLabel: '無截圖',
             activeColor: '#1a73e8',
             activeBackground: 'rgba(26, 115, 232, 0.16)',
             activeBorder: 'rgba(26, 115, 232, 0.42)',
@@ -738,66 +1013,67 @@ async function createDialog() {
             inactiveBackground: 'rgba(26, 115, 232, 0.06)',
             inactiveBorder: 'rgba(111, 126, 150, 0.24)',
             inactiveShadow: 'none',
-            icon: '🖵',
+            activeIcon: '📸',
+            inactiveIcon: '📷',
             iconFontSize: '15px',
-            iconFontWeight: '600',
-            iconFontFamily: '\'Segoe UI Symbol\', \'Apple Symbols\', sans-serif',
+            iconFontWeight: '400',
+            iconFontFamily: '\'Segoe UI Emoji\', \'Apple Color Emoji\', sans-serif',
             iconTransform: 'translateY(-0.5px)'
         },
         html: {
-            label: 'HTML 模式',
-            activeText: 'HTML',
-            inactiveText: '純文字',
-            activeColor: '#c16700',
-            activeBackground: 'rgba(246, 178, 74, 0.18)',
-            activeBorder: 'rgba(193, 103, 0, 0.42)',
-            activeShadow: '0 0 0 1px rgba(193, 103, 0, 0.1)',
-            inactiveColor: '#8a7352',
-            inactiveBackground: 'rgba(193, 103, 0, 0.06)',
-            inactiveBorder: 'rgba(138, 115, 82, 0.24)',
+            label: '模式切換',
+            activeText: '代理',
+            inactiveText: '詢問',
+            activeColor: '#8a4d00',
+            activeBackground: 'rgba(245, 158, 11, 0.18)',
+            activeBorder: 'rgba(217, 119, 6, 0.34)',
+            activeShadow: '0 0 0 1px rgba(217, 119, 6, 0.08)',
+            inactiveColor: '#0f5dc2',
+            inactiveBackground: 'rgba(59, 130, 246, 0.10)',
+            inactiveBorder: 'rgba(59, 130, 246, 0.22)',
             inactiveShadow: 'none',
-            icon: '</>',
-            iconFontSize: '13px',
-            iconFontWeight: '700',
-            iconFontFamily: 'ui-monospace, \'SFMono-Regular\', Consolas, \'Liberation Mono\', Menlo, monospace',
-            iconLetterSpacing: '-0.04em',
+            activeIcon: '🤖',
+            inactiveIcon: '💬',
+            iconFontSize: '14px',
+            iconFontWeight: '600',
+            iconFontFamily: '\'Segoe UI Emoji\', \'Apple Color Emoji\', sans-serif',
             iconTransform: 'translateY(-0.5px)'
         }
     };
 
+    const host = document.createElement('div');
+    host.id = DIALOG_HOST_ID;
+    const shadowRoot = host.attachShadow({ mode: 'open' });
+    const styleElement = document.createElement('style');
+    styleElement.textContent = dialogStylesText;
     const overlay = document.createElement('div');
-    overlay.id = 'gemini-qna-overlay';
+    overlay.id = DIALOG_OVERLAY_ID;
 
     const dialog = document.createElement('div');
     dialog.id = 'gemini-qna-dialog';
 
     const messagesEl = document.createElement('div');
-    messagesEl.id = 'gemini-qna-messages';
+    messagesEl.id = DIALOG_MESSAGES_ID;
 
     // Provider display header
     const providerHeader = document.createElement('div');
     providerHeader.id = 'provider-header';
-    providerHeader.style.cssText = `
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 16px;
-        background: var(--gemini-header-bg, #f8f9fa);
-        border-bottom: 1px solid var(--gemini-border-color, #e1e4e8);
-        font-size: 12px;
-        color: var(--gemini-secondary-color, #666);
-    `;
-
+    providerHeader.title = '拖曳標題列可移動對話框';
+    const providerInfo = document.createElement('div');
+    providerInfo.className = 'askpage-header-info';
     const providerDisplay = document.createElement('div');
-    providerDisplay.id = 'provider-display';
-    providerDisplay.textContent = 'Loading...';
+    providerDisplay.className = 'askpage-provider-display';
+    const providerDisplayName = document.createElement('div');
+    providerDisplayName.id = 'provider-display-name';
+    providerDisplayName.className = 'askpage-provider-name';
+    providerDisplayName.textContent = 'Loading...';
+    const providerDisplayModel = document.createElement('span');
+    providerDisplayModel.id = 'provider-display-model';
+    providerDisplayModel.className = 'askpage-provider-model';
+    providerDisplayModel.textContent = '載入中';
 
     const providerActions = document.createElement('div');
-    providerActions.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    `;
+    providerActions.className = 'askpage-header-actions';
 
     function createModeToggleButton(config) {
         const button = document.createElement('button');
@@ -805,13 +1081,15 @@ async function createDialog() {
         const text = document.createElement('span');
 
         button.type = 'button';
+        button.className = 'askpage-toolbar-btn askpage-toolbar-btn-toggle';
         button.style.cssText = modeToggleButtonBaseStyle;
         button.setAttribute('aria-pressed', 'false');
-        button.title = `${config.label}：目前為${config.inactiveText}，點擊切換為${config.activeText}`;
+        button.title = `${config.label}：目前為${config.inactiveStateLabel || config.inactiveText}，點擊切換為${config.activeStateLabel || config.activeText}`;
         button.setAttribute('aria-label', button.title);
 
         icon.setAttribute('aria-hidden', 'true');
-        icon.textContent = config.icon;
+        icon.setAttribute('data-mode-toggle-icon', 'true');
+        icon.textContent = config.inactiveIcon || config.icon || '';
         icon.style.cssText = `
             ${modeToggleIconBaseStyle}
             font-family: ${config.iconFontFamily || 'inherit'};
@@ -832,7 +1110,10 @@ async function createDialog() {
     function applyModeToggleButtonState(button, config, isActive) {
         const currentText = isActive ? config.activeText : config.inactiveText;
         const nextText = isActive ? config.inactiveText : config.activeText;
-        const toggleLabel = `${config.label}：目前為${currentText}，點擊切換為${nextText}`;
+        const currentStateLabel = isActive ? (config.activeStateLabel || currentText) : (config.inactiveStateLabel || currentText);
+        const nextStateLabel = isActive ? (config.inactiveStateLabel || nextText) : (config.activeStateLabel || nextText);
+        const toggleLabel = `${config.label}：目前為${currentStateLabel}，點擊切換為${nextStateLabel}`;
+        const icon = button.querySelector('[data-mode-toggle-icon="true"]');
         const text = button.querySelector('[data-mode-toggle-text="true"]');
 
         button.style.color = isActive ? config.activeColor : config.inactiveColor;
@@ -843,6 +1124,9 @@ async function createDialog() {
         button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         button.title = toggleLabel;
         button.setAttribute('aria-label', toggleLabel);
+        if (icon) {
+            icon.textContent = isActive ? (config.activeIcon || config.icon || '') : (config.inactiveIcon || config.icon || '');
+        }
         if (text) {
             text.textContent = currentText;
         }
@@ -852,13 +1136,13 @@ async function createDialog() {
     const htmlModeBtn = createModeToggleButton(modeToggleConfigs.html);
 
     async function updateModeToggleButtons() {
-        const [screenshotEnabled, htmlModeEnabled] = await Promise.all([
+        const [screenshotEnabled, agentModeEnabled] = await Promise.all([
             getScreenshotEnabled(),
-            getHtmlModeEnabled()
+            getAgentModeEnabled()
         ]);
 
         applyModeToggleButtonState(screenshotModeBtn, modeToggleConfigs.screenshot, screenshotEnabled);
-        applyModeToggleButtonState(htmlModeBtn, modeToggleConfigs.html, htmlModeEnabled);
+        applyModeToggleButtonState(htmlModeBtn, modeToggleConfigs.html, agentModeEnabled);
     }
 
     const switchProviderBtn = document.createElement('button');
@@ -867,14 +1151,15 @@ async function createDialog() {
     const optionsBtn = document.createElement('button');
     const optionsBtnIcon = document.createElement('span');
     switchProviderBtn.type = 'button';
-    switchProviderBtn.title = '切換提供者';
-    switchProviderBtn.setAttribute('aria-label', '切換提供者');
+    switchProviderBtn.title = 'AI 提供者';
+    switchProviderBtn.setAttribute('aria-label', 'AI 提供者');
+    switchProviderBtn.className = 'askpage-toolbar-btn askpage-toolbar-btn-switch-provider';
     switchProviderBtn.style.cssText = `
         ${modeToggleButtonBaseStyle}
-        color: #3559c7;
-        background: rgba(53, 89, 199, 0.11);
-        border-color: rgba(53, 89, 199, 0.22);
-        box-shadow: 0 0 0 1px rgba(53, 89, 199, 0.06);
+        color: #2952cc;
+        background: #edf3ff;
+        border-color: #bfd0fb;
+        box-shadow: 0 1px 2px rgba(41, 82, 204, 0.12);
     `;
     switchProviderIcon.setAttribute('aria-hidden', 'true');
     switchProviderIcon.textContent = '⇄';
@@ -885,7 +1170,7 @@ async function createDialog() {
         font-family: 'Segoe UI Symbol', 'Apple Symbols', sans-serif;
         transform: translateY(-0.5px);
     `;
-    switchProviderText.textContent = '切換提供者';
+    switchProviderText.textContent = 'AI 提供者';
     switchProviderText.style.cssText = modeToggleTextBaseStyle;
     switchProviderBtn.appendChild(switchProviderIcon);
     switchProviderBtn.appendChild(switchProviderText);
@@ -896,15 +1181,13 @@ async function createDialog() {
     optionsBtn.type = 'button';
     optionsBtn.title = '開啟選項';
     optionsBtn.setAttribute('aria-label', '開啟選項');
+    optionsBtn.className = 'askpage-toolbar-btn askpage-toolbar-btn-options';
     optionsBtn.style.cssText = `
         ${modeToggleButtonBaseStyle}
-        min-width: 34px;
-        padding-left: 8px;
-        padding-right: 8px;
-        color: #5f6368;
-        background: rgba(95, 99, 104, 0.08);
-        border-color: rgba(95, 99, 104, 0.18);
-        box-shadow: none;
+        color: #4c5d73;
+        background: #ffffff;
+        border-color: #cfdae8;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
     `;
     optionsBtnIcon.setAttribute('aria-hidden', 'true');
     optionsBtnIcon.textContent = '⚙️';
@@ -928,7 +1211,10 @@ async function createDialog() {
     providerActions.appendChild(htmlModeBtn);
     providerActions.appendChild(switchProviderBtn);
     providerActions.appendChild(optionsBtn);
-    providerHeader.appendChild(providerDisplay);
+    providerDisplay.appendChild(providerDisplayName);
+    providerDisplay.appendChild(providerDisplayModel);
+    providerInfo.appendChild(providerDisplay);
+    providerHeader.appendChild(providerInfo);
     providerHeader.appendChild(providerActions);
 
     const inputArea = document.createElement('div');
@@ -938,19 +1224,19 @@ async function createDialog() {
     input.id = 'gemini-qna-input';
     input.placeholder = '輸入問題後按 Enter 或點擊 Ask 按鈕 (可先選取文字範圍)';
     input.rows = 1;
-    input.wrap = 'off';
+    input.wrap = 'soft';
 
     // Dynamic intelliCommands based on screenshot state and custom commands
     async function getIntelliCommands() {
         const screenshotEnabled = await getScreenshotEnabled();
-        const htmlModeEnabled = await getHtmlModeEnabled();
+        const agentModeEnabled = await getAgentModeEnabled();
         const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
 
         const builtInCommands = [
             { cmd: '/clear', desc: '清除提問歷史紀錄' },
             { cmd: '/summary', desc: '總結本頁內容' },
             { cmd: '/screenshot', desc: screenshotEnabled ? '停用截圖功能' : '啟用截圖功能' },
-            { cmd: '/html', desc: htmlModeEnabled ? '停用 HTML 模式（改用純文字內容分析）' : '啟用 HTML 模式（使用頁面 HTML 內容分析）' }
+            { cmd: '/html', desc: agentModeEnabled ? '切換為詢問模式（只做內容問答）' : '切換為代理模式（允許工具調用）' }
         ];
 
         const customCommandsForIntellisense = customCommands.map(cmd => ({
@@ -968,13 +1254,12 @@ async function createDialog() {
         border: '1px solid #ccc', borderRadius: '8px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)', minWidth: '180px', fontSize: '14px',
         maxHeight: '180px', overflowY: 'auto', padding: '4px 0',
-        fontFamily: 'inherit', cursor: 'pointer', userSelect: 'none',
-        background: 'var(--gemini-intellisense-bg, #fff)',
-        color: 'var(--gemini-intellisense-color, #222)'
+        fontFamily: 'system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji',
+        cursor: 'pointer', userSelect: 'none',
+        background: '#ffffff',
+        color: '#222222'
     });
     intelliBox.tabIndex = -1;
-    inputArea.appendChild(intelliBox);
-
     const btn = document.createElement('button');
     btn.id = 'gemini-qna-btn';
     btn.textContent = 'Ask';
@@ -985,8 +1270,145 @@ async function createDialog() {
     dialog.appendChild(messagesEl);
     dialog.appendChild(inputArea);
     overlay.appendChild(dialog);
+    overlay.appendChild(intelliBox);
 
-    document.body.appendChild(overlay);
+    shadowRoot.appendChild(styleElement);
+    shadowRoot.appendChild(overlay);
+    document.body.appendChild(host);
+    activeDialogState = {
+        host,
+        shadowRoot,
+        overlay,
+        messagesEl,
+        close: null,
+        elements: {
+            [DIALOG_OVERLAY_ID]: overlay,
+            [DIALOG_MESSAGES_ID]: messagesEl,
+            'provider-display-name': providerDisplayName,
+            'provider-display-model': providerDisplayModel
+        }
+    };
+
+    let dragState = null;
+    let didDragDialog = false;
+
+    function setDialogDimmed(dimmed) {
+        dialog.dataset.askpageDimmed = dimmed ? 'true' : 'false';
+    }
+
+    function shouldKeepDialogVisible() {
+        return Boolean(dragState) || shadowRoot.activeElement === input;
+    }
+
+    function resetDialogPosition() {
+        dialog.style.left = '50%';
+        dialog.style.top = '50%';
+        dialog.style.transform = 'translate(-50%, -50%)';
+    }
+
+    function getDialogClampedPosition(left, top) {
+        const rect = dialog.getBoundingClientRect();
+        const margin = 12;
+        const maxLeft = Math.max(margin, window.innerWidth - rect.width - margin);
+        const maxTop = Math.max(margin, window.innerHeight - rect.height - margin);
+        return {
+            left: Math.min(Math.max(left, margin), maxLeft),
+            top: Math.min(Math.max(top, margin), maxTop)
+        };
+    }
+
+    function setDialogPosition(left, top) {
+        const clampedPosition = getDialogClampedPosition(left, top);
+        dialog.style.left = `${clampedPosition.left}px`;
+        dialog.style.top = `${clampedPosition.top}px`;
+        dialog.style.transform = 'none';
+    }
+
+    function stopDialogDrag() {
+        if (!dragState) {
+            return;
+        }
+
+        dragState = null;
+        providerHeader.dataset.askpageDragging = 'false';
+        window.removeEventListener('mousemove', handleDialogDrag, true);
+        window.removeEventListener('mouseup', stopDialogDrag, true);
+    }
+
+    function handleDialogDrag(event) {
+        if (!dragState) {
+            return;
+        }
+
+        setDialogDimmed(false);
+        const nextLeft = event.clientX - dragState.offsetX;
+        const nextTop = event.clientY - dragState.offsetY;
+        if (Math.abs(nextLeft - dragState.initialLeft) > 2 || Math.abs(nextTop - dragState.initialTop) > 2) {
+            didDragDialog = true;
+        }
+        setDialogPosition(nextLeft, nextTop);
+        event.preventDefault();
+    }
+
+    providerHeader.addEventListener('mousedown', (event) => {
+        if (event.button !== 0 || event.target.closest('button')) {
+            return;
+        }
+
+        const rect = dialog.getBoundingClientRect();
+        didDragDialog = false;
+        dragState = {
+            offsetX: event.clientX - rect.left,
+            offsetY: event.clientY - rect.top,
+            initialLeft: rect.left,
+            initialTop: rect.top
+        };
+
+        setDialogDimmed(false);
+        dialog.style.left = `${rect.left}px`;
+        dialog.style.top = `${rect.top}px`;
+        dialog.style.transform = 'none';
+        providerHeader.dataset.askpageDragging = 'true';
+        window.addEventListener('mousemove', handleDialogDrag, true);
+        window.addEventListener('mouseup', stopDialogDrag, true);
+        event.preventDefault();
+    });
+
+    resetDialogPosition();
+    setDialogDimmed(false);
+
+    overlay.addEventListener('mousemove', (event) => {
+        if (shouldKeepDialogVisible()) {
+            setDialogDimmed(false);
+            return;
+        }
+
+        setDialogDimmed(!dialog.contains(event.target) && !intelliBox.contains(event.target));
+    });
+    overlay.addEventListener('mouseleave', () => {
+        if (shouldKeepDialogVisible()) {
+            return;
+        }
+
+        setDialogDimmed(true);
+    });
+    dialog.addEventListener('mouseenter', () => {
+        setDialogDimmed(false);
+    });
+    intelliBox.addEventListener('mouseenter', () => {
+        setDialogDimmed(false);
+    });
+    input.addEventListener('focus', () => {
+        setDialogDimmed(false);
+    });
+    input.addEventListener('blur', () => {
+        if (shouldKeepDialogVisible()) {
+            setDialogDimmed(false);
+            return;
+        }
+
+        setDialogDimmed(!(dialog.matches(':hover') || intelliBox.matches(':hover')));
+    });
 
     // Initialize provider display
     await Promise.all([
@@ -1007,6 +1429,26 @@ async function createDialog() {
 
     function buildPromptCommandListCopyText() {
         return '**內建斜線命令：**\n- /clear - 清除歷史紀錄\n- /summary - 總結整個頁面';
+    }
+
+    function buildCustomCommandListMarkdown(commands) {
+        if (!commands.length) {
+            return '';
+        }
+
+        return '\n\n**您的自訂命令：**\n' + commands
+            .map((cmd) => `- ${createInlineSlashCommandMarkup(cmd.cmd)} - ${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`)
+            .join('\n');
+    }
+
+    function buildCustomCommandListCopyText(commands) {
+        if (!commands.length) {
+            return '';
+        }
+
+        return '\n\n**您的自訂命令：**\n' + commands
+            .map((cmd) => `- ${cmd.cmd} - ${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`)
+            .join('\n');
     }
 
     async function triggerInlineSlashCommand(command) {
@@ -1041,36 +1483,37 @@ async function createDialog() {
 
     async function appendUsagePromptMessage(options = {}) {
         const showUsageTipOnly = options.showUsageTipOnly || false;
-        const screenshotEnabled = await getScreenshotEnabled();
-        const htmlModeEnabled = await getHtmlModeEnabled();
-        const screenshotNotice = screenshotEnabled ? '\n\n⚠️ **提醒：截圖功能目前為啟用狀態**\n系統會自動在您的提問中包含當前頁面截圖進行分析。' : '';
-        const htmlModeNotice = htmlModeEnabled ?
-            '\n\n🧩 **HTML 模式目前為啟用狀態**\n系統會優先使用頁面 HTML 內容作為分析依據。' :
-            '\n\n🧩 **HTML 模式目前為關閉狀態**\n系統會使用整理後的頁面文字內容作為分析依據。';
-        const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
-        const customCommandsList = customCommands.length > 0 ?
-            '\n\n**您的自訂命令：**\n' + customCommands.map(cmd => `- \`${cmd.cmd}\` - ${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`).join('\n') :
+        const agentModeEnabled = await getAgentModeEnabled();
+        const htmlModeNotice = agentModeEnabled ?
+            '\n\n🤖 **代理模式目前為啟用狀態**\n系統會使用頁面 HTML 與工具調用能力來分析與操作目前頁面。' :
             '';
+        const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+        const customCommandsList = buildCustomCommandListMarkdown(customCommands);
+        const customCommandsCopyText = buildCustomCommandListCopyText(customCommands);
         const activeSelectedText = showUsageTipOnly ? '' : getActiveSelectedText(capturedSelectedText);
         const builtInCommandsText = buildPromptCommandListMarkdown();
         const builtInCommandsCopyText = buildPromptCommandListCopyText();
         const optionsHintText = '\n\n滑鼠右鍵點擊擴充功能可透過選項功能設定更多自訂命令。';
 
         if (activeSelectedText) {
-            const messageText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}${htmlModeNotice}\n\n💡 ${builtInCommandsText}${customCommandsList}${optionsHintText}`;
-            const copyText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${screenshotNotice}${htmlModeNotice}\n\n💡 ${builtInCommandsCopyText}${customCommandsList}${optionsHintText}`;
+            const messageText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${htmlModeNotice}\n\n💡 ${builtInCommandsText}${customCommandsList}${optionsHintText}`;
+            const copyText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${htmlModeNotice}\n\n💡 ${builtInCommandsCopyText}${customCommandsCopyText}${optionsHintText}`;
             appendMessage('assistant', copyText, { renderedHtml: renderMarkdown(messageText), copyText });
             return;
         }
 
-        const messageText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}${htmlModeNotice}\n\n${builtInCommandsText}${customCommandsList}${optionsHintText}`;
-        const copyText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${screenshotNotice}${htmlModeNotice}\n\n${builtInCommandsCopyText}${customCommandsList}${optionsHintText}`;
+        const messageText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${htmlModeNotice}\n\n${builtInCommandsText}${customCommandsList}${optionsHintText}`;
+        const copyText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${htmlModeNotice}\n\n${builtInCommandsCopyText}${customCommandsCopyText}${optionsHintText}`;
         appendMessage('assistant', copyText, { renderedHtml: renderMarkdown(messageText), copyText });
     }
 
     if (conversationHistory.length > 0) {
         conversationHistory.forEach((turn) => {
-            appendMessage(turn.role, turn.displayContent || turn.content);
+            appendMessage(turn.role, turn.displayContent || turn.content, {
+                renderedHtml: turn.renderedHtml || '',
+                suppressCopyButton: turn.suppressCopyButton,
+                extraClassName: turn.extraClassName
+            });
         });
     } else {
         await appendUsagePromptMessage();
@@ -1108,14 +1551,25 @@ async function createDialog() {
     });
 
     function closeDialog() {
+        stopDialogDrag();
         hideIntelliBox();
         dialogInputEventTypes.forEach((eventType) => {
             overlay.removeEventListener(eventType, stopDialogInputEventPropagation);
         });
-        overlay.remove();
+        host.remove();
+        if (activeDialogState && activeDialogState.host === host) {
+            activeDialogState = null;
+        }
         isDialogVisible = false;
     }
+    if (activeDialogState && activeDialogState.host === host) {
+        activeDialogState.close = closeDialog;
+    }
     overlay.addEventListener('click', (e) => {
+        if (didDragDialog) {
+            didDragDialog = false;
+            return;
+        }
         if (e.target === overlay) { closeDialog(); } else if (!intelliBox.contains(e.target) && !input.contains(e.target)) { hideIntelliBox(); }
     });
     const escapeKeyListener = (e) => {
@@ -1269,12 +1723,12 @@ async function createDialog() {
         });
     }
 
-    async function handleHtmlModeToggle(options = {}) {
+    async function handleAgentModeToggle(options = {}) {
         const feedbackMode = options.feedback || 'none';
 
-        return await toggleModeWithUi(toggleHtmlModeEnabled, async (newState) => {
+        return await toggleModeWithUi(toggleAgentModeEnabled, async (newState) => {
             if (feedbackMode === 'brief') {
-                appendMessage('assistant', newState ? '🧩 **HTML 模式已啟用**' : '⭕ **HTML 模式已停用**');
+                appendMessage('assistant', newState ? '🤖 **代理模式已啟用**' : '💬 **詢問模式已啟用**');
                 return;
             }
 
@@ -1283,9 +1737,9 @@ async function createDialog() {
             }
 
             if (newState) {
-                appendMessage('assistant', '✅ **HTML 模式已啟用**\n\n目前已將 HTML 模式開關設為開啟。此設定已寫入瀏覽器儲存空間，會套用到所有頁面，重新載入後仍會保留。');
+                appendMessage('assistant', '✅ **代理模式已啟用**\n\n目前已切換為代理模式。系統會使用頁面 HTML 與工具調用能力來分析與操作目前頁面，此設定會保留到重新載入後。');
             } else {
-                appendMessage('assistant', '⭕ **HTML 模式已停用**\n\n目前已將 HTML 模式開關設為關閉。此設定已寫入瀏覽器儲存空間，會套用到所有頁面，重新載入後仍會保留。');
+                appendMessage('assistant', '💬 **詢問模式已啟用**\n\n目前已切換為詢問模式。系統只會根據頁面內容回答問題，不會呼叫頁面工具，此設定會保留到重新載入後。');
             }
         });
     }
@@ -1295,7 +1749,7 @@ async function createDialog() {
     });
 
     htmlModeBtn.addEventListener('click', async () => {
-        await handleHtmlModeToggle();
+        await handleAgentModeToggle();
     });
 
     async function handleAsk() {
@@ -1337,7 +1791,7 @@ async function createDialog() {
             setInputValue('', { resetToSingleLine: true });
             input.focus();
 
-            await handleHtmlModeToggle({ feedback: 'detailed' });
+            await handleAgentModeToggle({ feedback: 'detailed' });
             return;
         }
 
@@ -1354,7 +1808,7 @@ async function createDialog() {
             } else {
                 // Unknown command
                 appendMessage('user', question);
-                appendMessage('assistant', `❌ **未知命令: ${question}**\n\n可用的命令：\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 切換截圖功能\n- \`/html\` - 切換 HTML 模式\n\n您也可以在設定中新增自訂命令。`);
+                appendMessage('assistant', `❌ **未知命令: ${question}**\n\n可用的命令：\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 切換截圖功能\n- \`/html\` - 切換詢問/代理模式\n\n您也可以在設定中新增自訂命令。`);
                 setInputValue('', { resetToSingleLine: true });
                 input.focus();
                 return;
@@ -1367,9 +1821,10 @@ async function createDialog() {
         await setValue(PROMPT_HISTORY_STORAGE, JSON.stringify(promptHistory));
 
         appendMessage('user', displayedQuestion);
+        addConversationTurn('user', question, displayedQuestion);
         setInputValue('', { resetToSingleLine: true });
         input.focus();
-        await askAI(question, getActiveSelectedText(capturedSelectedText), displayedQuestion);
+        await askAI(question, getActiveSelectedText(capturedSelectedText));
     }
 
     let intelliActive = false;
@@ -1501,6 +1956,12 @@ async function createDialog() {
     function appendMessage(role, text, options = {}) {
         const div = document.createElement('div');
         div.className = role === 'user' ? 'gemini-msg-user' : 'gemini-msg-assistant';
+        if (options.extraClassName) {
+            options.extraClassName
+                .split(/\s+/)
+                .filter(Boolean)
+                .forEach((className) => div.classList.add(className));
+        }
         if (role === 'assistant') {
             div.innerHTML = options.renderedHtml || renderMarkdown(text);
             enhanceCodeBlocks(div);
@@ -1521,40 +1982,242 @@ async function createDialog() {
         } else {
             div.textContent = '你: ' + text;
         }
-        messagesEl.appendChild(div);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        appendNodeToActiveMessages(div, messagesEl);
         return div;
     }
 
-    function createProgressMessage(initialText = '正在思考...') {
-        const progressElement = appendMessage('assistant', `⏳ ${initialText}`, {
-            suppressCopyButton: true
-        });
-        progressElement.dataset.askpageProgress = 'true';
-        progressElement.style.opacity = '0.9';
-        return progressElement;
+    function appendPersistentMessage(role, text, options = {}, historyOptions = {}) {
+        appendMessage(role, text, options);
+        addConversationTurn(
+            role,
+            historyOptions.content ?? text,
+            historyOptions.displayContent ?? text,
+            {
+                renderedHtml: historyOptions.renderedHtml ?? options.renderedHtml,
+                includeInModelContext: historyOptions.includeInModelContext,
+                suppressCopyButton: options.suppressCopyButton,
+                extraClassName: options.extraClassName
+            }
+        );
     }
 
-    function updateProgressMessage(progressElement, text) {
-        if (!progressElement || !progressElement.isConnected) {
+    function appendAgentTraceMessage(text, kind = 'status', options = {}) {
+        appendPersistentMessage('assistant', text, {
+            suppressCopyButton: true,
+            renderedHtml: options.renderedHtml || '',
+            extraClassName: `askpage-agent-trace askpage-agent-trace-${kind}`
+        }, {
+            renderedHtml: options.renderedHtml || '',
+            includeInModelContext: false
+        });
+    }
+
+    function formatTracePayload(value) {
+        return `\`\`\`json\n${getJsonPreview(value)}\n\`\`\``;
+    }
+
+    function formatElapsedDuration(milliseconds) {
+        const totalMilliseconds = Math.max(0, Math.round(milliseconds || 0));
+        const minutes = String(Math.floor(totalMilliseconds / 60000)).padStart(2, '0');
+        const seconds = String(Math.floor((totalMilliseconds % 60000) / 1000)).padStart(2, '0');
+        const fractional = String(totalMilliseconds % 1000).padStart(3, '0');
+        return `${minutes}:${seconds}.${fractional}`;
+    }
+
+    function buildCollapsibleTraceHtml(summaryText, payloadText, summaryHtml = '') {
+        return `
+            <details class="askpage-trace-disclosure">
+                <summary>
+                    <span class="askpage-trace-disclosure-summary">${summaryHtml || escapeHtml(summaryText)}</span>
+                    <span class="askpage-trace-expand-button" aria-hidden="true"></span>
+                </summary>
+                <div class="askpage-trace-disclosure-body">
+                    <pre><code class="language-json">${escapeHtml(payloadText)}</code></pre>
+                </div>
+            </details>
+        `.trim();
+    }
+
+    function formatConversationStyleStatus(status) {
+        const trimmedStatus = String(status || '').trim();
+        if (!trimmedStatus) {
+            return '';
+        }
+
+        if (
+            trimmedStatus.includes('已選擇工具')
+            || trimmedStatus.includes('正在執行工具')
+            || trimmedStatus.includes('已執行工具')
+        ) {
+            return '';
+        }
+
+        const roundMatch = trimmedStatus.match(/^\[(\d+)\/(\d+)\]\s*(.*)$/);
+        const roundBadge = roundMatch ? `[${roundMatch[1]}/${roundMatch[2]}] ` : '';
+        const baseStatus = roundMatch ? roundMatch[3] : trimmedStatus;
+        const withRoundBadge = (text) => `${roundBadge}${text}`;
+
+        if (baseStatus.includes('正在擷取畫面與整理頁面上下文')) {
+            return withRoundBadge('我先擷取目前畫面，再整理頁面上下文。');
+        }
+
+        if (baseStatus.includes('正在整理頁面上下文')) {
+            return withRoundBadge('我先整理一下頁面上下文。');
+        }
+
+        if (baseStatus.includes('規劃任務')) {
+            return withRoundBadge('正在分析需求與頁面狀態。');
+        }
+
+        if (baseStatus.includes('端點不支援 tool calling')) {
+            return withRoundBadge('這個端點不支援 tool calling，我改用一般文字模式繼續。');
+        }
+
+        if (baseStatus.includes('回傳內容為空且疑似達到輸出上限')) {
+            return withRoundBadge('這次回應在輸出上限前就被截斷了，我會放寬輸出額度再試一次。');
+        }
+
+        if (baseStatus.includes('回傳內容為空')) {
+            return withRoundBadge('這次沒有拿到可顯示內容，我再試一次。');
+        }
+
+        if (baseStatus.includes('將在') && baseStatus.includes('後重試')) {
+            return withRoundBadge('服務暫時不穩定，我會稍候自動重試。');
+        }
+
+        if (baseStatus.includes('已取得最終回覆，正在整理答案')) {
+            return withRoundBadge('我已經拿到結果，正在整理成最後答覆。');
+        }
+
+        return roundMatch ? `${roundBadge}${baseStatus}` : trimmedStatus;
+    }
+
+    function buildToolCallTraceMessage(toolCall) {
+        const toolName = formatToolDisplayName(toolCall.name);
+        const summaryText = `🛠️ 正在執行 ${toolName}`;
+        const summaryHtml = `🛠️ 正在執行 <span class="askpage-tool-name">${escapeHtml(toolName)}</span>`;
+        return {
+            text: `${summaryText}\n\n${formatTracePayload({ arguments: toolCall.args || {} })}`,
+            renderedHtml: buildCollapsibleTraceHtml(summaryText, getJsonPreview({ arguments: toolCall.args || {} }), summaryHtml)
+        };
+    }
+
+    function buildToolResultTraceMessage(toolResult) {
+        const toolName = formatToolDisplayName(toolResult.name);
+        const resultStatusSuffix = toolResult.result?.success === false ? '（失敗）' : '';
+        const resultSummary = toolResult.result?.message
+            ? `\n\n結果摘要：${truncateToolText(toolResult.result.message, 240)}`
+            : '';
+        const messageSuffix = toolResult.result?.message ? `：${truncateToolText(toolResult.result.message, 120)}` : '';
+        const summaryText = `📥 ${toolName} 已回傳${resultStatusSuffix}${messageSuffix}`;
+        const summaryHtml = `📥 <span class="askpage-tool-name">${escapeHtml(toolName)}</span> 已回傳${resultStatusSuffix ? escapeHtml(resultStatusSuffix) : ''}${messageSuffix ? `：${escapeHtml(truncateToolText(toolResult.result.message, 120))}` : ''}`;
+        return {
+            text: `📥 **${toolName}** 已回傳${resultStatusSuffix}。${resultSummary}\n\n${formatTracePayload(toolResult.result)}`,
+            renderedHtml: buildCollapsibleTraceHtml(summaryText, getJsonPreview(toolResult.result), summaryHtml)
+        };
+    }
+
+    function createExecutionTraceReporter() {
+        let lastStatus = '';
+        let lastReasoningText = '';
+        let stepCount = 0;
+        const startedAt = performance.now();
+        return {
+            reportStatus(status) {
+                const conversationalStatus = formatConversationStyleStatus(status);
+                if (!conversationalStatus || conversationalStatus === lastStatus) {
+                    return;
+                }
+                lastStatus = conversationalStatus;
+                stepCount++;
+                appendAgentTraceMessage(`⏳ ${conversationalStatus}`, 'status');
+            },
+            reportReasoning(summaries) {
+                const reasoningText = summaries
+                    .map((summary) => String(summary || '').trim())
+                    .filter(Boolean)
+                    .join('\n');
+                if (!reasoningText || reasoningText === lastReasoningText) {
+                    return;
+                }
+                lastReasoningText = reasoningText;
+                stepCount++;
+                appendAgentTraceMessage(`🧠 ${reasoningText}`, 'status');
+            },
+            reportToolCalls(toolCalls) {
+                toolCalls.forEach((toolCall) => {
+                    const toolTrace = buildToolCallTraceMessage(toolCall);
+                    stepCount++;
+                    appendAgentTraceMessage(toolTrace.text, 'tool-call', { renderedHtml: toolTrace.renderedHtml });
+                });
+            },
+            reportToolResults(toolResults) {
+                toolResults.forEach((toolResult) => {
+                    const resultTrace = buildToolResultTraceMessage(toolResult);
+                    stepCount++;
+                    appendAgentTraceMessage(resultTrace.text, 'tool-result', { renderedHtml: resultTrace.renderedHtml });
+                });
+            },
+            reportCompletion(message) {
+                appendAgentTraceMessage(`✅ ${message}`, 'completion');
+            },
+            getStats() {
+                return {
+                    stepCount,
+                    elapsedMilliseconds: performance.now() - startedAt
+                };
+            }
+        };
+    }
+
+    function logAgentExecutionCompletion(success, stats, errorMessage = '') {
+        const finalMessage = success
+            ? `頁問已經打完收工，共執行 ${stats.stepCount} 個步驟。費時: ${formatElapsedDuration(stats.elapsedMilliseconds)}`
+            : `頁問提早收工，共執行 ${stats.stepCount} 個步驟。費時: ${formatElapsedDuration(stats.elapsedMilliseconds)}`;
+        if (success) {
+            console.info(`[AskPage] ${finalMessage}`);
+        } else {
+            console.info(`[AskPage] ${finalMessage}`, errorMessage);
+        }
+        return finalMessage;
+    }
+
+    function createProgressStatusHandler(traceReporter) {
+        return (status) => {
+            traceReporter.reportStatus(status);
+        };
+    }
+
+    function handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent) {
+        if (!traceEvent) {
             return;
         }
 
-        progressElement.innerHTML = renderMarkdown(`⏳ ${text}`);
-        progressElement.style.opacity = '0.9';
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-
-    function removeProgressMessage(progressElement) {
-        if (progressElement && progressElement.parentElement) {
-            progressElement.remove();
+        if (traceEvent.type === 'status') {
+            traceReporter.reportStatus(traceEvent.text);
+            return;
         }
+
+        if (traceEvent.type === 'tool-call') {
+            traceReporter.reportToolCalls(traceEvent.toolCalls || []);
+            return;
+        }
+
+        if (traceEvent.type === 'reasoning') {
+            traceReporter.reportReasoning(traceEvent.summaries || []);
+            return;
+        }
+
+        if (traceEvent.type === 'tool-result') {
+            traceReporter.reportToolResults(traceEvent.toolResults || []);
+            return;
+        }
+
+        console.debug('[AskPage] Unknown execution trace event:', providerLabel, traceEvent);
     }
 
-    function appendErrorMessageAndStore(question, displayedQuestion, errorMessage) {
-        appendMessage('assistant', errorMessage);
-        addConversationTurn('user', question, displayedQuestion);
-        addConversationTurn('assistant', errorMessage);
+    function appendErrorMessageAndStore(errorMessage) {
+        appendPersistentMessage('assistant', errorMessage);
     }
 
     function appendScreenshotMessage(screenshotDataUrl) {
@@ -1644,15 +2307,292 @@ async function createDialog() {
         });
         div.appendChild(copyBtn);
 
-        messagesEl.appendChild(div);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        appendNodeToActiveMessages(div, messagesEl);
     }
 
-    function createHttpError(status, statusText, body, message) {
-        const error = new Error(message || `${status} ${statusText}: ${body}`);
+    function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function parseApiErrorBody(body) {
+        const text = typeof body === 'string' ? body.trim() : '';
+        if (!text) {
+            return {
+                apiMessage: '',
+                apiCode: '',
+                apiType: ''
+            };
+        }
+
+        try {
+            const parsed = JSON.parse(text);
+            const errorNode = parsed?.error && typeof parsed.error === 'object'
+                ? parsed.error
+                : parsed;
+            return {
+                apiMessage: String(errorNode?.message || parsed?.message || '').trim(),
+                apiCode: String(errorNode?.code || parsed?.code || errorNode?.status || parsed?.status || '').trim(),
+                apiType: String(errorNode?.type || parsed?.type || '').trim()
+            };
+        } catch {
+            return {
+                apiMessage: text,
+                apiCode: '',
+                apiType: ''
+            };
+        }
+    }
+
+    function parseRetryAfterMilliseconds(value) {
+        if (!value) {
+            return null;
+        }
+
+        const seconds = Number(value);
+        if (Number.isFinite(seconds)) {
+            return Math.max(0, seconds * 1000);
+        }
+
+        const timestamp = Date.parse(value);
+        if (Number.isNaN(timestamp)) {
+            return null;
+        }
+
+        return Math.max(0, timestamp - Date.now());
+    }
+
+    function getRetryAfterMilliseconds(response) {
+        return parseRetryAfterMilliseconds(response?.headers?.get('Retry-After'));
+    }
+
+    function isRetriableHttpStatus(status) {
+        return [408, 409, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 529].includes(Number(status || 0));
+    }
+
+    function isLikelyNetworkError(error) {
+        const message = String(error?.message || '').toLowerCase();
+        return error?.name === 'TypeError' || [
+            'failed to fetch',
+            'networkerror',
+            'network error',
+            'load failed',
+            'network request failed',
+            'the internet connection appears to be offline'
+        ].some((keyword) => message.includes(keyword));
+    }
+
+    function getRetryDelayMilliseconds(retryCount, retryAfterMs = null) {
+        const jitterMs = Math.floor(Math.random() * 250);
+        const exponentialDelayMs = Math.min(LLM_API_RETRY_BASE_DELAY_MS * (2 ** retryCount), LLM_API_RETRY_MAX_DELAY_MS);
+        if (Number.isFinite(retryAfterMs) && retryAfterMs >= 0) {
+            return Math.min(Math.max(retryAfterMs, exponentialDelayMs), LLM_API_RETRY_MAX_DELAY_MS) + jitterMs;
+        }
+        return exponentialDelayMs + jitterMs;
+    }
+
+    function formatRetryDelay(delayMs) {
+        return `${Math.max(1, Math.ceil(delayMs / 1000))} 秒`;
+    }
+
+    function buildApiDiagnosticPayload(error) {
+        return {
+            name: error?.name || 'Error',
+            message: error?.message || '',
+            status: Number(error?.status || 0) || null,
+            statusText: error?.statusText || '',
+            apiCode: error?.apiCode || '',
+            apiType: error?.apiType || '',
+            apiMessage: error?.apiMessage || '',
+            retryAfterMs: Number.isFinite(error?.retryAfterMs) ? error.retryAfterMs : null,
+            bodyPreview: truncateToolText(error?.body || '', 600)
+        };
+    }
+
+    function logDiagnostic(level, message, details = null) {
+        const detailText = details === null || details === undefined
+            ? ''
+            : ` ${typeof details === 'string' ? details : getJsonPreview(details)}`;
+        console[level](`[AskPage] ${message}${detailText}`);
+    }
+
+    function appendRetrySummary(message, retryCount) {
+        return retryCount > 0
+            ? `${message} 已重試 ${retryCount} 次仍失敗。`
+            : message;
+    }
+
+    function analyzeProviderApiError(providerLabel, error, retryCount = 0) {
+        const status = Number(error?.status || 0);
+        const apiMessage = String(error?.apiMessage || '').trim();
+        const statusSuffix = status ? `（HTTP ${status}${error?.statusText ? ` ${error.statusText}` : ''}）` : '';
+
+        if (error?.name === 'AbortError') {
+            return {
+                shouldRetry: true,
+                reasonCode: 'request-timeout',
+                shortReason: '請求逾時',
+                userMessage: appendRetrySummary(`${providerLabel} 請求逾時，可能是服務忙碌或網路不穩。`, retryCount)
+            };
+        }
+
+        if (isLikelyNetworkError(error)) {
+            return {
+                shouldRetry: true,
+                reasonCode: 'network-error',
+                shortReason: '網路連線異常',
+                userMessage: appendRetrySummary(`無法連線到 ${providerLabel} 服務，可能是網路不穩或服務暫時無回應。`, retryCount)
+            };
+        }
+
+        if (error?.name === 'SyntaxError') {
+            return {
+                shouldRetry: true,
+                reasonCode: 'invalid-json',
+                shortReason: '回應格式異常',
+                userMessage: appendRetrySummary(`${providerLabel} 回傳了無法解析的資料，可能是服務暫時異常。`, retryCount)
+            };
+        }
+
+        if (status === 401) {
+            return {
+                shouldRetry: false,
+                reasonCode: 'unauthorized',
+                shortReason: '驗證失敗',
+                userMessage: error.message
+            };
+        }
+
+        if (status === 403) {
+            return {
+                shouldRetry: false,
+                reasonCode: 'forbidden',
+                shortReason: '權限不足',
+                userMessage: error.message || `${providerLabel} 拒絕了這次請求，請檢查 API 權限或模型存取設定。`
+            };
+        }
+
+        if (status === 404) {
+            return {
+                shouldRetry: false,
+                reasonCode: 'not-found',
+                shortReason: '找不到資源',
+                userMessage: error.message || `${providerLabel} 找不到指定的模型、端點或部署設定。`
+            };
+        }
+
+        if (status === 400 || status === 422) {
+            return {
+                shouldRetry: false,
+                reasonCode: 'invalid-request',
+                shortReason: '請求格式錯誤',
+                userMessage: error.message || `${providerLabel} 拒絕了這次請求，可能是參數格式不正確。${apiMessage ? ` ${apiMessage}` : ''}`
+            };
+        }
+
+        if (status === 429) {
+            return {
+                shouldRetry: true,
+                reasonCode: 'rate-limit',
+                shortReason: '服務忙碌或請求過多',
+                userMessage: appendRetrySummary(`${providerLabel} 服務目前忙碌或請求頻率過高${statusSuffix}。${apiMessage ? ` ${apiMessage}` : ''}`, retryCount)
+            };
+        }
+
+        if (status >= 500 || isRetriableHttpStatus(status)) {
+            return {
+                shouldRetry: true,
+                reasonCode: `http-${status || 'service-error'}`,
+                shortReason: '服務暫時異常',
+                userMessage: appendRetrySummary(`${providerLabel} 服務暫時異常${statusSuffix}。${apiMessage ? ` ${apiMessage}` : ''}`, retryCount)
+            };
+        }
+
+        if (error?.message && error.message !== '[object Object]') {
+            return {
+                shouldRetry: false,
+                reasonCode: 'known-error',
+                shortReason: '請求失敗',
+                userMessage: error.message
+            };
+        }
+
+        return {
+            shouldRetry: false,
+            reasonCode: 'unknown-error',
+            shortReason: '未知錯誤',
+            userMessage: `${providerLabel} API 呼叫失敗，原因不明。`
+        };
+    }
+
+    async function fetchJsonWithRetry({
+        providerLabel,
+        url,
+        options,
+        buildHttpError,
+        onRetry,
+        transformResponse
+    }) {
+        let retryCount = 0;
+
+        for (;;) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    throw buildHttpError(response, errorBody);
+                }
+                const responseData = await response.json();
+                return typeof transformResponse === 'function'
+                    ? transformResponse(responseData)
+                    : responseData;
+            } catch (error) {
+                const analysis = analyzeProviderApiError(providerLabel, error, retryCount);
+                if (analysis.shouldRetry && retryCount < MAX_LLM_API_SERVICE_RETRIES) {
+                    const nextRetryCount = retryCount + 1;
+                    const delayMs = getRetryDelayMilliseconds(retryCount, error?.retryAfterMs);
+                    logDiagnostic('warn', `${providerLabel} API request failed and will retry.`, {
+                        provider: providerLabel,
+                        retry: nextRetryCount,
+                        maxRetries: MAX_LLM_API_SERVICE_RETRIES,
+                        delayMs,
+                        reasonCode: analysis.reasonCode,
+                        shortReason: analysis.shortReason,
+                        error: buildApiDiagnosticPayload(error)
+                    });
+                    if (typeof onRetry === 'function') {
+                        onRetry({
+                            ...analysis,
+                            retryCount: nextRetryCount,
+                            maxRetries: MAX_LLM_API_SERVICE_RETRIES,
+                            delayMs
+                        });
+                    }
+                    retryCount = nextRetryCount;
+                    await sleep(delayMs);
+                    continue;
+                }
+
+                error.userMessage = analysis.userMessage;
+                error.analysis = analysis;
+                error.retryCount = retryCount;
+                throw error;
+            }
+        }
+    }
+
+    function createHttpError(status, statusText, body, message, options = {}) {
+        const parsedBody = parseApiErrorBody(body);
+        const fallbackMessage = parsedBody.apiMessage
+            ? `${status} ${statusText}: ${parsedBody.apiMessage}`
+            : `${status} ${statusText}: ${body}`;
+        const error = new Error(message || fallbackMessage);
         error.status = status;
         error.statusText = statusText;
         error.body = body;
+        error.apiMessage = parsedBody.apiMessage;
+        error.apiCode = parsedBody.apiCode;
+        error.apiType = parsedBody.apiType;
+        error.retryAfterMs = options.retryAfterMs ?? null;
         return error;
     }
 
@@ -2199,18 +3139,7 @@ async function createDialog() {
     }
 
     function formatToolDisplayName(name) {
-        const labels = {
-            get_page_title: 'get_page_title（取得頁面標題）',
-            inspect_selection: 'inspect_selection（檢查選取範圍）',
-            inspect_form_fields: 'inspect_form_fields（檢查表單欄位）',
-            fill_form_fields: 'fill_form_fields（填寫表單欄位）',
-            replace_dom_content: 'replace_dom_content（替換頁面內容）',
-            get_element_content: 'get_element_content（讀取元素內容）',
-            click_element: 'click_element（點擊元素）',
-            run_javascript: 'run_javascript（執行 JavaScript）'
-        };
-
-        return labels[name] || name || '未知工具';
+        return name || '未知工具';
     }
 
     function formatToolNameList(toolNames = []) {
@@ -2250,55 +3179,8 @@ async function createDialog() {
         return `剛剛調用 ${toolNames} 工具，成功 ${successCount} 個、失敗 ${failureCount} 個`;
     }
 
-    function resolveClickableElement({ selector = '', text = '', role = '' } = {}) {
-        if (selector) {
-            const directMatch = document.querySelector(selector);
-            if (directMatch) {
-                return directMatch;
-            }
-        }
-
-        const allCandidates = Array.from(document.querySelectorAll('button, a, summary, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]'))
-            .filter((element) => isElementVisible(element) && !element.disabled);
-
-        let candidates = allCandidates;
-        if (role === 'link') {
-            candidates = candidates.filter((element) => element.tagName.toLowerCase() === 'a');
-        } else if (role === 'button') {
-            candidates = candidates.filter((element) => element.tagName.toLowerCase() === 'button' || element.getAttribute('role') === 'button' || element.tagName.toLowerCase() === 'input');
-        }
-
-        let bestMatch = { element: null, score: 0 };
-        candidates.forEach((element) => {
-            const searchTerms = [
-                element.innerText,
-                element.textContent,
-                element.getAttribute('aria-label'),
-                element.getAttribute('title'),
-                element.value
-            ].filter(Boolean);
-
-            searchTerms.forEach((candidate) => {
-                const score = scoreMatchCandidate(candidate, text, 110, 82);
-                if (score > bestMatch.score) {
-                    bestMatch = { element, score };
-                }
-            });
-        });
-
-        return bestMatch.score >= 60 ? bestMatch.element : null;
-    }
-
     function getToolDefinitions() {
         return [
-            {
-                name: 'get_page_title',
-                description: '取得目前網頁的標題與網址。當你需要確認目前頁面是什麼時使用。',
-                parameters: {
-                    type: 'object',
-                    properties: {}
-                }
-            },
             {
                 name: 'inspect_selection',
                 description: '取得目前頁面選取範圍的文字與 HTML。當需要處理使用者選取內容時使用。',
@@ -2361,79 +3243,14 @@ async function createDialog() {
                 }
             },
             {
-                name: 'replace_dom_content',
-                description: '用 raw HTML 取代目前選取範圍，或在沒有選取範圍時用 selector 取代目標元素的 innerHTML。',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        html: {
-                            type: 'string',
-                            description: '要插入的 raw HTML 字串。'
-                        },
-                        selector: {
-                            type: 'string',
-                            description: '沒有選取範圍時，指定要替換 innerHTML 的目標元素 selector。'
-                        },
-                        preferSelection: {
-                            type: 'boolean',
-                            description: '是否優先使用目前選取範圍，預設 true。'
-                        }
-                    },
-                    required: ['html']
-                }
-            },
-            {
-                name: 'get_element_content',
-                description: '根據 selector 取得特定元素的文字內容或 HTML 內容。',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        selector: {
-                            type: 'string',
-                            description: '目標元素的 CSS selector。'
-                        },
-                        includeHtml: {
-                            type: 'boolean',
-                            description: '是否一併回傳 innerHTML，預設 false。'
-                        },
-                        maxLength: {
-                            type: 'integer',
-                            description: '文字或 HTML 最多回傳幾個字元，預設 2000。'
-                        }
-                    },
-                    required: ['selector']
-                }
-            },
-            {
-                name: 'click_element',
-                description: '點擊目前頁面上的按鈕、連結或 role=button 元素。可用 selector 或可見文字模糊比對。',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        selector: {
-                            type: 'string',
-                            description: '直接指定要點擊的元素 selector。'
-                        },
-                        text: {
-                            type: 'string',
-                            description: '按鈕或連結的可見文字、aria-label 或 title。'
-                        },
-                        role: {
-                            type: 'string',
-                            description: '可選，button 或 link。'
-                        }
-                    }
-                }
-            },
-            {
-                name: 'run_javascript',
-                description: '在目前頁面的主世界執行任意 JavaScript 程式碼。可使用 await，若要把結果回傳給模型，請使用 return。',
+                name: 'run_js',
+                description: '在目前頁面的主世界執行通用 JavaScript。可用來讀取 DOM、查詢頁面資料、點擊元素、修改內容、呼叫頁面腳本，並支援 await。若要把結果回傳給模型，請使用 return。',
                 parameters: {
                     type: 'object',
                     properties: {
                         code: {
                             type: 'string',
-                            description: '要執行的 JavaScript 程式碼。可以使用 document、window、selection 與 buildElementSelector。'
+                            description: '要執行的 JavaScript 程式碼。可以使用 document、window、selection、console 與 buildElementSelector。'
                         }
                     },
                     required: ['code']
@@ -2457,20 +3274,6 @@ async function createDialog() {
         }
 
         try {
-            if (name === 'get_page_title') {
-                return {
-                    id,
-                    name,
-                    result: createToolResult(true, '已取得目前頁面標題。', {
-                        title: document.title,
-                        url: window.location.href
-                    }, [], [{
-                        selector: 'document',
-                        description: document.title
-                    }])
-                };
-            }
-
             if (name === 'inspect_selection') {
                 const selectionSnapshot = getSelectionSnapshot();
                 return {
@@ -2632,158 +3435,7 @@ async function createDialog() {
                 };
             }
 
-            if (name === 'replace_dom_content') {
-                const html = String(toolArgs.html || '');
-                if (!html) {
-                    return {
-                        id,
-                        name,
-                        result: createToolResult(false, 'html 參數不可為空字串。')
-                    };
-                }
-
-                const preferSelection = toolArgs.preferSelection !== false;
-                const selectionSnapshot = preferSelection ? getSelectionSnapshot() : { hasSelection: false };
-                const selector = String(toolArgs.selector || '').trim();
-
-                if (selectionSnapshot.hasSelection && selectionSnapshot.range) {
-                    const range = selectionSnapshot.range;
-                    const previousText = truncateToolText(range.toString(), 240);
-                    const fragment = range.createContextualFragment(html);
-                    range.deleteContents();
-                    range.insertNode(fragment);
-                    const activeSelection = window.getSelection();
-                    if (activeSelection) {
-                        activeSelection.removeAllRanges();
-                    }
-
-                    return {
-                        id,
-                        name,
-                        result: createToolResult(true, '已用 raw HTML 取代目前選取範圍。', {
-                            mode: 'selection',
-                            previousText,
-                            insertedHtmlPreview: truncateToolText(html, 240)
-                        }, [], [{
-                            selector: 'selection',
-                            description: previousText
-                        }])
-                    };
-                }
-
-                if (!selector) {
-                    return {
-                        id,
-                        name,
-                        result: createToolResult(false, '目前沒有可用選取範圍，請提供 selector。')
-                    };
-                }
-
-                const targetElement = document.querySelector(selector);
-                if (!targetElement) {
-                    return {
-                        id,
-                        name,
-                        result: createToolResult(false, `找不到 selector 對應的元素：${selector}`)
-                    };
-                }
-
-                const previousHtml = truncateToolText(targetElement.innerHTML, 240);
-                targetElement.innerHTML = html;
-                return {
-                    id,
-                    name,
-                    result: createToolResult(true, '已取代目標元素的 innerHTML。', {
-                        mode: 'selector',
-                        selector,
-                        previousHtml,
-                        insertedHtmlPreview: truncateToolText(html, 240)
-                    }, [], [{
-                        selector,
-                        description: targetElement.tagName.toLowerCase()
-                    }])
-                };
-            }
-
-            if (name === 'get_element_content') {
-                const selector = String(toolArgs.selector || '').trim();
-                if (!selector) {
-                    return {
-                        id,
-                        name,
-                        result: createToolResult(false, 'selector 參數不可為空。')
-                    };
-                }
-
-                const targetElement = document.querySelector(selector);
-                if (!targetElement) {
-                    return {
-                        id,
-                        name,
-                        result: createToolResult(false, `找不到 selector 對應的元素：${selector}`)
-                    };
-                }
-
-                const maxLength = Number.isFinite(toolArgs.maxLength) ? Math.max(200, Math.min(Number(toolArgs.maxLength), 10000)) : 2000;
-                const includeHtml = toolArgs.includeHtml === true;
-                const textContent = truncateToolText((targetElement.innerText || targetElement.textContent || '').trim(), maxLength);
-                const data = {
-                    selector,
-                    tagName: targetElement.tagName.toLowerCase(),
-                    text: textContent
-                };
-
-                if (includeHtml) {
-                    data.html = truncateToolText(targetElement.innerHTML, maxLength);
-                }
-
-                return {
-                    id,
-                    name,
-                    result: createToolResult(true, '已取得目標元素內容。', data, [], [{
-                        selector,
-                        description: targetElement.tagName.toLowerCase()
-                    }])
-                };
-            }
-
-            if (name === 'click_element') {
-                const selector = String(toolArgs.selector || '').trim();
-                const text = String(toolArgs.text || '').trim();
-                const role = String(toolArgs.role || '').trim().toLowerCase();
-                if (!selector && !text) {
-                    return {
-                        id,
-                        name,
-                        result: createToolResult(false, 'click_element 需要 selector 或 text 其中之一。')
-                    };
-                }
-
-                const targetElement = resolveClickableElement({ selector, text, role });
-                if (!targetElement) {
-                    return {
-                        id,
-                        name,
-                        result: createToolResult(false, `找不到可點擊的目標：${selector || text}`)
-                    };
-                }
-
-                targetElement.click();
-                return {
-                    id,
-                    name,
-                    result: createToolResult(true, '已點擊目標元素。', {
-                        selector: buildElementSelector(targetElement),
-                        text: truncateToolText(targetElement.innerText || targetElement.textContent || targetElement.value || '', 120),
-                        tagName: targetElement.tagName.toLowerCase()
-                    }, [], [{
-                        selector: buildElementSelector(targetElement),
-                        description: truncateToolText(targetElement.innerText || targetElement.textContent || targetElement.value || '', 120)
-                    }])
-                };
-            }
-
-            if (name === 'run_javascript') {
+            if (name === 'run_js') {
                 const code = String(toolArgs.code || '');
                 if (!code.trim()) {
                     return {
@@ -2848,6 +3500,15 @@ async function createDialog() {
         }));
     }
 
+    function getOpenAIResponsesToolDefinitions() {
+        return getToolDefinitions().map((tool) => ({
+            type: 'function',
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parameters
+        }));
+    }
+
     function getGeminiToolDefinitions() {
         return [{
             functionDeclarations: getToolDefinitions().map((tool) => ({
@@ -2890,23 +3551,379 @@ async function createDialog() {
         return results;
     }
 
-    function getAssistantMessageText(message) {
+    function getAssistantMessageText(message, choice = null) {
+        if (!message && typeof choice?.text !== 'string') {
+            return '';
+        }
+
+        if (typeof message?.content === 'string') {
+            return message.content.trim();
+        }
+
+        if (Array.isArray(message?.content)) {
+            return message.content
+                .map((part) => typeof part === 'string' ? part : (typeof part?.text === 'string' ? part.text : ''))
+                .join('\n')
+                .trim();
+        }
+
+        if (typeof choice?.text === 'string') {
+            return choice.text.trim();
+        }
+
+        return '';
+    }
+
+    function toResponsesMessageContent(role, content) {
+        if (Array.isArray(content)) {
+            return content;
+        }
+
+        const text = typeof content === 'string' ? content : '';
+        return [{
+            type: role === 'assistant' ? 'output_text' : 'input_text',
+            text
+        }];
+    }
+
+    function buildResponsesApiRequestBody(messages, options = {}) {
+        const responsesInput = [];
+        const instructions = [];
+
+        messages.forEach((message) => {
+            if (message.role === 'system') {
+                if (typeof message.content === 'string' && message.content.trim()) {
+                    instructions.push(message.content.trim());
+                }
+                return;
+            }
+
+            if (message.role === 'tool') {
+                responsesInput.push({
+                    type: 'function_call_output',
+                    call_id: message.tool_call_id,
+                    output: typeof message.content === 'string' ? message.content : getJsonPreview(message.content)
+                });
+                return;
+            }
+
+            if (message.role === 'assistant' && Array.isArray(message.tool_calls) && message.tool_calls.length) {
+                message.tool_calls.forEach((toolCall) => {
+                    responsesInput.push({
+                        type: 'function_call',
+                        call_id: toolCall.id,
+                        name: toolCall.function?.name || '',
+                        arguments: toolCall.function?.arguments || '{}'
+                    });
+                });
+                return;
+            }
+
+            responsesInput.push({
+                type: 'message',
+                role: message.role,
+                content: toResponsesMessageContent(message.role, message.content)
+            });
+        });
+
+        const requestBody = {
+            model: options.model,
+            input: responsesInput,
+            max_output_tokens: options.maxOutputTokens
+        };
+
+        if (instructions.length) {
+            requestBody.instructions = instructions.join('\n\n');
+        }
+
+        if (options.useTools) {
+            requestBody.tools = getOpenAIResponsesToolDefinitions();
+        }
+
+        if (options.reasoningEffort) {
+            requestBody.reasoning = {
+                effort: options.reasoningEffort,
+                summary: 'concise'
+            };
+        }
+
+        return requestBody;
+    }
+
+    function getResponsesApiOutputText(responseData) {
+        if (typeof responseData?.output_text === 'string') {
+            return responseData.output_text.trim();
+        }
+
+        const output = Array.isArray(responseData?.output) ? responseData.output : [];
+        return output
+            .filter((item) => item?.type === 'message' && Array.isArray(item.content))
+            .flatMap((item) => item.content)
+            .filter((part) => part?.type === 'output_text' && typeof part.text === 'string')
+            .map((part) => part.text)
+            .join('\n')
+            .trim();
+    }
+
+    function getResponsesApiRefusalText(responseData) {
+        const output = Array.isArray(responseData?.output) ? responseData.output : [];
+        return output
+            .filter((item) => item?.type === 'message' && Array.isArray(item.content))
+            .flatMap((item) => item.content)
+            .filter((part) => part?.type === 'refusal')
+            .map((part) => part?.refusal || part?.text || '')
+            .filter(Boolean)
+            .join('\n')
+            .trim();
+    }
+
+    function getResponsesApiToolCalls(responseData) {
+        const output = Array.isArray(responseData?.output) ? responseData.output : [];
+        return output
+            .filter((item) => item?.type === 'function_call')
+            .map((item, index) => ({
+                id: item.call_id || item.id || `responses-tool-call-${index + 1}`,
+                type: 'function',
+                function: {
+                    name: item.name || '',
+                    arguments: item.arguments || '{}'
+                }
+            }));
+    }
+
+    function getResponsesApiReasoningSummaries(responseData) {
+        const output = Array.isArray(responseData?.output) ? responseData.output : [];
+        return output
+            .filter((item) => item?.type === 'reasoning' && Array.isArray(item.summary))
+            .flatMap((item) => item.summary)
+            .map((part) => part?.text || '')
+            .map((text) => text.trim())
+            .filter(Boolean);
+    }
+
+    function normalizeResponsesApiResponse(responseData) {
+        const toolCalls = getResponsesApiToolCalls(responseData);
+        const answerText = getResponsesApiOutputText(responseData);
+        const refusalText = getResponsesApiRefusalText(responseData);
+        const reasoningSummaries = getResponsesApiReasoningSummaries(responseData);
+        const incompleteReason = responseData?.incomplete_details?.reason || '';
+        const finishReason = toolCalls.length
+            ? 'tool_calls'
+            : incompleteReason === 'max_output_tokens'
+                ? 'length'
+                : incompleteReason === 'content_filter'
+                    ? 'content_filter'
+                    : 'stop';
+        const usage = responseData?.usage || {};
+
+        return {
+            id: responseData?.id,
+            model: responseData?.model,
+            usage: {
+                prompt_tokens: usage.input_tokens ?? usage.prompt_tokens ?? 0,
+                completion_tokens: usage.output_tokens ?? usage.completion_tokens ?? 0,
+                completion_tokens_details: usage.output_tokens_details || usage.completion_tokens_details || null,
+                total_tokens: usage.total_tokens ?? 0
+            },
+            choices: [{
+                finish_reason: finishReason,
+                message: {
+                    content: answerText || null,
+                    refusal: refusalText || null,
+                    reasoning_summaries: reasoningSummaries.length ? reasoningSummaries : undefined,
+                    tool_calls: toolCalls.length ? toolCalls : undefined
+                }
+            }],
+            reasoning_summaries: reasoningSummaries
+        };
+    }
+
+    function getOpenAIPrimaryChoice(responseData) {
+        const choices = Array.isArray(responseData?.choices) ? responseData.choices : [];
+        return choices.find((choice) => choice?.message || typeof choice?.text === 'string') || choices[0] || null;
+    }
+
+    function getOpenAIFinishReason(choice) {
+        return choice?.finish_reason || choice?.finishReason || '';
+    }
+
+    function getOpenAIRefusalText(message) {
         if (!message) {
             return '';
         }
 
-        if (typeof message.content === 'string') {
-            return message.content;
+        if (typeof message.refusal === 'string') {
+            return message.refusal.trim();
+        }
+
+        if (Array.isArray(message.refusal)) {
+            return message.refusal
+                .map((part) => typeof part === 'string' ? part : (typeof part?.text === 'string' ? part.text : ''))
+                .join('\n')
+                .trim();
         }
 
         if (Array.isArray(message.content)) {
             return message.content
-                .filter((part) => part && part.type === 'text')
+                .filter((part) => part?.type === 'refusal')
                 .map((part) => part.text || '')
-                .join('\n');
+                .join('\n')
+                .trim();
         }
 
         return '';
+    }
+
+    function getOpenAIReasoningSummaries(message, responseData = null) {
+        if (Array.isArray(message?.reasoning_summaries) && message.reasoning_summaries.length) {
+            return message.reasoning_summaries.filter(Boolean);
+        }
+
+        if (Array.isArray(responseData?.reasoning_summaries) && responseData.reasoning_summaries.length) {
+            return responseData.reasoning_summaries.filter(Boolean);
+        }
+
+        return [];
+    }
+
+    function isOpenAIStyleRetriableEmptyResponse(responseData) {
+        const choice = getOpenAIPrimaryChoice(responseData);
+        const assistantMessage = choice?.message;
+        const finishReason = getOpenAIFinishReason(choice);
+
+        if (getOpenAIRefusalText(assistantMessage)) {
+            return false;
+        }
+
+        return !['content_filter'].includes(finishReason);
+    }
+
+    function buildOpenAIStyleEmptyResponseMessage(providerLabel, responseData) {
+        const choices = Array.isArray(responseData?.choices) ? responseData.choices : [];
+        const choice = getOpenAIPrimaryChoice(responseData);
+        const assistantMessage = choice?.message;
+        const finishReason = getOpenAIFinishReason(choice);
+        const refusalText = getOpenAIRefusalText(assistantMessage);
+
+        if (refusalText) {
+            return `${providerLabel} 拒絕回應這次請求：${refusalText}`;
+        }
+
+        switch (finishReason) {
+        case 'length':
+            return `${providerLabel} 已達輸出長度上限，請縮小問題範圍後再試。`;
+        case 'content_filter':
+            return `${providerLabel} 因內容過濾而未回傳文字內容，請調整提問內容後再試。`;
+        case 'tool_calls':
+            return `${providerLabel} 回傳了工具呼叫狀態，但沒有提供可顯示的文字內容。`;
+        case 'function_call':
+            return `${providerLabel} 回傳了函式呼叫狀態，但沒有提供可顯示的文字內容。`;
+        case 'stop':
+            return `${providerLabel} 已完成回應，但內容不是可顯示的文字。請再試一次，或縮小問題範圍。`;
+        default:
+            break;
+        }
+
+        if (!choices.length) {
+            return `${providerLabel} 沒有回傳任何候選內容，可能是模型暫時沒有產生答案，請稍後再試。`;
+        }
+
+        return `${providerLabel} 已回傳結果，但內容不是可顯示的文字。請再試一次，或縮小問題範圍。`;
+    }
+
+    function getGeminiPrimaryCandidate(responseData) {
+        const candidates = Array.isArray(responseData?.candidates) ? responseData.candidates : [];
+        return candidates.find((candidate) => {
+            const parts = candidate?.content?.parts || [];
+            return parts.some((part) => part?.functionCall || typeof part?.text === 'string');
+        }) || candidates[0] || null;
+    }
+
+    function getGeminiTextFromParts(parts) {
+        if (!Array.isArray(parts)) {
+            return '';
+        }
+
+        return parts
+            .map((part) => typeof part?.text === 'string' ? part.text : '')
+            .join('')
+            .trim();
+    }
+
+    function formatGeminiSafetyDetails(safetyRatings) {
+        if (!Array.isArray(safetyRatings)) {
+            return '';
+        }
+
+        const categories = safetyRatings
+            .filter((rating) => rating?.probability && rating.probability !== 'NEGLIGIBLE')
+            .map((rating) => rating.category)
+            .filter(Boolean);
+
+        return categories.length ? `（${categories.join('、')}）` : '';
+    }
+
+    function isGeminiRetriableEmptyResponse(responseData) {
+        if (responseData?.promptFeedback?.blockReason) {
+            return false;
+        }
+
+        const finishReason = getGeminiPrimaryCandidate(responseData)?.finishReason || '';
+        return !['SAFETY', 'RECITATION', 'LANGUAGE', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'IMAGE_SAFETY'].includes(finishReason);
+    }
+
+    function buildGeminiEmptyResponseMessage(responseData) {
+        const promptFeedback = responseData?.promptFeedback;
+        const promptSafetyDetails = formatGeminiSafetyDetails(promptFeedback?.safetyRatings);
+
+        switch (promptFeedback?.blockReason) {
+        case 'SAFETY':
+            return `Gemini 因安全性限制而未處理這次請求${promptSafetyDetails}，請調整提問內容後再試。`;
+        case 'BLOCKLIST':
+            return 'Gemini 因請求內容包含封鎖詞而未處理這次請求，請調整提問內容後再試。';
+        case 'PROHIBITED_CONTENT':
+            return 'Gemini 判定這次請求屬於禁止內容，因此未回傳答案。';
+        case 'IMAGE_SAFETY':
+            return 'Gemini 因圖片內容觸發安全性限制，因此未回傳答案。';
+        case 'OTHER':
+            return 'Gemini 沒有處理這次請求，請稍後再試。';
+        default:
+            break;
+        }
+
+        const candidate = getGeminiPrimaryCandidate(responseData);
+        const finishReason = candidate?.finishReason || '';
+        const finishMessage = candidate?.finishMessage ? `（${candidate.finishMessage}）` : '';
+        const candidateSafetyDetails = formatGeminiSafetyDetails(candidate?.safetyRatings);
+
+        switch (finishReason) {
+        case 'MAX_TOKENS':
+            return `Gemini 已達輸出長度上限${finishMessage}，請縮小問題範圍後再試。`;
+        case 'SAFETY':
+            return `Gemini 因安全性限制而未回傳文字內容${candidateSafetyDetails || finishMessage}，請調整提問內容後再試。`;
+        case 'RECITATION':
+            return `Gemini 因引用內容限制而未回傳文字內容${finishMessage}。`;
+        case 'LANGUAGE':
+            return `Gemini 因語言限制而未回傳文字內容${finishMessage}，請改用繁體中文或英文後再試。`;
+        case 'BLOCKLIST':
+            return 'Gemini 因回應內容觸發封鎖詞限制而未回傳文字內容。';
+        case 'PROHIBITED_CONTENT':
+            return 'Gemini 因回應內容觸發禁止內容限制而未回傳文字內容。';
+        case 'SPII':
+            return 'Gemini 因回應內容可能包含敏感個人資訊而未回傳文字內容。';
+        case 'MALFORMED_FUNCTION_CALL':
+            return `Gemini 回傳了格式不正確的工具呼叫${finishMessage}，請再試一次。`;
+        case 'OTHER':
+            return `Gemini 沒有產生可顯示的文字內容${finishMessage}，請稍後再試。`;
+        default:
+            break;
+        }
+
+        if (!Array.isArray(responseData?.candidates) || !responseData.candidates.length) {
+            return 'Gemini 沒有回傳任何候選內容，可能是請求被系統攔下或模型暫時沒有產生答案。';
+        }
+
+        return `Gemini 已回傳結果，但內容不是可顯示的文字${finishMessage}。請再試一次，或縮小問題範圍。`;
     }
 
     function isLikelyToolUnsupportedError(error) {
@@ -2929,77 +3946,128 @@ async function createDialog() {
         ];
     }
 
+    function formatRoundStatus(round, message) {
+        return message;
+    }
+
     async function runOpenAIStyleToolLoop({
         providerLabel,
         initialMessages,
         buildRequestBody,
         sendRequest,
         allowToolFallback = false,
-        onStatusUpdate = () => {}
+        initialUseTools = true,
+        onStatusUpdate = () => {},
+        onTrace = () => {},
+        initialMaxOutputTokens = DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS,
+        retryMaxOutputTokens = DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS
     }) {
         const messages = initialMessages.map((message) => ({ ...message }));
-        let useTools = true;
+        let useTools = initialUseTools;
         let fallbackUsed = false;
         let previousToolSummary = '';
+        let maxOutputTokens = initialMaxOutputTokens;
+        let emptyResponseRetryCount = 0;
+        const reportStatus = (status) => {
+            onStatusUpdate(status);
+            onTrace({ type: 'status', text: status });
+        };
 
         for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round++) {
             const roundPrefix = previousToolSummary ? `${previousToolSummary}，` : '';
-            onStatusUpdate(`第 ${round + 1} / ${MAX_TOOL_CALL_ROUNDS} 輪：${roundPrefix}正在請 ${providerLabel} 分析頁面並決定下一個工具...`);
+            reportStatus(formatRoundStatus(
+                round,
+                useTools
+                    ? `${roundPrefix}正在請 ${providerLabel} 規劃任務...`
+                    : `正在請 ${providerLabel} 分析頁面並回答問題...`
+            ));
             let responseData;
             try {
-                responseData = await sendRequest(buildRequestBody(messages, useTools));
+                responseData = await sendRequest(
+                    buildRequestBody(messages, useTools, maxOutputTokens),
+                    (retryInfo) => reportStatus(formatRoundStatus(
+                        round,
+                        `${providerLabel} ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
+                    ))
+                );
             } catch (error) {
                 if (useTools && allowToolFallback && isLikelyToolUnsupportedError(error)) {
                     console.warn(`[AskPage] ${providerLabel} does not appear to support tool calling, falling back to plain chat.`, error);
                     useTools = false;
                     fallbackUsed = true;
-                    onStatusUpdate(`第 ${round + 1} 輪：${providerLabel} 端點不支援 tool calling，正在退回一般文字模式...`);
+                    reportStatus(formatRoundStatus(round, `${providerLabel} 端點不支援 tool calling，正在退回一般文字模式...`));
                     continue;
                 }
                 throw error;
             }
 
-            const assistantMessage = responseData.choices?.[0]?.message;
-            if (!assistantMessage) {
-                return {
-                    answer: '未取得回應',
-                    fallbackUsed
-                };
-            }
-
-            const toolCalls = useTools && Array.isArray(assistantMessage.tool_calls)
+            const responseChoice = getOpenAIPrimaryChoice(responseData);
+            const assistantMessage = responseChoice?.message;
+            const reasoningSummaries = getOpenAIReasoningSummaries(assistantMessage, responseData);
+            const toolCalls = useTools && Array.isArray(assistantMessage?.tool_calls)
                 ? assistantMessage.tool_calls
                 : [];
+            const answerText = getAssistantMessageText(assistantMessage, responseChoice);
+
+            if (reasoningSummaries.length) {
+                onTrace({ type: 'reasoning', round, summaries: reasoningSummaries });
+            }
+
+            if (!toolCalls.length && !answerText) {
+                logDiagnostic('warn', `${providerLabel} returned an empty non-text response.`, {
+                    id: responseData?.id || null,
+                    model: responseData?.model || null,
+                    finishReason: getOpenAIFinishReason(responseChoice) || null,
+                    refusal: getOpenAIRefusalText(assistantMessage) || null,
+                    usage: responseData?.usage || null
+                });
+
+                if (emptyResponseRetryCount < OPENAI_STYLE_EMPTY_RESPONSE_RETRY_LIMIT && isOpenAIStyleRetriableEmptyResponse(responseData)) {
+                    emptyResponseRetryCount++;
+                    maxOutputTokens = Math.max(maxOutputTokens, retryMaxOutputTokens);
+                    reportStatus(
+                        getOpenAIFinishReason(responseChoice) === 'length'
+                            ? `${providerLabel} 回傳內容為空且疑似達到輸出上限，正在放寬輸出限制後自動重試一次...`
+                            : `${providerLabel} 回傳內容為空，正在自動重試一次...`
+                    );
+                    continue;
+                }
+
+                throw new Error(buildOpenAIStyleEmptyResponseMessage(providerLabel, responseData));
+            }
 
             if (!toolCalls.length) {
-                onStatusUpdate('已取得最終回覆，正在整理答案...');
+                reportStatus('已取得最終回覆，正在整理答案...');
                 return {
-                    answer: getAssistantMessageText(assistantMessage) || '未取得回應',
+                    answer: answerText,
                     fallbackUsed
                 };
             }
 
             messages.push({
                 role: 'assistant',
-                content: assistantMessage.content || null,
-                tool_calls: assistantMessage.tool_calls
+                content: assistantMessage?.content || null,
+                tool_calls: assistantMessage?.tool_calls
             });
 
             const requestedToolNames = formatToolNameList(toolCalls.map((toolCall) => toolCall.function?.name));
-            onStatusUpdate(`第 ${round + 1} 輪：${providerLabel} 已選擇工具 ${requestedToolNames}，準備執行...`);
+            const parsedToolCalls = toolCalls.map((toolCall) => ({
+                id: toolCall.id,
+                name: toolCall.function?.name,
+                args: parseToolArguments(toolCall.function?.arguments)
+            }));
+            reportStatus(formatRoundStatus(round, `${providerLabel} 已選擇工具 ${requestedToolNames}，準備執行...`));
+            onTrace({ type: 'tool-call', round, toolCalls: parsedToolCalls });
 
             const toolResults = await executeToolCalls(
-                toolCalls.map((toolCall) => ({
-                    id: toolCall.id,
-                    name: toolCall.function?.name,
-                    args: parseToolArguments(toolCall.function?.arguments)
-                })),
-                (toolStatus) => onStatusUpdate(`第 ${round + 1} 輪：正在執行工具 ${formatToolDisplayName(toolStatus.name)} (${toolStatus.index}/${toolStatus.total})...`)
+                parsedToolCalls,
+                (toolStatus) => reportStatus(formatRoundStatus(round, `正在執行工具 ${formatToolDisplayName(toolStatus.name)} (${toolStatus.index}/${toolStatus.total})...`))
             );
 
             previousToolSummary = buildToolExecutionSummary(toolResults);
             const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
-            onStatusUpdate(`第 ${round + 1} 輪：已執行工具 ${toolNames}，正在把結果交回模型...`);
+            onTrace({ type: 'tool-result', round, toolResults });
+            reportStatus(formatRoundStatus(round, `已執行工具 ${toolNames}，正在把結果交回模型...`));
 
             toolResults.forEach((toolResult) => {
                 messages.push({
@@ -3019,12 +4087,20 @@ async function createDialog() {
         question,
         capturedSelectedText = '',
         screenshotDataUrl = null,
-        onStatusUpdate = () => {}
+        enableTools = true,
+        onStatusUpdate = () => {},
+        onTrace = () => {}
     }) {
         const pageConversationContext = await preparePageConversationContext(capturedSelectedText, !!screenshotDataUrl);
         console.log('[AskPage] Gemini context mode:', pageConversationContext.contextMode);
         console.log('[AskPage] Conversation history messages:', conversationHistory.length);
         let previousToolSummary = '';
+        let maxOutputTokens = GEMINI_INITIAL_MAX_OUTPUT_TOKENS;
+        let emptyResponseRetryCount = 0;
+        const reportStatus = (status) => {
+            onStatusUpdate(status);
+            onTrace({ type: 'status', text: status });
+        };
 
         const userParts = [{
             text: `${pageConversationContext.conversationContextText}${buildConversationHistoryTranscript()}\n\nCurrent question:\n${question}`
@@ -3046,56 +4122,112 @@ async function createDialog() {
 
         for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round++) {
             const roundPrefix = previousToolSummary ? `${previousToolSummary}，` : '';
-            onStatusUpdate(`第 ${round + 1} / ${MAX_TOOL_CALL_ROUNDS} 輪：${roundPrefix}正在請 Gemini 分析頁面並決定下一個工具...`);
+            reportStatus(formatRoundStatus(
+                round,
+                enableTools
+                    ? `${roundPrefix}正在請 Gemini 規劃任務...`
+                    : '正在請 Gemini 分析頁面並回答問題...'
+            ));
             const requestBody = {
                 systemInstruction: {
                     parts: [{ text: pageConversationContext.systemPrompt }]
                 },
                 contents,
-                tools: getGeminiToolDefinitions(),
-                generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens: 2048 }
+                generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens }
             };
-
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                throw createHttpError(response.status, response.statusText, errorBody);
+            if (enableTools) {
+                requestBody.tools = getGeminiToolDefinitions();
             }
 
-            const responseData = await response.json();
-            const responseContent = responseData.candidates?.[0]?.content;
+            const responseData = await fetchJsonWithRetry({
+                providerLabel: 'Gemini',
+                url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
+                options: {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                },
+                buildHttpError: (response, errorBody) => {
+                    const retryAfterMs = getRetryAfterMilliseconds(response);
+                    if (response.status === 401) {
+                        return createHttpError(response.status, response.statusText, errorBody, '無效的 Gemini API Key，請檢查您的 Gemini API Key 設定。', { retryAfterMs });
+                    }
+                    if (response.status === 403) {
+                        return createHttpError(response.status, response.statusText, errorBody, 'Gemini 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
+                    }
+                    if (response.status === 404) {
+                        return createHttpError(response.status, response.statusText, errorBody, '找不到指定的 Gemini 模型，請檢查模型設定。', { retryAfterMs });
+                    }
+                    if (response.status === 429) {
+                        return createHttpError(response.status, response.statusText, errorBody, 'Gemini 服務目前忙碌或請求頻率過高，請稍後再試。', { retryAfterMs });
+                    }
+                    if (response.status >= 500) {
+                        return createHttpError(response.status, response.statusText, errorBody, 'Gemini 服務暫時不可用，請稍後再試。', { retryAfterMs });
+                    }
+                    return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
+                },
+                onRetry: (retryInfo) => reportStatus(formatRoundStatus(
+                    round,
+                    `Gemini ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
+                ))
+            });
+            const responseCandidate = getGeminiPrimaryCandidate(responseData);
+            const responseContent = responseCandidate?.content;
             const parts = responseContent?.parts || [];
+            const textResponse = getGeminiTextFromParts(parts);
             const functionCalls = parts
                 .filter((part) => part.functionCall)
                 .map((part) => part.functionCall);
 
+            if (!functionCalls.length && !textResponse) {
+                logDiagnostic('warn', 'Gemini returned an empty non-text response.', {
+                    responseId: responseData?.responseId || null,
+                    modelVersion: responseData?.modelVersion || null,
+                    promptBlockReason: responseData?.promptFeedback?.blockReason || null,
+                    finishReason: responseCandidate?.finishReason || null,
+                    finishMessage: responseCandidate?.finishMessage || null,
+                    usageMetadata: responseData?.usageMetadata || null
+                });
+
+                if (emptyResponseRetryCount < GEMINI_EMPTY_RESPONSE_RETRY_LIMIT && isGeminiRetriableEmptyResponse(responseData)) {
+                    emptyResponseRetryCount++;
+                    maxOutputTokens = Math.max(maxOutputTokens, GEMINI_RETRY_MAX_OUTPUT_TOKENS);
+                    reportStatus(
+                        responseCandidate?.finishReason === 'MAX_TOKENS'
+                            ? 'Gemini 回傳內容為空且疑似達到輸出上限，正在放寬輸出限制後自動重試一次...'
+                            : 'Gemini 回傳內容為空，正在自動重試一次...'
+                    );
+                    continue;
+                }
+
+                throw new Error(buildGeminiEmptyResponseMessage(responseData));
+            }
+
             if (!functionCalls.length) {
-                onStatusUpdate('已取得最終回覆，正在整理答案...');
-                return parts.map((part) => part.text || '').join('') || '未取得回應';
+                reportStatus('已取得最終回覆，正在整理答案...');
+                return textResponse;
             }
 
             contents.push(responseContent);
 
             const requestedToolNames = formatToolNameList(functionCalls.map((functionCall) => functionCall.name));
-            onStatusUpdate(`第 ${round + 1} 輪：Gemini 已選擇工具 ${requestedToolNames}，準備執行...`);
+            const parsedToolCalls = functionCalls.map((functionCall) => ({
+                id: functionCall.id,
+                name: functionCall.name,
+                args: functionCall.args || {}
+            }));
+            reportStatus(formatRoundStatus(round, `Gemini 已選擇工具 ${requestedToolNames}，準備執行...`));
+            onTrace({ type: 'tool-call', round, toolCalls: parsedToolCalls });
 
             const toolResults = await executeToolCalls(
-                functionCalls.map((functionCall) => ({
-                    id: functionCall.id,
-                    name: functionCall.name,
-                    args: functionCall.args || {}
-                })),
-                (toolStatus) => onStatusUpdate(`第 ${round + 1} 輪：正在執行工具 ${formatToolDisplayName(toolStatus.name)} (${toolStatus.index}/${toolStatus.total})...`)
+                parsedToolCalls,
+                (toolStatus) => reportStatus(formatRoundStatus(round, `正在執行工具 ${formatToolDisplayName(toolStatus.name)} (${toolStatus.index}/${toolStatus.total})...`))
             );
 
             previousToolSummary = buildToolExecutionSummary(toolResults);
             const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
-            onStatusUpdate(`第 ${round + 1} 輪：已執行工具 ${toolNames}，正在把結果交回 Gemini...`);
+            onTrace({ type: 'tool-result', round, toolResults });
+            reportStatus(formatRoundStatus(round, `已執行工具 ${toolNames}，正在把結果交回 Gemini...`));
 
             contents.push({
                 role: 'user',
@@ -3112,7 +4244,7 @@ async function createDialog() {
         throw new Error('Gemini 工具呼叫輪數已達上限，已中止以避免無限循環。');
     }
 
-    async function askGemini(question, capturedSelectedText = '', displayedQuestion = question) {
+    async function askGemini(question, capturedSelectedText = '') {
         console.log('[AskPage] ===== GEMINI API CALL STARTED =====');
         console.log('[AskPage] Question:', question);
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
@@ -3124,7 +4256,7 @@ async function createDialog() {
         console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
 
         if (!encryptedApiKey) {
-            appendErrorMessageAndStore(question, displayedQuestion, '請點擊擴充功能圖示設定您的 Gemini API Key。');
+            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 Gemini API Key。');
             return;
         }
 
@@ -3133,14 +4265,16 @@ async function createDialog() {
         console.log('[AskPage] API key preview:', maskApiKey(apiKey));
 
         if (!apiKey) {
-            appendErrorMessageAndStore(question, displayedQuestion, '無法解密 Gemini API Key，請重新設定。');
+            appendErrorMessageAndStore('無法解密 Gemini API Key，請重新設定。');
             return;
         }
 
-        const progressMessage = createProgressMessage('正在準備 Gemini 工具調用...');
+        const traceReporter = createExecutionTraceReporter();
+        const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
+        const agentModeEnabled = await getAgentModeEnabled();
         const screenshotEnabled = await getScreenshotEnabled();
-        updateProgressMessage(progressMessage, screenshotEnabled ? '正在擷取畫面與整理頁面上下文...' : '正在整理頁面上下文...');
+        handleStatusUpdate(screenshotEnabled ? '正在擷取畫面與整理頁面上下文...' : '正在整理頁面上下文...');
         const screenshotDataUrl = screenshotEnabled ? await captureViewportScreenshot() : null;
 
         try {
@@ -3150,50 +4284,68 @@ async function createDialog() {
                 question,
                 capturedSelectedText,
                 screenshotDataUrl,
-                onStatusUpdate: (status) => updateProgressMessage(progressMessage, status)
+                enableTools: agentModeEnabled,
+                onStatusUpdate: handleStatusUpdate,
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'Gemini', traceEvent)
             });
 
-            removeProgressMessage(progressMessage);
-            appendMessage('assistant', answer);
+            appendPersistentMessage('assistant', answer);
             conversationSelectedText = capturedSelectedText;
-            addConversationTurn('user', question, displayedQuestion);
-            addConversationTurn('assistant', answer);
+            traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
             console.error('[AskPage] Gemini API call failed:', error);
-            const errorMessage = `錯誤: ${error.message}`;
-            removeProgressMessage(progressMessage);
-            appendErrorMessageAndStore(question, displayedQuestion, errorMessage);
+            const errorMessage = `錯誤: ${error.userMessage || error.message}`;
+            appendErrorMessageAndStore(errorMessage);
+            traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats(), errorMessage));
         }
     }
 
-    async function askOpenAI(question, capturedSelectedText = '', displayedQuestion = question) {
+    async function askOpenAI(question, capturedSelectedText = '') {
         console.log('[AskPage] ===== OPENAI API CALL STARTED =====');
         const encryptedApiKey = await getValue(OPENAI_API_KEY_STORAGE, '');
         const selectedModel = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
 
         if (!encryptedApiKey) {
-            appendErrorMessageAndStore(question, displayedQuestion, '請點擊擴充功能圖示設定您的 OpenAI API Key。');
+            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 OpenAI API Key。');
             return;
         }
 
         const apiKey = await decryptApiKey(encryptedApiKey);
         if (!apiKey) {
-            appendErrorMessageAndStore(question, displayedQuestion, '無法解密 OpenAI API Key，請重新設定。');
+            appendErrorMessageAndStore('無法解密 OpenAI API Key，請重新設定。');
             return;
         }
 
-        const progressMessage = createProgressMessage('正在準備 OpenAI 工具調用...');
+        const traceReporter = createExecutionTraceReporter();
+        const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
         const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
-        updateProgressMessage(progressMessage, '正在整理頁面上下文...');
-        const usesMaxCompletionTokens = selectedModel.startsWith('gpt-5') || selectedModel.startsWith('o3') || selectedModel.startsWith('o4');
-        const supportsTemperature = !(selectedModel.startsWith('gpt-5') || selectedModel.startsWith('o3') || selectedModel.startsWith('o4'));
+        const agentModeEnabled = await getAgentModeEnabled();
+        handleStatusUpdate('正在整理頁面上下文...');
+        const normalizedSelectedModel = normalizeModelIdentifier(selectedModel);
+        const usesMaxCompletionTokens = normalizedSelectedModel.startsWith('gpt-5') || normalizedSelectedModel.startsWith('o3') || normalizedSelectedModel.startsWith('o4');
+        const supportsTemperature = !(normalizedSelectedModel.startsWith('gpt-5') || normalizedSelectedModel.startsWith('o3') || normalizedSelectedModel.startsWith('o4'));
+        const maxOutputTokens = getOpenAIStyleMaxOutputTokens(selectedModel);
+        const useResponsesApi = shouldUseResponsesApi(selectedModel);
+        console.log('[AskPage] OpenAI max output tokens:', maxOutputTokens, 'model:', selectedModel, 'responses_api:', useResponsesApi, 'reasoning_effort:', isGpt5FamilyModel(selectedModel) ? 'medium' : 'default');
 
         try {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: 'OpenAI',
                 initialMessages: buildTextProviderMessages(pageConversationContext, question),
-                buildRequestBody: (messages, useTools) => {
+                initialUseTools: agentModeEnabled,
+                initialMaxOutputTokens: maxOutputTokens,
+                retryMaxOutputTokens: maxOutputTokens,
+                buildRequestBody: (messages, useTools, maxOutputTokens) => {
+                    if (useResponsesApi) {
+                        return buildResponsesApiRequestBody(messages, {
+                            model: selectedModel,
+                            maxOutputTokens,
+                            useTools,
+                            reasoningEffort: isGpt5FamilyModel(selectedModel) ? 'medium' : ''
+                        });
+                    }
+
                     const requestBody = {
                         model: selectedModel,
                         messages
@@ -3204,9 +4356,13 @@ async function createDialog() {
                     }
 
                     if (usesMaxCompletionTokens) {
-                        requestBody.max_completion_tokens = 2048;
+                        requestBody.max_completion_tokens = maxOutputTokens;
                     } else {
-                        requestBody.max_tokens = 2048;
+                        requestBody.max_tokens = maxOutputTokens;
+                    }
+
+                    if (isGpt5FamilyModel(selectedModel)) {
+                        requestBody.reasoning_effort = 'medium';
                     }
 
                     if (useTools) {
@@ -3215,49 +4371,57 @@ async function createDialog() {
 
                     return requestBody;
                 },
-                sendRequest: async (requestBody) => {
-                    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`
+                sendRequest: async (requestBody, onRetry) => {
+                    return await fetchJsonWithRetry({
+                        providerLabel: 'OpenAI',
+                        url: useResponsesApi ? 'https://api.openai.com/v1/responses' : 'https://api.openai.com/v1/chat/completions',
+                        options: {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${apiKey}`
+                            },
+                            body: JSON.stringify(requestBody)
                         },
-                        body: JSON.stringify(requestBody)
+                        buildHttpError: (response, errorBody) => {
+                            const retryAfterMs = getRetryAfterMilliseconds(response);
+                            if (response.status === 401) {
+                                return createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 OpenAI API Key 設定。', { retryAfterMs });
+                            }
+                            if (response.status === 403) {
+                                return createHttpError(response.status, response.statusText, errorBody, 'OpenAI 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
+                            }
+                            if (response.status === 404) {
+                                return createHttpError(response.status, response.statusText, errorBody, '找不到指定的 OpenAI 模型，請檢查模型設定。', { retryAfterMs });
+                            }
+                            if (response.status === 429) {
+                                return createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。', { retryAfterMs });
+                            }
+                            if (response.status >= 500) {
+                                return createHttpError(response.status, response.statusText, errorBody, 'OpenAI 服務暫時不可用，請稍後再試。', { retryAfterMs });
+                            }
+                            return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
+                        },
+                        onRetry,
+                        transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined
                     });
-
-                    if (!response.ok) {
-                        const errorBody = await response.text();
-                        if (response.status === 401) {
-                            throw createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 OpenAI API Key 設定。');
-                        }
-                        if (response.status === 429) {
-                            throw createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。');
-                        }
-                        if (response.status >= 500) {
-                            throw createHttpError(response.status, response.statusText, errorBody, 'OpenAI 服務暫時不可用，請稍後再試。');
-                        }
-                        throw createHttpError(response.status, response.statusText, errorBody);
-                    }
-
-                    return await response.json();
                 },
-                onStatusUpdate: (status) => updateProgressMessage(progressMessage, status)
+                onStatusUpdate: handleStatusUpdate,
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'OpenAI', traceEvent)
             });
 
-            removeProgressMessage(progressMessage);
-            appendMessage('assistant', answer.answer);
+            appendPersistentMessage('assistant', answer.answer);
             conversationSelectedText = capturedSelectedText;
-            addConversationTurn('user', question, displayedQuestion);
-            addConversationTurn('assistant', answer.answer);
+            traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
             console.error('[AskPage] OpenAI API call failed:', error);
-            const errorMessage = `錯誤: ${error.message}`;
-            removeProgressMessage(progressMessage);
-            appendErrorMessageAndStore(question, displayedQuestion, errorMessage);
+            const errorMessage = `錯誤: ${error.userMessage || error.message}`;
+            appendErrorMessageAndStore(errorMessage);
+            traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats(), errorMessage));
         }
     }
 
-    async function askAzureOpenAI(question, capturedSelectedText = '', displayedQuestion = question) {
+    async function askAzureOpenAI(question, capturedSelectedText = '') {
         console.log('[AskPage] ===== AZURE OPENAI API CALL STARTED =====');
         const encryptedApiKey = await getValue(AZURE_OPENAI_API_KEY_STORAGE, '');
         const endpoint = await getValue(AZURE_OPENAI_ENDPOINT_STORAGE, '');
@@ -3265,48 +4429,72 @@ async function createDialog() {
         const apiVersion = await getValue(AZURE_OPENAI_API_VERSION_STORAGE, '2024-10-21');
 
         if (!encryptedApiKey) {
-            appendErrorMessageAndStore(question, displayedQuestion, '請點擊擴充功能圖示設定您的 Azure OpenAI API Key。');
+            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 Azure OpenAI API Key。');
             return;
         }
 
         if (!endpoint) {
-            appendErrorMessageAndStore(question, displayedQuestion, '請點擊擴充功能圖示設定您的 Azure OpenAI Endpoint。');
+            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 Azure OpenAI Endpoint。');
             return;
         }
 
         if (!deployment) {
-            appendErrorMessageAndStore(question, displayedQuestion, '請點擊擴充功能圖示設定您的 Azure OpenAI Deployment Name。');
+            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 Azure OpenAI Deployment Name。');
             return;
         }
 
         const apiKey = await decryptApiKey(encryptedApiKey);
         if (!apiKey) {
-            appendErrorMessageAndStore(question, displayedQuestion, '無法解密 Azure OpenAI API Key，請重新設定。');
+            appendErrorMessageAndStore('無法解密 Azure OpenAI API Key，請重新設定。');
             return;
         }
 
-        const progressMessage = createProgressMessage('正在準備 Azure OpenAI 工具調用...');
+        const traceReporter = createExecutionTraceReporter();
+        const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
         const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
-        updateProgressMessage(progressMessage, '正在整理頁面上下文...');
-        const isGpt5Model = deployment.startsWith('gpt-5');
+        const agentModeEnabled = await getAgentModeEnabled();
+        handleStatusUpdate('正在整理頁面上下文...');
+        const isGpt5Model = isGpt5FamilyModel(deployment);
+        const maxOutputTokens = getOpenAIStyleMaxOutputTokens(deployment);
+        const useResponsesApi = shouldUseResponsesApi(deployment);
+        const azureApiVersionForRequest = useResponsesApi ? getAzureResponsesApiVersion(apiVersion) : apiVersion;
+        console.log('[AskPage] Azure OpenAI max output tokens:', maxOutputTokens, 'deployment:', deployment, 'responses_api:', useResponsesApi, 'reasoning_effort:', isGpt5Model ? 'medium' : 'default');
         const azureEndpoint = endpoint.trim().replace(/\/$/, '');
-        const apiUrl = `${azureEndpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
+        const apiUrl = useResponsesApi
+            ? `${azureEndpoint}/openai/v1/responses?api-version=${azureApiVersionForRequest}`
+            : `${azureEndpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
 
         try {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: 'Azure OpenAI',
                 initialMessages: buildTextProviderMessages(pageConversationContext, question),
-                buildRequestBody: (messages, useTools) => {
+                initialUseTools: agentModeEnabled,
+                initialMaxOutputTokens: maxOutputTokens,
+                retryMaxOutputTokens: maxOutputTokens,
+                buildRequestBody: (messages, useTools, maxOutputTokens) => {
+                    if (useResponsesApi) {
+                        return buildResponsesApiRequestBody(messages, {
+                            model: deployment,
+                            maxOutputTokens,
+                            useTools,
+                            reasoningEffort: isGpt5Model ? 'medium' : ''
+                        });
+                    }
+
                     const requestBody = { messages };
                     if (!isGpt5Model) {
                         requestBody.temperature = 0.7;
                     }
 
                     if (isGpt5Model) {
-                        requestBody.max_completion_tokens = 2048;
+                        requestBody.max_completion_tokens = maxOutputTokens;
                     } else {
-                        requestBody.max_tokens = 2048;
+                        requestBody.max_tokens = maxOutputTokens;
+                    }
+
+                    if (isGpt5Model) {
+                        requestBody.reasoning_effort = 'medium';
                     }
 
                     if (useTools) {
@@ -3315,52 +4503,57 @@ async function createDialog() {
 
                     return requestBody;
                 },
-                sendRequest: async (requestBody) => {
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'api-key': apiKey
+                sendRequest: async (requestBody, onRetry) => {
+                    return await fetchJsonWithRetry({
+                        providerLabel: 'Azure OpenAI',
+                        url: apiUrl,
+                        options: {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'api-key': apiKey
+                            },
+                            body: JSON.stringify(requestBody)
                         },
-                        body: JSON.stringify(requestBody)
+                        buildHttpError: (response, errorBody) => {
+                            const retryAfterMs = getRetryAfterMilliseconds(response);
+                            if (response.status === 401) {
+                                return createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 Azure OpenAI API Key 設定。', { retryAfterMs });
+                            }
+                            if (response.status === 403) {
+                                return createHttpError(response.status, response.statusText, errorBody, 'Azure OpenAI 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
+                            }
+                            if (response.status === 404) {
+                                return createHttpError(response.status, response.statusText, errorBody, '找不到指定的部署，請檢查您的 Endpoint 和 Deployment Name 設定。', { retryAfterMs });
+                            }
+                            if (response.status === 429) {
+                                return createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。', { retryAfterMs });
+                            }
+                            if (response.status >= 500) {
+                                return createHttpError(response.status, response.statusText, errorBody, 'Azure OpenAI 服務暫時不可用，請稍後再試。', { retryAfterMs });
+                            }
+                            return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
+                        },
+                        onRetry,
+                        transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined
                     });
-
-                    if (!response.ok) {
-                        const errorBody = await response.text();
-                        if (response.status === 401) {
-                            throw createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 Azure OpenAI API Key 設定。');
-                        }
-                        if (response.status === 404) {
-                            throw createHttpError(response.status, response.statusText, errorBody, '找不到指定的部署，請檢查您的 Endpoint 和 Deployment Name 設定。');
-                        }
-                        if (response.status === 429) {
-                            throw createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。');
-                        }
-                        if (response.status >= 500) {
-                            throw createHttpError(response.status, response.statusText, errorBody, 'Azure OpenAI 服務暫時不可用，請稍後再試。');
-                        }
-                        throw createHttpError(response.status, response.statusText, errorBody);
-                    }
-
-                    return await response.json();
                 },
-                onStatusUpdate: (status) => updateProgressMessage(progressMessage, status)
+                onStatusUpdate: handleStatusUpdate,
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'Azure OpenAI', traceEvent)
             });
 
-            removeProgressMessage(progressMessage);
-            appendMessage('assistant', answer.answer);
+            appendPersistentMessage('assistant', answer.answer);
             conversationSelectedText = capturedSelectedText;
-            addConversationTurn('user', question, displayedQuestion);
-            addConversationTurn('assistant', answer.answer);
+            traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
             console.error('[AskPage] Azure OpenAI API call failed:', error);
-            const errorMessage = `錯誤: ${error.message}`;
-            removeProgressMessage(progressMessage);
-            appendErrorMessageAndStore(question, displayedQuestion, errorMessage);
+            const errorMessage = `錯誤: ${error.userMessage || error.message}`;
+            appendErrorMessageAndStore(errorMessage);
+            traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats(), errorMessage));
         }
     }
 
-    async function askOpenAICompatible(question, capturedSelectedText = '', displayedQuestion = question) {
+    async function askOpenAICompatible(question, capturedSelectedText = '') {
         console.log('[AskPage] ===== OPENAI COMPATIBLE API CALL STARTED =====');
         const encryptedApiKey = await getValue(OPENAI_COMPATIBLE_API_KEY_STORAGE, '');
         const endpoint = await getValue(OPENAI_COMPATIBLE_ENDPOINT_STORAGE, 'http://localhost:11434/v1');
@@ -3371,21 +4564,42 @@ async function createDialog() {
             apiKey = await decryptApiKey(encryptedApiKey);
         }
 
-        const progressMessage = createProgressMessage('正在準備 OpenAI Compatible 工具調用...');
+        const traceReporter = createExecutionTraceReporter();
+        const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
         const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
-        updateProgressMessage(progressMessage, '正在整理頁面上下文...');
+        const agentModeEnabled = await getAgentModeEnabled();
+        handleStatusUpdate('正在整理頁面上下文...');
         const cleanEndpoint = endpoint.replace(/\/$/, '');
-        const url = cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`;
+        const useResponsesApi = shouldUseResponsesApi(selectedModel);
+        const baseEndpoint = cleanEndpoint.replace(/\/(chat\/completions|responses)$/, '');
+        const url = useResponsesApi
+            ? `${baseEndpoint}/responses`
+            : (cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`);
+        const maxOutputTokens = getOpenAIStyleMaxOutputTokens(selectedModel);
+        console.log('[AskPage] OpenAI Compatible max output tokens:', maxOutputTokens, 'model:', selectedModel || '(unspecified)', 'responses_api:', useResponsesApi);
 
         try {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: 'OpenAI Compatible',
                 initialMessages: buildTextProviderMessages(pageConversationContext, question),
-                buildRequestBody: (messages, useTools) => {
+                initialUseTools: agentModeEnabled,
+                initialMaxOutputTokens: maxOutputTokens,
+                retryMaxOutputTokens: maxOutputTokens,
+                buildRequestBody: (messages, useTools, maxOutputTokens) => {
+                    if (useResponsesApi) {
+                        return buildResponsesApiRequestBody(messages, {
+                            model: selectedModel,
+                            maxOutputTokens,
+                            useTools,
+                            reasoningEffort: isGpt5FamilyModel(selectedModel) ? 'medium' : ''
+                        });
+                    }
+
                     const requestBody = {
                         messages,
-                        temperature: 0.7
+                        temperature: 0.7,
+                        max_tokens: maxOutputTokens
                     };
 
                     if (selectedModel) {
@@ -3398,7 +4612,7 @@ async function createDialog() {
 
                     return requestBody;
                 },
-                sendRequest: async (requestBody) => {
+                sendRequest: async (requestBody, onRetry) => {
                     const headers = {
                         'Content-Type': 'application/json'
                     };
@@ -3406,51 +4620,56 @@ async function createDialog() {
                         headers.Authorization = `Bearer ${apiKey}`;
                     }
 
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify(requestBody)
+                    return await fetchJsonWithRetry({
+                        providerLabel: 'OpenAI Compatible',
+                        url,
+                        options: {
+                            method: 'POST',
+                            headers,
+                            body: JSON.stringify(requestBody)
+                        },
+                        buildHttpError: (response, errorBody) => createHttpError(
+                            response.status,
+                            response.statusText,
+                            errorBody,
+                            undefined,
+                            { retryAfterMs: getRetryAfterMilliseconds(response) }
+                        ),
+                        onRetry,
+                        transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined
                     });
-
-                    if (!response.ok) {
-                        const errorBody = await response.text();
-                        throw createHttpError(response.status, response.statusText, errorBody);
-                    }
-
-                    return await response.json();
                 },
                 allowToolFallback: true,
-                onStatusUpdate: (status) => updateProgressMessage(progressMessage, status)
+                onStatusUpdate: handleStatusUpdate,
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'OpenAI Compatible', traceEvent)
             });
 
-            removeProgressMessage(progressMessage);
             const finalAnswer = answer.fallbackUsed
                 ? `⚠️ **目前這個 OpenAI Compatible 端點未完整支援 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n${answer.answer}`
                 : answer.answer;
-            appendMessage('assistant', finalAnswer);
+            appendPersistentMessage('assistant', finalAnswer);
             conversationSelectedText = capturedSelectedText;
-            addConversationTurn('user', question, displayedQuestion);
-            addConversationTurn('assistant', finalAnswer);
+            traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
             console.error('[AskPage] OpenAI Compatible API call failed:', error);
-            const errorMessage = `錯誤: ${error.message}`;
-            removeProgressMessage(progressMessage);
-            appendErrorMessageAndStore(question, displayedQuestion, errorMessage);
+            const errorMessage = `錯誤: ${error.userMessage || error.message}`;
+            appendErrorMessageAndStore(errorMessage);
+            traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats(), errorMessage));
         }
     }
 
-    async function askAI(question, capturedSelectedText = '', displayedQuestion = question) {
+    async function askAI(question, capturedSelectedText = '') {
         const provider = await getValue(PROVIDER_STORAGE, 'gemini');
         console.log('[AskPage] Using provider:', provider);
 
         if (provider === 'openai') {
-            await askOpenAI(question, capturedSelectedText, displayedQuestion);
+            await askOpenAI(question, capturedSelectedText);
         } else if (provider === 'azure') {
-            await askAzureOpenAI(question, capturedSelectedText, displayedQuestion);
+            await askAzureOpenAI(question, capturedSelectedText);
         } else if (provider === 'openai-compatible') {
-            await askOpenAICompatible(question, capturedSelectedText, displayedQuestion);
+            await askOpenAICompatible(question, capturedSelectedText);
         } else {
-            await askGemini(question, capturedSelectedText, displayedQuestion);
+            await askGemini(question, capturedSelectedText);
         }
     }
 }

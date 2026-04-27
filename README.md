@@ -55,31 +55,27 @@
 
 - `幫我翻譯選取範圍`：模型可先讀取目前選取內容，再把翻譯結果回填到選取範圍
 - `幫我將所有欄位寫入假資料`：模型可先檢查表單欄位，再逐一填入假資料
-- `幫我點擊送出按鈕`：模型可根據 selector 或按鈕文字找到可點擊元素
-- `幫我執行一段 JavaScript 找出所有必填欄位`：模型可直接呼叫 `run_javascript` 在目前頁面主世界執行程式碼
+- `幫我點擊送出按鈕`：模型可直接呼叫 `run_js` 尋找並點擊目標元素
+- `幫我執行一段 JavaScript 找出所有必填欄位`：模型可直接呼叫 `run_js` 在目前頁面主世界執行程式碼
 
 目前內建的頁面工具包括：
 
-- `get_page_title`
 - `inspect_selection`
 - `inspect_form_fields`
 - `fill_form_fields`
-- `replace_dom_content`
-- `get_element_content`
-- `click_element`
-- `run_javascript`
+- `run_js`
 
 > [!NOTE]
 > AskPage 會在多步驟工具調用期間即時顯示目前輪次、模型選擇的工具名稱，以及正在執行的工具，不再只顯示 `...thinking...`。變更型工具會直接執行，若失敗則錯誤會回傳給模型繼續處理。
 >
-> `run_javascript` 會透過 `chrome.scripting.executeScript(..., { world: 'MAIN' })` 在頁面主世界執行，因此通常不受網站自身 CSP 限制，也能直接存取頁面腳本建立的全域變數與函式；但在瀏覽器受限頁面、不可注入的框架或無法序列化的返回值情況下，仍可能失敗。
+> `run_js` 會透過 `chrome.scripting.executeScript(..., { world: 'MAIN' })` 在頁面主世界執行，因此通常不受網站自身 CSP 限制，也能直接存取頁面腳本建立的全域變數與函式；但在瀏覽器受限頁面、不可注入的框架或無法序列化的返回值情況下，仍可能失敗。
 
 ### 內建指令
 
 - `/clear` - 清除提問歷史記錄
 - `/summary` - 總結整個頁面內容（可在設定中自訂提示語）
 - `/screenshot` - 切換截圖功能狀態
-- `/html` - 切換 HTML 模式；啟用後會改用頁面 HTML 內容作為分析上下文
+- `/html` - 切換詢問模式 / 代理模式；代理模式會改用頁面 HTML 並允許工具調用
 
 ### 自訂斜線命令
 

@@ -1,14 +1,19 @@
 /* --------------------------------------------------
     Q&A 對話框樣式
-    使用 CSS 隔離避免影響宿主頁面樣式
+    透過 Shadow DOM 避免影響宿主頁面樣式
 -------------------------------------------------- */
+:host {
+  color: #000;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+  line-height: 1.5;
+}
+:host, :host * {
+  box-sizing: border-box;
+}
 #gemini-qna-overlay {
-  /* CSS 重置 - 隔離擴充功能樣式，避免被宿主頁面影響 */
-  all: initial;
-  /* 重新設定必要的樣式 */
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -18,27 +23,147 @@
   font-size: 16px;
   line-height: 1.5;
   color: #000;
+  isolation: isolate;
+  contain: layout style paint;
+  overscroll-behavior: contain;
 }
 
 /* 明亮主題作為預設 (Light Theme as Default) */
 #gemini-qna-dialog {
   /* CSS 重置 - 確保對話框不受宿主頁面樣式影響 */
-  all: initial;
   /* 重新設定對話框樣式 */
   width: min(700px, 92%);
   max-height: 85vh;
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   box-sizing: border-box;
+  isolation: isolate;
+  contain: layout style paint;
+  opacity: 1;
+  transition: opacity 0.18s ease;
+}
+#gemini-qna-dialog[data-askpage-dimmed="true"] {
+  opacity: 0.1;
+}
+#provider-header {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #f8fbff;
+  border-bottom: 1px solid #dbe5f1;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+  cursor: move;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#provider-header[data-askpage-dragging="true"] {
+  cursor: grabbing !important;
+}
+.askpage-header-info {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+  cursor: move;
+}
+.askpage-provider-display {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+}
+.askpage-provider-name {
+  box-sizing: border-box;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #1f2937;
+}
+.askpage-provider-model {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid #d7e3f5;
+  background: #ffffff;
+  color: #586a84;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.askpage-header-actions {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 1 auto;
+}
+.askpage-toolbar-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+.askpage-toolbar-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1) !important;
+}
+.askpage-toolbar-btn:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
+.askpage-toolbar-btn-options {
+  padding-left: 10px;
+  padding-right: 10px;
 }
 #gemini-qna-messages {
   /* 確保不繼承宿主頁面的樣式 */
-  all: initial;
   /* 重新設定訊息區域樣式 */
   flex: 1 1 auto;
   padding: 20px;
@@ -53,7 +178,6 @@
   display: block;
 }
 #gemini-qna-messages .gemini-msg-user {
-  all: initial;
   display: block;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   font-weight: 600;
@@ -70,7 +194,6 @@
   line-height: 1.6;
 }
 #gemini-qna-messages .gemini-msg-assistant {
-  all: initial;
   display: block;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   position: relative;
@@ -88,8 +211,135 @@
   font-size: 15px;
   line-height: 1.6;
 }
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace {
+  color: #1f2a60;
+  box-shadow: none;
+}
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-status {
+  margin-bottom: 8px;
+  padding: 4px 2px;
+  background: transparent;
+  border: none;
+  border-left: none;
+  color: #7c8cbf;
+  font-size: 14px;
+}
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-tool-call,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-tool-result,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-completion {
+  background: #f6f8ff;
+  border-color: #d7def8;
+  border-left-color: #5c6bc0;
+}
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-completion {
+  background: #eefaf1;
+  border-color: #cfead7;
+  border-left-color: #43a047;
+  color: #1b5e20;
+}
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace p,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace li {
+  color: #1f2a60;
+}
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-status p,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-status li {
+  color: #7c8cbf;
+}
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace h1,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace h2,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace h3,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace h4,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace h5,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace h6 {
+  color: #3949ab;
+}
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-completion p,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-completion li,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-completion h1,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-completion h2,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-completion h3,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-completion h4,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-completion h5,
+#gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-completion h6 {
+  color: #1b5e20;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-trace-disclosure {
+  display: block;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-trace-disclosure summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-trace-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-trace-disclosure-summary {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: inherit;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-tool-name {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  margin: 0 2px;
+  border-radius: 999px;
+  background: rgba(92, 107, 192, 0.14);
+  color: #3347b0;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-trace-expand-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 48px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(92, 107, 192, 0.12);
+  color: #3949ab;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-trace-expand-button::before {
+  content: '展開';
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-trace-disclosure[open] .askpage-trace-expand-button::before {
+  content: '收合';
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-trace-disclosure-body {
+  display: block;
+  margin-top: 10px;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+}
+#gemini-qna-messages .gemini-msg-assistant .askpage-trace-disclosure-body pre {
+  margin: 0;
+}
 #gemini-qna-messages .gemini-msg-assistant .copy-btn {
-  all: initial;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   position: absolute;
   top: 8px;
@@ -119,7 +369,6 @@
 }
 #gemini-qna-messages .gemini-msg-assistant ul,
 #gemini-qna-messages .gemini-msg-assistant ol {
-  all: initial;
   display: block;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   margin: 8px 0;
@@ -138,7 +387,6 @@
   list-style-type: decimal;
 }
 #gemini-qna-messages .gemini-msg-assistant li {
-  all: initial;
   display: list-item;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   margin-bottom: 4px;
@@ -154,7 +402,6 @@
 #gemini-qna-messages .gemini-msg-assistant h4,
 #gemini-qna-messages .gemini-msg-assistant h5,
 #gemini-qna-messages .gemini-msg-assistant h6 {
-  all: initial;
   display: block;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   margin: 12px 0 8px 0;
@@ -170,7 +417,6 @@
 #gemini-qna-messages .gemini-msg-assistant h5 { font-size: 0.83em; }
 #gemini-qna-messages .gemini-msg-assistant h6 { font-size: 0.67em; }
 #gemini-qna-messages .gemini-msg-assistant p {
-  all: initial;
   display: block;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   margin: 8px 0;
@@ -181,7 +427,6 @@
   box-sizing: border-box;
 }
 #gemini-qna-messages .gemini-msg-assistant pre {
-  all: initial;
   display: block;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   background: #1e1e1e;
@@ -198,7 +443,6 @@
   white-space: pre;
 }
 #gemini-qna-messages .gemini-msg-assistant code {
-  all: initial;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   background: #f0f0f0;
   color: #d32f2f;
@@ -211,7 +455,6 @@
   display: inline;
 }
 #gemini-qna-messages .gemini-msg-assistant pre code {
-  all: initial;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   background: transparent;
   color: inherit;
@@ -225,14 +468,12 @@
   box-sizing: border-box;
 }
 #gemini-qna-messages .gemini-msg-assistant .askpage-code-block {
-  all: initial;
   display: block;
   margin: 12px 0;
   box-sizing: border-box;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
 }
 #gemini-qna-messages .gemini-msg-assistant .askpage-code-block-header {
-  all: initial;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -247,7 +488,6 @@
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
 }
 #gemini-qna-messages .gemini-msg-assistant .askpage-code-block-language {
-  all: initial;
   display: inline-block;
   color: inherit;
   font-size: 12px;
@@ -257,7 +497,6 @@
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
 }
 #gemini-qna-messages .gemini-msg-assistant .askpage-code-block-copy {
-  all: initial;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -343,7 +582,6 @@
 }
 #gemini-qna-messages .gemini-msg-assistant strong,
 #gemini-qna-messages .gemini-msg-assistant b {
-  all: initial;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   color: #000000;
   font-weight: 700;
@@ -352,7 +590,6 @@
   line-height: 1.6;
 }
 #gemini-qna-input-area {
-  all: initial;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   display: flex;
   align-items: flex-end;
@@ -361,11 +598,13 @@
   gap: 8px;
   background: #ffffff;
   box-sizing: border-box;
+  min-width: 0;
 }
 #gemini-qna-input {
-  all: initial;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
   padding: 8px 12px;
   font-size: 14px;
   border: 1px solid #ccc;
@@ -379,16 +618,17 @@
   min-height: calc(1.5em + 18px);
   max-height: calc((1.5em * 5) + 18px);
   resize: none;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 #gemini-qna-input::placeholder {
   color: #666666;
   opacity: 1;
 }
 #gemini-qna-btn {
-  all: initial;
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   padding: 8px 14px;
   font-size: 14px;
@@ -404,137 +644,3 @@
   align-self: flex-end;
 }
 
-/* 只有在暗色主題偏好時才覆蓋樣式 (Dark Theme Override Only) */
-@media (prefers-color-scheme: dark) {
-  #gemini-qna-dialog {
-    background: #1f1f1f;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  }
-  #gemini-qna-messages {
-    background: #141414;
-    color: #ffffff;
-  }
-  #gemini-qna-messages .gemini-msg-user {
-    background: #2196f3;
-    border-left: 3px solid #1976d2;
-    color: #ffffff;
-  }
-  #gemini-qna-messages .gemini-msg-assistant {
-    background: #2a2a2a;
-    border: 1px solid #404040;
-    color: #ffffff;
-    border-left: 3px solid #4caf50;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  }
-  #gemini-qna-messages .gemini-msg-assistant li {
-    color: #ffffff;
-  }
-  #gemini-qna-messages .gemini-msg-assistant h1,
-  #gemini-qna-messages .gemini-msg-assistant h2,
-  #gemini-qna-messages .gemini-msg-assistant h3,
-  #gemini-qna-messages .gemini-msg-assistant h4,
-  #gemini-qna-messages .gemini-msg-assistant h5,
-  #gemini-qna-messages .gemini-msg-assistant h6 {
-    color: #64b5f6;
-  }
-  #gemini-qna-messages .gemini-msg-assistant p {
-    color: #ffffff;
-  }
-  #gemini-qna-messages .gemini-msg-assistant pre {
-    background: #0d1117;
-    color: #f0f6fc;
-    border: 1px solid #30363d;
-  }
-  #gemini-qna-messages .gemini-msg-assistant code {
-    background: #21262d;
-    color: #ff6b6b;
-    border: 1px solid #30363d;
-  }
-  #gemini-qna-messages .gemini-msg-assistant strong,
-  #gemini-qna-messages .gemini-msg-assistant b {
-    color: #ffffff;
-  }
-  #gemini-qna-input-area {
-    background: #1f1f1f;
-    border-top: 1px solid #404040;
-  }
-  #gemini-qna-input {
-    background: #2a2a2a;
-    border: 1px solid #404040;
-    color: #ffffff;
-  }
-  #gemini-qna-input::placeholder {
-    color: #888888;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .copy-btn {
-    background: rgba(42, 42, 42, 0.95);
-    border: 1px solid #555;
-    color: #ffffff;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .copy-btn:hover {
-    background: rgba(42, 42, 42, 1);
-    border-color: #777;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .askpage-code-block-header {
-    background: #161b22;
-    color: #e6edf3;
-    border-color: #30363d;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .askpage-code-block-copy {
-    background: rgba(240, 246, 252, 0.06);
-    color: #e6edf3;
-    border-color: rgba(240, 246, 252, 0.12);
-  }
-  #gemini-qna-messages .gemini-msg-assistant .askpage-code-block-copy:hover {
-    background: rgba(240, 246, 252, 0.12);
-    border-color: rgba(240, 246, 252, 0.24);
-  }
-  #gemini-qna-messages .gemini-msg-assistant .hljs {
-    color: #f0f6fc;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .hljs-comment,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-quote {
-    color: #8b949e;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .hljs-keyword,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-selector-tag,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-type,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-built_in {
-    color: #ff7b72;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .hljs-title,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-title.class_,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-title.function_ {
-    color: #d2a8ff;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .hljs-string,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-regexp,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-attribute,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-template-tag,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-template-variable {
-    color: #a5d6ff;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .hljs-number,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-literal,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-symbol,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-bullet {
-    color: #79c0ff;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .hljs-variable,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-property,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-params {
-    color: #ffa657;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .hljs-subst {
-    color: #f0f6fc;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .hljs-meta,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-meta .hljs-keyword {
-    color: #f2cc60;
-  }
-  #gemini-qna-messages .gemini-msg-assistant .hljs-function,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-section,
-  #gemini-qna-messages .gemini-msg-assistant .hljs-tag .hljs-name {
-    color: #7ee787;
-  }
-}
