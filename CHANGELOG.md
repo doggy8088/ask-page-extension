@@ -4,6 +4,24 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.15.0] - 2026-04-27
+
+### 新增 / 改進（v0.15.0）
+
+- **新增單頁面 tool calling 機制**：AskPage 現在可讓模型透過結構化工具直接讀取或操作目前網頁，並套用到 Gemini、OpenAI、Azure OpenAI 與 OpenAI Compatible。
+  - 新增 `get_page_title`、`inspect_selection`、`inspect_form_fields`、`fill_form_fields`、`replace_dom_content`、`get_element_content`、`click_element`、`run_javascript` 八個頁面工具。
+  - 支援以 selector 與欄位文字模糊比對方式填寫文字欄位、下拉選單、核取方塊與 Radio Button，並在寫入後補送 `input` / `change` 事件。
+  - 支援將 raw HTML 直接回填到目前選取範圍；若沒有選取範圍，則可依 selector 直接取代目標元素的 `innerHTML`。
+  - 變更型工具改為直接執行，不再跳出瀏覽器確認框中斷工具流程。
+  - `run_javascript` 會透過 `chrome.scripting.executeScript(..., { world: 'MAIN' })` 在頁面主世界執行，通常可避開網站 CSP 對動態腳本的限制，也能直接存取頁面腳本建立的全域變數與函式。
+  - 多步驟工具調用會即時把目前輪次、模型選擇的工具、目前正在執行的工具，以及上一輪工具結果顯示在對話框中，不再只顯示 `...thinking...`。
+  - 工具執行失敗時，錯誤訊息會回傳給模型，且最終顯示的錯誤也會寫回對話歷史，方便使用者直接接著說 `try again`。
+  - 工具調用上限提高到 50 輪。
+  - AskPage 對話框在輸入提問時，會攔截鍵盤、輸入、貼上、拖放與組字事件，不再把事件傳回原本頁面。
+  - 修正輸入事件攔截回歸：恢復 Enter 送出、Shift+Enter 換行、Esc 關閉與 slash 指令提示，同時維持輸入事件不外洩到宿主頁面。
+  - OpenAI Compatible 採 best-effort 模式：若端點不支援 tool calling，會自動退回一般文字對話並明確提示限制。
+  - OpenAI 模型選單已補上 `gpt-5.3`、`gpt-5.4`、`gpt-5.5`，並同步更新設定頁與舊版 popup 的模型清單。
+
 ## [0.14.0] - 2026-04-25
 
 ### 修正 / 更新（v0.13.3）

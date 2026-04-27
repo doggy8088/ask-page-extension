@@ -15,6 +15,8 @@ const MAX_PAGE_TEXT_CONTEXT_LENGTH = 15000;
 const MAX_SELECTED_TEXT_CONTEXT_LENGTH = 5000;
 const MAX_HTML_CONTEXT_WITH_SELECTION_LENGTH = 15000;
 const MAX_INPUT_VISIBLE_LINES = 5;
+const MAX_FORM_FIELD_DISCOVERY = 80;
+const MAX_TOOL_CALL_ROUNDS = 50;
 const HTML_CONTEXT_NOISE_SELECTOR = 'script, style, noscript, template';
 
 // Listen for the message from the background script
@@ -592,7 +594,7 @@ function buildSystemPrompt({
         ? 'You also have a screenshot of the current viewport for additional visual context.'
         : '';
 
-    return `You are a helpful assistant that answers questions about web page content. ${pageContextDescription} ${selectedTextDescription} ${screenshotDescription} Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.`;
+    return `You are a helpful assistant that answers questions about web page content. ${pageContextDescription} ${selectedTextDescription} ${screenshotDescription} Please format your answer using Markdown when appropriate. As a default, provide responses in zh-tw unless specified otherwise. Use the available page tools whenever the user asks you to inspect or modify the current page, selected text, or form fields. Never claim that a page change succeeded unless the corresponding tool result confirms it. For non-trivial form filling, inspect the form fields first before mutating them. Do not provide any additional explanations or disclaimers unless explicitly asked. No prefix or suffix is needed for the response.`;
 }
 
 function buildConversationContextText(pageContext, capturedSelectedText = '') {
@@ -683,6 +685,9 @@ async function createDialog() {
     if (document.getElementById('gemini-qna-overlay')) { return; }
 
     const initialSelection = window.getSelection();
+    const initialSelectionRange = initialSelection.rangeCount > 0
+        ? initialSelection.getRangeAt(0).cloneRange()
+        : null;
     const capturedSelectedText = initialSelection.toString().trim();
     const modeToggleButtonBaseStyle = `
         min-height: 34px;
@@ -1071,8 +1076,42 @@ async function createDialog() {
         await appendUsagePromptMessage();
     }
 
+    const dialogInputEventTypes = [
+        'keydown',
+        'keyup',
+        'keypress',
+        'beforeinput',
+        'input',
+        'textInput',
+        'compositionstart',
+        'compositionupdate',
+        'compositionend',
+        'paste',
+        'cut',
+        'copy',
+        'drop',
+        'dragenter',
+        'dragover',
+        'dragleave',
+        'dragstart',
+        'dragend'
+    ];
+    const stopDialogInputEventPropagation = (event) => {
+        if (!overlay.isConnected || !event.target || !overlay.contains(event.target)) {
+            return;
+        }
+
+        event.stopPropagation();
+    };
+    dialogInputEventTypes.forEach((eventType) => {
+        overlay.addEventListener(eventType, stopDialogInputEventPropagation);
+    });
+
     function closeDialog() {
         hideIntelliBox();
+        dialogInputEventTypes.forEach((eventType) => {
+            overlay.removeEventListener(eventType, stopDialogInputEventPropagation);
+        });
         overlay.remove();
         isDialogVisible = false;
     }
@@ -1081,11 +1120,11 @@ async function createDialog() {
     });
     const escapeKeyListener = (e) => {
         if (e.key === 'Escape') {
+            e.preventDefault();
             closeDialog();
-            window.removeEventListener('keydown', escapeKeyListener);
         }
     };
-    window.addEventListener('keydown', escapeKeyListener);
+    overlay.addEventListener('keydown', escapeKeyListener);
 
     const promptHistory = JSON.parse(await getValue(PROMPT_HISTORY_STORAGE, '[]'));
     let historyIndex = promptHistory.length;
@@ -1467,21 +1506,55 @@ async function createDialog() {
             enhanceCodeBlocks(div);
             bindInteractiveCommandElements(div);
 
-            // 新增複製按鈕到助理訊息
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'copy-btn';
-            copyBtn.innerHTML = '📋';
-            copyBtn.title = '複製到剪貼簿';
-            copyBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                await copyTextWithFeedback(copyBtn, options.copyText || text);
-            });
-            div.appendChild(copyBtn);
+            if (!options.suppressCopyButton) {
+                // 新增複製按鈕到助理訊息
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'copy-btn';
+                copyBtn.innerHTML = '📋';
+                copyBtn.title = '複製到剪貼簿';
+                copyBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await copyTextWithFeedback(copyBtn, options.copyText || text);
+                });
+                div.appendChild(copyBtn);
+            }
         } else {
             div.textContent = '你: ' + text;
         }
         messagesEl.appendChild(div);
         messagesEl.scrollTop = messagesEl.scrollHeight;
+        return div;
+    }
+
+    function createProgressMessage(initialText = '正在思考...') {
+        const progressElement = appendMessage('assistant', `⏳ ${initialText}`, {
+            suppressCopyButton: true
+        });
+        progressElement.dataset.askpageProgress = 'true';
+        progressElement.style.opacity = '0.9';
+        return progressElement;
+    }
+
+    function updateProgressMessage(progressElement, text) {
+        if (!progressElement || !progressElement.isConnected) {
+            return;
+        }
+
+        progressElement.innerHTML = renderMarkdown(`⏳ ${text}`);
+        progressElement.style.opacity = '0.9';
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function removeProgressMessage(progressElement) {
+        if (progressElement && progressElement.parentElement) {
+            progressElement.remove();
+        }
+    }
+
+    function appendErrorMessageAndStore(question, displayedQuestion, errorMessage) {
+        appendMessage('assistant', errorMessage);
+        addConversationTurn('user', question, displayedQuestion);
+        addConversationTurn('assistant', errorMessage);
     }
 
     function appendScreenshotMessage(screenshotDataUrl) {
@@ -1575,6 +1648,1470 @@ async function createDialog() {
         messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    function createHttpError(status, statusText, body, message) {
+        const error = new Error(message || `${status} ${statusText}: ${body}`);
+        error.status = status;
+        error.statusText = statusText;
+        error.body = body;
+        return error;
+    }
+
+    function truncateToolText(value, maxLength = 400) {
+        const text = String(value || '');
+        return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+    }
+
+    function getJsonPreview(value) {
+        const text = JSON.stringify(value, null, 2);
+        return text.length > 6000 ? `${text.slice(0, 6000)}...` : text;
+    }
+
+    function escapeSelectorValue(value) {
+        const rawValue = String(value || '');
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return window.CSS.escape(rawValue);
+        }
+        return rawValue.replace(/([ !"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+    }
+
+    function buildElementSelector(element) {
+        if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+            return '';
+        }
+
+        if (element.id) {
+            return `#${escapeSelectorValue(element.id)}`;
+        }
+
+        const segments = [];
+        let current = element;
+        while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body) {
+            let segment = current.tagName.toLowerCase();
+            if (current.name) {
+                segment += `[name="${String(current.name).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`;
+            } else {
+                const siblings = Array.from(current.parentElement ? current.parentElement.children : [])
+                    .filter((sibling) => sibling.tagName === current.tagName);
+                if (siblings.length > 1) {
+                    segment += `:nth-of-type(${siblings.indexOf(current) + 1})`;
+                }
+            }
+            segments.unshift(segment);
+            current = current.parentElement;
+        }
+
+        return segments.join(' > ');
+    }
+
+    function normalizeMatchText(value) {
+        return String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, ' ')
+            .replace(/[！!？?，,。:：;；"'`~~@#$%^&*()_\-+=<>[\]{}|\\/]/g, '')
+            .trim();
+    }
+
+    function getNormalizedCompactText(value) {
+        return normalizeMatchText(value).replace(/\s+/g, '');
+    }
+
+    function getTokenOverlapScore(candidate, query) {
+        const candidateTokens = normalizeMatchText(candidate).split(' ').filter(Boolean);
+        const queryTokens = normalizeMatchText(query).split(' ').filter(Boolean);
+
+        if (!candidateTokens.length || !queryTokens.length) {
+            return 0;
+        }
+
+        const candidateTokenSet = new Set(candidateTokens);
+        const queryTokenSet = new Set(queryTokens);
+        let overlap = 0;
+        queryTokenSet.forEach((token) => {
+            if (candidateTokenSet.has(token)) {
+                overlap++;
+            }
+        });
+
+        return Math.round((overlap / Math.max(candidateTokenSet.size, queryTokenSet.size)) * 60);
+    }
+
+    function scoreMatchCandidate(candidate, query, exactScore = 100, containsScore = 76) {
+        const normalizedCandidate = normalizeMatchText(candidate);
+        const normalizedQuery = normalizeMatchText(query);
+        const compactCandidate = getNormalizedCompactText(candidate);
+        const compactQuery = getNormalizedCompactText(query);
+
+        if (!normalizedCandidate || !normalizedQuery) {
+            return 0;
+        }
+
+        if (normalizedCandidate === normalizedQuery || compactCandidate === compactQuery) {
+            return exactScore;
+        }
+
+        if (normalizedCandidate.includes(normalizedQuery) || normalizedQuery.includes(normalizedCandidate) ||
+            compactCandidate.includes(compactQuery) || compactQuery.includes(compactCandidate)) {
+            return containsScore;
+        }
+
+        return getTokenOverlapScore(candidate, query);
+    }
+
+    function isElementVisible(element) {
+        if (!element) {
+            return false;
+        }
+
+        const style = window.getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden') {
+            return false;
+        }
+
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    }
+
+    function getFieldLabels(element) {
+        const labelTexts = [];
+        const addLabel = (value) => {
+            const text = String(value || '').replace(/\s+/g, ' ').trim();
+            if (text && !labelTexts.includes(text)) {
+                labelTexts.push(text);
+            }
+        };
+
+        if (element.labels && element.labels.length > 0) {
+            Array.from(element.labels).forEach((label) => addLabel(label.innerText || label.textContent));
+        }
+
+        if (element.id) {
+            const label = document.querySelector(`label[for="${String(element.id).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`);
+            if (label) {
+                addLabel(label.innerText || label.textContent);
+            }
+        }
+
+        const closestLabel = element.closest('label');
+        if (closestLabel) {
+            addLabel(closestLabel.innerText || closestLabel.textContent);
+        }
+
+        return labelTexts;
+    }
+
+    function getNearestFieldContextText(element) {
+        const container = element.closest('[data-testid], .form-group, .form-item, .field, .control, .input-group, td, th, li, section, article, div');
+        if (!container) {
+            return '';
+        }
+
+        return truncateToolText((container.innerText || container.textContent || '').replace(/\s+/g, ' ').trim(), 180);
+    }
+
+    function setNativeProperty(element, propertyName, value) {
+        let prototype = element;
+        while (prototype) {
+            const descriptor = Object.getOwnPropertyDescriptor(prototype, propertyName);
+            if (descriptor && typeof descriptor.set === 'function') {
+                descriptor.set.call(element, value);
+                return;
+            }
+            prototype = Object.getPrototypeOf(prototype);
+        }
+
+        element[propertyName] = value;
+    }
+
+    function dispatchFieldEvents(element) {
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function coerceBooleanValue(value, defaultValue = false) {
+        if (typeof value === 'boolean') {
+            return value;
+        }
+
+        const normalized = normalizeMatchText(value);
+        if (!normalized) {
+            return defaultValue;
+        }
+
+        if (['true', '1', 'yes', 'on', 'checked', 'selected', '是', '需要', '勾選'].includes(normalized)) {
+            return true;
+        }
+
+        if (['false', '0', 'no', 'off', 'unchecked', 'unselected', '否', '不要', '取消'].includes(normalized)) {
+            return false;
+        }
+
+        return defaultValue;
+    }
+
+    function getRadioGroupInputs(input) {
+        const root = input.form || document;
+        if (!input.name) {
+            return [input];
+        }
+
+        return Array.from(root.querySelectorAll(`input[type="radio"][name="${String(input.name).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`));
+    }
+
+    function buildFieldDescriptor(element, index) {
+        const tagName = element.tagName.toLowerCase();
+        const inputType = tagName === 'input' ? (element.type || 'text').toLowerCase() : tagName;
+        const labels = getFieldLabels(element);
+        const fieldContext = getNearestFieldContextText(element);
+        const selector = buildElementSelector(element);
+        const commonProperties = {
+            key: `field-${index}`,
+            selector,
+            id: element.id || '',
+            name: element.name || '',
+            placeholder: element.placeholder || '',
+            ariaLabel: element.getAttribute('aria-label') || '',
+            title: element.getAttribute('title') || '',
+            labels,
+            contextText: fieldContext,
+            required: Boolean(element.required),
+            disabled: Boolean(element.disabled),
+            visible: isElementVisible(element)
+        };
+
+        const baseSearchTerms = [
+            ...labels,
+            commonProperties.placeholder,
+            commonProperties.ariaLabel,
+            commonProperties.title,
+            commonProperties.name,
+            commonProperties.id,
+            fieldContext
+        ].filter(Boolean);
+
+        if (tagName === 'select') {
+            const options = Array.from(element.options).map((option, optionIndex) => ({
+                index: optionIndex,
+                text: (option.textContent || '').replace(/\s+/g, ' ').trim(),
+                value: option.value,
+                selected: option.selected,
+                disabled: option.disabled
+            }));
+
+            return {
+                ...commonProperties,
+                fieldType: 'select',
+                inputType,
+                element,
+                elements: [element],
+                options,
+                currentValue: element.value,
+                currentDisplayValue: (element.selectedOptions[0]?.textContent || '').trim(),
+                searchTerms: baseSearchTerms
+            };
+        }
+
+        if (tagName === 'textarea') {
+            return {
+                ...commonProperties,
+                fieldType: 'textarea',
+                inputType,
+                element,
+                elements: [element],
+                currentValue: element.value || '',
+                searchTerms: baseSearchTerms
+            };
+        }
+
+        if (inputType === 'checkbox') {
+            return {
+                ...commonProperties,
+                fieldType: 'checkbox',
+                inputType,
+                element,
+                elements: [element],
+                currentValue: Boolean(element.checked),
+                searchTerms: [...baseSearchTerms, element.value || '']
+            };
+        }
+
+        if (inputType === 'radio') {
+            const groupInputs = getRadioGroupInputs(element).filter((radio) => isElementVisible(radio) || radio.checked);
+            const options = groupInputs.map((radio) => {
+                const optionLabels = getFieldLabels(radio);
+                return {
+                    selector: buildElementSelector(radio),
+                    text: optionLabels[0] || radio.value || buildElementSelector(radio),
+                    value: radio.value,
+                    checked: radio.checked,
+                    disabled: radio.disabled,
+                    element: radio,
+                    searchTerms: [...optionLabels, radio.value || '', radio.getAttribute('aria-label') || ''].filter(Boolean)
+                };
+            });
+
+            return {
+                ...commonProperties,
+                fieldType: 'radio',
+                inputType,
+                element,
+                elements: groupInputs,
+                options,
+                currentValue: options.find((option) => option.checked)?.value || '',
+                currentDisplayValue: options.find((option) => option.checked)?.text || '',
+                searchTerms: [...baseSearchTerms, ...options.flatMap((option) => option.searchTerms)]
+            };
+        }
+
+        return {
+            ...commonProperties,
+            fieldType: 'text',
+            inputType,
+            element,
+            elements: [element],
+            currentValue: element.value || '',
+            searchTerms: [...baseSearchTerms, element.value || '']
+        };
+    }
+
+    function serializeFieldDescriptor(descriptor) {
+        const serialized = {
+            key: descriptor.key,
+            fieldType: descriptor.fieldType,
+            inputType: descriptor.inputType,
+            selector: descriptor.selector,
+            id: descriptor.id,
+            name: descriptor.name,
+            placeholder: descriptor.placeholder,
+            ariaLabel: descriptor.ariaLabel,
+            labels: descriptor.labels,
+            required: descriptor.required,
+            disabled: descriptor.disabled,
+            visible: descriptor.visible,
+            currentValue: descriptor.currentValue
+        };
+
+        if (descriptor.currentDisplayValue) {
+            serialized.currentDisplayValue = descriptor.currentDisplayValue;
+        }
+
+        if (descriptor.options) {
+            serialized.options = descriptor.options.map((option) => ({
+                text: option.text,
+                value: option.value,
+                selected: Boolean(option.selected || option.checked),
+                disabled: Boolean(option.disabled)
+            }));
+        }
+
+        return serialized;
+    }
+
+    function collectFormFieldDescriptors({ includeDisabled = true, includeHidden = false, limit = MAX_FORM_FIELD_DISCOVERY } = {}) {
+        const controls = Array.from(document.querySelectorAll('input, select, textarea'));
+        const descriptors = [];
+        const seenRadioGroups = new Set();
+        const unsupportedInputTypes = new Set(['hidden', 'button', 'submit', 'reset', 'image', 'file']);
+
+        controls.forEach((element) => {
+            if (descriptors.length >= limit) {
+                return;
+            }
+
+            const tagName = element.tagName.toLowerCase();
+            const inputType = tagName === 'input' ? (element.type || 'text').toLowerCase() : tagName;
+            if (unsupportedInputTypes.has(inputType)) {
+                return;
+            }
+
+            if (!includeHidden && !isElementVisible(element)) {
+                return;
+            }
+
+            if (!includeDisabled && element.disabled) {
+                return;
+            }
+
+            if (inputType === 'radio') {
+                const radioGroupKey = `${element.form ? buildElementSelector(element.form) : 'document'}::${element.name || buildElementSelector(element)}`;
+                if (seenRadioGroups.has(radioGroupKey)) {
+                    return;
+                }
+                seenRadioGroups.add(radioGroupKey);
+            }
+
+            const descriptor = buildFieldDescriptor(element, descriptors.length + 1);
+            if (descriptor) {
+                descriptors.push(descriptor);
+            }
+        });
+
+        return descriptors;
+    }
+
+    function resolveFieldBySelector(selector, descriptors) {
+        if (!selector) {
+            return null;
+        }
+
+        const matchedElement = document.querySelector(selector);
+        if (!matchedElement) {
+            return null;
+        }
+
+        return descriptors.find((descriptor) => descriptor.elements.some((element) => (
+            element === matchedElement || element.contains(matchedElement) || matchedElement.contains(element)
+        ))) || null;
+    }
+
+    function resolveFieldDescriptor(instruction, descriptors) {
+        const selectorMatch = resolveFieldBySelector(instruction.selector, descriptors);
+        if (selectorMatch) {
+            return { descriptor: selectorMatch, score: 1000 };
+        }
+
+        const directQueries = [
+            { value: instruction.field, exactScore: 110, containsScore: 84 },
+            { value: instruction.label, exactScore: 120, containsScore: 90 },
+            { value: instruction.name, exactScore: 118, containsScore: 86 },
+            { value: instruction.id, exactScore: 122, containsScore: 92 },
+            { value: instruction.placeholder, exactScore: 104, containsScore: 80 },
+            { value: instruction.target, exactScore: 102, containsScore: 78 }
+        ].filter((item) => item.value);
+
+        if (!directQueries.length) {
+            return { descriptor: null, score: 0 };
+        }
+
+        let bestMatch = { descriptor: null, score: 0 };
+        descriptors.forEach((descriptor) => {
+            let score = 0;
+            directQueries.forEach((query) => {
+                descriptor.searchTerms.forEach((candidate) => {
+                    score = Math.max(score, scoreMatchCandidate(candidate, query.value, query.exactScore, query.containsScore));
+                });
+            });
+
+            if (score > bestMatch.score) {
+                bestMatch = { descriptor, score };
+            }
+        });
+
+        if (bestMatch.score < 60) {
+            return { descriptor: null, score: bestMatch.score };
+        }
+
+        return bestMatch;
+    }
+
+    function resolveOptionMatch(options, instruction) {
+        const selector = instruction.optionSelector || instruction.valueSelector;
+        if (selector) {
+            const matchedOption = options.find((option) => option.selector === selector);
+            if (matchedOption) {
+                return matchedOption;
+            }
+        }
+
+        const queries = [
+            { value: instruction.optionValue, exactScore: 120, containsScore: 88 },
+            { value: instruction.valueKey, exactScore: 118, containsScore: 86 },
+            { value: instruction.value, exactScore: 104, containsScore: 78 },
+            { value: instruction.optionText, exactScore: 116, containsScore: 86 },
+            { value: instruction.valueText, exactScore: 114, containsScore: 84 },
+            { value: instruction.text, exactScore: 108, containsScore: 80 }
+        ].filter((item) => item.value);
+
+        let bestMatch = { option: null, score: 0 };
+        options.forEach((option) => {
+            queries.forEach((query) => {
+                const candidates = [
+                    option.text,
+                    option.value,
+                    ...(option.searchTerms || [])
+                ].filter(Boolean);
+
+                candidates.forEach((candidate) => {
+                    const score = scoreMatchCandidate(candidate, query.value, query.exactScore, query.containsScore);
+                    if (score > bestMatch.score) {
+                        bestMatch = { option, score };
+                    }
+                });
+            });
+        });
+
+        return bestMatch.score >= 60 ? bestMatch.option : null;
+    }
+
+    function isRangeConnected(range) {
+        return Boolean(range && range.startContainer && range.endContainer &&
+            range.startContainer.isConnected && range.endContainer.isConnected);
+    }
+
+    function cloneLiveSelectionRange() {
+        const liveSelection = window.getSelection();
+        if (!liveSelection || liveSelection.rangeCount === 0) {
+            return null;
+        }
+
+        const range = liveSelection.getRangeAt(0);
+        return range.collapsed ? null : range.cloneRange();
+    }
+
+    function getSelectionSnapshot() {
+        const liveRange = cloneLiveSelectionRange();
+        const storedRange = isRangeConnected(initialSelectionRange) && initialSelectionRange && !initialSelectionRange.collapsed
+            ? initialSelectionRange.cloneRange()
+            : null;
+        const range = liveRange || storedRange;
+        const source = liveRange ? 'live' : (storedRange ? 'captured' : 'none');
+
+        if (!range) {
+            return {
+                hasSelection: false,
+                source,
+                text: '',
+                html: '',
+                range: null
+            };
+        }
+
+        const container = document.createElement('div');
+        container.appendChild(range.cloneContents());
+
+        return {
+            hasSelection: true,
+            source,
+            text: range.toString().trim(),
+            html: container.innerHTML,
+            range
+        };
+    }
+
+    function createToolResult(success, message, data = {}, warnings = [], matchedTargets = []) {
+        return {
+            success,
+            message,
+            data,
+            warnings,
+            matchedTargets
+        };
+    }
+
+    function formatToolDisplayName(name) {
+        const labels = {
+            get_page_title: 'get_page_title（取得頁面標題）',
+            inspect_selection: 'inspect_selection（檢查選取範圍）',
+            inspect_form_fields: 'inspect_form_fields（檢查表單欄位）',
+            fill_form_fields: 'fill_form_fields（填寫表單欄位）',
+            replace_dom_content: 'replace_dom_content（替換頁面內容）',
+            get_element_content: 'get_element_content（讀取元素內容）',
+            click_element: 'click_element（點擊元素）',
+            run_javascript: 'run_javascript（執行 JavaScript）'
+        };
+
+        return labels[name] || name || '未知工具';
+    }
+
+    function formatToolNameList(toolNames = []) {
+        const formattedNames = toolNames.map((toolName) => formatToolDisplayName(toolName)).filter(Boolean);
+        if (!formattedNames.length) {
+            return '未知工具';
+        }
+
+        if (formattedNames.length <= 3) {
+            return formattedNames.join('、');
+        }
+
+        return `${formattedNames.slice(0, 3).join('、')} 等 ${formattedNames.length} 個工具`;
+    }
+
+    function buildToolExecutionSummary(toolResults = []) {
+        if (!toolResults.length) {
+            return '';
+        }
+
+        const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
+        const successCount = toolResults.filter((toolResult) => toolResult.result?.success).length;
+        const failureCount = toolResults.length - successCount;
+
+        if (toolResults.length === 1) {
+            return `剛剛調用 ${toolNames} 工具${successCount === 1 ? '成功' : '失敗'}`;
+        }
+
+        if (failureCount === 0) {
+            return `剛剛調用 ${toolNames} 工具全部成功`;
+        }
+
+        if (successCount === 0) {
+            return `剛剛調用 ${toolNames} 工具全部失敗`;
+        }
+
+        return `剛剛調用 ${toolNames} 工具，成功 ${successCount} 個、失敗 ${failureCount} 個`;
+    }
+
+    function resolveClickableElement({ selector = '', text = '', role = '' } = {}) {
+        if (selector) {
+            const directMatch = document.querySelector(selector);
+            if (directMatch) {
+                return directMatch;
+            }
+        }
+
+        const allCandidates = Array.from(document.querySelectorAll('button, a, summary, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]'))
+            .filter((element) => isElementVisible(element) && !element.disabled);
+
+        let candidates = allCandidates;
+        if (role === 'link') {
+            candidates = candidates.filter((element) => element.tagName.toLowerCase() === 'a');
+        } else if (role === 'button') {
+            candidates = candidates.filter((element) => element.tagName.toLowerCase() === 'button' || element.getAttribute('role') === 'button' || element.tagName.toLowerCase() === 'input');
+        }
+
+        let bestMatch = { element: null, score: 0 };
+        candidates.forEach((element) => {
+            const searchTerms = [
+                element.innerText,
+                element.textContent,
+                element.getAttribute('aria-label'),
+                element.getAttribute('title'),
+                element.value
+            ].filter(Boolean);
+
+            searchTerms.forEach((candidate) => {
+                const score = scoreMatchCandidate(candidate, text, 110, 82);
+                if (score > bestMatch.score) {
+                    bestMatch = { element, score };
+                }
+            });
+        });
+
+        return bestMatch.score >= 60 ? bestMatch.element : null;
+    }
+
+    function getToolDefinitions() {
+        return [
+            {
+                name: 'get_page_title',
+                description: '取得目前網頁的標題與網址。當你需要確認目前頁面是什麼時使用。',
+                parameters: {
+                    type: 'object',
+                    properties: {}
+                }
+            },
+            {
+                name: 'inspect_selection',
+                description: '取得目前頁面選取範圍的文字與 HTML。當需要處理使用者選取內容時使用。',
+                parameters: {
+                    type: 'object',
+                    properties: {}
+                }
+            },
+            {
+                name: 'inspect_form_fields',
+                description: '列出目前頁面的可編輯表單欄位，包含 label、name、id、placeholder、型別與選項。填表前優先使用。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        limit: {
+                            type: 'integer',
+                            description: '最多回傳幾個欄位，預設 40。'
+                        },
+                        includeHidden: {
+                            type: 'boolean',
+                            description: '是否包含隱藏欄位，預設 false。'
+                        },
+                        includeDisabled: {
+                            type: 'boolean',
+                            description: '是否包含 disabled 欄位，預設 true。'
+                        }
+                    }
+                }
+            },
+            {
+                name: 'fill_form_fields',
+                description: '根據 selector 或欄位名稱模糊比對填寫表單。支援文字輸入、下拉選單、核取方塊與 radio button。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        fields: {
+                            type: 'array',
+                            description: '要填寫的欄位清單。',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    selector: { type: 'string', description: '直接指定欄位 CSS selector。' },
+                                    field: { type: 'string', description: '欄位名稱或模糊搜尋文字。' },
+                                    label: { type: 'string', description: '欄位標籤文字。' },
+                                    name: { type: 'string', description: '欄位 name。' },
+                                    id: { type: 'string', description: '欄位 id。' },
+                                    placeholder: { type: 'string', description: '欄位 placeholder。' },
+                                    value: { type: 'string', description: '要寫入的值，文字欄位直接使用；select/radio 可同時拿來當選項 key 或 value。' },
+                                    text: { type: 'string', description: '要寫入的顯示文字或選項文字。' },
+                                    checked: { type: 'boolean', description: 'checkbox 要設定的狀態。' },
+                                    optionText: { type: 'string', description: 'select/radio 要選取的選項文字。' },
+                                    optionValue: { type: 'string', description: 'select/radio 要選取的選項 value。' },
+                                    valueKey: { type: 'string', description: 'select/radio 的 key 或 value。' },
+                                    valueText: { type: 'string', description: 'select/radio 的顯示文字。' }
+                                }
+                            }
+                        }
+                    },
+                    required: ['fields']
+                }
+            },
+            {
+                name: 'replace_dom_content',
+                description: '用 raw HTML 取代目前選取範圍，或在沒有選取範圍時用 selector 取代目標元素的 innerHTML。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        html: {
+                            type: 'string',
+                            description: '要插入的 raw HTML 字串。'
+                        },
+                        selector: {
+                            type: 'string',
+                            description: '沒有選取範圍時，指定要替換 innerHTML 的目標元素 selector。'
+                        },
+                        preferSelection: {
+                            type: 'boolean',
+                            description: '是否優先使用目前選取範圍，預設 true。'
+                        }
+                    },
+                    required: ['html']
+                }
+            },
+            {
+                name: 'get_element_content',
+                description: '根據 selector 取得特定元素的文字內容或 HTML 內容。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        selector: {
+                            type: 'string',
+                            description: '目標元素的 CSS selector。'
+                        },
+                        includeHtml: {
+                            type: 'boolean',
+                            description: '是否一併回傳 innerHTML，預設 false。'
+                        },
+                        maxLength: {
+                            type: 'integer',
+                            description: '文字或 HTML 最多回傳幾個字元，預設 2000。'
+                        }
+                    },
+                    required: ['selector']
+                }
+            },
+            {
+                name: 'click_element',
+                description: '點擊目前頁面上的按鈕、連結或 role=button 元素。可用 selector 或可見文字模糊比對。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        selector: {
+                            type: 'string',
+                            description: '直接指定要點擊的元素 selector。'
+                        },
+                        text: {
+                            type: 'string',
+                            description: '按鈕或連結的可見文字、aria-label 或 title。'
+                        },
+                        role: {
+                            type: 'string',
+                            description: '可選，button 或 link。'
+                        }
+                    }
+                }
+            },
+            {
+                name: 'run_javascript',
+                description: '在目前頁面的主世界執行任意 JavaScript 程式碼。可使用 await，若要把結果回傳給模型，請使用 return。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        code: {
+                            type: 'string',
+                            description: '要執行的 JavaScript 程式碼。可以使用 document、window、selection 與 buildElementSelector。'
+                        }
+                    },
+                    required: ['code']
+                }
+            }
+        ];
+    }
+
+    async function executeToolCall({ id = '', name = '', args = {} }) {
+        const toolArgs = args && typeof args === 'object' ? args : {};
+        console.log('[AskPage] Executing tool:', name, toolArgs);
+
+        if (toolArgs._parseError) {
+            return {
+                id,
+                name,
+                result: createToolResult(false, `工具參數解析失敗：${toolArgs._parseError}`, {
+                    rawArguments: truncateToolText(toolArgs._raw || '', 240)
+                }, [toolArgs._parseError])
+            };
+        }
+
+        try {
+            if (name === 'get_page_title') {
+                return {
+                    id,
+                    name,
+                    result: createToolResult(true, '已取得目前頁面標題。', {
+                        title: document.title,
+                        url: window.location.href
+                    }, [], [{
+                        selector: 'document',
+                        description: document.title
+                    }])
+                };
+            }
+
+            if (name === 'inspect_selection') {
+                const selectionSnapshot = getSelectionSnapshot();
+                return {
+                    id,
+                    name,
+                    result: createToolResult(selectionSnapshot.hasSelection, selectionSnapshot.hasSelection ? '已取得選取範圍內容。' : '目前沒有可用的選取範圍。', {
+                        source: selectionSnapshot.source,
+                        text: selectionSnapshot.text,
+                        html: selectionSnapshot.html,
+                        length: selectionSnapshot.text.length
+                    })
+                };
+            }
+
+            if (name === 'inspect_form_fields') {
+                const descriptors = collectFormFieldDescriptors({
+                    includeDisabled: toolArgs.includeDisabled !== false,
+                    includeHidden: toolArgs.includeHidden === true,
+                    limit: Number.isFinite(toolArgs.limit) ? Math.max(1, Math.min(Number(toolArgs.limit), MAX_FORM_FIELD_DISCOVERY)) : 40
+                });
+                return {
+                    id,
+                    name,
+                    result: createToolResult(true, `已找到 ${descriptors.length} 個表單欄位。`, {
+                        total: descriptors.length,
+                        fields: descriptors.map(serializeFieldDescriptor)
+                    }, [], descriptors.map((descriptor) => ({
+                        selector: descriptor.selector,
+                        description: `${descriptor.fieldType}:${descriptor.labels[0] || descriptor.name || descriptor.id || descriptor.selector}`
+                    })))
+                };
+            }
+
+            if (name === 'fill_form_fields') {
+                const instructions = Array.isArray(toolArgs.fields) ? toolArgs.fields : [];
+                if (!instructions.length) {
+                    return {
+                        id,
+                        name,
+                        result: createToolResult(false, 'fields 參數至少要有一筆欄位指示。')
+                    };
+                }
+
+                const descriptors = collectFormFieldDescriptors({ includeDisabled: true, includeHidden: false });
+                const fieldResults = instructions.map((instruction) => {
+                    const match = resolveFieldDescriptor(instruction, descriptors);
+                    if (!match.descriptor) {
+                        return {
+                            success: false,
+                            message: `找不到符合條件的欄位：${instruction.selector || instruction.field || instruction.label || instruction.name || instruction.id || '未知欄位'}`
+                        };
+                    }
+
+                    const descriptor = match.descriptor;
+                    if (descriptor.disabled) {
+                        return {
+                            success: false,
+                            message: `欄位目前是 disabled，無法填寫：${descriptor.labels[0] || descriptor.name || descriptor.id || descriptor.selector}`,
+                            selector: descriptor.selector
+                        };
+                    }
+
+                    if (descriptor.fieldType === 'text' || descriptor.fieldType === 'textarea') {
+                        const nextValue = instruction.value ?? instruction.text ?? '';
+                        setNativeProperty(descriptor.element, 'value', String(nextValue));
+                        dispatchFieldEvents(descriptor.element);
+                        return {
+                            success: true,
+                            selector: descriptor.selector,
+                            value: String(nextValue),
+                            fieldType: descriptor.fieldType,
+                            message: `已填寫 ${descriptor.labels[0] || descriptor.name || descriptor.id || descriptor.selector}`
+                        };
+                    }
+
+                    if (descriptor.fieldType === 'checkbox') {
+                        const nextChecked = coerceBooleanValue(instruction.checked ?? instruction.value ?? instruction.text, true);
+                        setNativeProperty(descriptor.element, 'checked', nextChecked);
+                        dispatchFieldEvents(descriptor.element);
+                        return {
+                            success: true,
+                            selector: descriptor.selector,
+                            checked: nextChecked,
+                            fieldType: descriptor.fieldType,
+                            message: `已${nextChecked ? '勾選' : '取消勾選'} ${descriptor.labels[0] || descriptor.name || descriptor.id || descriptor.selector}`
+                        };
+                    }
+
+                    if (descriptor.fieldType === 'select') {
+                        const matchedOption = resolveOptionMatch(descriptor.options, instruction);
+                        if (!matchedOption) {
+                            return {
+                                success: false,
+                                selector: descriptor.selector,
+                                message: `找不到可匹配的選項：${descriptor.labels[0] || descriptor.name || descriptor.id || descriptor.selector}`
+                            };
+                        }
+
+                        setNativeProperty(descriptor.element, 'value', matchedOption.value);
+                        descriptor.element.selectedIndex = matchedOption.index;
+                        dispatchFieldEvents(descriptor.element);
+                        return {
+                            success: true,
+                            selector: descriptor.selector,
+                            value: matchedOption.value,
+                            displayValue: matchedOption.text,
+                            fieldType: descriptor.fieldType,
+                            message: `已選取 ${matchedOption.text}`
+                        };
+                    }
+
+                    if (descriptor.fieldType === 'radio') {
+                        const matchedOption = resolveOptionMatch(descriptor.options, instruction);
+                        if (!matchedOption || !matchedOption.element) {
+                            return {
+                                success: false,
+                                selector: descriptor.selector,
+                                message: `找不到可匹配的 radio 選項：${descriptor.labels[0] || descriptor.name || descriptor.id || descriptor.selector}`
+                            };
+                        }
+
+                        setNativeProperty(matchedOption.element, 'checked', true);
+                        dispatchFieldEvents(matchedOption.element);
+                        return {
+                            success: true,
+                            selector: matchedOption.selector,
+                            value: matchedOption.value,
+                            displayValue: matchedOption.text,
+                            fieldType: descriptor.fieldType,
+                            message: `已選取 ${matchedOption.text}`
+                        };
+                    }
+
+                    return {
+                        success: false,
+                        selector: descriptor.selector,
+                        message: `目前不支援此欄位型別：${descriptor.fieldType}`
+                    };
+                });
+
+                const successResults = fieldResults.filter((result) => result.success);
+                const failureResults = fieldResults.filter((result) => !result.success);
+                return {
+                    id,
+                    name,
+                    result: createToolResult(
+                        successResults.length > 0,
+                        `已成功填寫 ${successResults.length} 個欄位${failureResults.length ? `，失敗 ${failureResults.length} 個` : ''}。`,
+                        {
+                            total: fieldResults.length,
+                            applied: fieldResults
+                        },
+                        failureResults.map((result) => result.message),
+                        successResults.map((result) => ({
+                            selector: result.selector,
+                            description: result.message
+                        }))
+                    )
+                };
+            }
+
+            if (name === 'replace_dom_content') {
+                const html = String(toolArgs.html || '');
+                if (!html) {
+                    return {
+                        id,
+                        name,
+                        result: createToolResult(false, 'html 參數不可為空字串。')
+                    };
+                }
+
+                const preferSelection = toolArgs.preferSelection !== false;
+                const selectionSnapshot = preferSelection ? getSelectionSnapshot() : { hasSelection: false };
+                const selector = String(toolArgs.selector || '').trim();
+
+                if (selectionSnapshot.hasSelection && selectionSnapshot.range) {
+                    const range = selectionSnapshot.range;
+                    const previousText = truncateToolText(range.toString(), 240);
+                    const fragment = range.createContextualFragment(html);
+                    range.deleteContents();
+                    range.insertNode(fragment);
+                    const activeSelection = window.getSelection();
+                    if (activeSelection) {
+                        activeSelection.removeAllRanges();
+                    }
+
+                    return {
+                        id,
+                        name,
+                        result: createToolResult(true, '已用 raw HTML 取代目前選取範圍。', {
+                            mode: 'selection',
+                            previousText,
+                            insertedHtmlPreview: truncateToolText(html, 240)
+                        }, [], [{
+                            selector: 'selection',
+                            description: previousText
+                        }])
+                    };
+                }
+
+                if (!selector) {
+                    return {
+                        id,
+                        name,
+                        result: createToolResult(false, '目前沒有可用選取範圍，請提供 selector。')
+                    };
+                }
+
+                const targetElement = document.querySelector(selector);
+                if (!targetElement) {
+                    return {
+                        id,
+                        name,
+                        result: createToolResult(false, `找不到 selector 對應的元素：${selector}`)
+                    };
+                }
+
+                const previousHtml = truncateToolText(targetElement.innerHTML, 240);
+                targetElement.innerHTML = html;
+                return {
+                    id,
+                    name,
+                    result: createToolResult(true, '已取代目標元素的 innerHTML。', {
+                        mode: 'selector',
+                        selector,
+                        previousHtml,
+                        insertedHtmlPreview: truncateToolText(html, 240)
+                    }, [], [{
+                        selector,
+                        description: targetElement.tagName.toLowerCase()
+                    }])
+                };
+            }
+
+            if (name === 'get_element_content') {
+                const selector = String(toolArgs.selector || '').trim();
+                if (!selector) {
+                    return {
+                        id,
+                        name,
+                        result: createToolResult(false, 'selector 參數不可為空。')
+                    };
+                }
+
+                const targetElement = document.querySelector(selector);
+                if (!targetElement) {
+                    return {
+                        id,
+                        name,
+                        result: createToolResult(false, `找不到 selector 對應的元素：${selector}`)
+                    };
+                }
+
+                const maxLength = Number.isFinite(toolArgs.maxLength) ? Math.max(200, Math.min(Number(toolArgs.maxLength), 10000)) : 2000;
+                const includeHtml = toolArgs.includeHtml === true;
+                const textContent = truncateToolText((targetElement.innerText || targetElement.textContent || '').trim(), maxLength);
+                const data = {
+                    selector,
+                    tagName: targetElement.tagName.toLowerCase(),
+                    text: textContent
+                };
+
+                if (includeHtml) {
+                    data.html = truncateToolText(targetElement.innerHTML, maxLength);
+                }
+
+                return {
+                    id,
+                    name,
+                    result: createToolResult(true, '已取得目標元素內容。', data, [], [{
+                        selector,
+                        description: targetElement.tagName.toLowerCase()
+                    }])
+                };
+            }
+
+            if (name === 'click_element') {
+                const selector = String(toolArgs.selector || '').trim();
+                const text = String(toolArgs.text || '').trim();
+                const role = String(toolArgs.role || '').trim().toLowerCase();
+                if (!selector && !text) {
+                    return {
+                        id,
+                        name,
+                        result: createToolResult(false, 'click_element 需要 selector 或 text 其中之一。')
+                    };
+                }
+
+                const targetElement = resolveClickableElement({ selector, text, role });
+                if (!targetElement) {
+                    return {
+                        id,
+                        name,
+                        result: createToolResult(false, `找不到可點擊的目標：${selector || text}`)
+                    };
+                }
+
+                targetElement.click();
+                return {
+                    id,
+                    name,
+                    result: createToolResult(true, '已點擊目標元素。', {
+                        selector: buildElementSelector(targetElement),
+                        text: truncateToolText(targetElement.innerText || targetElement.textContent || targetElement.value || '', 120),
+                        tagName: targetElement.tagName.toLowerCase()
+                    }, [], [{
+                        selector: buildElementSelector(targetElement),
+                        description: truncateToolText(targetElement.innerText || targetElement.textContent || targetElement.value || '', 120)
+                    }])
+                };
+            }
+
+            if (name === 'run_javascript') {
+                const code = String(toolArgs.code || '');
+                if (!code.trim()) {
+                    return {
+                        id,
+                        name,
+                        result: createToolResult(false, 'code 參數不可為空。')
+                    };
+                }
+
+                const response = await chrome.runtime.sendMessage({
+                    action: 'execute-main-world-javascript',
+                    code
+                });
+
+                if (!response?.success) {
+                    return {
+                        id,
+                        name,
+                        result: createToolResult(false, response?.error || '主世界 JavaScript 執行失敗。')
+                    };
+                }
+
+                return {
+                    id,
+                    name,
+                    result: createToolResult(
+                        response.result?.success !== false,
+                        response.result?.message || '已執行 JavaScript。',
+                        response.result?.data || {},
+                        response.result?.warnings || [],
+                        response.result?.matchedTargets || []
+                    )
+                };
+            }
+
+            return {
+                id,
+                name,
+                result: createToolResult(false, `未知工具：${name}`)
+            };
+        } catch (error) {
+            console.error('[AskPage] Tool execution failed:', name, error);
+            return {
+                id,
+                name,
+                result: createToolResult(false, `工具 ${name} 執行失敗：${error.message}`, {
+                    errorName: error.name || 'Error',
+                    errorMessage: error.message || '未知錯誤'
+                }, [`${error.name || 'Error'}: ${error.message || '未知錯誤'}`])
+            };
+        }
+    }
+
+    function getOpenAIToolDefinitions() {
+        return getToolDefinitions().map((tool) => ({
+            type: 'function',
+            function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters
+            }
+        }));
+    }
+
+    function getGeminiToolDefinitions() {
+        return [{
+            functionDeclarations: getToolDefinitions().map((tool) => ({
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters
+            }))
+        }];
+    }
+
+    function parseToolArguments(rawArguments) {
+        if (!rawArguments) {
+            return {};
+        }
+
+        if (typeof rawArguments === 'object') {
+            return rawArguments;
+        }
+
+        try {
+            return JSON.parse(rawArguments);
+        } catch (error) {
+            return {
+                _raw: rawArguments,
+                _parseError: error.message
+            };
+        }
+    }
+
+    async function executeToolCalls(toolCalls, onToolStatus = () => {}) {
+        const results = [];
+        for (const [index, toolCall] of toolCalls.entries()) {
+            onToolStatus({
+                name: toolCall.name,
+                index: index + 1,
+                total: toolCalls.length
+            });
+            results.push(await executeToolCall(toolCall));
+        }
+        return results;
+    }
+
+    function getAssistantMessageText(message) {
+        if (!message) {
+            return '';
+        }
+
+        if (typeof message.content === 'string') {
+            return message.content;
+        }
+
+        if (Array.isArray(message.content)) {
+            return message.content
+                .filter((part) => part && part.type === 'text')
+                .map((part) => part.text || '')
+                .join('\n');
+        }
+
+        return '';
+    }
+
+    function isLikelyToolUnsupportedError(error) {
+        const status = Number(error?.status || 0);
+        const content = `${error?.message || ''}\n${error?.body || ''}`.toLowerCase();
+        const mentionsTools = ['tool', 'tool_calls', 'function', 'function_call', 'unsupported', 'unknown field', 'schema', 'does not support']
+            .some((keyword) => content.includes(keyword));
+
+        return mentionsTools && [400, 404, 405, 409, 422, 500, 501].includes(status);
+    }
+
+    function buildTextProviderMessages(pageConversationContext, question) {
+        return [
+            {
+                role: 'system',
+                content: `${pageConversationContext.systemPrompt}\n\n${pageConversationContext.conversationContextText}`
+            },
+            ...getConversationMessagesForTextProviders(),
+            { role: 'user', content: question }
+        ];
+    }
+
+    async function runOpenAIStyleToolLoop({
+        providerLabel,
+        initialMessages,
+        buildRequestBody,
+        sendRequest,
+        allowToolFallback = false,
+        onStatusUpdate = () => {}
+    }) {
+        const messages = initialMessages.map((message) => ({ ...message }));
+        let useTools = true;
+        let fallbackUsed = false;
+        let previousToolSummary = '';
+
+        for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round++) {
+            const roundPrefix = previousToolSummary ? `${previousToolSummary}，` : '';
+            onStatusUpdate(`第 ${round + 1} / ${MAX_TOOL_CALL_ROUNDS} 輪：${roundPrefix}正在請 ${providerLabel} 分析頁面並決定下一個工具...`);
+            let responseData;
+            try {
+                responseData = await sendRequest(buildRequestBody(messages, useTools));
+            } catch (error) {
+                if (useTools && allowToolFallback && isLikelyToolUnsupportedError(error)) {
+                    console.warn(`[AskPage] ${providerLabel} does not appear to support tool calling, falling back to plain chat.`, error);
+                    useTools = false;
+                    fallbackUsed = true;
+                    onStatusUpdate(`第 ${round + 1} 輪：${providerLabel} 端點不支援 tool calling，正在退回一般文字模式...`);
+                    continue;
+                }
+                throw error;
+            }
+
+            const assistantMessage = responseData.choices?.[0]?.message;
+            if (!assistantMessage) {
+                return {
+                    answer: '未取得回應',
+                    fallbackUsed
+                };
+            }
+
+            const toolCalls = useTools && Array.isArray(assistantMessage.tool_calls)
+                ? assistantMessage.tool_calls
+                : [];
+
+            if (!toolCalls.length) {
+                onStatusUpdate('已取得最終回覆，正在整理答案...');
+                return {
+                    answer: getAssistantMessageText(assistantMessage) || '未取得回應',
+                    fallbackUsed
+                };
+            }
+
+            messages.push({
+                role: 'assistant',
+                content: assistantMessage.content || null,
+                tool_calls: assistantMessage.tool_calls
+            });
+
+            const requestedToolNames = formatToolNameList(toolCalls.map((toolCall) => toolCall.function?.name));
+            onStatusUpdate(`第 ${round + 1} 輪：${providerLabel} 已選擇工具 ${requestedToolNames}，準備執行...`);
+
+            const toolResults = await executeToolCalls(
+                toolCalls.map((toolCall) => ({
+                    id: toolCall.id,
+                    name: toolCall.function?.name,
+                    args: parseToolArguments(toolCall.function?.arguments)
+                })),
+                (toolStatus) => onStatusUpdate(`第 ${round + 1} 輪：正在執行工具 ${formatToolDisplayName(toolStatus.name)} (${toolStatus.index}/${toolStatus.total})...`)
+            );
+
+            previousToolSummary = buildToolExecutionSummary(toolResults);
+            const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
+            onStatusUpdate(`第 ${round + 1} 輪：已執行工具 ${toolNames}，正在把結果交回模型...`);
+
+            toolResults.forEach((toolResult) => {
+                messages.push({
+                    role: 'tool',
+                    tool_call_id: toolResult.id,
+                    content: getJsonPreview(toolResult.result)
+                });
+            });
+        }
+
+        throw new Error('工具呼叫輪數已達上限，已中止以避免無限循環。');
+    }
+
+    async function runGeminiToolLoop({
+        apiKey,
+        selectedModel,
+        question,
+        capturedSelectedText = '',
+        screenshotDataUrl = null,
+        onStatusUpdate = () => {}
+    }) {
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, !!screenshotDataUrl);
+        console.log('[AskPage] Gemini context mode:', pageConversationContext.contextMode);
+        console.log('[AskPage] Conversation history messages:', conversationHistory.length);
+        let previousToolSummary = '';
+
+        const userParts = [{
+            text: `${pageConversationContext.conversationContextText}${buildConversationHistoryTranscript()}\n\nCurrent question:\n${question}`
+        }];
+
+        if (screenshotDataUrl) {
+            userParts.push({
+                inline_data: {
+                    mime_type: 'image/png',
+                    data: screenshotDataUrl.split(',')[1]
+                }
+            });
+        }
+
+        const contents = [{
+            role: 'user',
+            parts: userParts
+        }];
+
+        for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round++) {
+            const roundPrefix = previousToolSummary ? `${previousToolSummary}，` : '';
+            onStatusUpdate(`第 ${round + 1} / ${MAX_TOOL_CALL_ROUNDS} 輪：${roundPrefix}正在請 Gemini 分析頁面並決定下一個工具...`);
+            const requestBody = {
+                systemInstruction: {
+                    parts: [{ text: pageConversationContext.systemPrompt }]
+                },
+                contents,
+                tools: getGeminiToolDefinitions(),
+                generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens: 2048 }
+            };
+
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw createHttpError(response.status, response.statusText, errorBody);
+            }
+
+            const responseData = await response.json();
+            const responseContent = responseData.candidates?.[0]?.content;
+            const parts = responseContent?.parts || [];
+            const functionCalls = parts
+                .filter((part) => part.functionCall)
+                .map((part) => part.functionCall);
+
+            if (!functionCalls.length) {
+                onStatusUpdate('已取得最終回覆，正在整理答案...');
+                return parts.map((part) => part.text || '').join('') || '未取得回應';
+            }
+
+            contents.push(responseContent);
+
+            const requestedToolNames = formatToolNameList(functionCalls.map((functionCall) => functionCall.name));
+            onStatusUpdate(`第 ${round + 1} 輪：Gemini 已選擇工具 ${requestedToolNames}，準備執行...`);
+
+            const toolResults = await executeToolCalls(
+                functionCalls.map((functionCall) => ({
+                    id: functionCall.id,
+                    name: functionCall.name,
+                    args: functionCall.args || {}
+                })),
+                (toolStatus) => onStatusUpdate(`第 ${round + 1} 輪：正在執行工具 ${formatToolDisplayName(toolStatus.name)} (${toolStatus.index}/${toolStatus.total})...`)
+            );
+
+            previousToolSummary = buildToolExecutionSummary(toolResults);
+            const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
+            onStatusUpdate(`第 ${round + 1} 輪：已執行工具 ${toolNames}，正在把結果交回 Gemini...`);
+
+            contents.push({
+                role: 'user',
+                parts: toolResults.map((toolResult) => ({
+                    functionResponse: {
+                        name: toolResult.name,
+                        id: toolResult.id,
+                        response: { result: toolResult.result }
+                    }
+                }))
+            });
+        }
+
+        throw new Error('Gemini 工具呼叫輪數已達上限，已中止以避免無限循環。');
+    }
+
     async function askGemini(question, capturedSelectedText = '', displayedQuestion = question) {
         console.log('[AskPage] ===== GEMINI API CALL STARTED =====');
         console.log('[AskPage] Question:', question);
@@ -1587,7 +3124,7 @@ async function createDialog() {
         console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
 
         if (!encryptedApiKey) {
-            appendMessage('assistant', '請點擊擴充功能圖示設定您的 Gemini API Key。');
+            appendErrorMessageAndStore(question, displayedQuestion, '請點擊擴充功能圖示設定您的 Gemini API Key。');
             return;
         }
 
@@ -1596,532 +3133,312 @@ async function createDialog() {
         console.log('[AskPage] API key preview:', maskApiKey(apiKey));
 
         if (!apiKey) {
-            appendMessage('assistant', '無法解密 Gemini API Key，請重新設定。');
+            appendErrorMessageAndStore(question, displayedQuestion, '無法解密 Gemini API Key，請重新設定。');
             return;
         }
 
-        appendMessage('assistant', '...thinking...');
+        const progressMessage = createProgressMessage('正在準備 Gemini 工具調用...');
 
-        // 檢查是否啟用截圖功能
         const screenshotEnabled = await getScreenshotEnabled();
-        console.log('[AskPage] Screenshot enabled:', screenshotEnabled);
+        updateProgressMessage(progressMessage, screenshotEnabled ? '正在擷取畫面與整理頁面上下文...' : '正在整理頁面上下文...');
+        const screenshotDataUrl = screenshotEnabled ? await captureViewportScreenshot() : null;
 
-        // 捕獲當前視窗截圖 (僅在啟用時)
-        let screenshotDataUrl = null;
-        if (screenshotEnabled) {
-            console.log('[AskPage] Starting screenshot capture for Gemini API');
-            screenshotDataUrl = await captureViewportScreenshot();
-            console.log('[AskPage] Screenshot capture result:', screenshotDataUrl ? 'Success' : 'Failed');
-        } else {
-            console.log('[AskPage] Screenshot capture skipped (disabled)');
-        }
-
-        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, !!screenshotDataUrl);
-        console.log('[AskPage] Full page context length:', pageConversationContext.pageContext.content.length);
-
-        const systemPrompt = pageConversationContext.systemPrompt;
-        let contextParts = [{
-            text: `${pageConversationContext.conversationContextText}${buildConversationHistoryTranscript()}\n\nCurrent question:\n${question}`
-        }];
-        console.log('[AskPage] Context mode:', pageConversationContext.contextMode);
-        console.log('[AskPage] Conversation history messages:', conversationHistory.length);
-
-        // 如果有截圖，將其加入到上下文中
-        if (screenshotDataUrl) {
-            const base64Data = screenshotDataUrl.split(',')[1]; // 移除 data:image/png;base64, 前綴
-            const screenshotPart = {
-                inline_data: {
-                    mime_type: 'image/png',
-                    data: base64Data
-                }
-            };
-            contextParts.push(screenshotPart);
-
-            console.log('[AskPage] ===== SCREENSHOT DATA ADDED TO CONTEXT =====');
-            console.log('[AskPage] Screenshot included in API request: Yes');
-            console.log('[AskPage] Base64 data length:', base64Data.length);
-            console.log('[AskPage] Base64 data preview:', base64Data.substring(0, 100) + '...');
-            console.log('[AskPage] MIME type:', 'image/png');
-        } else {
-            console.log('[AskPage] ===== NO SCREENSHOT DATA =====');
-            console.log('[AskPage] Screenshot included in API request: No');
-            console.log('[AskPage] Reason: Screenshot capture failed or returned null');
-        }
-
-        console.log('[AskPage] Total context parts:', contextParts.length);
-
-        // show all context parts for debugging
-        contextParts.forEach((part, index) => {
-            if (part.text) {
-                console.log(`[AskPage]   Part ${index + 1}: Text (${part.text.length} chars)`);
-                console.log(`[AskPage]   Part ${index + 1}: Text content: ${part.text}`);
-            } else if (part.inline_data) {
-                console.log(`[AskPage]   Part ${index + 1}: Image (${part.inline_data.mime_type}, ${part.inline_data.data.length} chars)`);
-            }
-        });
-
-        console.log('[AskPage] ===== CONTEXT PARTS PREPARED =====');
-        console.log('[AskPage] Context parts breakdown:');
-        contextParts.forEach((part, index) => {
-            if (part.text) {
-                console.log(`[AskPage]   Part ${index + 1}: Text (${part.text.length} chars)`);
-            } else if (part.inline_data) {
-                console.log(`[AskPage]   Part ${index + 1}: Image (${part.inline_data.mime_type}, ${part.inline_data.data.length} chars)`);
-            }
-        });
-
-        const requestBody = {
-            contents: [{ role: 'user', parts: [{ text: systemPrompt }, ...contextParts] }],
-            generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens: 2048 }
-        };
-
-        console.log('[AskPage] ===== PREPARING API REQUEST =====');
-        console.log('[AskPage] Request body structure:', {
-            contents_length: requestBody.contents.length,
-            parts_count: requestBody.contents[0].parts.length,
-            has_image: requestBody.contents[0].parts.some(part => part.inline_data),
-            generation_config: requestBody.generationConfig
-        });
-
-        let responseData;
         try {
-            console.log('[AskPage] Sending request to Gemini API...');
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
+            const answer = await runGeminiToolLoop({
+                apiKey,
+                selectedModel,
+                question,
+                capturedSelectedText,
+                screenshotDataUrl,
+                onStatusUpdate: (status) => updateProgressMessage(progressMessage, status)
             });
 
-            console.log('[AskPage] ===== API RESPONSE RECEIVED =====');
-            console.log('[AskPage] Response status:', response.status);
-            console.log('[AskPage] Response ok:', response.ok);
-            console.log('[AskPage] Response headers:', Object.fromEntries(response.headers.entries()));
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error('[AskPage] API Error response body:', errorBody);
-                throw new Error(`${response.status} ${response.statusText}: ${errorBody}`);
-            }
-
-            responseData = await response.json();
-            console.log('[AskPage] ===== API RESPONSE PARSED =====');
-            console.log('[AskPage] Response data structure:', {
-                has_candidates: !!responseData.candidates,
-                candidates_count: responseData.candidates?.length || 0,
-                first_candidate_has_content: !!responseData.candidates?.[0]?.content,
-                first_candidate_parts_count: responseData.candidates?.[0]?.content?.parts?.length || 0
-            });
-
-            if (responseData.candidates?.[0]?.content?.parts) {
-                console.log('[AskPage] Response parts details:');
-                responseData.candidates[0].content.parts.forEach((part, index) => {
-                    console.log(`[AskPage]   Part ${index + 1}: ${part.text ? `Text (${part.text.length} chars)` : 'Non-text content'}`);
-                });
-            }
-
-        } catch (err) {
-            console.error('[AskPage] ===== API CALL FAILED =====');
-            console.error('[AskPage] API 呼叫失敗:', err);
-            console.error('[AskPage] Error message:', err.message);
-            console.error('[AskPage] Error stack:', err.stack);
-            messagesEl.lastChild.remove();
-            appendMessage('assistant', `錯誤: ${err.message}`);
-            return;
+            removeProgressMessage(progressMessage);
+            appendMessage('assistant', answer);
+            conversationSelectedText = capturedSelectedText;
+            addConversationTurn('user', question, displayedQuestion);
+            addConversationTurn('assistant', answer);
+        } catch (error) {
+            console.error('[AskPage] Gemini API call failed:', error);
+            const errorMessage = `錯誤: ${error.message}`;
+            removeProgressMessage(progressMessage);
+            appendErrorMessageAndStore(question, displayedQuestion, errorMessage);
         }
-
-        console.log('[AskPage] ===== PROCESSING RESPONSE =====');
-        messagesEl.lastChild.remove();
-        const answer = responseData.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '未取得回應';
-        console.log('[AskPage] Final answer length:', answer.length);
-        console.log('[AskPage] Answer preview:', answer.substring(0, 200) + (answer.length > 200 ? '...' : ''));
-        appendMessage('assistant', answer);
-        conversationSelectedText = capturedSelectedText;
-        addConversationTurn('user', question, displayedQuestion);
-        addConversationTurn('assistant', answer);
-        console.log('[AskPage] ===== GEMINI API CALL COMPLETED =====');
     }
 
-    // OpenAI API calling function
     async function askOpenAI(question, capturedSelectedText = '', displayedQuestion = question) {
         console.log('[AskPage] ===== OPENAI API CALL STARTED =====');
-        console.log('[AskPage] Question:', question);
-        console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
-
         const encryptedApiKey = await getValue(OPENAI_API_KEY_STORAGE, '');
         const selectedModel = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
 
-        console.log('[AskPage] Selected model:', selectedModel);
-        console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
-
         if (!encryptedApiKey) {
-            appendMessage('assistant', '請點擊擴充功能圖示設定您的 OpenAI API Key。');
+            appendErrorMessageAndStore(question, displayedQuestion, '請點擊擴充功能圖示設定您的 OpenAI API Key。');
             return;
         }
 
         const apiKey = await decryptApiKey(encryptedApiKey);
-        console.log('[AskPage] Decrypted API key available:', apiKey ? 'Yes' : 'No');
-        console.log('[AskPage] API key preview:', maskApiKey(apiKey));
-
         if (!apiKey) {
-            appendMessage('assistant', '無法解密 OpenAI API Key，請重新設定。');
+            appendErrorMessageAndStore(question, displayedQuestion, '無法解密 OpenAI API Key，請重新設定。');
             return;
         }
 
-        appendMessage('assistant', '...thinking...');
+        const progressMessage = createProgressMessage('正在準備 OpenAI 工具調用...');
 
         const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
-        console.log('[AskPage] Full page context length:', pageConversationContext.pageContext.content.length);
-
-        const messages = [
-            {
-                role: 'system',
-                content: `${pageConversationContext.systemPrompt}\n\n${pageConversationContext.conversationContextText}`
-            },
-            ...getConversationMessagesForTextProviders(),
-            { role: 'user', content: question }
-        ];
-        console.log('[AskPage] Context mode:', pageConversationContext.contextMode);
-        console.log('[AskPage] Conversation history messages:', conversationHistory.length);
-
-        // OpenAI models differ in which token limit parameter they accept:
-        // - gpt-5* and o-series models require max_completion_tokens (max_tokens is rejected)
-        // - other chat models use max_tokens
-        // Also, gpt-5* and o-series models do not support the temperature parameter.
+        updateProgressMessage(progressMessage, '正在整理頁面上下文...');
         const usesMaxCompletionTokens = selectedModel.startsWith('gpt-5') || selectedModel.startsWith('o3') || selectedModel.startsWith('o4');
         const supportsTemperature = !(selectedModel.startsWith('gpt-5') || selectedModel.startsWith('o3') || selectedModel.startsWith('o4'));
 
-        const requestBody = {
-            model: selectedModel,
-            messages: messages
-        };
-
-        // Add temperature parameter only for models that support it
-        if (supportsTemperature) {
-            requestBody.temperature = 0.7;
-        }
-
-        if (usesMaxCompletionTokens) {
-            requestBody.max_completion_tokens = 2048;
-        } else {
-            requestBody.max_tokens = 2048;
-        }
-
-        console.log('[AskPage] ===== PREPARING OPENAI API REQUEST =====');
-        console.log('[AskPage] Request body structure:', {
-            model: requestBody.model,
-            messages_count: requestBody.messages.length,
-            ...(requestBody.temperature !== undefined && { temperature: requestBody.temperature }),
-            ...(usesMaxCompletionTokens ? { max_completion_tokens: requestBody.max_completion_tokens } : { max_tokens: requestBody.max_tokens })
-        });
-
-        let responseData;
         try {
-            console.log('[AskPage] Sending request to OpenAI API...');
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
+            const answer = await runOpenAIStyleToolLoop({
+                providerLabel: 'OpenAI',
+                initialMessages: buildTextProviderMessages(pageConversationContext, question),
+                buildRequestBody: (messages, useTools) => {
+                    const requestBody = {
+                        model: selectedModel,
+                        messages
+                    };
+
+                    if (supportsTemperature) {
+                        requestBody.temperature = 0.7;
+                    }
+
+                    if (usesMaxCompletionTokens) {
+                        requestBody.max_completion_tokens = 2048;
+                    } else {
+                        requestBody.max_tokens = 2048;
+                    }
+
+                    if (useTools) {
+                        requestBody.tools = getOpenAIToolDefinitions();
+                    }
+
+                    return requestBody;
                 },
-                body: JSON.stringify(requestBody)
+                sendRequest: async (requestBody) => {
+                    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    if (!response.ok) {
+                        const errorBody = await response.text();
+                        if (response.status === 401) {
+                            throw createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 OpenAI API Key 設定。');
+                        }
+                        if (response.status === 429) {
+                            throw createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。');
+                        }
+                        if (response.status >= 500) {
+                            throw createHttpError(response.status, response.statusText, errorBody, 'OpenAI 服務暫時不可用，請稍後再試。');
+                        }
+                        throw createHttpError(response.status, response.statusText, errorBody);
+                    }
+
+                    return await response.json();
+                },
+                onStatusUpdate: (status) => updateProgressMessage(progressMessage, status)
             });
 
-            console.log('[AskPage] ===== OPENAI API RESPONSE RECEIVED =====');
-            console.log('[AskPage] Response status:', response.status);
-            console.log('[AskPage] Response ok:', response.ok);
-            console.log('[AskPage] Response headers:', Object.fromEntries(response.headers.entries()));
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error('[AskPage] OpenAI API Error response body:', errorBody);
-
-                // Handle specific error cases
-                if (response.status === 401) {
-                    throw new Error('無效的 API Key，請檢查您的 OpenAI API Key 設定。');
-                } else if (response.status === 429) {
-                    throw new Error('API 請求頻率過高，請稍後再試。');
-                } else if (response.status >= 500) {
-                    throw new Error('OpenAI 服務暫時不可用，請稍後再試。');
-                } else {
-                    throw new Error(`${response.status} ${response.statusText}: ${errorBody}`);
-                }
-            }
-
-            responseData = await response.json();
-            console.log('[AskPage] ===== OPENAI API RESPONSE PARSED =====');
-            console.log('[AskPage] Response data structure:', {
-                has_choices: !!responseData.choices,
-                choices_count: responseData.choices?.length || 0,
-                first_choice_has_message: !!responseData.choices?.[0]?.message,
-                first_choice_content_length: responseData.choices?.[0]?.message?.content?.length || 0
-            });
-
-        } catch (err) {
-            console.error('[AskPage] ===== OPENAI API CALL FAILED =====');
-            console.error('[AskPage] OpenAI API 呼叫失敗:', err);
-            console.error('[AskPage] Error message:', err.message);
-            console.error('[AskPage] Error stack:', err.stack);
-            messagesEl.lastChild.remove();
-            appendMessage('assistant', `錯誤: ${err.message}`);
-            return;
+            removeProgressMessage(progressMessage);
+            appendMessage('assistant', answer.answer);
+            conversationSelectedText = capturedSelectedText;
+            addConversationTurn('user', question, displayedQuestion);
+            addConversationTurn('assistant', answer.answer);
+        } catch (error) {
+            console.error('[AskPage] OpenAI API call failed:', error);
+            const errorMessage = `錯誤: ${error.message}`;
+            removeProgressMessage(progressMessage);
+            appendErrorMessageAndStore(question, displayedQuestion, errorMessage);
         }
-
-        console.log('[AskPage] ===== PROCESSING OPENAI RESPONSE =====');
-        messagesEl.lastChild.remove();
-        const answer = responseData.choices?.[0]?.message?.content || '未取得回應';
-        console.log('[AskPage] Final answer length:', answer.length);
-        console.log('[AskPage] Answer preview:', answer.substring(0, 200) + (answer.length > 200 ? '...' : ''));
-        appendMessage('assistant', answer);
-        conversationSelectedText = capturedSelectedText;
-        addConversationTurn('user', question, displayedQuestion);
-        addConversationTurn('assistant', answer);
-        console.log('[AskPage] ===== OPENAI API CALL COMPLETED =====');
     }
 
-    // Azure OpenAI API calling function
     async function askAzureOpenAI(question, capturedSelectedText = '', displayedQuestion = question) {
         console.log('[AskPage] ===== AZURE OPENAI API CALL STARTED =====');
-        console.log('[AskPage] Question:', question);
-        console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
-
         const encryptedApiKey = await getValue(AZURE_OPENAI_API_KEY_STORAGE, '');
         const endpoint = await getValue(AZURE_OPENAI_ENDPOINT_STORAGE, '');
         const deployment = await getValue(AZURE_OPENAI_DEPLOYMENT_STORAGE, '');
         const apiVersion = await getValue(AZURE_OPENAI_API_VERSION_STORAGE, '2024-10-21');
 
-        console.log('[AskPage] Endpoint:', endpoint);
-        console.log('[AskPage] Deployment:', deployment);
-        console.log('[AskPage] API Version:', apiVersion);
-        console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
-
         if (!encryptedApiKey) {
-            appendMessage('assistant', '請點擊擴充功能圖示設定您的 Azure OpenAI API Key。');
+            appendErrorMessageAndStore(question, displayedQuestion, '請點擊擴充功能圖示設定您的 Azure OpenAI API Key。');
             return;
         }
 
         if (!endpoint) {
-            appendMessage('assistant', '請點擊擴充功能圖示設定您的 Azure OpenAI Endpoint。');
+            appendErrorMessageAndStore(question, displayedQuestion, '請點擊擴充功能圖示設定您的 Azure OpenAI Endpoint。');
             return;
         }
 
         if (!deployment) {
-            appendMessage('assistant', '請點擊擴充功能圖示設定您的 Azure OpenAI Deployment Name。');
+            appendErrorMessageAndStore(question, displayedQuestion, '請點擊擴充功能圖示設定您的 Azure OpenAI Deployment Name。');
             return;
         }
 
         const apiKey = await decryptApiKey(encryptedApiKey);
-        console.log('[AskPage] Decrypted API key available:', apiKey ? 'Yes' : 'No');
-        console.log('[AskPage] API key preview:', maskApiKey(apiKey));
-
         if (!apiKey) {
-            appendMessage('assistant', '無法解密 Azure OpenAI API Key，請重新設定。');
+            appendErrorMessageAndStore(question, displayedQuestion, '無法解密 Azure OpenAI API Key，請重新設定。');
             return;
         }
 
-        appendMessage('assistant', '...thinking...');
+        const progressMessage = createProgressMessage('正在準備 Azure OpenAI 工具調用...');
 
         const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
-        console.log('[AskPage] Full page context length:', pageConversationContext.pageContext.content.length);
-
-        const messages = [
-            {
-                role: 'system',
-                content: `${pageConversationContext.systemPrompt}\n\n${pageConversationContext.conversationContextText}`
-            },
-            ...getConversationMessagesForTextProviders(),
-            { role: 'user', content: question }
-        ];
-        console.log('[AskPage] Context mode:', pageConversationContext.contextMode);
-        console.log('[AskPage] Conversation history messages:', conversationHistory.length);
-
-        // Azure OpenAI models differ in which token limit parameter they accept:
-        // - gpt-5* models require max_completion_tokens and do not support temperature
-        // - other models use max_tokens
+        updateProgressMessage(progressMessage, '正在整理頁面上下文...');
         const isGpt5Model = deployment.startsWith('gpt-5');
-
-        const requestBody = {
-            messages: messages
-        };
-
-        // Add temperature parameter only for models that support it
-        if (!isGpt5Model) {
-            requestBody.temperature = 0.7;
-        }
-
-        if (isGpt5Model) {
-            requestBody.max_completion_tokens = 2048;
-        } else {
-            requestBody.max_tokens = 2048;
-        }
-
-        console.log('[AskPage] ===== PREPARING AZURE OPENAI API REQUEST =====');
-        console.log('[AskPage] Request body structure:', {
-            messages_count: requestBody.messages.length,
-            ...(requestBody.temperature !== undefined && { temperature: requestBody.temperature }),
-            ...(requestBody.max_completion_tokens !== undefined ? { max_completion_tokens: requestBody.max_completion_tokens } : { max_tokens: requestBody.max_tokens })
-        });
-
-        // Construct Azure OpenAI endpoint URL
-        // Format: https://{endpoint}/openai/deployments/{deployment-id}/chat/completions?api-version={api-version}
-        let azureEndpoint = endpoint.trim();
-        // Remove trailing slash if present
-        if (azureEndpoint.endsWith('/')) {
-            azureEndpoint = azureEndpoint.slice(0, -1);
-        }
+        const azureEndpoint = endpoint.trim().replace(/\/$/, '');
         const apiUrl = `${azureEndpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
-        console.log('[AskPage] Full API URL:', apiUrl);
 
-        let responseData;
         try {
-            console.log('[AskPage] Sending request to Azure OpenAI API...');
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'api-key': apiKey
+            const answer = await runOpenAIStyleToolLoop({
+                providerLabel: 'Azure OpenAI',
+                initialMessages: buildTextProviderMessages(pageConversationContext, question),
+                buildRequestBody: (messages, useTools) => {
+                    const requestBody = { messages };
+                    if (!isGpt5Model) {
+                        requestBody.temperature = 0.7;
+                    }
+
+                    if (isGpt5Model) {
+                        requestBody.max_completion_tokens = 2048;
+                    } else {
+                        requestBody.max_tokens = 2048;
+                    }
+
+                    if (useTools) {
+                        requestBody.tools = getOpenAIToolDefinitions();
+                    }
+
+                    return requestBody;
                 },
-                body: JSON.stringify(requestBody)
+                sendRequest: async (requestBody) => {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'api-key': apiKey
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    if (!response.ok) {
+                        const errorBody = await response.text();
+                        if (response.status === 401) {
+                            throw createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 Azure OpenAI API Key 設定。');
+                        }
+                        if (response.status === 404) {
+                            throw createHttpError(response.status, response.statusText, errorBody, '找不到指定的部署，請檢查您的 Endpoint 和 Deployment Name 設定。');
+                        }
+                        if (response.status === 429) {
+                            throw createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。');
+                        }
+                        if (response.status >= 500) {
+                            throw createHttpError(response.status, response.statusText, errorBody, 'Azure OpenAI 服務暫時不可用，請稍後再試。');
+                        }
+                        throw createHttpError(response.status, response.statusText, errorBody);
+                    }
+
+                    return await response.json();
+                },
+                onStatusUpdate: (status) => updateProgressMessage(progressMessage, status)
             });
 
-            console.log('[AskPage] ===== AZURE OPENAI API RESPONSE RECEIVED =====');
-            console.log('[AskPage] Response status:', response.status);
-            console.log('[AskPage] Response ok:', response.ok);
-            console.log('[AskPage] Response headers:', Object.fromEntries(response.headers.entries()));
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error('[AskPage] Azure OpenAI API Error response body:', errorBody);
-
-                // Handle specific error cases
-                if (response.status === 401) {
-                    throw new Error('無效的 API Key，請檢查您的 Azure OpenAI API Key 設定。');
-                } else if (response.status === 404) {
-                    throw new Error('找不到指定的部署，請檢查您的 Endpoint 和 Deployment Name 設定。');
-                } else if (response.status === 429) {
-                    throw new Error('API 請求頻率過高，請稍後再試。');
-                } else if (response.status >= 500) {
-                    throw new Error('Azure OpenAI 服務暫時不可用，請稍後再試。');
-                } else {
-                    throw new Error(`${response.status} ${response.statusText}: ${errorBody}`);
-                }
-            }
-
-            responseData = await response.json();
-            console.log('[AskPage] ===== AZURE OPENAI API RESPONSE PARSED =====');
-            console.log('[AskPage] Response data structure:', {
-                has_choices: !!responseData.choices,
-                choices_count: responseData.choices?.length || 0,
-                first_choice_has_message: !!responseData.choices?.[0]?.message,
-                first_choice_content_length: responseData.choices?.[0]?.message?.content?.length || 0
-            });
-
-        } catch (err) {
-            console.error('[AskPage] ===== AZURE OPENAI API CALL FAILED =====');
-            console.error('[AskPage] Azure OpenAI API 呼叫失敗:', err);
-            console.error('[AskPage] Error message:', err.message);
-            console.error('[AskPage] Error stack:', err.stack);
-            messagesEl.lastChild.remove();
-            appendMessage('assistant', `錯誤: ${err.message}`);
-            return;
+            removeProgressMessage(progressMessage);
+            appendMessage('assistant', answer.answer);
+            conversationSelectedText = capturedSelectedText;
+            addConversationTurn('user', question, displayedQuestion);
+            addConversationTurn('assistant', answer.answer);
+        } catch (error) {
+            console.error('[AskPage] Azure OpenAI API call failed:', error);
+            const errorMessage = `錯誤: ${error.message}`;
+            removeProgressMessage(progressMessage);
+            appendErrorMessageAndStore(question, displayedQuestion, errorMessage);
         }
-
-        console.log('[AskPage] ===== PROCESSING AZURE OPENAI RESPONSE =====');
-        messagesEl.lastChild.remove();
-        const answer = responseData.choices?.[0]?.message?.content || '未取得回應';
-        console.log('[AskPage] Final answer length:', answer.length);
-        console.log('[AskPage] Answer preview:', answer.substring(0, 200) + (answer.length > 200 ? '...' : ''));
-        appendMessage('assistant', answer);
-        conversationSelectedText = capturedSelectedText;
-        addConversationTurn('user', question, displayedQuestion);
-        addConversationTurn('assistant', answer);
-        console.log('[AskPage] ===== AZURE OPENAI API CALL COMPLETED =====');
     }
 
     async function askOpenAICompatible(question, capturedSelectedText = '', displayedQuestion = question) {
-        const messagesEl = document.getElementById('gemini-qna-messages');
         console.log('[AskPage] ===== OPENAI COMPATIBLE API CALL STARTED =====');
-        console.log('[AskPage] Question:', question);
-
         const encryptedApiKey = await getValue(OPENAI_COMPATIBLE_API_KEY_STORAGE, '');
         const endpoint = await getValue(OPENAI_COMPATIBLE_ENDPOINT_STORAGE, 'http://localhost:11434/v1');
         const selectedModel = await getValue(OPENAI_COMPATIBLE_MODEL_STORAGE, '');
 
-        console.log('[AskPage] Selected model:', selectedModel);
-        console.log('[AskPage] Endpoint:', endpoint);
-
-        // API Key is optional for some compatible providers (e.g. Ollama)
         let apiKey = '';
         if (encryptedApiKey) {
             apiKey = await decryptApiKey(encryptedApiKey);
         }
 
-        appendMessage('assistant', '...thinking...');
+        const progressMessage = createProgressMessage('正在準備 OpenAI Compatible 工具調用...');
 
         const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
-        const messages = [
-            {
-                role: 'system',
-                content: `${pageConversationContext.systemPrompt}\n\n${pageConversationContext.conversationContextText}`
-            },
-            ...getConversationMessagesForTextProviders(),
-            { role: 'user', content: question }
-        ];
-        console.log('[AskPage] Full page context length:', pageConversationContext.pageContext.content.length);
-        console.log('[AskPage] Context mode:', pageConversationContext.contextMode);
-        console.log('[AskPage] Conversation history messages:', conversationHistory.length);
-
-        const requestBody = {
-            messages: messages,
-            temperature: 0.7
-        };
-
-        if (selectedModel) {
-            requestBody.model = selectedModel;
-        }
-
-        // Construct full URL
-        // Remove trailing slash if present
+        updateProgressMessage(progressMessage, '正在整理頁面上下文...');
         const cleanEndpoint = endpoint.replace(/\/$/, '');
         const url = cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`;
 
-        console.log('[AskPage] Request URL:', url);
-
         try {
-            const headers = {
-                'Content-Type': 'application/json'
-            };
-            if (apiKey) {
-                headers['Authorization'] = `Bearer ${apiKey}`;
-            }
+            const answer = await runOpenAIStyleToolLoop({
+                providerLabel: 'OpenAI Compatible',
+                initialMessages: buildTextProviderMessages(pageConversationContext, question),
+                buildRequestBody: (messages, useTools) => {
+                    const requestBody = {
+                        messages,
+                        temperature: 0.7
+                    };
 
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify(requestBody)
+                    if (selectedModel) {
+                        requestBody.model = selectedModel;
+                    }
+
+                    if (useTools) {
+                        requestBody.tools = getOpenAIToolDefinitions();
+                    }
+
+                    return requestBody;
+                },
+                sendRequest: async (requestBody) => {
+                    const headers = {
+                        'Content-Type': 'application/json'
+                    };
+                    if (apiKey) {
+                        headers.Authorization = `Bearer ${apiKey}`;
+                    }
+
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    if (!response.ok) {
+                        const errorBody = await response.text();
+                        throw createHttpError(response.status, response.statusText, errorBody);
+                    }
+
+                    return await response.json();
+                },
+                allowToolFallback: true,
+                onStatusUpdate: (status) => updateProgressMessage(progressMessage, status)
             });
 
-            if (!response.ok) {
-                const errorBody = await response.text();
-                throw new Error(`${response.status} ${response.statusText}: ${errorBody}`);
-            }
-
-            const responseData = await response.json();
-            messagesEl.lastChild.remove();
-
-            const answer = responseData.choices?.[0]?.message?.content || '未取得回應';
-            appendMessage('assistant', answer);
+            removeProgressMessage(progressMessage);
+            const finalAnswer = answer.fallbackUsed
+                ? `⚠️ **目前這個 OpenAI Compatible 端點未完整支援 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n${answer.answer}`
+                : answer.answer;
+            appendMessage('assistant', finalAnswer);
             conversationSelectedText = capturedSelectedText;
             addConversationTurn('user', question, displayedQuestion);
-            addConversationTurn('assistant', answer);
-
-        } catch (err) {
-            console.error('[AskPage] OpenAI Compatible API call failed:', err);
-            messagesEl.lastChild.remove();
-            appendMessage('assistant', `錯誤: ${err.message}`);
+            addConversationTurn('assistant', finalAnswer);
+        } catch (error) {
+            console.error('[AskPage] OpenAI Compatible API call failed:', error);
+            const errorMessage = `錯誤: ${error.message}`;
+            removeProgressMessage(progressMessage);
+            appendErrorMessageAndStore(question, displayedQuestion, errorMessage);
         }
     }
 
-    // Generic AI asking function that routes to the appropriate provider
     async function askAI(question, capturedSelectedText = '', displayedQuestion = question) {
         const provider = await getValue(PROVIDER_STORAGE, 'gemini');
         console.log('[AskPage] Using provider:', provider);

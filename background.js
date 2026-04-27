@@ -145,10 +145,236 @@ chrome.runtime.onInstalled.addListener((details) => {
     });
 });
 
+async function executeMainWorldJavaScript(tabId, code) {
+    const executionResults = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: 'MAIN',
+        func: async (sourceCode) => {
+            function truncateToolText(value, maxLength = 400) {
+                const text = String(value || '');
+                return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+            }
+
+            function escapeSelectorValue(value) {
+                const rawValue = String(value || '');
+                if (window.CSS && typeof window.CSS.escape === 'function') {
+                    return window.CSS.escape(rawValue);
+                }
+                return rawValue.replace(/([ !"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+            }
+
+            function buildElementSelector(element) {
+                if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+                    return '';
+                }
+
+                if (element.id) {
+                    return `#${escapeSelectorValue(element.id)}`;
+                }
+
+                const segments = [];
+                let current = element;
+                while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body) {
+                    let segment = current.tagName.toLowerCase();
+                    if (current.name) {
+                        segment += `[name="${String(current.name).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`;
+                    } else {
+                        const siblings = Array.from(current.parentElement ? current.parentElement.children : [])
+                            .filter((sibling) => sibling.tagName === current.tagName);
+                        if (siblings.length > 1) {
+                            segment += `:nth-of-type(${siblings.indexOf(current) + 1})`;
+                        }
+                    }
+                    segments.unshift(segment);
+                    current = current.parentElement;
+                }
+
+                return segments.join(' > ');
+            }
+
+            function getSelectionSnapshot() {
+                const selection = window.getSelection();
+                if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+                    return {
+                        hasSelection: false,
+                        source: 'live',
+                        text: '',
+                        html: ''
+                    };
+                }
+
+                const range = selection.getRangeAt(0).cloneRange();
+                const container = document.createElement('div');
+                container.appendChild(range.cloneContents());
+
+                return {
+                    hasSelection: true,
+                    source: 'live',
+                    text: range.toString().trim(),
+                    html: container.innerHTML
+                };
+            }
+
+            function serializeJavaScriptResult(value, depth = 0, seen = new WeakSet()) {
+                if (value === null || value === undefined) {
+                    return value;
+                }
+
+                if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                    return value;
+                }
+
+                if (typeof value === 'bigint') {
+                    return `${value}n`;
+                }
+
+                if (typeof value === 'function') {
+                    return `[Function ${value.name || 'anonymous'}]`;
+                }
+
+                if (value instanceof Date) {
+                    return value.toISOString();
+                }
+
+                if (value instanceof RegExp) {
+                    return value.toString();
+                }
+
+                if (value instanceof Node) {
+                    if (value.nodeType === Node.ELEMENT_NODE) {
+                        return {
+                            nodeType: 'element',
+                            tagName: value.tagName.toLowerCase(),
+                            selector: buildElementSelector(value),
+                            text: truncateToolText(value.innerText || value.textContent || '', 240)
+                        };
+                    }
+
+                    if (value.nodeType === Node.TEXT_NODE) {
+                        return {
+                            nodeType: 'text',
+                            text: truncateToolText(value.textContent || '', 240)
+                        };
+                    }
+
+                    return `[Node type=${value.nodeType}]`;
+                }
+
+                if (value === window) {
+                    return '[Window]';
+                }
+
+                if (value === document) {
+                    return '[Document]';
+                }
+
+                if (depth >= 4) {
+                    return '[MaxDepthExceeded]';
+                }
+
+                if (Array.isArray(value)) {
+                    return value.slice(0, 20).map((item) => serializeJavaScriptResult(item, depth + 1, seen));
+                }
+
+                if (typeof value === 'object') {
+                    if (seen.has(value)) {
+                        return '[Circular]';
+                    }
+                    seen.add(value);
+
+                    const result = {};
+                    Object.keys(value).slice(0, 30).forEach((key) => {
+                        result[key] = serializeJavaScriptResult(value[key], depth + 1, seen);
+                    });
+                    return result;
+                }
+
+                return String(value);
+            }
+
+            try {
+                const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+                const runner = new AsyncFunction(
+                    'window',
+                    'document',
+                    'selection',
+                    'buildElementSelector',
+                    sourceCode
+                );
+                const rawResult = await runner(
+                    window,
+                    document,
+                    getSelectionSnapshot(),
+                    buildElementSelector
+                );
+
+                return {
+                    success: true,
+                    message: '已在頁面主世界執行 JavaScript。',
+                    data: {
+                        executionWorld: 'main',
+                        resultType: rawResult === null ? 'null' : typeof rawResult,
+                        result: serializeJavaScriptResult(rawResult)
+                    },
+                    warnings: []
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    message: `JavaScript 執行失敗：${error?.message || '未知錯誤'}`,
+                    data: {
+                        executionWorld: 'main',
+                        errorName: error?.name || 'Error',
+                        errorMessage: error?.message || '未知錯誤',
+                        stack: truncateToolText(error?.stack || '', 2000)
+                    },
+                    warnings: [`${error?.name || 'Error'}: ${error?.message || '未知錯誤'}`]
+                };
+            }
+        },
+        args: [code]
+    });
+
+    return executionResults?.[0]?.result;
+}
+
 // Add message listener for debugging
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('[AskPage] Background received message:', request);
     console.log('[AskPage] From sender:', sender);
+
+    if (request.action === 'execute-main-world-javascript') {
+        (async () => {
+            try {
+                const tabId = sender.tab?.id;
+                const code = String(request.code || '');
+                if (!tabId) {
+                    throw new Error('找不到目前頁籤，無法執行 JavaScript。');
+                }
+                if (!code.trim()) {
+                    throw new Error('code 參數不可為空。');
+                }
+
+                const result = await executeMainWorldJavaScript(tabId, code);
+                if (!result) {
+                    throw new Error('沒有取得 JavaScript 執行結果。');
+                }
+
+                sendResponse({
+                    success: true,
+                    result
+                });
+            } catch (error) {
+                console.error('[AskPage] Failed to execute main-world JavaScript:', error);
+                sendResponse({
+                    success: false,
+                    error: error.message || '主世界 JavaScript 執行失敗。'
+                });
+            }
+        })();
+
+        return true;
+    }
 
     // 處理截圖請求
     if (request.action === 'capture-screenshot') {

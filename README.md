@@ -1,13 +1,14 @@
 # AskPage 擴充功能
 
-使用 Gemini、OpenAI 或 Azure OpenAI API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
+使用 Gemini、OpenAI、Azure OpenAI 或 OpenAI Compatible API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
 
 ## ✨ 功能特色
 
-- 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI 和 Azure OpenAI，可自由切換
+- 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI、Azure OpenAI 與 OpenAI Compatible，可自由切換
 - 💬 **多輪對話脈絡延續** - 追問時會自動帶入前文，切換不同 AI Provider 也能延續同一段對話
+- 🛠️ **單頁面 Tool Calling** - 模型可直接讀取頁面標題、選取範圍、表單欄位，並可填表、點擊元素、替換部分 DOM、執行 JavaScript
 - 🔐 **加密安全儲存** - API 金鑰使用 AES-256-GCM 加密保護
-- 🎯 **智慧模型選擇** - 支援 Gemini 全系列模型、OpenAI 8 種模型和 Azure OpenAI 部署
+- 🎯 **智慧模型選擇** - 支援 Gemini 全系列模型、多種 OpenAI 模型和 Azure OpenAI 部署
 - 📝 支援選取文字進行針對性提問
 - ⌨️ 快速鍵支援 (Ctrl+Shift+Y 開啟對話，Ctrl+Shift+S 切換提供者)
 - 🎨 美觀的對話介面，即時顯示當前使用的 AI 提供者
@@ -48,6 +49,31 @@
 2. 開啟對話框
 3. 直接提問，AI 會專注於您選取的內容
 
+### Tool calling 使用方式
+
+當您直接下達需要操作頁面的自然語言指令時，AskPage 會讓支援的模型自動呼叫頁面工具。例如：
+
+- `幫我翻譯選取範圍`：模型可先讀取目前選取內容，再把翻譯結果回填到選取範圍
+- `幫我將所有欄位寫入假資料`：模型可先檢查表單欄位，再逐一填入假資料
+- `幫我點擊送出按鈕`：模型可根據 selector 或按鈕文字找到可點擊元素
+- `幫我執行一段 JavaScript 找出所有必填欄位`：模型可直接呼叫 `run_javascript` 在目前頁面主世界執行程式碼
+
+目前內建的頁面工具包括：
+
+- `get_page_title`
+- `inspect_selection`
+- `inspect_form_fields`
+- `fill_form_fields`
+- `replace_dom_content`
+- `get_element_content`
+- `click_element`
+- `run_javascript`
+
+> [!NOTE]
+> AskPage 會在多步驟工具調用期間即時顯示目前輪次、模型選擇的工具名稱，以及正在執行的工具，不再只顯示 `...thinking...`。變更型工具會直接執行，若失敗則錯誤會回傳給模型繼續處理。
+>
+> `run_javascript` 會透過 `chrome.scripting.executeScript(..., { world: 'MAIN' })` 在頁面主世界執行，因此通常不受網站自身 CSP 限制，也能直接存取頁面腳本建立的全域變數與函式；但在瀏覽器受限頁面、不可注入的框架或無法序列化的返回值情況下，仍可能失敗。
+
 ### 內建指令
 
 - `/clear` - 清除提問歷史記錄
@@ -76,7 +102,7 @@
 ### 第一次使用
 
 1. 點擊擴充功能圖示（第一次使用時會先開啟設定頁面完成設定）
-2. 在「AI 提供者」頁籤中選擇您偏好的 AI 提供者 (Gemini、OpenAI 或 Azure OpenAI)
+2. 在「AI 提供者」頁籤中選擇您偏好的 AI 提供者 (Gemini、OpenAI、Azure OpenAI 或 OpenAI Compatible)
 3. 輸入對應的 API Key 和相關設定
 4. 選擇想要使用的模型或部署
 5. 點擊「儲存設定」
@@ -114,6 +140,13 @@
 4. 在「Model deployments」中查看您的部署名稱
 5. 將這些資訊填入擴充功能設定中
 
+#### OpenAI Compatible
+
+1. 準備相容於 OpenAI Chat Completions 的 endpoint（例如支援 `/v1/chat/completions` 的服務）
+2. 視服務需求填入 API Key（部分端點可省略）
+3. 輸入 endpoint URL 與 model 名稱
+4. 儲存設定後即可切換使用
+
 ### 支援的模型
 
 #### Gemini 模型
@@ -125,6 +158,9 @@
 
 #### OpenAI 模型
 
+- gpt-5.5
+- gpt-5.4
+- gpt-5.3
 - gpt-5.2
 - gpt-5.1
 - gpt-5
@@ -148,6 +184,15 @@
   - Endpoint URL (例如：`https://your-resource.openai.azure.com`)
   - Deployment Name (您在 Azure 中建立的部署名稱)
   - API Version (預設：`2024-10-21`)
+
+#### OpenAI Compatible
+
+- 支援相容於 OpenAI Chat Completions API 的自訂 endpoint
+- 需要提供：
+  - Endpoint URL
+  - Model 名稱（如端點需要）
+  - API Key（部分端點可省略）
+- Tool calling 採 best-effort 模式；若端點不支援，AskPage 會退回一般文字對話
 
 支援的 API 版本：
 - 2024-10-21
