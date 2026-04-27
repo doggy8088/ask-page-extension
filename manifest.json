@@ -6,8 +6,12 @@
   "permissions": [
     "storage",
     "activeTab",
-    "scripting"
+    "userScripts"
   ],
+  "host_permissions": [
+    "*://*/*"
+  ],
+  "minimum_chrome_version": "135",
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",

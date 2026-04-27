@@ -100,6 +100,8 @@ AskPage 也支援使用者在設定頁建立自訂斜線指令。每筆資料包
   - 可使用 `await`
   - 若要把結果回傳給模型，需明確 `return`
   - 可使用 `document`、`window`、`selection` 與 `buildElementSelector`
+  - 透過 `chrome.userScripts.execute(..., { world: 'MAIN' })` 執行，以避開 GitHub 等網站對 `unsafe-eval` 與 `data:` script 的 CSP 限制
+  - 需要 Chrome 135+，並啟用 User Scripts（Chrome 138+ 需在擴充功能詳細資料頁打開 **Allow User Scripts**）
 
 | 參數 | 型別 | 說明 |
 | --- | --- | --- |

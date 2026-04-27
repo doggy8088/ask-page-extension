@@ -68,7 +68,11 @@
 > [!NOTE]
 > AskPage 會在多步驟工具調用期間即時顯示目前輪次、模型選擇的工具名稱，以及正在執行的工具，不再只顯示 `...thinking...`。變更型工具會直接執行，若失敗則錯誤會回傳給模型繼續處理。
 >
-> `run_js` 會透過 `chrome.scripting.executeScript(..., { world: 'MAIN' })` 在頁面主世界執行，因此通常不受網站自身 CSP 限制，也能直接存取頁面腳本建立的全域變數與函式；但在瀏覽器受限頁面、不可注入的框架或無法序列化的返回值情況下，仍可能失敗。
+> `run_js` 現在會透過 `chrome.userScripts.execute(..., { world: 'MAIN' })` 在頁面主世界執行任意 JavaScript，專門用來處理 GitHub 這類會阻擋 `unsafe-eval` 與 `data:` script 的網站。這項功能需要：
+>
+> 1. Chrome 135 以上版本
+> 2. 擴充功能已取得網站 `host_permissions`
+> 3. 啟用 User Scripts（Chrome 138+ 為擴充功能詳細資料頁的 **Allow User Scripts**；較舊版本則需開啟 **開發人員模式**）
 
 ### 內建指令
 

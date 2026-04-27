@@ -146,196 +146,242 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 async function executeMainWorldJavaScript(tabId, code) {
-    const executionResults = await chrome.scripting.executeScript({
+    function truncateToolText(value, maxLength = 400) {
+        const text = String(value || '');
+        return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+    }
+
+    function createErrorResult(message, errorName = 'Error', stack = '') {
+        return {
+            success: false,
+            message: `JavaScript 執行失敗：${message || '未知錯誤'}`,
+            data: {
+                executionWorld: 'main',
+                errorName,
+                errorMessage: message || '未知錯誤',
+                stack: truncateToolText(stack || '', 2000)
+            },
+            warnings: [`${errorName}: ${message || '未知錯誤'}`]
+        };
+    }
+
+    async function getUserScriptsAvailabilityError() {
+        const chromeVersion = Number((navigator.userAgent.match(/(?:Chrome|Chromium)\/([0-9]+)/) || [])[1] || 0);
+
+        if (!chrome.userScripts) {
+            return '目前瀏覽器不支援 User Scripts API，請升級到較新的 Chrome。';
+        }
+
+        if (typeof chrome.userScripts.execute !== 'function') {
+            return '目前瀏覽器版本過舊，無法執行 run_js。請升級到 Chrome 135 以上版本。';
+        }
+
+        try {
+            await chrome.userScripts.getScripts();
+            return '';
+        } catch (error) {
+            if (chromeVersion >= 138) {
+                return 'run_js 需要在擴充功能詳細資料頁啟用「Allow User Scripts」後才能使用。';
+            }
+
+            return `run_js 需要啟用 User Scripts。請先到 chrome://extensions 開啟開發人員模式，再重新整理目前頁面。${error?.message ? ` (${error.message})` : ''}`;
+        }
+    }
+
+    function buildMainWorldExecutionScript(sourceCode) {
+        return [
+            '(async () => {',
+            '    function truncateToolText(value, maxLength = 400) {',
+            '        const text = String(value || \'\');',
+            '        return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;',
+            '    }',
+            '',
+            '    function escapeSelectorValue(value) {',
+            '        const rawValue = String(value || \'\');',
+            '        if (window.CSS && typeof window.CSS.escape === \'function\') {',
+            '            return window.CSS.escape(rawValue);',
+            '        }',
+            '        return rawValue.replace(/([ !"#$%&\'()*+,./:;<=>?@[\\\\\\]^`{|}~])/g, \'\\\\$1\');',
+            '    }',
+            '',
+            '    function buildElementSelector(element) {',
+            '        if (!element || element.nodeType !== Node.ELEMENT_NODE) {',
+            '            return \'\';',
+            '        }',
+            '',
+            '        if (element.id) {',
+            '            return `#${escapeSelectorValue(element.id)}`;',
+            '        }',
+            '',
+            '        const segments = [];',
+            '        let current = element;',
+            '        while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body) {',
+            '            let segment = current.tagName.toLowerCase();',
+            '            if (current.name) {',
+            '                segment += `[name="${String(current.name).replace(/\\\\/g, \'\\\\\\\\\').replace(/"/g, \'\\\\"\')}"]`;',
+            '            } else {',
+            '                const siblings = Array.from(current.parentElement ? current.parentElement.children : [])',
+            '                    .filter((sibling) => sibling.tagName === current.tagName);',
+            '                if (siblings.length > 1) {',
+            '                    segment += `:nth-of-type(${siblings.indexOf(current) + 1})`;',
+            '                }',
+            '            }',
+            '            segments.unshift(segment);',
+            '            current = current.parentElement;',
+            '        }',
+            '',
+            '        return segments.join(\' > \');',
+            '    }',
+            '',
+            '    function getSelectionSnapshot() {',
+            '        const selection = window.getSelection();',
+            '        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {',
+            '            return {',
+            '                hasSelection: false,',
+            '                source: \'live\',',
+            '                text: \'\',',
+            '                html: \'\'',
+            '            };',
+            '        }',
+            '',
+            '        const range = selection.getRangeAt(0).cloneRange();',
+            '        const container = document.createElement(\'div\');',
+            '        container.appendChild(range.cloneContents());',
+            '',
+            '        return {',
+            '            hasSelection: true,',
+            '            source: \'live\',',
+            '            text: range.toString().trim(),',
+            '            html: container.innerHTML',
+            '        };',
+            '    }',
+            '',
+            '    function serializeJavaScriptResult(value, depth = 0, seen = new WeakSet()) {',
+            '        if (value === null || value === undefined) {',
+            '            return value;',
+            '        }',
+            '',
+            '        if (typeof value === \'string\' || typeof value === \'number\' || typeof value === \'boolean\') {',
+            '            return value;',
+            '        }',
+            '',
+            '        if (typeof value === \'bigint\') {',
+            '            return `${value}n`;',
+            '        }',
+            '',
+            '        if (typeof value === \'function\') {',
+            '            return `[Function ${value.name || \'anonymous\'}]`;',
+            '        }',
+            '',
+            '        if (value instanceof Date) {',
+            '            return value.toISOString();',
+            '        }',
+            '',
+            '        if (value instanceof RegExp) {',
+            '            return value.toString();',
+            '        }',
+            '',
+            '        if (value instanceof Node) {',
+            '            if (value.nodeType === Node.ELEMENT_NODE) {',
+            '                return {',
+            '                    nodeType: \'element\',',
+            '                    tagName: value.tagName.toLowerCase(),',
+            '                    selector: buildElementSelector(value),',
+            '                    text: truncateToolText(value.innerText || value.textContent || \'\', 240)',
+            '                };',
+            '            }',
+            '',
+            '            if (value.nodeType === Node.TEXT_NODE) {',
+            '                return {',
+            '                    nodeType: \'text\',',
+            '                    text: truncateToolText(value.textContent || \'\', 240)',
+            '                };',
+            '            }',
+            '',
+            '            return `[Node type=${value.nodeType}]`;',
+            '        }',
+            '',
+            '        if (value === window) {',
+            '            return \'[Window]\';',
+            '        }',
+            '',
+            '        if (value === document) {',
+            '            return \'[Document]\';',
+            '        }',
+            '',
+            '        if (depth >= 4) {',
+            '            return \'[MaxDepthExceeded]\';',
+            '        }',
+            '',
+            '        if (Array.isArray(value)) {',
+            '            return value.slice(0, 20).map((item) => serializeJavaScriptResult(item, depth + 1, seen));',
+            '        }',
+            '',
+            '        if (typeof value === \'object\') {',
+            '            if (seen.has(value)) {',
+            '                return \'[Circular]\';',
+            '            }',
+            '            seen.add(value);',
+            '',
+            '            const result = {};',
+            '            Object.keys(value).slice(0, 30).forEach((key) => {',
+            '                result[key] = serializeJavaScriptResult(value[key], depth + 1, seen);',
+            '            });',
+            '            return result;',
+            '        }',
+            '',
+            '        return String(value);',
+            '    }',
+            '',
+            '    try {',
+            '        const rawResult = await (async (window, document, selection, buildElementSelector) => {',
+            sourceCode,
+            '        })(window, document, getSelectionSnapshot(), buildElementSelector);',
+            '',
+            '        return {',
+            '            success: true,',
+            '            message: \'已在頁面主世界執行 JavaScript。\',',
+            '            data: {',
+            '                executionWorld: \'main\',',
+            '                resultType: rawResult === null ? \'null\' : typeof rawResult,',
+            '                result: serializeJavaScriptResult(rawResult)',
+            '            },',
+            '            warnings: []',
+            '        };',
+            '    } catch (error) {',
+            '        return {',
+            '            success: false,',
+            '            message: `JavaScript 執行失敗：${error?.message || \'未知錯誤\'}`,',
+            '            data: {',
+            '                executionWorld: \'main\',',
+            '                errorName: error?.name || \'Error\',',
+            '                errorMessage: error?.message || \'未知錯誤\',',
+            '                stack: truncateToolText(error?.stack || \'\', 2000)',
+            '            },',
+            '            warnings: [`${error?.name || \'Error\'}: ${error?.message || \'未知錯誤\'}`]',
+            '        };',
+            '    }',
+            '})()'
+        ].join('\n');
+    }
+
+    const userScriptsError = await getUserScriptsAvailabilityError();
+    if (userScriptsError) {
+        return createErrorResult(userScriptsError, 'UserScriptsUnavailableError');
+    }
+
+    const executionResults = await chrome.userScripts.execute({
         target: { tabId },
+        injectImmediately: true,
         world: 'MAIN',
-        func: async (sourceCode) => {
-            function truncateToolText(value, maxLength = 400) {
-                const text = String(value || '');
-                return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+        js: [
+            {
+                code: buildMainWorldExecutionScript(code)
             }
-
-            function escapeSelectorValue(value) {
-                const rawValue = String(value || '');
-                if (window.CSS && typeof window.CSS.escape === 'function') {
-                    return window.CSS.escape(rawValue);
-                }
-                return rawValue.replace(/([ !"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
-            }
-
-            function buildElementSelector(element) {
-                if (!element || element.nodeType !== Node.ELEMENT_NODE) {
-                    return '';
-                }
-
-                if (element.id) {
-                    return `#${escapeSelectorValue(element.id)}`;
-                }
-
-                const segments = [];
-                let current = element;
-                while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body) {
-                    let segment = current.tagName.toLowerCase();
-                    if (current.name) {
-                        segment += `[name="${String(current.name).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`;
-                    } else {
-                        const siblings = Array.from(current.parentElement ? current.parentElement.children : [])
-                            .filter((sibling) => sibling.tagName === current.tagName);
-                        if (siblings.length > 1) {
-                            segment += `:nth-of-type(${siblings.indexOf(current) + 1})`;
-                        }
-                    }
-                    segments.unshift(segment);
-                    current = current.parentElement;
-                }
-
-                return segments.join(' > ');
-            }
-
-            function getSelectionSnapshot() {
-                const selection = window.getSelection();
-                if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-                    return {
-                        hasSelection: false,
-                        source: 'live',
-                        text: '',
-                        html: ''
-                    };
-                }
-
-                const range = selection.getRangeAt(0).cloneRange();
-                const container = document.createElement('div');
-                container.appendChild(range.cloneContents());
-
-                return {
-                    hasSelection: true,
-                    source: 'live',
-                    text: range.toString().trim(),
-                    html: container.innerHTML
-                };
-            }
-
-            function serializeJavaScriptResult(value, depth = 0, seen = new WeakSet()) {
-                if (value === null || value === undefined) {
-                    return value;
-                }
-
-                if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-                    return value;
-                }
-
-                if (typeof value === 'bigint') {
-                    return `${value}n`;
-                }
-
-                if (typeof value === 'function') {
-                    return `[Function ${value.name || 'anonymous'}]`;
-                }
-
-                if (value instanceof Date) {
-                    return value.toISOString();
-                }
-
-                if (value instanceof RegExp) {
-                    return value.toString();
-                }
-
-                if (value instanceof Node) {
-                    if (value.nodeType === Node.ELEMENT_NODE) {
-                        return {
-                            nodeType: 'element',
-                            tagName: value.tagName.toLowerCase(),
-                            selector: buildElementSelector(value),
-                            text: truncateToolText(value.innerText || value.textContent || '', 240)
-                        };
-                    }
-
-                    if (value.nodeType === Node.TEXT_NODE) {
-                        return {
-                            nodeType: 'text',
-                            text: truncateToolText(value.textContent || '', 240)
-                        };
-                    }
-
-                    return `[Node type=${value.nodeType}]`;
-                }
-
-                if (value === window) {
-                    return '[Window]';
-                }
-
-                if (value === document) {
-                    return '[Document]';
-                }
-
-                if (depth >= 4) {
-                    return '[MaxDepthExceeded]';
-                }
-
-                if (Array.isArray(value)) {
-                    return value.slice(0, 20).map((item) => serializeJavaScriptResult(item, depth + 1, seen));
-                }
-
-                if (typeof value === 'object') {
-                    if (seen.has(value)) {
-                        return '[Circular]';
-                    }
-                    seen.add(value);
-
-                    const result = {};
-                    Object.keys(value).slice(0, 30).forEach((key) => {
-                        result[key] = serializeJavaScriptResult(value[key], depth + 1, seen);
-                    });
-                    return result;
-                }
-
-                return String(value);
-            }
-
-            try {
-                const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-                const runner = new AsyncFunction(
-                    'window',
-                    'document',
-                    'selection',
-                    'buildElementSelector',
-                    sourceCode
-                );
-                const rawResult = await runner(
-                    window,
-                    document,
-                    getSelectionSnapshot(),
-                    buildElementSelector
-                );
-
-                return {
-                    success: true,
-                    message: '已在頁面主世界執行 JavaScript。',
-                    data: {
-                        executionWorld: 'main',
-                        resultType: rawResult === null ? 'null' : typeof rawResult,
-                        result: serializeJavaScriptResult(rawResult)
-                    },
-                    warnings: []
-                };
-            } catch (error) {
-                return {
-                    success: false,
-                    message: `JavaScript 執行失敗：${error?.message || '未知錯誤'}`,
-                    data: {
-                        executionWorld: 'main',
-                        errorName: error?.name || 'Error',
-                        errorMessage: error?.message || '未知錯誤',
-                        stack: truncateToolText(error?.stack || '', 2000)
-                    },
-                    warnings: [`${error?.name || 'Error'}: ${error?.message || '未知錯誤'}`]
-                };
-            }
-        },
-        args: [code]
+        ]
     });
 
-    return executionResults?.[0]?.result;
+    return executionResults?.[0]?.result || createErrorResult('沒有取得 JavaScript 執行結果。', 'UserScriptsExecutionError');
 }
 
 // Add message listener for debugging
