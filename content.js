@@ -1431,6 +1431,21 @@ async function createDialog() {
         return '**內建斜線命令：**\n- /clear - 清除歷史紀錄\n- /summary - 總結整個頁面';
     }
 
+    function buildUsageModeNotice(options = {}) {
+        const screenshotEnabled = options.screenshotEnabled === true;
+        const agentModeEnabled = options.agentModeEnabled === true;
+        const notices = [
+            screenshotEnabled
+                ? '📸 **截圖模式目前為啟用狀態**\n系統會在提問時自動附帶目前可視範圍的截圖作為輔助分析。'
+                : '📝 **截圖模式目前為停用狀態**\n頁問只會對目前網頁的文字內容進行分析，不會自動附帶截圖。',
+            agentModeEnabled
+                ? '🤖 **代理模式目前為啟用狀態**\n系統會使用多步驟代理的工具調用能力來分析與操作目前頁面。'
+                : '💬 **詢問模式目前為啟用狀態**\n系統只會根據頁面內容回答問題，不會呼叫頁面工具。'
+        ];
+
+        return `\n\n${notices.join('\n\n')}`;
+    }
+
     function buildCustomCommandListMarkdown(commands) {
         if (!commands.length) {
             return '';
@@ -1481,30 +1496,45 @@ async function createDialog() {
         });
     }
 
-    async function appendUsagePromptMessage(options = {}) {
+    async function buildUsagePromptMessage(options = {}) {
         const showUsageTipOnly = options.showUsageTipOnly || false;
+        const screenshotEnabled = await getScreenshotEnabled();
         const agentModeEnabled = await getAgentModeEnabled();
-        const htmlModeNotice = agentModeEnabled ?
-            '\n\n🤖 **代理模式目前為啟用狀態**\n系統會使用頁面 HTML 與工具調用能力來分析與操作目前頁面。' :
-            '';
         const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
         const customCommandsList = buildCustomCommandListMarkdown(customCommands);
         const customCommandsCopyText = buildCustomCommandListCopyText(customCommands);
         const activeSelectedText = showUsageTipOnly ? '' : getActiveSelectedText(capturedSelectedText);
+        const modeNotice = buildUsageModeNotice({ screenshotEnabled, agentModeEnabled });
         const builtInCommandsText = buildPromptCommandListMarkdown();
         const builtInCommandsCopyText = buildPromptCommandListCopyText();
         const optionsHintText = '\n\n滑鼠右鍵點擊擴充功能可透過選項功能設定更多自訂命令。';
 
         if (activeSelectedText) {
-            const messageText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${htmlModeNotice}\n\n💡 ${builtInCommandsText}${customCommandsList}${optionsHintText}`;
-            const copyText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${htmlModeNotice}\n\n💡 ${builtInCommandsCopyText}${customCommandsCopyText}${optionsHintText}`;
-            appendMessage('assistant', copyText, { renderedHtml: renderMarkdown(messageText), copyText });
-            return;
+            const messageText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${modeNotice}\n\n💡 ${builtInCommandsText}${customCommandsList}${optionsHintText}`;
+            const copyText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${modeNotice}\n\n💡 ${builtInCommandsCopyText}${customCommandsCopyText}${optionsHintText}`;
+            return {
+                text: copyText,
+                renderedHtml: renderMarkdown(messageText),
+                copyText
+            };
         }
 
-        const messageText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${htmlModeNotice}\n\n${builtInCommandsText}${customCommandsList}${optionsHintText}`;
-        const copyText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${htmlModeNotice}\n\n${builtInCommandsCopyText}${customCommandsCopyText}${optionsHintText}`;
-        appendMessage('assistant', copyText, { renderedHtml: renderMarkdown(messageText), copyText });
+        const messageText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${modeNotice}\n\n${builtInCommandsText}${customCommandsList}${optionsHintText}`;
+        const copyText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${modeNotice}\n\n${builtInCommandsCopyText}${customCommandsCopyText}${optionsHintText}`;
+        return {
+            text: copyText,
+            renderedHtml: renderMarkdown(messageText),
+            copyText
+        };
+    }
+
+    async function appendUsagePromptMessage(options = {}) {
+        const usageMessage = await buildUsagePromptMessage(options);
+        appendMessage('assistant', usageMessage.text, {
+            renderedHtml: usageMessage.renderedHtml,
+            copyText: usageMessage.copyText,
+            extraClassName: 'askpage-usage-prompt'
+        });
     }
 
     if (conversationHistory.length > 0) {
@@ -1674,6 +1704,7 @@ async function createDialog() {
     async function toggleModeWithUi(toggleModeFn, afterToggle) {
         const newState = await toggleModeFn();
         await updateModeToggleButtons();
+        await refreshUsagePromptMessage();
 
         if (afterToggle) {
             await afterToggle(newState);
@@ -1953,6 +1984,42 @@ async function createDialog() {
     }, true);
     btn.addEventListener('click', handleAsk);
 
+    function renderAssistantMessageElement(element, text, options = {}) {
+        element.innerHTML = options.renderedHtml || renderMarkdown(text);
+        enhanceCodeBlocks(element);
+        bindInteractiveCommandElements(element);
+
+        if (!options.suppressCopyButton) {
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-btn';
+            copyBtn.innerHTML = '📋';
+            copyBtn.title = '複製到剪貼簿';
+            copyBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await copyTextWithFeedback(copyBtn, options.copyText || text);
+            });
+            element.appendChild(copyBtn);
+        }
+    }
+
+    async function refreshUsagePromptMessage(options = {}) {
+        const targetMessagesEl = getActiveMessagesElement(messagesEl);
+        if (!targetMessagesEl) {
+            return;
+        }
+
+        const usagePromptEl = targetMessagesEl.querySelector('.askpage-usage-prompt');
+        if (!usagePromptEl) {
+            return;
+        }
+
+        const usageMessage = await buildUsagePromptMessage(options);
+        renderAssistantMessageElement(usagePromptEl, usageMessage.text, {
+            renderedHtml: usageMessage.renderedHtml,
+            copyText: usageMessage.copyText
+        });
+    }
+
     function appendMessage(role, text, options = {}) {
         const div = document.createElement('div');
         div.className = role === 'user' ? 'gemini-msg-user' : 'gemini-msg-assistant';
@@ -1963,22 +2030,7 @@ async function createDialog() {
                 .forEach((className) => div.classList.add(className));
         }
         if (role === 'assistant') {
-            div.innerHTML = options.renderedHtml || renderMarkdown(text);
-            enhanceCodeBlocks(div);
-            bindInteractiveCommandElements(div);
-
-            if (!options.suppressCopyButton) {
-                // 新增複製按鈕到助理訊息
-                const copyBtn = document.createElement('button');
-                copyBtn.className = 'copy-btn';
-                copyBtn.innerHTML = '📋';
-                copyBtn.title = '複製到剪貼簿';
-                copyBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    await copyTextWithFeedback(copyBtn, options.copyText || text);
-                });
-                div.appendChild(copyBtn);
-            }
+            renderAssistantMessageElement(div, text, options);
         } else {
             div.textContent = '你: ' + text;
         }

@@ -169,7 +169,11 @@ async function executeMainWorldJavaScript(tabId, code) {
         const chromeVersion = Number((navigator.userAgent.match(/(?:Chrome|Chromium)\/([0-9]+)/) || [])[1] || 0);
 
         if (!chrome.userScripts) {
-            return '目前瀏覽器不支援 User Scripts API，請升級到較新的 Chrome。';
+            if (chromeVersion >= 135) {
+                return '目前執行環境沒有提供 User Scripts API。這通常代表擴充功能尚未重新載入以套用最新權限，或您目前使用的瀏覽器發行版尚未支援這個 API。';
+            }
+
+            return '目前瀏覽器不支援 User Scripts API，請升級到 Chrome 135 以上版本。';
         }
 
         if (typeof chrome.userScripts.execute !== 'function') {
