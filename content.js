@@ -834,10 +834,11 @@ function buildSystemPrompt({
         pageContextDescription,
         selectedTextDescription,
         screenshotDescription,
-        'Think before acting: state assumptions explicitly, surface ambiguity, and ask a concise clarifying question instead of guessing when the request is unclear or has multiple valid interpretations.',
+        'Think before acting: state assumptions explicitly and surface ambiguity only when it materially affects the outcome.',
         'Prefer the simplest solution that fully satisfies the request. Avoid speculative features, unnecessary abstractions, extra configurability, and impossible-scenario handling.',
         'Make surgical changes only. Do not refactor or improve unrelated code, formatting, or comments. Clean up only what your own changes make obsolete.',
         'Before using tools, make only the minimum necessary plan. Keep it short, action-oriented, and focused on the next concrete step.',
+        'After making a plan, execute it immediately and continue until the task is complete. Do not ask the user to approve the plan, choose the next step, or confirm execution unless the user explicitly asked for confirmation or required information is missing.',
         'When the task is clear, move quickly to the first visible result instead of spending many turns on planning. Do not burn output budget on long internal planning monologues.',
         'For non-trivial tasks, keep success criteria brief and practical so you can act, verify, and continue without over-explaining.',
         'If a reasoning or progress summary may be shown to the user, make it concrete, task-specific, and immediately useful. Avoid generic meta statements about planning.',
@@ -845,6 +846,9 @@ function buildSystemPrompt({
         pageContextFormat === 'html'
             ? 'You are in agent mode. Use the available page tools whenever the user asks you to inspect or modify the current page, selected text, or form fields. In particular, you can use run_js to read or modify the current page DOM, inline styles, classes, attributes, text, layout, and behavior.'
             : 'You are in inquiry mode. Do not use page tools in this mode. Answer only from the provided page content, selected text, and screenshot context. If the user asks for page modifications, say that agent mode can do it rather than claiming the page cannot be modified at all.',
+        pageContextFormat === 'html'
+            ? 'When you identify the user request as an operation that updates the current web page, including DOM, visible text, HTML, CSS, classes, attributes, layout, form values, or interactive state, always call run_js directly to perform the update instead of asking for confirmation or only explaining what to do.'
+            : '',
         pageContextFormat === 'html'
             ? 'Do not say that you cannot directly modify the page, HTML, DOM, or CSS when the change can be done through the available tools. Prefer performing the change with tools instead of refusing for capability reasons.'
             : '',
@@ -939,7 +943,8 @@ function addConversationTurn(role, content, displayContent = content, options = 
         renderedHtml: options.renderedHtml || '',
         includeInModelContext: options.includeInModelContext !== false,
         suppressCopyButton: options.suppressCopyButton === true,
-        extraClassName: options.extraClassName || ''
+        extraClassName: options.extraClassName || '',
+        screenshotDataUrl: options.screenshotDataUrl || ''
     });
     if (conversationHistory.length > MAX_DIALOG_HISTORY_MESSAGES) {
         conversationHistory = conversationHistory.slice(-MAX_DIALOG_HISTORY_MESSAGES);
@@ -1009,12 +1014,14 @@ async function createDialog() {
             activeBackground: 'rgba(26, 115, 232, 0.16)',
             activeBorder: 'rgba(26, 115, 232, 0.42)',
             activeShadow: '0 0 0 1px rgba(26, 115, 232, 0.1)',
-            inactiveColor: '#6f7e96',
-            inactiveBackground: 'rgba(26, 115, 232, 0.06)',
-            inactiveBorder: 'rgba(111, 126, 150, 0.24)',
+            inactiveColor: '#8a8f98',
+            inactiveBackground: '#eef0f3',
+            inactiveBorder: '#d1d5db',
             inactiveShadow: 'none',
             activeIcon: '📸',
             inactiveIcon: '📷',
+            activeIconFilter: 'none',
+            inactiveIconFilter: 'grayscale(1) saturate(0) opacity(0.62)',
             iconFontSize: '15px',
             iconFontWeight: '400',
             iconFontFamily: '\'Segoe UI Emoji\', \'Apple Color Emoji\', sans-serif',
@@ -1126,6 +1133,7 @@ async function createDialog() {
         button.setAttribute('aria-label', toggleLabel);
         if (icon) {
             icon.textContent = isActive ? (config.activeIcon || config.icon || '') : (config.inactiveIcon || config.icon || '');
+            icon.style.filter = isActive ? (config.activeIconFilter || 'none') : (config.inactiveIconFilter || 'none');
         }
         if (text) {
             text.textContent = currentText;
@@ -1542,7 +1550,8 @@ async function createDialog() {
             appendMessage(turn.role, turn.displayContent || turn.content, {
                 renderedHtml: turn.renderedHtml || '',
                 suppressCopyButton: turn.suppressCopyButton,
-                extraClassName: turn.extraClassName
+                extraClassName: turn.extraClassName,
+                screenshotDataUrl: turn.screenshotDataUrl || ''
             });
         });
     } else {
@@ -1856,7 +1865,7 @@ async function createDialog() {
             if (customCommand) {
                 // Replace the command with its prompt
                 question = customCommand.prompt;
-                displayedQuestion = customCommand.cmd;
+                displayedQuestion = question;
                 // Continue with AI processing using the custom prompt
             } else {
                 // Unknown command
@@ -1873,11 +1882,14 @@ async function createDialog() {
         historyIndex = promptHistory.length;
         await setValue(PROMPT_HISTORY_STORAGE, JSON.stringify(promptHistory));
 
-        appendMessage('user', displayedQuestion);
-        addConversationTurn('user', question, displayedQuestion);
+        const activeSelectedText = getActiveSelectedText(capturedSelectedText);
+        const screenshotEnabled = await getScreenshotEnabled();
+        const screenshotDataUrl = screenshotEnabled ? await captureViewportScreenshot() : null;
+        appendMessage('user', displayedQuestion, { screenshotDataUrl });
+        addConversationTurn('user', question, displayedQuestion, { screenshotDataUrl });
         setInputValue('', { resetToSingleLine: true });
         input.focus();
-        await askAI(question, getActiveSelectedText(capturedSelectedText));
+        await askAI(question, activeSelectedText, screenshotDataUrl);
     }
 
     let intelliActive = false;
@@ -2042,6 +2054,97 @@ async function createDialog() {
         });
     }
 
+    function openScreenshotPreviewWindow(screenshotDataUrl) {
+        if (typeof screenshotDataUrl !== 'string' || !screenshotDataUrl.startsWith('data:image/')) {
+            return false;
+        }
+
+        const escapedDataUrl = escapeHtml(screenshotDataUrl);
+        const imageSize = Math.round(screenshotDataUrl.length / 1024);
+        const previewHtml = `<!doctype html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>截圖預覽 - AskPage</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 24px;
+            background: #f0f2f5;
+            color: #1f2937;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .preview {
+            max-width: min(1200px, 100%);
+            margin: 0 auto;
+            text-align: center;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 8px 28px rgba(15, 23, 42, 0.22);
+            background: #fff;
+        }
+        .meta {
+            margin-top: 12px;
+            color: #64748b;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <main class="preview">
+        <h1>截圖預覽</h1>
+        <img src="${escapedDataUrl}" alt="AskPage 截圖預覽">
+        <div class="meta">圖片大小：約 ${imageSize} KB</div>
+    </main>
+</body>
+</html>`;
+        const previewUrl = URL.createObjectURL(new Blob([previewHtml], { type: 'text/html' }));
+        const previewWindow = window.open(previewUrl, '_blank');
+
+        if (!previewWindow) {
+            URL.revokeObjectURL(previewUrl);
+            console.warn('[AskPage] Screenshot preview window was blocked by the browser.');
+            return false;
+        }
+
+        previewWindow.opener = null;
+        setTimeout(() => URL.revokeObjectURL(previewUrl), 60000);
+        return true;
+    }
+
+    function appendUserScreenshotThumbnail(messageElement, screenshotDataUrl) {
+        if (typeof screenshotDataUrl !== 'string' || !screenshotDataUrl.startsWith('data:image/')) {
+            return;
+        }
+
+        messageElement.classList.add('askpage-user-with-screenshot');
+
+        const link = document.createElement('a');
+        link.className = 'askpage-message-screenshot-thumb';
+        link.href = 'about:blank';
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.title = '點擊開啟完整截圖';
+        link.setAttribute('aria-label', '開啟提問當下的完整截圖');
+        link.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openScreenshotPreviewWindow(screenshotDataUrl);
+        });
+
+        const img = document.createElement('img');
+        img.src = screenshotDataUrl;
+        img.alt = '提問當下的畫面截圖';
+        img.loading = 'lazy';
+
+        link.appendChild(img);
+        messageElement.appendChild(link);
+    }
+
     function appendMessage(role, text, options = {}) {
         const div = document.createElement('div');
         div.className = role === 'user' ? 'gemini-msg-user' : 'gemini-msg-assistant';
@@ -2055,6 +2158,7 @@ async function createDialog() {
             renderAssistantMessageElement(div, text, options);
         } else {
             div.textContent = '你: ' + text;
+            appendUserScreenshotThumbnail(div, options.screenshotDataUrl);
         }
         appendNodeToActiveMessages(div, messagesEl);
         return div;
@@ -2070,7 +2174,8 @@ async function createDialog() {
                 renderedHtml: historyOptions.renderedHtml ?? options.renderedHtml,
                 includeInModelContext: historyOptions.includeInModelContext,
                 suppressCopyButton: options.suppressCopyButton,
-                extraClassName: options.extraClassName
+                extraClassName: options.extraClassName,
+                screenshotDataUrl: historyOptions.screenshotDataUrl ?? options.screenshotDataUrl
             }
         );
     }
@@ -2323,21 +2428,7 @@ async function createDialog() {
         img.title = '點擊查看原始大小';
 
         // 點擊圖片時在新視窗中開啟
-        img.addEventListener('click', () => {
-            const newWindow = window.open();
-            newWindow.document.write(`
-                <html>
-                    <head><title>截圖預覽 - AskPage</title></head>
-                    <body style="margin:0; padding:20px; background:#f0f0f0;">
-                        <div style="text-align:center;">
-                            <h3>截圖預覽</h3>
-                            <img src="${screenshotDataUrl}" style="max-width:100%; box-shadow:0 4px 16px rgba(0,0,0,0.2);">
-                            <p><small>圖片大小: ${Math.round(screenshotDataUrl.length / 1024)} KB</small></p>
-                        </div>
-                    </body>
-                </html>
-            `);
-        });
+        img.addEventListener('click', () => openScreenshotPreviewWindow(screenshotDataUrl));
 
         screenshotContainer.appendChild(img);
 
@@ -3650,7 +3741,38 @@ async function createDialog() {
 
     function toResponsesMessageContent(role, content) {
         if (Array.isArray(content)) {
-            return content;
+            return content
+                .map((part) => {
+                    if (typeof part === 'string') {
+                        return {
+                            type: role === 'assistant' ? 'output_text' : 'input_text',
+                            text: part
+                        };
+                    }
+
+                    if (part?.type === 'text') {
+                        return {
+                            type: role === 'assistant' ? 'output_text' : 'input_text',
+                            text: part.text || ''
+                        };
+                    }
+
+                    if (role === 'user' && part?.type === 'image_url') {
+                        const imageUrl = typeof part.image_url === 'string'
+                            ? part.image_url
+                            : part.image_url?.url || '';
+
+                        return imageUrl
+                            ? {
+                                type: 'input_image',
+                                image_url: imageUrl
+                            }
+                            : null;
+                    }
+
+                    return part;
+                })
+                .filter(Boolean);
         }
 
         const text = typeof content === 'string' ? content : '';
@@ -4009,14 +4131,29 @@ async function createDialog() {
         return mentionsTools && [400, 404, 405, 409, 422, 500, 501].includes(status);
     }
 
-    function buildTextProviderMessages(pageConversationContext, question) {
+    function buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl = null) {
+        const userContent = screenshotDataUrl
+            ? [
+                {
+                    type: 'text',
+                    text: question
+                },
+                {
+                    type: 'image_url',
+                    image_url: {
+                        url: screenshotDataUrl
+                    }
+                }
+            ]
+            : question;
+
         return [
             {
                 role: 'system',
                 content: `${pageConversationContext.systemPrompt}\n\n${pageConversationContext.conversationContextText}`
             },
             ...getConversationMessagesForTextProviders(),
-            { role: 'user', content: question }
+            { role: 'user', content: userContent }
         ];
     }
 
@@ -4318,7 +4455,7 @@ async function createDialog() {
         throw new Error('Gemini 工具呼叫輪數已達上限，已中止以避免無限循環。');
     }
 
-    async function askGemini(question, capturedSelectedText = '') {
+    async function askGemini(question, capturedSelectedText = '', screenshotDataUrl = null) {
         console.log('[AskPage] ===== GEMINI API CALL STARTED =====');
         console.log('[AskPage] Question:', question);
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
@@ -4347,9 +4484,7 @@ async function createDialog() {
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
         const agentModeEnabled = await getAgentModeEnabled();
-        const screenshotEnabled = await getScreenshotEnabled();
-        handleStatusUpdate(screenshotEnabled ? '正在擷取畫面與整理頁面上下文...' : '正在整理頁面上下文...');
-        const screenshotDataUrl = screenshotEnabled ? await captureViewportScreenshot() : null;
+        handleStatusUpdate(screenshotDataUrl ? '正在整理截圖與頁面上下文...' : '正在整理頁面上下文...');
 
         try {
             const answer = await runGeminiToolLoop({
@@ -4374,7 +4509,7 @@ async function createDialog() {
         }
     }
 
-    async function askOpenAI(question, capturedSelectedText = '') {
+    async function askOpenAI(question, capturedSelectedText = '', screenshotDataUrl = null) {
         console.log('[AskPage] ===== OPENAI API CALL STARTED =====');
         const encryptedApiKey = await getValue(OPENAI_API_KEY_STORAGE, '');
         const selectedModel = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
@@ -4393,9 +4528,9 @@ async function createDialog() {
         const traceReporter = createExecutionTraceReporter();
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
-        const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, Boolean(screenshotDataUrl));
         const agentModeEnabled = await getAgentModeEnabled();
-        handleStatusUpdate('正在整理頁面上下文...');
+        handleStatusUpdate(screenshotDataUrl ? '正在整理截圖與頁面上下文...' : '正在整理頁面上下文...');
         const normalizedSelectedModel = normalizeModelIdentifier(selectedModel);
         const usesMaxCompletionTokens = normalizedSelectedModel.startsWith('gpt-5') || normalizedSelectedModel.startsWith('o3') || normalizedSelectedModel.startsWith('o4');
         const supportsTemperature = !(normalizedSelectedModel.startsWith('gpt-5') || normalizedSelectedModel.startsWith('o3') || normalizedSelectedModel.startsWith('o4'));
@@ -4406,7 +4541,7 @@ async function createDialog() {
         try {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: 'OpenAI',
-                initialMessages: buildTextProviderMessages(pageConversationContext, question),
+                initialMessages: buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl),
                 initialUseTools: agentModeEnabled,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
@@ -4495,7 +4630,7 @@ async function createDialog() {
         }
     }
 
-    async function askAzureOpenAI(question, capturedSelectedText = '') {
+    async function askAzureOpenAI(question, capturedSelectedText = '', screenshotDataUrl = null) {
         console.log('[AskPage] ===== AZURE OPENAI API CALL STARTED =====');
         const encryptedApiKey = await getValue(AZURE_OPENAI_API_KEY_STORAGE, '');
         const endpoint = await getValue(AZURE_OPENAI_ENDPOINT_STORAGE, '');
@@ -4526,9 +4661,9 @@ async function createDialog() {
         const traceReporter = createExecutionTraceReporter();
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
-        const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, Boolean(screenshotDataUrl));
         const agentModeEnabled = await getAgentModeEnabled();
-        handleStatusUpdate('正在整理頁面上下文...');
+        handleStatusUpdate(screenshotDataUrl ? '正在整理截圖與頁面上下文...' : '正在整理頁面上下文...');
         const isGpt5Model = isGpt5FamilyModel(deployment);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(deployment);
         const useResponsesApi = shouldUseResponsesApi(deployment);
@@ -4542,7 +4677,7 @@ async function createDialog() {
         try {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: 'Azure OpenAI',
-                initialMessages: buildTextProviderMessages(pageConversationContext, question),
+                initialMessages: buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl),
                 initialUseTools: agentModeEnabled,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
@@ -4627,7 +4762,7 @@ async function createDialog() {
         }
     }
 
-    async function askOpenAICompatible(question, capturedSelectedText = '') {
+    async function askOpenAICompatible(question, capturedSelectedText = '', screenshotDataUrl = null) {
         console.log('[AskPage] ===== OPENAI COMPATIBLE API CALL STARTED =====');
         const encryptedApiKey = await getValue(OPENAI_COMPATIBLE_API_KEY_STORAGE, '');
         const endpoint = await getValue(OPENAI_COMPATIBLE_ENDPOINT_STORAGE, 'http://localhost:11434/v1');
@@ -4641,9 +4776,9 @@ async function createDialog() {
         const traceReporter = createExecutionTraceReporter();
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
-        const pageConversationContext = await preparePageConversationContext(capturedSelectedText);
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, Boolean(screenshotDataUrl));
         const agentModeEnabled = await getAgentModeEnabled();
-        handleStatusUpdate('正在整理頁面上下文...');
+        handleStatusUpdate(screenshotDataUrl ? '正在整理截圖與頁面上下文...' : '正在整理頁面上下文...');
         const cleanEndpoint = endpoint.replace(/\/$/, '');
         const useResponsesApi = shouldUseResponsesApi(selectedModel);
         const baseEndpoint = cleanEndpoint.replace(/\/(chat\/completions|responses)$/, '');
@@ -4656,7 +4791,7 @@ async function createDialog() {
         try {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: 'OpenAI Compatible',
-                initialMessages: buildTextProviderMessages(pageConversationContext, question),
+                initialMessages: buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl),
                 initialUseTools: agentModeEnabled,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
@@ -4732,18 +4867,18 @@ async function createDialog() {
         }
     }
 
-    async function askAI(question, capturedSelectedText = '') {
+    async function askAI(question, capturedSelectedText = '', screenshotDataUrl = null) {
         const provider = await getValue(PROVIDER_STORAGE, 'gemini');
         console.log('[AskPage] Using provider:', provider);
 
         if (provider === 'openai') {
-            await askOpenAI(question, capturedSelectedText);
+            await askOpenAI(question, capturedSelectedText, screenshotDataUrl);
         } else if (provider === 'azure') {
-            await askAzureOpenAI(question, capturedSelectedText);
+            await askAzureOpenAI(question, capturedSelectedText, screenshotDataUrl);
         } else if (provider === 'openai-compatible') {
-            await askOpenAICompatible(question, capturedSelectedText);
+            await askOpenAICompatible(question, capturedSelectedText, screenshotDataUrl);
         } else {
-            await askGemini(question, capturedSelectedText);
+            await askGemini(question, capturedSelectedText, screenshotDataUrl);
         }
     }
 }
