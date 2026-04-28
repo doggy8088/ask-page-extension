@@ -1424,11 +1424,11 @@ async function createDialog() {
     }
 
     function buildPromptCommandListMarkdown() {
-        return `**內建斜線命令：**\n- ${createInlineSlashCommandMarkup('/clear')} - 清除歷史紀錄\n- ${createInlineSlashCommandMarkup('/summary')} - 總結整個頁面`;
+        return `**內建斜線命令：**\n- ${createInlineSlashCommandMarkup('/clear')} - 清除歷史紀錄（也可按 Ctrl+L）\n- ${createInlineSlashCommandMarkup('/summary')} - 總結整個頁面`;
     }
 
     function buildPromptCommandListCopyText() {
-        return '**內建斜線命令：**\n- /clear - 清除歷史紀錄\n- /summary - 總結整個頁面';
+        return '**內建斜線命令：**\n- /clear - 清除歷史紀錄（也可按 Ctrl+L）\n- /summary - 總結整個頁面';
     }
 
     function buildUsageModeNotice(options = {}) {
@@ -1583,6 +1583,7 @@ async function createDialog() {
     function closeDialog() {
         stopDialogDrag();
         hideIntelliBox();
+        window.removeEventListener('keydown', clearShortcutListener, true);
         dialogInputEventTypes.forEach((eventType) => {
             overlay.removeEventListener(eventType, stopDialogInputEventPropagation);
         });
@@ -1609,6 +1610,27 @@ async function createDialog() {
         }
     };
     overlay.addEventListener('keydown', escapeKeyListener);
+
+    function isClearShortcutEvent(e) {
+        return e.ctrlKey &&
+            !e.shiftKey &&
+            !e.altKey &&
+            !e.metaKey &&
+            typeof e.key === 'string' &&
+            e.key.toLowerCase() === 'l';
+    }
+
+    const clearShortcutListener = (e) => {
+        if (!host.isConnected || e.repeat || !isClearShortcutEvent(e)) {
+            return;
+        }
+
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setInputValue('/clear');
+        handleAsk();
+    };
+    window.addEventListener('keydown', clearShortcutListener, true);
 
     const promptHistory = JSON.parse(await getValue(PROMPT_HISTORY_STORAGE, '[]'));
     let historyIndex = promptHistory.length;

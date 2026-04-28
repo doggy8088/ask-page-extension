@@ -10,7 +10,7 @@
 - 🔐 **加密安全儲存** - API 金鑰使用 AES-256-GCM 加密保護
 - 🎯 **智慧模型選擇** - 支援 Gemini 全系列模型、多種 OpenAI 模型和 Azure OpenAI 部署
 - 📝 支援選取文字進行針對性提問
-- ⌨️ 快速鍵支援 (Ctrl+Shift+Y 開啟對話，Ctrl+Shift+S 切換提供者)
+- ⌨️ 快速鍵支援 (Ctrl+Shift+Y 開啟對話，Ctrl+Shift+S 切換提供者，Ctrl+L 清除對話)
 - 🎨 美觀的對話介面，即時顯示當前使用的 AI 提供者
 - ⚡ 自訂斜線命令系統 - 新增、編輯、刪除個人專屬命令
 - 📚 智慧命令提示 - 內建和自訂命令的自動完成功能
@@ -76,7 +76,7 @@
 
 ### 內建指令
 
-- `/clear` - 清除提問歷史記錄
+- `/clear` - 清除提問歷史記錄（對話框開啟時也可按 `Ctrl+L`）
 - `/summary` - 總結整個頁面內容（可在設定中自訂提示語）
 - `/screenshot` - 切換截圖功能狀態
 - `/html` - 切換詢問模式 / 代理模式；代理模式會改用頁面 HTML 並允許工具調用
@@ -94,6 +94,7 @@
 
 - `Ctrl+Shift+Y` (Windows/Linux) / `Command+Shift+Y` (Mac) - 開啟 / 關閉對話框
 - `Ctrl+Shift+S` (Windows/Linux) / `MacCtrl+Shift+S` (Mac) - 切換 AI 提供者
+- `Ctrl+L` - 對話框開啟時執行 `/clear`，清除目前對話與提問歷史
 - `Escape` - 關閉對話框
 - `↑/↓` 方向鍵 - 瀏覽提問歷史
 
