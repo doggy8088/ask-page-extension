@@ -18,6 +18,7 @@ const MAX_PAGE_TEXT_CONTEXT_LENGTH = 15000;
 const MAX_SELECTED_TEXT_CONTEXT_LENGTH = 5000;
 const MAX_HTML_CONTEXT_WITH_SELECTION_LENGTH = 15000;
 const MAX_INPUT_VISIBLE_LINES = 5;
+const MAX_INPUT_CONTEXT_IMAGES = 4;
 const MAX_FORM_FIELD_DISCOVERY = 80;
 const MAX_TOOL_CALL_ROUNDS = 50;
 const GEMINI_INITIAL_MAX_OUTPUT_TOKENS = 2048;
@@ -257,6 +258,34 @@ function maskApiKey(apiKey) {
     return apiKey.substring(0, 4) + '****' + apiKey.substring(apiKey.length - 4);
 }
 
+function isImageDataUrl(value) {
+    return typeof value === 'string' && /^data:image\/[a-z0-9.+-]+;base64,/i.test(value);
+}
+
+function getImageMimeTypeFromDataUrl(imageDataUrl) {
+    const match = /^data:(image\/[a-z0-9.+-]+);base64,/i.exec(imageDataUrl || '');
+    return match ? match[1].toLowerCase() : 'image/png';
+}
+
+function normalizeInputImageDataUrls(imageDataUrls = []) {
+    if (!Array.isArray(imageDataUrls)) {
+        return [];
+    }
+
+    const normalizedImages = [];
+    const seen = new Set();
+    imageDataUrls.forEach((imageDataUrl) => {
+        if (!isImageDataUrl(imageDataUrl) || seen.has(imageDataUrl)) {
+            return;
+        }
+
+        seen.add(imageDataUrl);
+        normalizedImages.push(imageDataUrl);
+    });
+
+    return normalizedImages.slice(0, MAX_INPUT_CONTEXT_IMAGES);
+}
+
 function normalizeModelIdentifier(model = '') {
     return String(model || '')
         .trim()
@@ -399,33 +428,31 @@ async function switchProvider() {
 // Update provider display in dialog
 async function updateProviderDisplay() {
     const provider = await getValue(PROVIDER_STORAGE, 'gemini');
-    const providerNameElement = getActiveDialogElementById('provider-display-name');
-    const providerModelElement = getActiveDialogElementById('provider-display-model');
+    const agentModeEnabled = await getAgentModeEnabled();
+    const questionInput = getActiveDialogElementById('gemini-qna-input');
+    let model;
+    let displayName;
 
-    if (providerNameElement || providerModelElement) {
-        let model;
-        let displayName;
+    if (provider === 'gemini') {
+        model = await getValue(MODEL_STORAGE, 'gemini-flash-lite-latest');
+        displayName = 'Gemini';
+    } else if (provider === 'openai') {
+        model = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
+        displayName = 'OpenAI';
+    } else if (provider === 'azure') {
+        model = await getValue(AZURE_OPENAI_DEPLOYMENT_STORAGE, 'gpt-4o-mini');
+        displayName = 'Azure OpenAI';
+    } else if (provider === 'openai-compatible') {
+        model = await getValue(OPENAI_COMPATIBLE_MODEL_STORAGE, '');
+        displayName = 'OpenAI Compatible';
+    }
 
-        if (provider === 'gemini') {
-            model = await getValue(MODEL_STORAGE, 'gemini-flash-lite-latest');
-            displayName = 'Gemini';
-        } else if (provider === 'openai') {
-            model = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
-            displayName = 'OpenAI';
-        } else if (provider === 'azure') {
-            model = await getValue(AZURE_OPENAI_DEPLOYMENT_STORAGE, 'gpt-4o-mini');
-            displayName = 'Azure OpenAI';
-        } else if (provider === 'openai-compatible') {
-            model = await getValue(OPENAI_COMPATIBLE_MODEL_STORAGE, '');
-            displayName = 'OpenAI Compatible';
-        }
-
-        if (providerNameElement) {
-            providerNameElement.textContent = displayName;
-        }
-        if (providerModelElement) {
-            providerModelElement.textContent = model || '未設定模型';
-        }
+    if (questionInput) {
+        const modelText = model ? ` (${model})` : '，尚未設定模型';
+        const inputHintText = agentModeEnabled
+            ? 'Shift+Enter 可換行'  //，也可貼上或拖曳圖片'
+            : 'Shift+Enter 可換行'; //，附圖僅代理模式可用';
+        questionInput.placeholder = `正在使用 ${displayName}${modelText} 回答您的提問 (${inputHintText})`;
     }
 }
 
@@ -813,6 +840,8 @@ function getActiveSelectedText(capturedSelectedText = '') {
 function buildSystemPrompt({
     hasSelectedText = false,
     includeScreenshot = false,
+    includeInputImages = false,
+    inputImageCount = 0,
     pageContextFormat = 'text',
     pageContextIsFiltered = false,
     pageContextIsTruncated = false
@@ -828,12 +857,16 @@ function buildSystemPrompt({
     const screenshotDescription = includeScreenshot
         ? 'You also have a screenshot of the current viewport for additional visual context.'
         : '';
+    const inputImagesDescription = includeInputImages
+        ? `The user also attached ${inputImageCount > 1 ? `${inputImageCount} images` : 'an image'} as additional visual context.`
+        : '';
 
     return [
         'You are a helpful assistant that answers questions about web page content.',
         pageContextDescription,
         selectedTextDescription,
         screenshotDescription,
+        inputImagesDescription,
         'Think before acting: state assumptions explicitly and surface ambiguity only when it materially affects the outcome.',
         'Prefer the simplest solution that fully satisfies the request. Avoid speculative features, unnecessary abstractions, extra configurability, and impossible-scenario handling.',
         'Make surgical changes only. Do not refactor or improve unrelated code, formatting, or comments. Clean up only what your own changes make obsolete.',
@@ -886,15 +919,18 @@ function buildConversationContextText(pageContext, capturedSelectedText = '') {
     return `${introText}\n\n${fullPageLabel}\n${pageContext.content}`;
 }
 
-async function preparePageConversationContext(capturedSelectedText = '', includeScreenshot = false) {
+async function preparePageConversationContext(capturedSelectedText = '', options = {}) {
     const pageContext = await getPageContext(capturedSelectedText);
     const hasSelectedText = Boolean(capturedSelectedText);
+    const includeScreenshot = options.includeScreenshot === true;
+    const inputImageCount = normalizeInputImageDataUrls(options.inputImageDataUrls).length;
     const contextMode = [
         hasSelectedText ? 'Selected text' : null,
         pageContext.format === 'html'
             ? (pageContext.isTruncated ? 'Filtered page HTML' : 'Filtered full page HTML')
             : 'Full page text',
-        includeScreenshot ? 'screenshot' : null
+        includeScreenshot ? 'screenshot' : null,
+        inputImageCount ? `user images (${inputImageCount})` : null
     ].filter(Boolean).join(' + ');
 
     return {
@@ -902,6 +938,8 @@ async function preparePageConversationContext(capturedSelectedText = '', include
         systemPrompt: buildSystemPrompt({
             hasSelectedText,
             includeScreenshot,
+            includeInputImages: inputImageCount > 0,
+            inputImageCount,
             pageContextFormat: pageContext.format,
             pageContextIsFiltered: pageContext.isFiltered,
             pageContextIsTruncated: pageContext.isTruncated
@@ -944,7 +982,8 @@ function addConversationTurn(role, content, displayContent = content, options = 
         includeInModelContext: options.includeInModelContext !== false,
         suppressCopyButton: options.suppressCopyButton === true,
         extraClassName: options.extraClassName || '',
-        screenshotDataUrl: options.screenshotDataUrl || ''
+        screenshotDataUrl: options.screenshotDataUrl || '',
+        inputImageDataUrls: normalizeInputImageDataUrls(options.inputImageDataUrls)
     });
     if (conversationHistory.length > MAX_DIALOG_HISTORY_MESSAGES) {
         conversationHistory = conversationHistory.slice(-MAX_DIALOG_HISTORY_MESSAGES);
@@ -973,10 +1012,10 @@ async function createDialog() {
     const capturedSelectedText = initialSelection.toString().trim();
     const dialogStylesText = await getDialogStylesText();
     const modeToggleButtonBaseStyle = `
-        color: #41536b;
-        background: #ffffff;
-        border-color: #cfdae8;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+        color: #dbeafe;
+        background: rgba(15, 23, 42, 0.24);
+        border-color: rgba(147, 197, 253, 0.34);
+        box-shadow: 0 1px 2px rgba(2, 6, 23, 0.22);
     `;
     const modeToggleIconBaseStyle = `
         box-sizing: border-box;
@@ -1010,13 +1049,13 @@ async function createDialog() {
             inactiveText: '截圖',
             activeStateLabel: '含截圖',
             inactiveStateLabel: '無截圖',
-            activeColor: '#1a73e8',
-            activeBackground: 'rgba(26, 115, 232, 0.16)',
-            activeBorder: 'rgba(26, 115, 232, 0.42)',
-            activeShadow: '0 0 0 1px rgba(26, 115, 232, 0.1)',
-            inactiveColor: '#8a8f98',
-            inactiveBackground: '#eef0f3',
-            inactiveBorder: '#d1d5db',
+            activeColor: '#eff6ff',
+            activeBackground: 'rgba(37, 99, 235, 0.72)',
+            activeBorder: 'rgba(147, 197, 253, 0.78)',
+            activeShadow: '0 0 0 1px rgba(96, 165, 250, 0.24)',
+            inactiveColor: '#cbd5e1',
+            inactiveBackground: 'rgba(71, 85, 105, 0.68)',
+            inactiveBorder: 'rgba(148, 163, 184, 0.56)',
             inactiveShadow: 'none',
             activeIcon: '📸',
             inactiveIcon: '📷',
@@ -1031,13 +1070,13 @@ async function createDialog() {
             label: '模式切換',
             activeText: '代理',
             inactiveText: '詢問',
-            activeColor: '#8a4d00',
-            activeBackground: 'rgba(245, 158, 11, 0.18)',
-            activeBorder: 'rgba(217, 119, 6, 0.34)',
-            activeShadow: '0 0 0 1px rgba(217, 119, 6, 0.08)',
-            inactiveColor: '#0f5dc2',
-            inactiveBackground: 'rgba(59, 130, 246, 0.10)',
-            inactiveBorder: 'rgba(59, 130, 246, 0.22)',
+            activeColor: '#fff7ed',
+            activeBackground: 'rgba(217, 119, 6, 0.72)',
+            activeBorder: 'rgba(253, 186, 116, 0.74)',
+            activeShadow: '0 0 0 1px rgba(251, 146, 60, 0.22)',
+            inactiveColor: '#dbeafe',
+            inactiveBackground: 'rgba(37, 99, 235, 0.36)',
+            inactiveBorder: 'rgba(96, 165, 250, 0.5)',
             inactiveShadow: 'none',
             activeIcon: '🤖',
             inactiveIcon: '💬',
@@ -1073,7 +1112,7 @@ async function createDialog() {
     const providerDisplayName = document.createElement('div');
     providerDisplayName.id = 'provider-display-name';
     providerDisplayName.className = 'askpage-provider-name';
-    providerDisplayName.textContent = 'Loading...';
+    providerDisplayName.textContent = '頁問';
     const providerDisplayModel = document.createElement('span');
     providerDisplayModel.id = 'provider-display-model';
     providerDisplayModel.className = 'askpage-provider-model';
@@ -1164,10 +1203,10 @@ async function createDialog() {
     switchProviderBtn.className = 'askpage-toolbar-btn askpage-toolbar-btn-switch-provider';
     switchProviderBtn.style.cssText = `
         ${modeToggleButtonBaseStyle}
-        color: #2952cc;
-        background: #edf3ff;
-        border-color: #bfd0fb;
-        box-shadow: 0 1px 2px rgba(41, 82, 204, 0.12);
+        color: #e0f2fe;
+        background: rgba(29, 78, 216, 0.42);
+        border-color: rgba(125, 211, 252, 0.58);
+        box-shadow: 0 1px 2px rgba(2, 6, 23, 0.24);
     `;
     switchProviderIcon.setAttribute('aria-hidden', 'true');
     switchProviderIcon.textContent = '⇄';
@@ -1192,10 +1231,10 @@ async function createDialog() {
     optionsBtn.className = 'askpage-toolbar-btn askpage-toolbar-btn-options';
     optionsBtn.style.cssText = `
         ${modeToggleButtonBaseStyle}
-        color: #4c5d73;
-        background: #ffffff;
-        border-color: #cfdae8;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+        color: #e5e7eb;
+        background: rgba(15, 23, 42, 0.34);
+        border-color: rgba(148, 163, 184, 0.52);
+        box-shadow: 0 1px 2px rgba(2, 6, 23, 0.22);
     `;
     optionsBtnIcon.setAttribute('aria-hidden', 'true');
     optionsBtnIcon.textContent = '⚙️';
@@ -1220,7 +1259,6 @@ async function createDialog() {
     providerActions.appendChild(switchProviderBtn);
     providerActions.appendChild(optionsBtn);
     providerDisplay.appendChild(providerDisplayName);
-    providerDisplay.appendChild(providerDisplayModel);
     providerInfo.appendChild(providerDisplay);
     providerHeader.appendChild(providerInfo);
     providerHeader.appendChild(providerActions);
@@ -1230,9 +1268,42 @@ async function createDialog() {
 
     const input = document.createElement('textarea');
     input.id = 'gemini-qna-input';
-    input.placeholder = '輸入問題後按 Enter 或點擊 Ask 按鈕 (可先選取文字範圍)';
+    input.placeholder = '輸入問題後按 Enter；也可貼上或拖曳最多 4 張圖片作為上下文';
     input.rows = 1;
     input.wrap = 'soft';
+
+    const inputStack = document.createElement('div');
+    inputStack.id = 'gemini-qna-input-stack';
+
+    const inputImageStrip = document.createElement('div');
+    inputImageStrip.id = 'askpage-input-image-strip';
+    inputImageStrip.hidden = true;
+
+    const inputImageStripHeader = document.createElement('div');
+    inputImageStripHeader.className = 'askpage-input-image-strip-header';
+
+    const inputImageStripTitle = document.createElement('span');
+    inputImageStripTitle.className = 'askpage-input-image-strip-title';
+    inputImageStripTitle.textContent = '圖片上下文 (可透過 Ctrl+V 或拖曳貼上參考圖片)';
+
+    const inputImageStripMeta = document.createElement('span');
+    inputImageStripMeta.className = 'askpage-input-image-strip-meta';
+
+    inputImageStripHeader.appendChild(inputImageStripTitle);
+    inputImageStripHeader.appendChild(inputImageStripMeta);
+
+    const inputImageStripList = document.createElement('div');
+    inputImageStripList.className = 'askpage-input-image-strip-list';
+
+    const inputImageStripNotice = document.createElement('div');
+    inputImageStripNotice.className = 'askpage-input-image-strip-notice';
+
+    inputImageStrip.appendChild(inputImageStripHeader);
+    inputImageStrip.appendChild(inputImageStripList);
+    inputImageStrip.appendChild(inputImageStripNotice);
+
+    const inputRow = document.createElement('div');
+    inputRow.id = 'gemini-qna-input-row';
 
     // Dynamic intelliCommands based on screenshot state and custom commands
     async function getIntelliCommands() {
@@ -1244,7 +1315,7 @@ async function createDialog() {
             { cmd: '/clear', desc: '清除提問歷史紀錄' },
             { cmd: '/summary', desc: '總結本頁內容' },
             { cmd: '/screenshot', desc: screenshotEnabled ? '停用截圖功能' : '啟用截圖功能' },
-            { cmd: '/html', desc: agentModeEnabled ? '切換為詢問模式（只做內容問答）' : '切換為代理模式（允許工具調用）' }
+            { cmd: '/agent', desc: agentModeEnabled ? '切換為詢問模式（只做內容問答）' : '切換為代理模式（允許工具調用）' }
         ];
 
         const customCommandsForIntellisense = customCommands.map(cmd => ({
@@ -1272,8 +1343,11 @@ async function createDialog() {
     btn.id = 'gemini-qna-btn';
     btn.textContent = 'Ask';
 
-    inputArea.appendChild(input);
-    inputArea.appendChild(btn);
+    inputRow.appendChild(input);
+    inputRow.appendChild(btn);
+    inputStack.appendChild(inputImageStrip);
+    inputStack.appendChild(inputRow);
+    inputArea.appendChild(inputStack);
     dialog.appendChild(providerHeader);
     dialog.appendChild(messagesEl);
     dialog.appendChild(inputArea);
@@ -1292,6 +1366,7 @@ async function createDialog() {
         elements: {
             [DIALOG_OVERLAY_ID]: overlay,
             [DIALOG_MESSAGES_ID]: messagesEl,
+            'gemini-qna-input': input,
             'provider-display-name': providerDisplayName,
             'provider-display-model': providerDisplayModel
         }
@@ -1305,7 +1380,9 @@ async function createDialog() {
     }
 
     function shouldKeepDialogVisible() {
-        return Boolean(dragState) || shadowRoot.activeElement === input;
+        const activeElement = shadowRoot.activeElement;
+        return Boolean(dragState)
+            || (activeElement && (dialog.contains(activeElement) || intelliBox.contains(activeElement)));
     }
 
     function resetDialogPosition() {
@@ -1406,10 +1483,13 @@ async function createDialog() {
     intelliBox.addEventListener('mouseenter', () => {
         setDialogDimmed(false);
     });
-    input.addEventListener('focus', () => {
+    dialog.addEventListener('focusin', () => {
         setDialogDimmed(false);
     });
-    input.addEventListener('blur', () => {
+    intelliBox.addEventListener('focusin', () => {
+        setDialogDimmed(false);
+    });
+    dialog.addEventListener('focusout', () => {
         if (shouldKeepDialogVisible()) {
             setDialogDimmed(false);
             return;
@@ -1444,7 +1524,7 @@ async function createDialog() {
         const agentModeEnabled = options.agentModeEnabled === true;
         const notices = [
             screenshotEnabled
-                ? '📸 **截圖模式目前為啟用狀態**\n系統會在提問時自動附帶目前可視範圍的截圖作為輔助分析。'
+                ? '📸 **截圖模式目前為啟用狀態**\n系統會在提問時會自動附帶目前可視範圍的截圖作為輔助分析。'
                 : '📝 **截圖模式目前為停用狀態**\n頁問只會對目前網頁的文字內容進行分析，不會自動附帶截圖。',
             agentModeEnabled
                 ? '🤖 **代理模式目前為啟用狀態**\n系統會使用多步驟代理的工具調用能力來分析與操作目前頁面。'
@@ -1551,7 +1631,8 @@ async function createDialog() {
                 renderedHtml: turn.renderedHtml || '',
                 suppressCopyButton: turn.suppressCopyButton,
                 extraClassName: turn.extraClassName,
-                screenshotDataUrl: turn.screenshotDataUrl || ''
+                screenshotDataUrl: turn.screenshotDataUrl || '',
+                inputImageDataUrls: turn.inputImageDataUrls || []
             });
         });
     } else {
@@ -1646,6 +1727,10 @@ async function createDialog() {
     let isInputComposing = false;
     let justEndedComposition = false;
     let compositionEndGuardTimer = null;
+    let inputContextImageDataUrls = [];
+    let inputContextImageNotice = '';
+    let inputContextImageNoticeLevel = 'info';
+    let dragEnterDepth = 0;
 
     function getQuestionInputMetrics() {
         const computedStyle = window.getComputedStyle(input);
@@ -1692,6 +1777,347 @@ async function createDialog() {
         }
     }
 
+    function setInputImageNotice(message = '', level = 'info') {
+        inputContextImageNotice = message;
+        inputContextImageNoticeLevel = level;
+        renderInputContextImages();
+    }
+
+    function clearInputContextImages(options = {}) {
+        inputContextImageDataUrls = [];
+        if (options.preserveNotice !== true) {
+            inputContextImageNotice = '';
+            inputContextImageNoticeLevel = 'info';
+        }
+        renderInputContextImages();
+    }
+
+    async function refreshInputImageContextAvailability(options = {}) {
+        const agentModeEnabled = await getAgentModeEnabled();
+        inputStack.dataset.askpageImageContextEnabled = agentModeEnabled ? 'true' : 'false';
+
+        if (!agentModeEnabled) {
+            clearInputContextImages();
+        } else if (!inputContextImageDataUrls.length && options.clearNotice !== false) {
+            inputContextImageNotice = '';
+            inputContextImageNoticeLevel = 'info';
+            renderInputContextImages();
+        }
+
+        return agentModeEnabled;
+    }
+
+    function openImagePreviewWindow(imageDataUrl, options = {}) {
+        if (!isImageDataUrl(imageDataUrl)) {
+            return false;
+        }
+
+        const previewTitle = options.title || '圖片預覽 - AskPage';
+        const previewHeading = options.heading || '圖片預覽';
+        const previewAlt = options.alt || 'AskPage 圖片預覽';
+        const escapedDataUrl = escapeHtml(imageDataUrl);
+        const imageSize = Math.round(imageDataUrl.length / 1024);
+        const previewHtml = `<!doctype html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(previewTitle)}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 24px;
+            background: #f0f2f5;
+            color: #1f2937;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .preview {
+            max-width: min(1200px, 100%);
+            margin: 0 auto;
+            text-align: center;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 8px 28px rgba(15, 23, 42, 0.22);
+            background: #fff;
+        }
+        .meta {
+            margin-top: 12px;
+            color: #64748b;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <main class="preview">
+        <h1>${escapeHtml(previewHeading)}</h1>
+        <img src="${escapedDataUrl}" alt="${escapeHtml(previewAlt)}">
+        <div class="meta">圖片大小：約 ${imageSize} KB</div>
+    </main>
+</body>
+</html>`;
+        const previewUrl = URL.createObjectURL(new Blob([previewHtml], { type: 'text/html' }));
+        const previewWindow = window.open(previewUrl, '_blank');
+
+        if (!previewWindow) {
+            URL.revokeObjectURL(previewUrl);
+            console.warn('[AskPage] Image preview window was blocked by the browser.');
+            return false;
+        }
+
+        previewWindow.opener = null;
+        setTimeout(() => URL.revokeObjectURL(previewUrl), 60000);
+        return true;
+    }
+
+    function renderInputContextImages() {
+        const normalizedImages = normalizeInputImageDataUrls(inputContextImageDataUrls);
+        inputContextImageDataUrls = normalizedImages;
+        inputImageStripList.innerHTML = '';
+        inputImageStripMeta.textContent = normalizedImages.length ? `${normalizedImages.length}/${MAX_INPUT_CONTEXT_IMAGES}` : '';
+        inputImageStripNotice.textContent = inputContextImageNotice;
+        inputImageStripNotice.dataset.level = inputContextImageNoticeLevel;
+
+        normalizedImages.forEach((imageDataUrl, index) => {
+            const item = document.createElement('div');
+            item.className = 'askpage-input-image-item';
+
+            const link = document.createElement('a');
+            link.className = 'askpage-input-image-thumb';
+            link.href = 'about:blank';
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.title = `點擊開啟第 ${index + 1} 張完整圖片`;
+            link.setAttribute('aria-label', `開啟第 ${index + 1} 張完整圖片`);
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openImagePreviewWindow(imageDataUrl, {
+                    title: `圖片預覽 ${index + 1} - AskPage`,
+                    heading: `圖片預覽 ${index + 1}`,
+                    alt: `AskPage 提問圖片 ${index + 1}`
+                });
+            });
+
+            const img = document.createElement('img');
+            img.src = imageDataUrl;
+            img.alt = `提問圖片 ${index + 1}`;
+            img.loading = 'lazy';
+            link.appendChild(img);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'askpage-input-image-remove';
+            removeBtn.title = `移除第 ${index + 1} 張圖片`;
+            removeBtn.setAttribute('aria-label', `移除第 ${index + 1} 張圖片`);
+            removeBtn.textContent = '×';
+            removeBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                inputContextImageDataUrls.splice(index, 1);
+                if (!inputContextImageDataUrls.length) {
+                    inputContextImageNotice = '';
+                    inputContextImageNoticeLevel = 'info';
+                }
+                renderInputContextImages();
+                input.focus();
+            });
+
+            item.appendChild(link);
+            item.appendChild(removeBtn);
+            inputImageStripList.appendChild(item);
+        });
+
+        inputImageStrip.hidden = !normalizedImages.length && !inputContextImageNotice;
+    }
+
+    function setInputDropActive(active) {
+        inputStack.dataset.askpageDropActive = active ? 'true' : 'false';
+    }
+
+    function doesDataTransferContainImage(dataTransfer) {
+        if (!dataTransfer) {
+            return false;
+        }
+
+        const items = Array.from(dataTransfer.items || []);
+        if (items.some((item) => item.kind === 'file' && item.type.startsWith('image/'))) {
+            return true;
+        }
+
+        if (Array.from(dataTransfer.files || []).some((file) => file.type.startsWith('image/'))) {
+            return true;
+        }
+
+        const types = Array.from(dataTransfer.types || []);
+        return types.includes('text/uri-list') || types.includes('text/html');
+    }
+
+    function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                if (typeof reader.result === 'string' && isImageDataUrl(reader.result)) {
+                    resolve(reader.result);
+                    return;
+                }
+
+                reject(new Error('讀取到的檔案內容不是有效圖片。'));
+            };
+            reader.onerror = () => {
+                reject(reader.error || new Error('無法讀取圖片內容。'));
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function fetchImageUrlAsDataUrl(url) {
+        if (isImageDataUrl(url)) {
+            return url;
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`無法讀取拖曳圖片（${response.status} ${response.statusText}）。`);
+        }
+
+        const mimeType = response.headers.get('content-type') || '';
+        if (!mimeType.toLowerCase().startsWith('image/')) {
+            throw new Error('拖曳內容不是圖片。');
+        }
+
+        return await readFileAsDataUrl(await response.blob());
+    }
+
+    function collectImageUrlsFromHtml(html) {
+        if (typeof html !== 'string' || !html.trim()) {
+            return [];
+        }
+
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        return Array.from(doc.images)
+            .map((img) => img.getAttribute('src') || '')
+            .map((src) => src.trim())
+            .filter(Boolean);
+    }
+
+    async function collectDroppedImageDataUrls(dataTransfer) {
+        const imageFiles = Array.from(dataTransfer?.files || []).filter((file) => file.type.startsWith('image/'));
+        if (imageFiles.length) {
+            return await Promise.all(imageFiles.map((file) => readFileAsDataUrl(file)));
+        }
+
+        const itemFiles = Array.from(dataTransfer?.items || [])
+            .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+            .map((item) => item.getAsFile())
+            .filter(Boolean);
+        if (itemFiles.length) {
+            return await Promise.all(itemFiles.map((file) => readFileAsDataUrl(file)));
+        }
+
+        const rawUrls = [];
+        const uriList = typeof dataTransfer?.getData === 'function' ? dataTransfer.getData('text/uri-list') : '';
+        if (uriList) {
+            rawUrls.push(...uriList.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#')));
+        }
+
+        rawUrls.push(...collectImageUrlsFromHtml(typeof dataTransfer?.getData === 'function' ? dataTransfer.getData('text/html') : ''));
+
+        const plainText = typeof dataTransfer?.getData === 'function' ? dataTransfer.getData('text/plain').trim() : '';
+        if (plainText) {
+            rawUrls.push(plainText);
+        }
+
+        const uniqueUrls = Array.from(new Set(rawUrls.filter(Boolean)));
+        if (!uniqueUrls.length) {
+            return [];
+        }
+
+        return await Promise.all(uniqueUrls.map((url) => fetchImageUrlAsDataUrl(url)));
+    }
+
+    async function appendInputContextImages(imageDataUrls, options = {}) {
+        const rawUniqueImages = Array.isArray(imageDataUrls)
+            ? Array.from(new Set(imageDataUrls.filter((imageDataUrl) => isImageDataUrl(imageDataUrl))))
+            : [];
+        if (!rawUniqueImages.length) {
+            setInputImageNotice(options.emptyMessage || '沒有偵測到可加入的圖片。', 'warning');
+            return;
+        }
+
+        const nextImages = rawUniqueImages.slice(0, MAX_INPUT_CONTEXT_IMAGES);
+        const existingImages = new Set(inputContextImageDataUrls);
+        const newImages = nextImages.filter((imageDataUrl) => !existingImages.has(imageDataUrl));
+        if (!newImages.length) {
+            setInputImageNotice('這些圖片已經加入目前提問。', 'info');
+            return;
+        }
+
+        const availableSlots = Math.max(MAX_INPUT_CONTEXT_IMAGES - inputContextImageDataUrls.length, 0);
+        const acceptedImages = newImages.slice(0, availableSlots);
+        inputContextImageDataUrls = inputContextImageDataUrls.concat(acceptedImages);
+
+        if (!acceptedImages.length) {
+            setInputImageNotice(`最多只能附加 ${MAX_INPUT_CONTEXT_IMAGES} 張圖片。`, 'warning');
+            return;
+        }
+
+        if (acceptedImages.length < newImages.length || rawUniqueImages.length > nextImages.length) {
+            setInputImageNotice(`最多只能附加 ${MAX_INPUT_CONTEXT_IMAGES} 張圖片，已加入前 ${acceptedImages.length} 張。`, 'warning');
+            return;
+        }
+
+        setInputImageNotice(`已加入 ${inputContextImageDataUrls.length} 張圖片，可直接送出給模型。`, 'info');
+    }
+
+    async function handleInputImagePaste(event) {
+        const items = Array.from(event.clipboardData?.items || []);
+        const imageFiles = items
+            .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+            .map((item) => item.getAsFile())
+            .filter(Boolean);
+
+        if (!imageFiles.length) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (inputStack.dataset.askpageImageContextEnabled !== 'true') {
+            return;
+        }
+
+        try {
+            const imageDataUrls = await Promise.all(imageFiles.map((file) => readFileAsDataUrl(file)));
+            await appendInputContextImages(imageDataUrls, { emptyMessage: '剪貼簿裡沒有可用的圖片。' });
+        } catch (error) {
+            console.error('[AskPage] Failed to read pasted images:', error);
+            setInputImageNotice(`無法貼上圖片：${error.message}`, 'error');
+        }
+    }
+
+    async function handleInputImageDrop(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        dragEnterDepth = 0;
+        setInputDropActive(false);
+
+        if (inputStack.dataset.askpageImageContextEnabled !== 'true') {
+            return;
+        }
+
+        try {
+            const imageDataUrls = await collectDroppedImageDataUrls(event.dataTransfer);
+            await appendInputContextImages(imageDataUrls, { emptyMessage: '拖曳內容中沒有可用的圖片。' });
+        } catch (error) {
+            console.error('[AskPage] Failed to read dropped images:', error);
+            setInputImageNotice(`無法加入拖曳圖片：${error.message}`, 'error');
+        }
+    }
+
     function shouldUsePromptHistoryNavigation(key) {
         if (input.value.includes('\n')) {
             return false;
@@ -1735,6 +2161,8 @@ async function createDialog() {
     async function toggleModeWithUi(toggleModeFn, afterToggle) {
         const newState = await toggleModeFn();
         await updateModeToggleButtons();
+        await updateProviderDisplay();
+        await refreshInputImageContextAvailability();
         await refreshUsagePromptMessage();
 
         if (afterToggle) {
@@ -1801,7 +2229,7 @@ async function createDialog() {
             if (newState) {
                 appendMessage('assistant', '✅ **代理模式已啟用**\n\n目前已切換為代理模式。系統會使用頁面 HTML 與工具調用能力來分析與操作目前頁面，此設定會保留到重新載入後。');
             } else {
-                appendMessage('assistant', '💬 **詢問模式已啟用**\n\n目前已切換為詢問模式。系統只會根據頁面內容回答問題，不會呼叫頁面工具，此設定會保留到重新載入後。');
+                appendMessage('assistant', '💬 **詢問模式已啟用**\n\n目前已切換為詢問模式。系統只會根據頁面內容回答問題，不會呼叫頁面工具，手動附加的圖片上下文也會一併停用，此設定會保留到重新載入後。');
             }
         });
     }
@@ -1818,6 +2246,7 @@ async function createDialog() {
         hideIntelliBox();
         let question = input.value.trim();
         let displayedQuestion = question;
+        const inputImageDataUrls = normalizeInputImageDataUrls(inputContextImageDataUrls);
         if (!question) { return; }
 
         if (question === '/clear') {
@@ -1827,6 +2256,7 @@ async function createDialog() {
             clearConversationHistory();
             messagesEl.innerHTML = '';
             await appendUsagePromptMessage({ showUsageTipOnly: true });
+            clearInputContextImages();
             setInputValue('', { resetToSingleLine: true });
             input.focus();
             return;
@@ -1841,6 +2271,7 @@ async function createDialog() {
 
         if (question === '/screenshot') {
             appendMessage('user', question);
+            clearInputContextImages();
             setInputValue('', { resetToSingleLine: true });
             input.focus();
 
@@ -1848,8 +2279,9 @@ async function createDialog() {
             return;
         }
 
-        if (question === '/html') {
+        if (question === '/agent') {
             appendMessage('user', question);
+            clearInputContextImages();
             setInputValue('', { resetToSingleLine: true });
             input.focus();
 
@@ -1870,7 +2302,8 @@ async function createDialog() {
             } else {
                 // Unknown command
                 appendMessage('user', question);
-                appendMessage('assistant', `❌ **未知命令: ${question}**\n\n可用的命令：\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 切換截圖功能\n- \`/html\` - 切換詢問/代理模式\n\n您也可以在設定中新增自訂命令。`);
+                appendMessage('assistant', `❌ **未知命令: ${question}**\n\n可用的命令：\n- \`/clear\` - 清除歷史紀錄\n- \`/summary\` - 總結整個頁面\n- \`/screenshot\` - 切換截圖功能\n- \`/agent\` - 切換詢問/代理模式\n\n您也可以在設定中新增自訂命令。`);
+                clearInputContextImages();
                 setInputValue('', { resetToSingleLine: true });
                 input.focus();
                 return;
@@ -1885,11 +2318,12 @@ async function createDialog() {
         const activeSelectedText = getActiveSelectedText(capturedSelectedText);
         const screenshotEnabled = await getScreenshotEnabled();
         const screenshotDataUrl = screenshotEnabled ? await captureViewportScreenshot() : null;
-        appendMessage('user', displayedQuestion, { screenshotDataUrl });
-        addConversationTurn('user', question, displayedQuestion, { screenshotDataUrl });
+        appendMessage('user', displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
+        addConversationTurn('user', question, displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
+        clearInputContextImages();
         setInputValue('', { resetToSingleLine: true });
         input.focus();
-        await askAI(question, activeSelectedText, screenshotDataUrl);
+        await askAI(question, activeSelectedText, screenshotDataUrl, inputImageDataUrls);
     }
 
     let intelliActive = false;
@@ -1955,6 +2389,67 @@ async function createDialog() {
         isInputComposing = false;
         armCompositionEndGuard();
     });
+    input.addEventListener('paste', handleInputImagePaste, true);
+    input.addEventListener('dragenter', (event) => {
+        if (!doesDataTransferContainImage(event.dataTransfer)) {
+            return;
+        }
+
+        if (inputStack.dataset.askpageImageContextEnabled !== 'true') {
+            event.preventDefault();
+            event.stopPropagation();
+            setInputDropActive(false);
+            return;
+        }
+
+        dragEnterDepth++;
+        setInputDropActive(true);
+        event.preventDefault();
+        event.stopPropagation();
+    }, true);
+    input.addEventListener('dragover', (event) => {
+        if (!doesDataTransferContainImage(event.dataTransfer)) {
+            return;
+        }
+
+        if (inputStack.dataset.askpageImageContextEnabled !== 'true') {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = 'none';
+            }
+            setInputDropActive(false);
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = 'copy';
+        }
+        setInputDropActive(true);
+    }, true);
+    input.addEventListener('dragleave', (event) => {
+        if (!doesDataTransferContainImage(event.dataTransfer)) {
+            return;
+        }
+
+        if (inputStack.dataset.askpageImageContextEnabled !== 'true') {
+            event.preventDefault();
+            event.stopPropagation();
+            setInputDropActive(false);
+            return;
+        }
+
+        dragEnterDepth = Math.max(dragEnterDepth - 1, 0);
+        if (!dragEnterDepth) {
+            setInputDropActive(false);
+        }
+        event.preventDefault();
+        event.stopPropagation();
+    }, true);
+    input.addEventListener('drop', handleInputImageDrop, true);
+    await refreshInputImageContextAvailability();
 
     input.addEventListener('keydown', async (e) => {
         const isImeActive = isInputComposing || e.isComposing || e.keyCode === 229;
@@ -2055,69 +2550,15 @@ async function createDialog() {
     }
 
     function openScreenshotPreviewWindow(screenshotDataUrl) {
-        if (typeof screenshotDataUrl !== 'string' || !screenshotDataUrl.startsWith('data:image/')) {
-            return false;
-        }
-
-        const escapedDataUrl = escapeHtml(screenshotDataUrl);
-        const imageSize = Math.round(screenshotDataUrl.length / 1024);
-        const previewHtml = `<!doctype html>
-<html lang="zh-Hant">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>截圖預覽 - AskPage</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 24px;
-            background: #f0f2f5;
-            color: #1f2937;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
-        .preview {
-            max-width: min(1200px, 100%);
-            margin: 0 auto;
-            text-align: center;
-        }
-        img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-            box-shadow: 0 8px 28px rgba(15, 23, 42, 0.22);
-            background: #fff;
-        }
-        .meta {
-            margin-top: 12px;
-            color: #64748b;
-            font-size: 13px;
-        }
-    </style>
-</head>
-<body>
-    <main class="preview">
-        <h1>截圖預覽</h1>
-        <img src="${escapedDataUrl}" alt="AskPage 截圖預覽">
-        <div class="meta">圖片大小：約 ${imageSize} KB</div>
-    </main>
-</body>
-</html>`;
-        const previewUrl = URL.createObjectURL(new Blob([previewHtml], { type: 'text/html' }));
-        const previewWindow = window.open(previewUrl, '_blank');
-
-        if (!previewWindow) {
-            URL.revokeObjectURL(previewUrl);
-            console.warn('[AskPage] Screenshot preview window was blocked by the browser.');
-            return false;
-        }
-
-        previewWindow.opener = null;
-        setTimeout(() => URL.revokeObjectURL(previewUrl), 60000);
-        return true;
+        return openImagePreviewWindow(screenshotDataUrl, {
+            title: '截圖預覽 - AskPage',
+            heading: '截圖預覽',
+            alt: 'AskPage 截圖預覽'
+        });
     }
 
     function appendUserScreenshotThumbnail(messageElement, screenshotDataUrl) {
-        if (typeof screenshotDataUrl !== 'string' || !screenshotDataUrl.startsWith('data:image/')) {
+        if (!isImageDataUrl(screenshotDataUrl)) {
             return;
         }
 
@@ -2145,6 +2586,46 @@ async function createDialog() {
         messageElement.appendChild(link);
     }
 
+    function appendUserInputImageGallery(messageElement, inputImageDataUrls) {
+        const normalizedImages = normalizeInputImageDataUrls(inputImageDataUrls);
+        if (!normalizedImages.length) {
+            return;
+        }
+
+        const gallery = document.createElement('div');
+        gallery.className = 'askpage-user-context-images';
+
+        normalizedImages.forEach((imageDataUrl, index) => {
+            const link = document.createElement('a');
+            link.className = 'askpage-user-context-image-thumb';
+            link.href = 'about:blank';
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.title = `點擊開啟第 ${index + 1} 張完整圖片`;
+            link.setAttribute('aria-label', `開啟第 ${index + 1} 張完整圖片`);
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openImagePreviewWindow(imageDataUrl, {
+                    title: `圖片預覽 ${index + 1} - AskPage`,
+                    heading: `圖片預覽 ${index + 1}`,
+                    alt: `AskPage 提問圖片 ${index + 1}`
+                });
+            });
+
+            const img = document.createElement('img');
+            img.src = imageDataUrl;
+            img.alt = `提問圖片 ${index + 1}`;
+            img.loading = 'lazy';
+            link.appendChild(img);
+
+            gallery.appendChild(link);
+        });
+
+        messageElement.classList.add('askpage-user-with-context-images');
+        messageElement.appendChild(gallery);
+    }
+
     function appendMessage(role, text, options = {}) {
         const div = document.createElement('div');
         div.className = role === 'user' ? 'gemini-msg-user' : 'gemini-msg-assistant';
@@ -2159,6 +2640,7 @@ async function createDialog() {
         } else {
             div.textContent = '你: ' + text;
             appendUserScreenshotThumbnail(div, options.screenshotDataUrl);
+            appendUserInputImageGallery(div, options.inputImageDataUrls);
         }
         appendNodeToActiveMessages(div, messagesEl);
         return div;
@@ -2175,7 +2657,8 @@ async function createDialog() {
                 includeInModelContext: historyOptions.includeInModelContext,
                 suppressCopyButton: options.suppressCopyButton,
                 extraClassName: options.extraClassName,
-                screenshotDataUrl: historyOptions.screenshotDataUrl ?? options.screenshotDataUrl
+                screenshotDataUrl: historyOptions.screenshotDataUrl ?? options.screenshotDataUrl,
+                inputImageDataUrls: historyOptions.inputImageDataUrls ?? options.inputImageDataUrls
             }
         );
     }
@@ -4131,21 +4614,36 @@ async function createDialog() {
         return mentionsTools && [400, 404, 405, 409, 422, 500, 501].includes(status);
     }
 
-    function buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl = null) {
-        const userContent = screenshotDataUrl
-            ? [
-                {
-                    type: 'text',
-                    text: question
-                },
-                {
+    function buildTextProviderUserContent(question, screenshotDataUrl = null, inputImageDataUrls = []) {
+        const normalizedInputImages = normalizeInputImageDataUrls(inputImageDataUrls);
+        if (!screenshotDataUrl && !normalizedInputImages.length) {
+            return question;
+        }
+
+        return [
+            {
+                type: 'text',
+                text: question
+            },
+            ...normalizedInputImages.map((imageDataUrl) => ({
+                type: 'image_url',
+                image_url: {
+                    url: imageDataUrl
+                }
+            })),
+            ...(screenshotDataUrl
+                ? [{
                     type: 'image_url',
                     image_url: {
                         url: screenshotDataUrl
                     }
-                }
-            ]
-            : question;
+                }]
+                : [])
+        ];
+    }
+
+    function buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl = null, inputImageDataUrls = []) {
+        const userContent = buildTextProviderUserContent(question, screenshotDataUrl, inputImageDataUrls);
 
         return [
             {
@@ -4298,11 +4796,16 @@ async function createDialog() {
         question,
         capturedSelectedText = '',
         screenshotDataUrl = null,
+        inputImageDataUrls = [],
         enableTools = true,
         onStatusUpdate = () => {},
         onTrace = () => {}
     }) {
-        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, !!screenshotDataUrl);
+        const normalizedInputImages = normalizeInputImageDataUrls(inputImageDataUrls);
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, {
+            includeScreenshot: !!screenshotDataUrl,
+            inputImageDataUrls: normalizedInputImages
+        });
         console.log('[AskPage] Gemini context mode:', pageConversationContext.contextMode);
         console.log('[AskPage] Conversation history messages:', conversationHistory.length);
         let previousToolSummary = '';
@@ -4317,10 +4820,19 @@ async function createDialog() {
             text: `${pageConversationContext.conversationContextText}${buildConversationHistoryTranscript()}\n\nCurrent question:\n${question}`
         }];
 
+        normalizedInputImages.forEach((imageDataUrl) => {
+            userParts.push({
+                inline_data: {
+                    mime_type: getImageMimeTypeFromDataUrl(imageDataUrl),
+                    data: imageDataUrl.split(',')[1]
+                }
+            });
+        });
+
         if (screenshotDataUrl) {
             userParts.push({
                 inline_data: {
-                    mime_type: 'image/png',
+                    mime_type: getImageMimeTypeFromDataUrl(screenshotDataUrl),
                     data: screenshotDataUrl.split(',')[1]
                 }
             });
@@ -4455,7 +4967,7 @@ async function createDialog() {
         throw new Error('Gemini 工具呼叫輪數已達上限，已中止以避免無限循環。');
     }
 
-    async function askGemini(question, capturedSelectedText = '', screenshotDataUrl = null) {
+    async function askGemini(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
         console.log('[AskPage] ===== GEMINI API CALL STARTED =====');
         console.log('[AskPage] Question:', question);
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
@@ -4484,7 +4996,8 @@ async function createDialog() {
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
         const agentModeEnabled = await getAgentModeEnabled();
-        handleStatusUpdate(screenshotDataUrl ? '正在整理截圖與頁面上下文...' : '正在整理頁面上下文...');
+        const hasInputImages = normalizeInputImageDataUrls(inputImageDataUrls).length > 0;
+        handleStatusUpdate((screenshotDataUrl || hasInputImages) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
 
         try {
             const answer = await runGeminiToolLoop({
@@ -4493,6 +5006,7 @@ async function createDialog() {
                 question,
                 capturedSelectedText,
                 screenshotDataUrl,
+                inputImageDataUrls,
                 enableTools: agentModeEnabled,
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'Gemini', traceEvent)
@@ -4509,7 +5023,7 @@ async function createDialog() {
         }
     }
 
-    async function askOpenAI(question, capturedSelectedText = '', screenshotDataUrl = null) {
+    async function askOpenAI(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
         console.log('[AskPage] ===== OPENAI API CALL STARTED =====');
         const encryptedApiKey = await getValue(OPENAI_API_KEY_STORAGE, '');
         const selectedModel = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
@@ -4528,9 +5042,13 @@ async function createDialog() {
         const traceReporter = createExecutionTraceReporter();
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
-        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, Boolean(screenshotDataUrl));
+        const normalizedInputImages = normalizeInputImageDataUrls(inputImageDataUrls);
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, {
+            includeScreenshot: Boolean(screenshotDataUrl),
+            inputImageDataUrls: normalizedInputImages
+        });
         const agentModeEnabled = await getAgentModeEnabled();
-        handleStatusUpdate(screenshotDataUrl ? '正在整理截圖與頁面上下文...' : '正在整理頁面上下文...');
+        handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const normalizedSelectedModel = normalizeModelIdentifier(selectedModel);
         const usesMaxCompletionTokens = normalizedSelectedModel.startsWith('gpt-5') || normalizedSelectedModel.startsWith('o3') || normalizedSelectedModel.startsWith('o4');
         const supportsTemperature = !(normalizedSelectedModel.startsWith('gpt-5') || normalizedSelectedModel.startsWith('o3') || normalizedSelectedModel.startsWith('o4'));
@@ -4541,7 +5059,7 @@ async function createDialog() {
         try {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: 'OpenAI',
-                initialMessages: buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl),
+                initialMessages: buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl, normalizedInputImages),
                 initialUseTools: agentModeEnabled,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
@@ -4630,7 +5148,7 @@ async function createDialog() {
         }
     }
 
-    async function askAzureOpenAI(question, capturedSelectedText = '', screenshotDataUrl = null) {
+    async function askAzureOpenAI(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
         console.log('[AskPage] ===== AZURE OPENAI API CALL STARTED =====');
         const encryptedApiKey = await getValue(AZURE_OPENAI_API_KEY_STORAGE, '');
         const endpoint = await getValue(AZURE_OPENAI_ENDPOINT_STORAGE, '');
@@ -4661,9 +5179,13 @@ async function createDialog() {
         const traceReporter = createExecutionTraceReporter();
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
-        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, Boolean(screenshotDataUrl));
+        const normalizedInputImages = normalizeInputImageDataUrls(inputImageDataUrls);
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, {
+            includeScreenshot: Boolean(screenshotDataUrl),
+            inputImageDataUrls: normalizedInputImages
+        });
         const agentModeEnabled = await getAgentModeEnabled();
-        handleStatusUpdate(screenshotDataUrl ? '正在整理截圖與頁面上下文...' : '正在整理頁面上下文...');
+        handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const isGpt5Model = isGpt5FamilyModel(deployment);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(deployment);
         const useResponsesApi = shouldUseResponsesApi(deployment);
@@ -4677,7 +5199,7 @@ async function createDialog() {
         try {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: 'Azure OpenAI',
-                initialMessages: buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl),
+                initialMessages: buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl, normalizedInputImages),
                 initialUseTools: agentModeEnabled,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
@@ -4762,7 +5284,7 @@ async function createDialog() {
         }
     }
 
-    async function askOpenAICompatible(question, capturedSelectedText = '', screenshotDataUrl = null) {
+    async function askOpenAICompatible(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
         console.log('[AskPage] ===== OPENAI COMPATIBLE API CALL STARTED =====');
         const encryptedApiKey = await getValue(OPENAI_COMPATIBLE_API_KEY_STORAGE, '');
         const endpoint = await getValue(OPENAI_COMPATIBLE_ENDPOINT_STORAGE, 'http://localhost:11434/v1');
@@ -4776,9 +5298,13 @@ async function createDialog() {
         const traceReporter = createExecutionTraceReporter();
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
-        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, Boolean(screenshotDataUrl));
+        const normalizedInputImages = normalizeInputImageDataUrls(inputImageDataUrls);
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, {
+            includeScreenshot: Boolean(screenshotDataUrl),
+            inputImageDataUrls: normalizedInputImages
+        });
         const agentModeEnabled = await getAgentModeEnabled();
-        handleStatusUpdate(screenshotDataUrl ? '正在整理截圖與頁面上下文...' : '正在整理頁面上下文...');
+        handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const cleanEndpoint = endpoint.replace(/\/$/, '');
         const useResponsesApi = shouldUseResponsesApi(selectedModel);
         const baseEndpoint = cleanEndpoint.replace(/\/(chat\/completions|responses)$/, '');
@@ -4791,7 +5317,7 @@ async function createDialog() {
         try {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: 'OpenAI Compatible',
-                initialMessages: buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl),
+                initialMessages: buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl, normalizedInputImages),
                 initialUseTools: agentModeEnabled,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
@@ -4867,18 +5393,18 @@ async function createDialog() {
         }
     }
 
-    async function askAI(question, capturedSelectedText = '', screenshotDataUrl = null) {
+    async function askAI(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
         const provider = await getValue(PROVIDER_STORAGE, 'gemini');
         console.log('[AskPage] Using provider:', provider);
 
         if (provider === 'openai') {
-            await askOpenAI(question, capturedSelectedText, screenshotDataUrl);
+            await askOpenAI(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
         } else if (provider === 'azure') {
-            await askAzureOpenAI(question, capturedSelectedText, screenshotDataUrl);
+            await askAzureOpenAI(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
         } else if (provider === 'openai-compatible') {
-            await askOpenAICompatible(question, capturedSelectedText, screenshotDataUrl);
+            await askOpenAICompatible(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
         } else {
-            await askGemini(question, capturedSelectedText, screenshotDataUrl);
+            await askGemini(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
         }
     }
 }

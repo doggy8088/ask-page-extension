@@ -80,7 +80,7 @@ const BUILT_IN_COMMANDS = [
     { cmd: '/clear', desc: '清除提問歷史紀錄', builtin: true },
     { cmd: '/summary', desc: '總結本頁內容', builtin: true, editable: true },
     { cmd: '/screenshot', desc: '切換截圖功能狀態', builtin: true },
-    { cmd: '/html', desc: '切換 HTML 模式狀態（啟用後使用頁面 HTML 內容分析）', builtin: true }
+    { cmd: '/agent', desc: '切換詢問 / 代理模式（代理模式會使用頁面 HTML 與工具調用）', builtin: true }
 ];
 
 // Current edit state
