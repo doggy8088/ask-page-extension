@@ -4,6 +4,16 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.19.0] - 2026-04-29
+
+### 新增 / 改進（v0.19.0）
+
+- **代理模式支援 LLM 串流回應**：啟用代理模式時，Gemini、OpenAI、Azure OpenAI 與 OpenAI Compatible 會以串流方式即時顯示模型回傳的回答文字。
+- **思考內容即時顯示**：支援串流顯示可取得的 reasoning / thinking 文字，讓多步驟代理執行時能更快看到模型目前的推理進度。
+- **Gemini Thinking 主動啟用**：代理模式下 Gemini 3 會使用 `thinkingLevel: medium`，Gemini 2.5 會使用動態 `thinkingBudget: -1`，讓支援模型更穩定回傳 thought summaries。
+- **Provider 串流格式對應**：依不同 API 使用正確串流參數與解析方式，包括 Gemini `streamGenerateContent`、OpenAI Chat Completions SSE，以及 OpenAI / Azure Responses API SSE。
+- **模型最大輸出 Tokens 對齊**：Gemini 文字模型改用 65,536 輸出 Tokens；OpenAI / Azure OpenAI 的 GPT-5 reasoning 系列改用 128,000、GPT-5 chat 系列維持 16,384、o-series 改用 100,000，GPT-4.1 與 GPT-4o 系列依官方上限維持 32,768 / 16,384。
+
 ## [0.18.2] - 2026-04-29
 
 ### 修正 / 更新（v0.18.2）

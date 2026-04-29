@@ -21,33 +21,46 @@ const MAX_INPUT_VISIBLE_LINES = 5;
 const MAX_INPUT_CONTEXT_IMAGES = 4;
 const MAX_FORM_FIELD_DISCOVERY = 80;
 const MAX_TOOL_CALL_ROUNDS = 50;
-const GEMINI_INITIAL_MAX_OUTPUT_TOKENS = 2048;
-const GEMINI_RETRY_MAX_OUTPUT_TOKENS = 4096;
 const GEMINI_EMPTY_RESPONSE_RETRY_LIMIT = 1;
+const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 65536;
 const DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS = 32768;
 const OPENAI_STYLE_EMPTY_RESPONSE_RETRY_LIMIT = 1;
 const MAX_LLM_API_SERVICE_RETRIES = 5;
 const LLM_API_RETRY_BASE_DELAY_MS = 1000;
 const LLM_API_RETRY_MAX_DELAY_MS = 16000;
 const HTML_CONTEXT_NOISE_SELECTOR = 'script, style, noscript, template';
+const GEMINI_MODEL_MAX_OUTPUT_TOKENS = {
+    'gemini-3.1-pro-preview': 65536,
+    'gemini-3.1-flash-lite-preview': 65536,
+    'gemini-3-pro-preview': 65536,
+    'gemini-3-flash-preview': 65536,
+    'gemini-2.5-pro': 65536,
+    'gemini-2.5-flash': 65536,
+    'gemini-2.5-flash-lite': 65536,
+    'gemini-flash-lite-latest': 65536
+};
 const OPENAI_STYLE_MODEL_MAX_OUTPUT_TOKENS = {
     'gpt-4o': 16384,
     'gpt-4o-mini': 16384,
     'gpt-4.1': 32768,
     'gpt-4.1-mini': 32768,
-    'gpt-5': 32768,
-    'gpt-5.1': 32768,
-    'gpt-5.2': 32768,
-    'gpt-5.3': 32768,
-    'gpt-5.4': 32768,
-    'gpt-5.5': 32768,
-    'gpt-5-chat-latest': 32768,
-    'gpt-5-mini': 32768,
-    'gpt-5-nano': 32768,
-    'o3': 32768,
-    'o3-mini': 32768,
-    'o3-pro': 32768,
-    'o4-mini': 32768
+    'gpt-5': 128000,
+    'gpt-5.1': 128000,
+    'gpt-5.1-chat': 16384,
+    'gpt-5.2': 128000,
+    'gpt-5.2-chat': 16384,
+    'gpt-5.3': 128000,
+    'gpt-5.3-chat': 16384,
+    'gpt-5.4': 128000,
+    'gpt-5.5': 128000,
+    'gpt-5-chat': 16384,
+    'gpt-5-chat-latest': 16384,
+    'gpt-5-mini': 128000,
+    'gpt-5-nano': 128000,
+    'o3': 100000,
+    'o3-mini': 100000,
+    'o3-pro': 100000,
+    'o4-mini': 100000
 };
 const DIALOG_HOST_ID = 'askpage-dialog-host';
 const DIALOG_OVERLAY_ID = 'gemini-qna-overlay';
@@ -131,8 +144,20 @@ function appendNodeToActiveMessages(messageNode, fallbackMessagesEl) {
     }
 
     targetMessagesEl.appendChild(messageNode);
-    targetMessagesEl.scrollTop = targetMessagesEl.scrollHeight;
+    scrollMessagesToBottom(targetMessagesEl);
     return true;
+}
+
+function scrollMessagesToBottom(messagesElement) {
+    if (!messagesElement) {
+        return;
+    }
+
+    messagesElement.scrollTop = messagesElement.scrollHeight;
+}
+
+function scrollActiveMessagesToBottom(fallbackMessagesEl) {
+    scrollMessagesToBottom(getActiveMessagesElement(fallbackMessagesEl));
 }
 
 function closeActiveDialog() {
@@ -301,6 +326,15 @@ function shouldUseResponsesApi(model = '') {
     return isGpt5FamilyModel(model);
 }
 
+function getGeminiMaxOutputTokens(model = '') {
+    const normalizedModel = normalizeModelIdentifier(model);
+    if (!normalizedModel) {
+        return DEFAULT_GEMINI_MAX_OUTPUT_TOKENS;
+    }
+
+    return GEMINI_MODEL_MAX_OUTPUT_TOKENS[normalizedModel] || DEFAULT_GEMINI_MAX_OUTPUT_TOKENS;
+}
+
 function getOpenAIStyleMaxOutputTokens(model = '') {
     const normalizedModel = normalizeModelIdentifier(model);
     if (!normalizedModel) {
@@ -319,8 +353,12 @@ function getOpenAIStyleMaxOutputTokens(model = '') {
         return 32768;
     }
 
+    if (normalizedModel.startsWith('gpt-5-chat')) {
+        return 16384;
+    }
+
     if (normalizedModel.startsWith('gpt-5') || normalizedModel.startsWith('o3') || normalizedModel.startsWith('o4')) {
-        return 32768;
+        return normalizedModel.startsWith('gpt-5') ? 128000 : 100000;
     }
 
     return DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS;
@@ -2531,6 +2569,87 @@ async function createDialog() {
         }
     }
 
+    function createStreamingAssistantMessageRenderer() {
+        let messageElement = null;
+        let text = '';
+        let renderFrame = 0;
+
+        const ensureMessageElement = () => {
+            if (messageElement) {
+                return messageElement;
+            }
+
+            messageElement = document.createElement('div');
+            messageElement.className = 'gemini-msg-assistant askpage-streaming-answer';
+            appendNodeToActiveMessages(messageElement, messagesEl);
+            return messageElement;
+        };
+
+        const render = (options = {}) => {
+            if (!messageElement) {
+                return;
+            }
+
+            renderAssistantMessageElement(messageElement, text || '...', {
+                suppressCopyButton: options.suppressCopyButton === true,
+                copyText: text
+            });
+            scrollActiveMessagesToBottom(messagesEl);
+        };
+
+        const discard = () => {
+            if (renderFrame) {
+                cancelAnimationFrame(renderFrame);
+                renderFrame = 0;
+            }
+            if (messageElement) {
+                messageElement.remove();
+                messageElement = null;
+            }
+            text = '';
+        };
+
+        const scheduleRender = () => {
+            if (renderFrame) {
+                return;
+            }
+
+            renderFrame = requestAnimationFrame(() => {
+                renderFrame = 0;
+                render({ suppressCopyButton: true });
+            });
+        };
+
+        return {
+            append(delta) {
+                if (!delta) {
+                    return;
+                }
+
+                text += delta;
+                ensureMessageElement();
+                scheduleRender();
+            },
+            finalize(finalText, historyOptions = {}) {
+                text = String(finalText || '').trim();
+                if (!text) {
+                    discard();
+                    return null;
+                }
+
+                ensureMessageElement();
+                if (renderFrame) {
+                    cancelAnimationFrame(renderFrame);
+                    renderFrame = 0;
+                }
+                render({ suppressCopyButton: false });
+                addConversationTurn('assistant', text, text, historyOptions);
+                return messageElement;
+            },
+            discard
+        };
+    }
+
     async function refreshUsagePromptMessage(options = {}) {
         const targetMessagesEl = getActiveMessagesElement(messagesEl);
         if (!targetMessagesEl) {
@@ -2782,8 +2901,62 @@ async function createDialog() {
     function createExecutionTraceReporter() {
         let lastStatus = '';
         let lastReasoningText = '';
+        let streamedReasoningText = '';
+        let streamedReasoningElement = null;
+        let streamedReasoningStored = false;
+        let streamedReasoningRenderFrame = 0;
         let stepCount = 0;
         const startedAt = performance.now();
+        const renderStreamedReasoning = () => {
+            if (!streamedReasoningElement) {
+                return;
+            }
+
+            renderAssistantMessageElement(streamedReasoningElement, `🧠 ${streamedReasoningText}`, {
+                suppressCopyButton: true
+            });
+            scrollActiveMessagesToBottom(messagesEl);
+        };
+        const scheduleStreamedReasoningRender = () => {
+            if (streamedReasoningRenderFrame) {
+                return;
+            }
+
+            streamedReasoningRenderFrame = requestAnimationFrame(() => {
+                streamedReasoningRenderFrame = 0;
+                renderStreamedReasoning();
+            });
+        };
+        const ensureStreamedReasoningElement = () => {
+            if (streamedReasoningElement) {
+                return;
+            }
+
+            streamedReasoningElement = appendMessage('assistant', `🧠 ${streamedReasoningText}`, {
+                suppressCopyButton: true,
+                extraClassName: 'askpage-agent-trace askpage-agent-trace-status'
+            });
+            stepCount++;
+        };
+        const storeStreamedReasoning = () => {
+            const reasoningText = streamedReasoningText.trim();
+            if (!reasoningText || streamedReasoningStored) {
+                return;
+            }
+
+            if (streamedReasoningRenderFrame) {
+                cancelAnimationFrame(streamedReasoningRenderFrame);
+                streamedReasoningRenderFrame = 0;
+                renderStreamedReasoning();
+            }
+
+            streamedReasoningStored = true;
+            addConversationTurn('assistant', `🧠 ${reasoningText}`, `🧠 ${reasoningText}`, {
+                includeInModelContext: false,
+                suppressCopyButton: true,
+                extraClassName: 'askpage-agent-trace askpage-agent-trace-status'
+            });
+        };
         return {
             reportStatus(status) {
                 const conversationalStatus = formatConversationStyleStatus(status);
@@ -2804,7 +2977,24 @@ async function createDialog() {
                 }
                 lastReasoningText = reasoningText;
                 stepCount++;
+                if (streamedReasoningElement) {
+                    streamedReasoningText = reasoningText;
+                    renderStreamedReasoning();
+                    storeStreamedReasoning();
+                    return;
+                }
+
                 appendAgentTraceMessage(`🧠 ${reasoningText}`, 'status');
+            },
+            reportReasoningDelta(delta) {
+                if (!delta) {
+                    return;
+                }
+
+                streamedReasoningText += delta;
+                lastReasoningText = streamedReasoningText.trim();
+                ensureStreamedReasoningElement();
+                scheduleStreamedReasoningRender();
             },
             reportToolCalls(toolCalls) {
                 toolCalls.forEach((toolCall) => {
@@ -2821,6 +3011,7 @@ async function createDialog() {
                 });
             },
             reportCompletion(message) {
+                storeStreamedReasoning();
                 appendAgentTraceMessage(`✅ ${message}`, 'completion');
             },
             getStats() {
@@ -2867,6 +3058,11 @@ async function createDialog() {
 
         if (traceEvent.type === 'reasoning') {
             traceReporter.reportReasoning(traceEvent.summaries || []);
+            return;
+        }
+
+        if (traceEvent.type === 'reasoning-delta') {
+            traceReporter.reportReasoningDelta(traceEvent.text || '');
             return;
         }
 
@@ -3199,6 +3395,134 @@ async function createDialog() {
                     const nextRetryCount = retryCount + 1;
                     const delayMs = getRetryDelayMilliseconds(retryCount, error?.retryAfterMs);
                     logDiagnostic('warn', `${providerLabel} API request failed and will retry.`, {
+                        provider: providerLabel,
+                        retry: nextRetryCount,
+                        maxRetries: MAX_LLM_API_SERVICE_RETRIES,
+                        delayMs,
+                        reasonCode: analysis.reasonCode,
+                        shortReason: analysis.shortReason,
+                        error: buildApiDiagnosticPayload(error)
+                    });
+                    if (typeof onRetry === 'function') {
+                        onRetry({
+                            ...analysis,
+                            retryCount: nextRetryCount,
+                            maxRetries: MAX_LLM_API_SERVICE_RETRIES,
+                            delayMs
+                        });
+                    }
+                    retryCount = nextRetryCount;
+                    await sleep(delayMs);
+                    continue;
+                }
+
+                error.userMessage = analysis.userMessage;
+                error.analysis = analysis;
+                error.retryCount = retryCount;
+                throw error;
+            }
+        }
+    }
+
+    async function readServerSentEvents(response, onEvent) {
+        if (!response.body || typeof response.body.getReader !== 'function') {
+            throw new Error('此瀏覽器不支援讀取串流回應。');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        for (;;) {
+            const { value, done } = await reader.read();
+            if (done) {
+                break;
+            }
+
+            buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+            const blocks = buffer.split('\n\n');
+            buffer = blocks.pop() || '';
+
+            for (const block of blocks) {
+                if (handleServerSentEventBlock(block, onEvent) === false) {
+                    return;
+                }
+            }
+        }
+
+        buffer += decoder.decode();
+        if (buffer.trim()) {
+            handleServerSentEventBlock(buffer, onEvent);
+        }
+    }
+
+    function handleServerSentEventBlock(block, onEvent) {
+        const dataLines = [];
+        let eventType = 'message';
+
+        block.split('\n').forEach((line) => {
+            if (!line || line.startsWith(':')) {
+                return;
+            }
+
+            const separatorIndex = line.indexOf(':');
+            const field = separatorIndex >= 0 ? line.slice(0, separatorIndex) : line;
+            const rawValue = separatorIndex >= 0 ? line.slice(separatorIndex + 1) : '';
+            const value = rawValue.startsWith(' ') ? rawValue.slice(1) : rawValue;
+
+            if (field === 'event') {
+                eventType = value || eventType;
+            } else if (field === 'data') {
+                dataLines.push(value);
+            }
+        });
+
+        if (!dataLines.length) {
+            return true;
+        }
+
+        const data = dataLines.join('\n');
+        if (data === '[DONE]') {
+            return false;
+        }
+
+        onEvent({
+            event: eventType,
+            data
+        });
+        return true;
+    }
+
+    async function fetchSseWithRetry({
+        providerLabel,
+        url,
+        options,
+        buildHttpError,
+        onRetry,
+        onEvent
+    }) {
+        let retryCount = 0;
+
+        for (;;) {
+            let receivedEvent = false;
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    throw buildHttpError(response, errorBody);
+                }
+
+                await readServerSentEvents(response, (event) => {
+                    receivedEvent = true;
+                    onEvent(event);
+                });
+                return;
+            } catch (error) {
+                const analysis = analyzeProviderApiError(providerLabel, error, retryCount);
+                if (!receivedEvent && analysis.shouldRetry && retryCount < MAX_LLM_API_SERVICE_RETRIES) {
+                    const nextRetryCount = retryCount + 1;
+                    const delayMs = getRetryDelayMilliseconds(retryCount, error?.retryAfterMs);
+                    logDiagnostic('warn', `${providerLabel} streaming API request failed and will retry.`, {
                         provider: providerLabel,
                         retry: nextRetryCount,
                         maxRetries: MAX_LLM_API_SERVICE_RETRIES,
@@ -4524,9 +4848,29 @@ async function createDialog() {
         }
 
         return parts
-            .map((part) => typeof part?.text === 'string' ? part.text : '')
+            .map((part) => part?.thought === true ? '' : (typeof part?.text === 'string' ? part.text : ''))
             .join('')
             .trim();
+    }
+
+    function doesGeminiModelSupportThoughtStreaming(model = '') {
+        const normalizedModel = normalizeModelIdentifier(model);
+        return normalizedModel.startsWith('gemini-2.5') || normalizedModel.startsWith('gemini-3');
+    }
+
+    function buildGeminiThinkingConfig(model = '') {
+        const normalizedModel = normalizeModelIdentifier(model);
+        if (!doesGeminiModelSupportThoughtStreaming(normalizedModel)) {
+            return null;
+        }
+
+        const thinkingConfig = { includeThoughts: true };
+        if (normalizedModel.startsWith('gemini-3')) {
+            thinkingConfig.thinkingLevel = 'medium';
+        } else if (normalizedModel.startsWith('gemini-2.5')) {
+            thinkingConfig.thinkingBudget = -1;
+        }
+        return thinkingConfig;
     }
 
     function formatGeminiSafetyDetails(safetyRatings) {
@@ -4655,6 +4999,397 @@ async function createDialog() {
         ];
     }
 
+    function parseSseJsonEvent(providerLabel, sseEvent) {
+        try {
+            return JSON.parse(sseEvent.data);
+        } catch (error) {
+            throw new Error(`${providerLabel} 回傳了無法解析的串流資料：${sseEvent.data.slice(0, 200)}`);
+        }
+    }
+
+    function appendOpenAIChatToolCallDelta(toolCalls, toolCallDelta) {
+        const index = Number.isInteger(toolCallDelta.index) ? toolCallDelta.index : toolCalls.length;
+        if (!toolCalls[index]) {
+            toolCalls[index] = {
+                id: toolCallDelta.id || '',
+                type: toolCallDelta.type || 'function',
+                function: {
+                    name: '',
+                    arguments: ''
+                }
+            };
+        }
+
+        const target = toolCalls[index];
+        if (toolCallDelta.id) {
+            target.id = toolCallDelta.id;
+        }
+        if (toolCallDelta.type) {
+            target.type = toolCallDelta.type;
+        }
+        if (toolCallDelta.function?.name) {
+            target.function.name += toolCallDelta.function.name;
+        }
+        if (toolCallDelta.function?.arguments) {
+            target.function.arguments += toolCallDelta.function.arguments;
+        }
+    }
+
+    async function fetchOpenAIChatCompletionsStream({
+        providerLabel,
+        url,
+        requestBody,
+        headers,
+        buildHttpError,
+        onRetry,
+        onAnswerDelta = () => {},
+        onReasoningDelta = () => {}
+    }) {
+        const message = {
+            role: 'assistant',
+            content: '',
+            tool_calls: []
+        };
+        let finishReason = '';
+        let reasoningText = '';
+        let responseId = '';
+        let responseModel = requestBody.model || '';
+        let usage = null;
+
+        await fetchSseWithRetry({
+            providerLabel,
+            url,
+            options: {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    ...requestBody,
+                    stream: true
+                })
+            },
+            buildHttpError,
+            onRetry,
+            onEvent: (sseEvent) => {
+                const chunk = parseSseJsonEvent(providerLabel, sseEvent);
+                responseId = chunk.id || responseId;
+                responseModel = chunk.model || responseModel;
+                usage = chunk.usage || usage;
+
+                const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : null;
+                if (!choice) {
+                    return;
+                }
+
+                const delta = choice.delta || {};
+                const contentDelta = typeof delta.content === 'string' ? delta.content : '';
+                const reasoningDelta = [
+                    delta.reasoning_content,
+                    delta.reasoning,
+                    delta.reasoning_text
+                ].filter((value) => typeof value === 'string').join('');
+
+                if (contentDelta) {
+                    message.content += contentDelta;
+                    onAnswerDelta(contentDelta);
+                }
+
+                if (reasoningDelta) {
+                    reasoningText += reasoningDelta;
+                    onReasoningDelta(reasoningDelta);
+                }
+
+                if (Array.isArray(delta.tool_calls)) {
+                    delta.tool_calls.forEach((toolCallDelta) => appendOpenAIChatToolCallDelta(message.tool_calls, toolCallDelta));
+                }
+
+                finishReason = choice.finish_reason || finishReason;
+            }
+        });
+
+        message.content = message.content || null;
+        message.tool_calls = message.tool_calls.filter(Boolean);
+        if (reasoningText.trim()) {
+            message.reasoning_summaries = [reasoningText.trim()];
+        }
+        if (!message.tool_calls.length) {
+            delete message.tool_calls;
+        }
+
+        return {
+            id: responseId,
+            model: responseModel,
+            usage,
+            choices: [{
+                finish_reason: finishReason || 'stop',
+                message
+            }],
+            reasoning_summaries: reasoningText.trim() ? [reasoningText.trim()] : []
+        };
+    }
+
+    function ensureResponsesStreamOutputItem(state, payload) {
+        const outputIndex = Number.isInteger(payload.output_index) ? payload.output_index : state.outputItems.length;
+        if (!state.outputItems[outputIndex]) {
+            state.outputItems[outputIndex] = {
+                type: payload.item?.type || 'message',
+                id: payload.item?.id || '',
+                call_id: payload.item?.call_id || '',
+                name: payload.item?.name || '',
+                arguments: payload.item?.arguments || '',
+                content: Array.isArray(payload.item?.content) ? payload.item.content : []
+            };
+        }
+
+        const target = state.outputItems[outputIndex];
+        if (payload.item) {
+            Object.assign(target, payload.item);
+        }
+        return target;
+    }
+
+    function buildResponsesApiResponseFromStream(state) {
+        const output = state.outputItems.filter(Boolean);
+        if (state.outputText) {
+            const messageItem = output.find((item) => item.type === 'message');
+            if (messageItem) {
+                messageItem.content = [{
+                    type: 'output_text',
+                    text: state.outputText
+                }];
+            } else {
+                output.push({
+                    type: 'message',
+                    content: [{
+                        type: 'output_text',
+                        text: state.outputText
+                    }]
+                });
+            }
+        }
+
+        if (state.refusalText) {
+            output.push({
+                type: 'message',
+                content: [{
+                    type: 'refusal',
+                    refusal: state.refusalText
+                }]
+            });
+        }
+
+        if (state.reasoningText) {
+            output.push({
+                type: 'reasoning',
+                summary: [{
+                    type: 'summary_text',
+                    text: state.reasoningText
+                }]
+            });
+        }
+
+        return {
+            id: state.id,
+            model: state.model,
+            output,
+            output_text: state.outputText,
+            usage: state.usage || {}
+        };
+    }
+
+    async function fetchResponsesApiStream({
+        providerLabel,
+        url,
+        requestBody,
+        headers,
+        buildHttpError,
+        onRetry,
+        onAnswerDelta = () => {},
+        onReasoningDelta = () => {}
+    }) {
+        const state = {
+            id: '',
+            model: requestBody.model || '',
+            usage: null,
+            outputText: '',
+            refusalText: '',
+            reasoningText: '',
+            outputItems: [],
+            completedResponse: null
+        };
+
+        await fetchSseWithRetry({
+            providerLabel,
+            url,
+            options: {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    ...requestBody,
+                    stream: true
+                })
+            },
+            buildHttpError,
+            onRetry,
+            onEvent: (sseEvent) => {
+                const payload = parseSseJsonEvent(providerLabel, sseEvent);
+                const eventType = payload.type || sseEvent.event;
+                const response = payload.response || payload;
+                state.id = response.id || state.id;
+                state.model = response.model || state.model;
+                state.usage = response.usage || state.usage;
+
+                if (eventType === 'response.output_item.added') {
+                    ensureResponsesStreamOutputItem(state, payload);
+                    return;
+                }
+
+                if (eventType === 'response.output_item.done') {
+                    const item = ensureResponsesStreamOutputItem(state, payload);
+                    if (payload.item) {
+                        Object.assign(item, payload.item);
+                    }
+                    return;
+                }
+
+                if (eventType === 'response.output_text.delta' && typeof payload.delta === 'string') {
+                    state.outputText += payload.delta;
+                    onAnswerDelta(payload.delta);
+                    return;
+                }
+
+                if (eventType === 'response.refusal.delta' && typeof payload.delta === 'string') {
+                    state.refusalText += payload.delta;
+                    return;
+                }
+
+                if (eventType.includes('reasoning') && eventType.endsWith('.delta') && typeof payload.delta === 'string') {
+                    state.reasoningText += payload.delta;
+                    onReasoningDelta(payload.delta);
+                    return;
+                }
+
+                if (eventType === 'response.function_call_arguments.delta' && typeof payload.delta === 'string') {
+                    const item = ensureResponsesStreamOutputItem(state, payload);
+                    item.type = 'function_call';
+                    item.arguments = `${item.arguments || ''}${payload.delta}`;
+                    return;
+                }
+
+                if (eventType === 'response.function_call_arguments.done') {
+                    const item = ensureResponsesStreamOutputItem(state, payload);
+                    item.type = 'function_call';
+                    item.arguments = payload.arguments || item.arguments || '';
+                    return;
+                }
+
+                if (eventType === 'response.completed') {
+                    state.completedResponse = payload.response || payload;
+                }
+            }
+        });
+
+        const responseData = state.completedResponse || buildResponsesApiResponseFromStream(state);
+        const normalizedResponse = normalizeResponsesApiResponse(responseData);
+        const assistantMessage = normalizedResponse.choices?.[0]?.message;
+        if (state.outputText && !assistantMessage?.content) {
+            assistantMessage.content = state.outputText;
+        }
+        if (state.reasoningText.trim()) {
+            const reasoningSummaries = [state.reasoningText.trim()];
+            assistantMessage.reasoning_summaries = reasoningSummaries;
+            normalizedResponse.reasoning_summaries = reasoningSummaries;
+        }
+        return normalizedResponse;
+    }
+
+    function mergeGeminiStreamChunk(target, chunk, onAnswerDelta, onReasoningDelta) {
+        target.responseId = chunk.responseId || target.responseId;
+        target.modelVersion = chunk.modelVersion || target.modelVersion;
+        target.promptFeedback = chunk.promptFeedback || target.promptFeedback;
+        target.usageMetadata = chunk.usageMetadata || target.usageMetadata;
+
+        const candidates = Array.isArray(chunk.candidates) ? chunk.candidates : [];
+        candidates.forEach((candidate, candidateIndex) => {
+            if (!target.candidates[candidateIndex]) {
+                target.candidates[candidateIndex] = {
+                    content: {
+                        role: candidate.content?.role || 'model',
+                        parts: []
+                    }
+                };
+            }
+
+            const targetCandidate = target.candidates[candidateIndex];
+            targetCandidate.finishReason = candidate.finishReason || targetCandidate.finishReason;
+            targetCandidate.finishMessage = candidate.finishMessage || targetCandidate.finishMessage;
+            targetCandidate.safetyRatings = candidate.safetyRatings || targetCandidate.safetyRatings;
+
+            const parts = Array.isArray(candidate.content?.parts) ? candidate.content.parts : [];
+            parts.forEach((part) => {
+                if (typeof part.text === 'string') {
+                    const targetParts = targetCandidate.content.parts;
+                    const previousPart = targetParts[targetParts.length - 1];
+                    const copiedPart = { ...part };
+                    if (
+                        previousPart
+                        && typeof previousPart.text === 'string'
+                        && previousPart.thought === part.thought
+                        && !previousPart.thoughtSignature
+                        && !copiedPart.thoughtSignature
+                    ) {
+                        previousPart.text += part.text;
+                    } else {
+                        targetParts.push(copiedPart);
+                    }
+
+                    if (part.thought === true) {
+                        onReasoningDelta(part.text);
+                    } else {
+                        onAnswerDelta(part.text);
+                    }
+                    return;
+                }
+
+                if (part.functionCall) {
+                    targetCandidate.content.parts.push(part);
+                }
+            });
+        });
+    }
+
+    async function fetchGeminiStream({
+        apiKey,
+        selectedModel,
+        requestBody,
+        buildHttpError,
+        onRetry,
+        onAnswerDelta = () => {},
+        onReasoningDelta = () => {}
+    }) {
+        const responseData = {
+            candidates: []
+        };
+
+        await fetchSseWithRetry({
+            providerLabel: 'Gemini',
+            url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?alt=sse&key=${apiKey}`,
+            options: {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            },
+            buildHttpError,
+            onRetry,
+            onEvent: (sseEvent) => {
+                const chunk = parseSseJsonEvent('Gemini', sseEvent);
+                mergeGeminiStreamChunk(responseData, chunk, onAnswerDelta, onReasoningDelta);
+            }
+        });
+
+        responseData.candidates = responseData.candidates.filter(Boolean);
+        return responseData;
+    }
+
     function formatRoundStatus(round, message) {
         return message;
     }
@@ -4668,6 +5403,8 @@ async function createDialog() {
         initialUseTools = true,
         onStatusUpdate = () => {},
         onTrace = () => {},
+        onAnswerDelta = () => {},
+        onReasoningDelta = () => {},
         initialMaxOutputTokens = DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS,
         retryMaxOutputTokens = DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS
     }) {
@@ -4697,7 +5434,11 @@ async function createDialog() {
                     (retryInfo) => reportStatus(formatRoundStatus(
                         round,
                         `${providerLabel} ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
-                    ))
+                    )),
+                    {
+                        onAnswerDelta,
+                        onReasoningDelta
+                    }
                 );
             } catch (error) {
                 if (useTools && allowToolFallback && isLikelyToolUnsupportedError(error)) {
@@ -4799,7 +5540,9 @@ async function createDialog() {
         inputImageDataUrls = [],
         enableTools = true,
         onStatusUpdate = () => {},
-        onTrace = () => {}
+        onTrace = () => {},
+        onAnswerDelta = () => {},
+        onReasoningDelta = () => {}
     }) {
         const normalizedInputImages = normalizeInputImageDataUrls(inputImageDataUrls);
         const pageConversationContext = await preparePageConversationContext(capturedSelectedText, {
@@ -4809,7 +5552,7 @@ async function createDialog() {
         console.log('[AskPage] Gemini context mode:', pageConversationContext.contextMode);
         console.log('[AskPage] Conversation history messages:', conversationHistory.length);
         let previousToolSummary = '';
-        let maxOutputTokens = GEMINI_INITIAL_MAX_OUTPUT_TOKENS;
+        const maxOutputTokens = getGeminiMaxOutputTokens(selectedModel);
         let emptyResponseRetryCount = 0;
         const reportStatus = (status) => {
             onStatusUpdate(status);
@@ -4858,42 +5601,58 @@ async function createDialog() {
                 contents,
                 generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens }
             };
+            const thinkingConfig = enableTools ? buildGeminiThinkingConfig(selectedModel) : null;
+            if (thinkingConfig) {
+                requestBody.generationConfig.thinkingConfig = thinkingConfig;
+            }
             if (enableTools) {
                 requestBody.tools = getGeminiToolDefinitions();
             }
 
-            const responseData = await fetchJsonWithRetry({
-                providerLabel: 'Gemini',
-                url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
-                options: {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
-                },
-                buildHttpError: (response, errorBody) => {
-                    const retryAfterMs = getRetryAfterMilliseconds(response);
-                    if (response.status === 401) {
-                        return createHttpError(response.status, response.statusText, errorBody, '無效的 Gemini API Key，請檢查您的 Gemini API Key 設定。', { retryAfterMs });
-                    }
-                    if (response.status === 403) {
-                        return createHttpError(response.status, response.statusText, errorBody, 'Gemini 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
-                    }
-                    if (response.status === 404) {
-                        return createHttpError(response.status, response.statusText, errorBody, '找不到指定的 Gemini 模型，請檢查模型設定。', { retryAfterMs });
-                    }
-                    if (response.status === 429) {
-                        return createHttpError(response.status, response.statusText, errorBody, 'Gemini 服務目前忙碌或請求頻率過高，請稍後再試。', { retryAfterMs });
-                    }
-                    if (response.status >= 500) {
-                        return createHttpError(response.status, response.statusText, errorBody, 'Gemini 服務暫時不可用，請稍後再試。', { retryAfterMs });
-                    }
-                    return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
-                },
-                onRetry: (retryInfo) => reportStatus(formatRoundStatus(
-                    round,
-                    `Gemini ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
-                ))
-            });
+            const buildGeminiHttpError = (response, errorBody) => {
+                const retryAfterMs = getRetryAfterMilliseconds(response);
+                if (response.status === 401) {
+                    return createHttpError(response.status, response.statusText, errorBody, '無效的 Gemini API Key，請檢查您的 Gemini API Key 設定。', { retryAfterMs });
+                }
+                if (response.status === 403) {
+                    return createHttpError(response.status, response.statusText, errorBody, 'Gemini 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
+                }
+                if (response.status === 404) {
+                    return createHttpError(response.status, response.statusText, errorBody, '找不到指定的 Gemini 模型，請檢查模型設定。', { retryAfterMs });
+                }
+                if (response.status === 429) {
+                    return createHttpError(response.status, response.statusText, errorBody, 'Gemini 服務目前忙碌或請求頻率過高，請稍後再試。', { retryAfterMs });
+                }
+                if (response.status >= 500) {
+                    return createHttpError(response.status, response.statusText, errorBody, 'Gemini 服務暫時不可用，請稍後再試。', { retryAfterMs });
+                }
+                return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
+            };
+            const handleRetry = (retryInfo) => reportStatus(formatRoundStatus(
+                round,
+                `Gemini ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
+            ));
+            const responseData = enableTools
+                ? await fetchGeminiStream({
+                    apiKey,
+                    selectedModel,
+                    requestBody,
+                    buildHttpError: buildGeminiHttpError,
+                    onRetry: handleRetry,
+                    onAnswerDelta,
+                    onReasoningDelta
+                })
+                : await fetchJsonWithRetry({
+                    providerLabel: 'Gemini',
+                    url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
+                    options: {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(requestBody)
+                    },
+                    buildHttpError: buildGeminiHttpError,
+                    onRetry: handleRetry
+                });
             const responseCandidate = getGeminiPrimaryCandidate(responseData);
             const responseContent = responseCandidate?.content;
             const parts = responseContent?.parts || [];
@@ -4914,10 +5673,9 @@ async function createDialog() {
 
                 if (emptyResponseRetryCount < GEMINI_EMPTY_RESPONSE_RETRY_LIMIT && isGeminiRetriableEmptyResponse(responseData)) {
                     emptyResponseRetryCount++;
-                    maxOutputTokens = Math.max(maxOutputTokens, GEMINI_RETRY_MAX_OUTPUT_TOKENS);
                     reportStatus(
                         responseCandidate?.finishReason === 'MAX_TOKENS'
-                            ? 'Gemini 回傳內容為空且疑似達到輸出上限，正在放寬輸出限制後自動重試一次...'
+                            ? 'Gemini 回傳內容為空且疑似達到輸出上限，正在以模型最大輸出上限自動重試一次...'
                             : 'Gemini 回傳內容為空，正在自動重試一次...'
                     );
                     continue;
@@ -4998,6 +5756,7 @@ async function createDialog() {
         const agentModeEnabled = await getAgentModeEnabled();
         const hasInputImages = normalizeInputImageDataUrls(inputImageDataUrls).length > 0;
         handleStatusUpdate((screenshotDataUrl || hasInputImages) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
+        const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
 
         try {
             const answer = await runGeminiToolLoop({
@@ -5009,14 +5768,23 @@ async function createDialog() {
                 inputImageDataUrls,
                 enableTools: agentModeEnabled,
                 onStatusUpdate: handleStatusUpdate,
-                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'Gemini', traceEvent)
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'Gemini', traceEvent),
+                onAnswerDelta: streamedAnswer ? (delta) => streamedAnswer.append(delta) : () => {},
+                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, 'Gemini', { type: 'reasoning-delta', text: delta })
             });
 
-            appendPersistentMessage('assistant', answer);
+            if (streamedAnswer) {
+                streamedAnswer.finalize(answer);
+            } else {
+                appendPersistentMessage('assistant', answer);
+            }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
             console.error('[AskPage] Gemini API call failed:', error);
+            if (streamedAnswer) {
+                streamedAnswer.discard();
+            }
             const errorMessage = `錯誤: ${error.userMessage || error.message}`;
             appendErrorMessageAndStore(errorMessage);
             traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats(), errorMessage));
@@ -5049,6 +5817,7 @@ async function createDialog() {
         });
         const agentModeEnabled = await getAgentModeEnabled();
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
+        const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
         const normalizedSelectedModel = normalizeModelIdentifier(selectedModel);
         const usesMaxCompletionTokens = normalizedSelectedModel.startsWith('gpt-5') || normalizedSelectedModel.startsWith('o3') || normalizedSelectedModel.startsWith('o4');
         const supportsTemperature = !(normalizedSelectedModel.startsWith('gpt-5') || normalizedSelectedModel.startsWith('o3') || normalizedSelectedModel.startsWith('o4'));
@@ -5098,50 +5867,77 @@ async function createDialog() {
 
                     return requestBody;
                 },
-                sendRequest: async (requestBody, onRetry) => {
+                sendRequest: async (requestBody, onRetry, streamHandlers = {}) => {
+                    const headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    };
+                    const buildHttpError = (response, errorBody) => {
+                        const retryAfterMs = getRetryAfterMilliseconds(response);
+                        if (response.status === 401) {
+                            return createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 OpenAI API Key 設定。', { retryAfterMs });
+                        }
+                        if (response.status === 403) {
+                            return createHttpError(response.status, response.statusText, errorBody, 'OpenAI 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
+                        }
+                        if (response.status === 404) {
+                            return createHttpError(response.status, response.statusText, errorBody, '找不到指定的 OpenAI 模型，請檢查模型設定。', { retryAfterMs });
+                        }
+                        if (response.status === 429) {
+                            return createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。', { retryAfterMs });
+                        }
+                        if (response.status >= 500) {
+                            return createHttpError(response.status, response.statusText, errorBody, 'OpenAI 服務暫時不可用，請稍後再試。', { retryAfterMs });
+                        }
+                        return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
+                    };
+                    if (agentModeEnabled) {
+                        const streamOptions = {
+                            providerLabel: 'OpenAI',
+                            url: useResponsesApi ? 'https://api.openai.com/v1/responses' : 'https://api.openai.com/v1/chat/completions',
+                            requestBody,
+                            headers,
+                            buildHttpError,
+                            onRetry,
+                            onAnswerDelta: streamHandlers.onAnswerDelta,
+                            onReasoningDelta: streamHandlers.onReasoningDelta
+                        };
+                        return useResponsesApi
+                            ? await fetchResponsesApiStream(streamOptions)
+                            : await fetchOpenAIChatCompletionsStream(streamOptions);
+                    }
+
                     return await fetchJsonWithRetry({
                         providerLabel: 'OpenAI',
                         url: useResponsesApi ? 'https://api.openai.com/v1/responses' : 'https://api.openai.com/v1/chat/completions',
                         options: {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${apiKey}`
-                            },
+                            headers,
                             body: JSON.stringify(requestBody)
                         },
-                        buildHttpError: (response, errorBody) => {
-                            const retryAfterMs = getRetryAfterMilliseconds(response);
-                            if (response.status === 401) {
-                                return createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 OpenAI API Key 設定。', { retryAfterMs });
-                            }
-                            if (response.status === 403) {
-                                return createHttpError(response.status, response.statusText, errorBody, 'OpenAI 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
-                            }
-                            if (response.status === 404) {
-                                return createHttpError(response.status, response.statusText, errorBody, '找不到指定的 OpenAI 模型，請檢查模型設定。', { retryAfterMs });
-                            }
-                            if (response.status === 429) {
-                                return createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。', { retryAfterMs });
-                            }
-                            if (response.status >= 500) {
-                                return createHttpError(response.status, response.statusText, errorBody, 'OpenAI 服務暫時不可用，請稍後再試。', { retryAfterMs });
-                            }
-                            return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
-                        },
+                        buildHttpError,
                         onRetry,
                         transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined
                     });
                 },
                 onStatusUpdate: handleStatusUpdate,
-                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'OpenAI', traceEvent)
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'OpenAI', traceEvent),
+                onAnswerDelta: agentModeEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
+                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, 'OpenAI', { type: 'reasoning-delta', text: delta })
             });
 
-            appendPersistentMessage('assistant', answer.answer);
+            if (streamedAnswer) {
+                streamedAnswer.finalize(answer.answer);
+            } else {
+                appendPersistentMessage('assistant', answer.answer);
+            }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
             console.error('[AskPage] OpenAI API call failed:', error);
+            if (streamedAnswer) {
+                streamedAnswer.discard();
+            }
             const errorMessage = `錯誤: ${error.userMessage || error.message}`;
             appendErrorMessageAndStore(errorMessage);
             traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats(), errorMessage));
@@ -5186,6 +5982,7 @@ async function createDialog() {
         });
         const agentModeEnabled = await getAgentModeEnabled();
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
+        const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
         const isGpt5Model = isGpt5FamilyModel(deployment);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(deployment);
         const useResponsesApi = shouldUseResponsesApi(deployment);
@@ -5234,50 +6031,77 @@ async function createDialog() {
 
                     return requestBody;
                 },
-                sendRequest: async (requestBody, onRetry) => {
+                sendRequest: async (requestBody, onRetry, streamHandlers = {}) => {
+                    const headers = {
+                        'Content-Type': 'application/json',
+                        'api-key': apiKey
+                    };
+                    const buildHttpError = (response, errorBody) => {
+                        const retryAfterMs = getRetryAfterMilliseconds(response);
+                        if (response.status === 401) {
+                            return createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 Azure OpenAI API Key 設定。', { retryAfterMs });
+                        }
+                        if (response.status === 403) {
+                            return createHttpError(response.status, response.statusText, errorBody, 'Azure OpenAI 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
+                        }
+                        if (response.status === 404) {
+                            return createHttpError(response.status, response.statusText, errorBody, '找不到指定的部署，請檢查您的 Endpoint 和 Deployment Name 設定。', { retryAfterMs });
+                        }
+                        if (response.status === 429) {
+                            return createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。', { retryAfterMs });
+                        }
+                        if (response.status >= 500) {
+                            return createHttpError(response.status, response.statusText, errorBody, 'Azure OpenAI 服務暫時不可用，請稍後再試。', { retryAfterMs });
+                        }
+                        return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
+                    };
+                    if (agentModeEnabled) {
+                        const streamOptions = {
+                            providerLabel: 'Azure OpenAI',
+                            url: apiUrl,
+                            requestBody,
+                            headers,
+                            buildHttpError,
+                            onRetry,
+                            onAnswerDelta: streamHandlers.onAnswerDelta,
+                            onReasoningDelta: streamHandlers.onReasoningDelta
+                        };
+                        return useResponsesApi
+                            ? await fetchResponsesApiStream(streamOptions)
+                            : await fetchOpenAIChatCompletionsStream(streamOptions);
+                    }
+
                     return await fetchJsonWithRetry({
                         providerLabel: 'Azure OpenAI',
                         url: apiUrl,
                         options: {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'api-key': apiKey
-                            },
+                            headers,
                             body: JSON.stringify(requestBody)
                         },
-                        buildHttpError: (response, errorBody) => {
-                            const retryAfterMs = getRetryAfterMilliseconds(response);
-                            if (response.status === 401) {
-                                return createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 Azure OpenAI API Key 設定。', { retryAfterMs });
-                            }
-                            if (response.status === 403) {
-                                return createHttpError(response.status, response.statusText, errorBody, 'Azure OpenAI 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
-                            }
-                            if (response.status === 404) {
-                                return createHttpError(response.status, response.statusText, errorBody, '找不到指定的部署，請檢查您的 Endpoint 和 Deployment Name 設定。', { retryAfterMs });
-                            }
-                            if (response.status === 429) {
-                                return createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。', { retryAfterMs });
-                            }
-                            if (response.status >= 500) {
-                                return createHttpError(response.status, response.statusText, errorBody, 'Azure OpenAI 服務暫時不可用，請稍後再試。', { retryAfterMs });
-                            }
-                            return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
-                        },
+                        buildHttpError,
                         onRetry,
                         transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined
                     });
                 },
                 onStatusUpdate: handleStatusUpdate,
-                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'Azure OpenAI', traceEvent)
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'Azure OpenAI', traceEvent),
+                onAnswerDelta: agentModeEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
+                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, 'Azure OpenAI', { type: 'reasoning-delta', text: delta })
             });
 
-            appendPersistentMessage('assistant', answer.answer);
+            if (streamedAnswer) {
+                streamedAnswer.finalize(answer.answer);
+            } else {
+                appendPersistentMessage('assistant', answer.answer);
+            }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
             console.error('[AskPage] Azure OpenAI API call failed:', error);
+            if (streamedAnswer) {
+                streamedAnswer.discard();
+            }
             const errorMessage = `錯誤: ${error.userMessage || error.message}`;
             appendErrorMessageAndStore(errorMessage);
             traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats(), errorMessage));
@@ -5305,6 +6129,7 @@ async function createDialog() {
         });
         const agentModeEnabled = await getAgentModeEnabled();
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
+        const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
         const cleanEndpoint = endpoint.replace(/\/$/, '');
         const useResponsesApi = shouldUseResponsesApi(selectedModel);
         const baseEndpoint = cleanEndpoint.replace(/\/(chat\/completions|responses)$/, '');
@@ -5347,12 +6172,35 @@ async function createDialog() {
 
                     return requestBody;
                 },
-                sendRequest: async (requestBody, onRetry) => {
+                sendRequest: async (requestBody, onRetry, streamHandlers = {}) => {
                     const headers = {
                         'Content-Type': 'application/json'
                     };
                     if (apiKey) {
                         headers.Authorization = `Bearer ${apiKey}`;
+                    }
+
+                    const buildHttpError = (response, errorBody) => createHttpError(
+                        response.status,
+                        response.statusText,
+                        errorBody,
+                        undefined,
+                        { retryAfterMs: getRetryAfterMilliseconds(response) }
+                    );
+                    if (agentModeEnabled) {
+                        const streamOptions = {
+                            providerLabel: 'OpenAI Compatible',
+                            url,
+                            requestBody,
+                            headers,
+                            buildHttpError,
+                            onRetry,
+                            onAnswerDelta: streamHandlers.onAnswerDelta,
+                            onReasoningDelta: streamHandlers.onReasoningDelta
+                        };
+                        return useResponsesApi
+                            ? await fetchResponsesApiStream(streamOptions)
+                            : await fetchOpenAIChatCompletionsStream(streamOptions);
                     }
 
                     return await fetchJsonWithRetry({
@@ -5363,30 +6211,33 @@ async function createDialog() {
                             headers,
                             body: JSON.stringify(requestBody)
                         },
-                        buildHttpError: (response, errorBody) => createHttpError(
-                            response.status,
-                            response.statusText,
-                            errorBody,
-                            undefined,
-                            { retryAfterMs: getRetryAfterMilliseconds(response) }
-                        ),
+                        buildHttpError,
                         onRetry,
                         transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined
                     });
                 },
                 allowToolFallback: true,
                 onStatusUpdate: handleStatusUpdate,
-                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'OpenAI Compatible', traceEvent)
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'OpenAI Compatible', traceEvent),
+                onAnswerDelta: agentModeEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
+                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, 'OpenAI Compatible', { type: 'reasoning-delta', text: delta })
             });
 
             const finalAnswer = answer.fallbackUsed
                 ? `⚠️ **目前這個 OpenAI Compatible 端點未完整支援 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n${answer.answer}`
                 : answer.answer;
-            appendPersistentMessage('assistant', finalAnswer);
+            if (streamedAnswer) {
+                streamedAnswer.finalize(finalAnswer);
+            } else {
+                appendPersistentMessage('assistant', finalAnswer);
+            }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
             console.error('[AskPage] OpenAI Compatible API call failed:', error);
+            if (streamedAnswer) {
+                streamedAnswer.discard();
+            }
             const errorMessage = `錯誤: ${error.userMessage || error.message}`;
             appendErrorMessageAndStore(errorMessage);
             traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats(), errorMessage));
