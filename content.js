@@ -16,7 +16,6 @@ const MAX_CONVERSATION_MESSAGES = 20;
 const MAX_DIALOG_HISTORY_MESSAGES = 200;
 const MAX_PAGE_TEXT_CONTEXT_LENGTH = 15000;
 const MAX_SELECTED_TEXT_CONTEXT_LENGTH = 5000;
-const MAX_HTML_CONTEXT_WITH_SELECTION_LENGTH = 15000;
 const MAX_INPUT_VISIBLE_LINES = 5;
 const MAX_INPUT_CONTEXT_IMAGES = 4;
 const MAX_FORM_FIELD_DISCOVERY = 80;
@@ -903,25 +902,23 @@ function createFilteredHtmlContextContainer(container) {
     return clone;
 }
 
-function getFilteredHtmlPageContext(container, { hasSelectedText = false } = {}) {
+function getFilteredHtmlPageContext(container) {
     const filteredContainer = createFilteredHtmlContextContainer(container);
     const content = filteredContainer.outerHTML;
 
     return {
-        content: hasSelectedText ? content.slice(0, MAX_HTML_CONTEXT_WITH_SELECTION_LENGTH) : content,
+        content,
         isFiltered: true,
-        isTruncated: hasSelectedText && content.length > MAX_HTML_CONTEXT_WITH_SELECTION_LENGTH
+        isTruncated: false
     };
 }
 
-async function getPageContext(capturedSelectedText = '') {
+async function getPageContext() {
     const container = getPageContextContainer();
     const htmlModeEnabled = await getHtmlModeEnabled();
 
     if (htmlModeEnabled) {
-        const htmlContext = getFilteredHtmlPageContext(container, {
-            hasSelectedText: Boolean(capturedSelectedText)
-        });
+        const htmlContext = getFilteredHtmlPageContext(container);
 
         return {
             content: htmlContext.content,
@@ -1006,9 +1003,7 @@ function buildSystemPrompt({
 
 function buildConversationContextText(pageContext, capturedSelectedText = '') {
     const fullPageLabel = pageContext.format === 'html'
-        ? (pageContext.isTruncated
-            ? 'Filtered page HTML context (HTML markup, truncated):'
-            : 'Filtered full page HTML context (HTML markup):')
+        ? 'Filtered full page HTML context (HTML markup):'
         : 'Full page content:';
     const introText = pageContext.format === 'html'
         ? 'Use the following web page context for this conversation. The page context is provided as filtered HTML markup from the selected page container with script/style-related noise and inline JavaScript removed.'
@@ -1026,7 +1021,7 @@ function buildConversationContextText(pageContext, capturedSelectedText = '') {
 }
 
 async function preparePageConversationContext(capturedSelectedText = '', options = {}) {
-    const pageContext = await getPageContext(capturedSelectedText);
+    const pageContext = await getPageContext();
     const hasSelectedText = Boolean(capturedSelectedText);
     const includeScreenshot = options.includeScreenshot === true;
     const inputImageCount = normalizeInputImageDataUrls(options.inputImageDataUrls).length;
