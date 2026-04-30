@@ -84,7 +84,7 @@
 >
 > 啟用代理模式時，AskPage 也會依 Provider 使用對應的串流 API，即時顯示可取得的 reasoning / thinking 文字與最後回答內容；若模型或端點不提供思考文字，仍會串流顯示一般回答。
 >
-> 串流輸出期間，對話框會預設跟著最新的 thinking / answer 內容自動捲動到底部。
+> 串流輸出期間，對話框會預設跟著最新的 thinking / answer 內容自動捲動到底部；如果您手動捲動對話內容，自動捲動會暫停，直到下一次送出提示才恢復。
 >
 > `run_js` 現在會透過 `chrome.userScripts.execute(..., { world: 'MAIN' })` 在頁面主世界執行任意 JavaScript，專門用來處理 GitHub 這類會阻擋 `unsafe-eval` 與 `data:` script 的網站。這項功能需要：
 >

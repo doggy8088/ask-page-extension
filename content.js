@@ -66,6 +66,7 @@ const DIALOG_HOST_ID = 'askpage-dialog-host';
 const DIALOG_OVERLAY_ID = 'gemini-qna-overlay';
 const DIALOG_MESSAGES_ID = 'gemini-qna-messages';
 const DIALOG_STYLESHEET_PATH = 'style.css';
+const AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS = 100;
 
 async function getDialogStylesText() {
     if (!dialogStylesTextPromise) {
@@ -137,6 +138,50 @@ function getActiveMessagesElement(fallbackMessagesEl) {
     return null;
 }
 
+function getActiveDialogStateForMessages(messagesElement) {
+    if (activeDialogState?.messagesEl === messagesElement) {
+        return activeDialogState;
+    }
+
+    return null;
+}
+
+function clearAutoScrollResetTimer(dialogState) {
+    if (!dialogState?.autoScrollResetTimer) {
+        return;
+    }
+
+    clearTimeout(dialogState.autoScrollResetTimer);
+    dialogState.autoScrollResetTimer = 0;
+}
+
+function shouldIgnoreProgrammaticMessagesScroll(dialogState, messagesElement) {
+    const isAtLastProgrammaticPosition = Math.abs(messagesElement.scrollTop - dialogState.lastProgrammaticScrollTop) <= 1;
+    const maxScrollTop = Math.max(0, messagesElement.scrollHeight - messagesElement.clientHeight);
+
+    return isAtLastProgrammaticPosition
+        && (dialogState.isAutoScrolling || Math.abs(messagesElement.scrollTop - maxScrollTop) <= 1);
+}
+
+function suspendMessagesAutoScroll(messagesElement) {
+    const dialogState = getActiveDialogStateForMessages(messagesElement);
+    if (!dialogState) {
+        return;
+    }
+
+    dialogState.autoScrollSuspended = true;
+}
+
+function resumeActiveMessagesAutoScroll(fallbackMessagesEl) {
+    const targetMessagesEl = getActiveMessagesElement(fallbackMessagesEl);
+    const dialogState = getActiveDialogStateForMessages(targetMessagesEl);
+    if (dialogState) {
+        dialogState.autoScrollSuspended = false;
+    }
+
+    scrollMessagesToBottom(targetMessagesEl);
+}
+
 function appendNodeToActiveMessages(messageNode, fallbackMessagesEl) {
     const targetMessagesEl = getActiveMessagesElement(fallbackMessagesEl);
     if (!targetMessagesEl) {
@@ -153,7 +198,27 @@ function scrollMessagesToBottom(messagesElement) {
         return;
     }
 
+    const dialogState = getActiveDialogStateForMessages(messagesElement);
+    if (dialogState?.autoScrollSuspended) {
+        return;
+    }
+
+    if (dialogState) {
+        dialogState.isAutoScrolling = true;
+        clearAutoScrollResetTimer(dialogState);
+    }
+
     messagesElement.scrollTop = messagesElement.scrollHeight;
+
+    if (dialogState) {
+        dialogState.lastProgrammaticScrollTop = messagesElement.scrollTop;
+        dialogState.autoScrollResetTimer = setTimeout(() => {
+            if (activeDialogState === dialogState) {
+                dialogState.isAutoScrolling = false;
+                dialogState.autoScrollResetTimer = 0;
+            }
+        }, AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS);
+    }
 }
 
 function scrollActiveMessagesToBottom(fallbackMessagesEl) {
@@ -171,6 +236,9 @@ function closeActiveDialog() {
         host.remove();
     }
 
+    if (activeDialogState) {
+        clearAutoScrollResetTimer(activeDialogState);
+    }
     activeDialogState = null;
     isDialogVisible = false;
     return Boolean(host);
@@ -1401,6 +1469,10 @@ async function createDialog() {
         overlay,
         messagesEl,
         close: null,
+        autoScrollSuspended: false,
+        isAutoScrolling: false,
+        lastProgrammaticScrollTop: 0,
+        autoScrollResetTimer: 0,
         elements: {
             [DIALOG_OVERLAY_ID]: overlay,
             [DIALOG_MESSAGES_ID]: messagesEl,
@@ -1499,6 +1571,29 @@ async function createDialog() {
 
     resetDialogPosition();
     setDialogDimmed(false);
+
+    const messagesScrollKeys = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
+    const handleMessagesUserScrollIntent = () => {
+        suspendMessagesAutoScroll(messagesEl);
+    };
+    const handleMessagesScrollKey = (event) => {
+        if (messagesScrollKeys.has(event.key)) {
+            suspendMessagesAutoScroll(messagesEl);
+        }
+    };
+    const handleMessagesScroll = () => {
+        const dialogState = getActiveDialogStateForMessages(messagesEl);
+        if (!dialogState || shouldIgnoreProgrammaticMessagesScroll(dialogState, messagesEl)) {
+            return;
+        }
+
+        dialogState.autoScrollSuspended = true;
+    };
+
+    messagesEl.addEventListener('wheel', handleMessagesUserScrollIntent, { passive: true });
+    messagesEl.addEventListener('touchmove', handleMessagesUserScrollIntent, { passive: true });
+    messagesEl.addEventListener('keydown', handleMessagesScrollKey, true);
+    messagesEl.addEventListener('scroll', handleMessagesScroll, { passive: true });
 
     overlay.addEventListener('mousemove', (event) => {
         if (shouldKeepDialogVisible()) {
@@ -1715,6 +1810,7 @@ async function createDialog() {
         dialogInputEventTypes.forEach((eventType) => {
             overlay.removeEventListener(eventType, stopDialogInputEventPropagation);
         });
+        clearAutoScrollResetTimer(activeDialogState);
         host.remove();
         if (activeDialogState && activeDialogState.host === host) {
             activeDialogState = null;
@@ -2286,6 +2382,7 @@ async function createDialog() {
         let displayedQuestion = question;
         const inputImageDataUrls = normalizeInputImageDataUrls(inputContextImageDataUrls);
         if (!question) { return; }
+        resumeActiveMessagesAutoScroll(messagesEl);
 
         if (question === '/clear') {
             promptHistory.length = 0;
