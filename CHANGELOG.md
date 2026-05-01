@@ -4,6 +4,12 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.21.1] - 2026-05-02
+
+### 修正 / 更新（v0.21.1）
+
+- **設定頁命令名稱驗證修正**：修正自訂斜線命令輸入欄位的 HTML `pattern` 在新版 Chrome 使用 `v` flag 驗證時，因未跳脫連字符而產生 invalid regular expression log 的問題。
+
 ## [0.21.0] - 2026-05-01
 
 ### 新增 / 改進（v0.21.0）

@@ -721,7 +721,7 @@
 
       <div class="form-group">
         <label for="modalCommandName">命令名稱</label>
-        <input id="modalCommandName" type="text" placeholder="例如：/help" pattern="^/[a-zA-Z0-9_-]+$" aria-describedby="modalCommandNameError">
+        <input id="modalCommandName" type="text" placeholder="例如：/help" pattern="^/[a-zA-Z0-9_\-]+$" aria-describedby="modalCommandNameError">
         <small id="modalCommandNameError" class="field-error"></small>
         <small style="color: var(--text-secondary);">命令必須以 / 開頭，只能包含字母、數字、底線和連字符</small>
       </div>
