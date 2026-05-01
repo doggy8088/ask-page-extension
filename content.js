@@ -1190,7 +1190,8 @@ async function createDialog() {
 
     const host = document.createElement('div');
     host.id = DIALOG_HOST_ID;
-    const shadowRoot = host.attachShadow({ mode: 'open' });
+    host.tabIndex = -1;
+    const shadowRoot = host.attachShadow({ mode: 'open', delegatesFocus: true });
     const styleElement = document.createElement('style');
     styleElement.textContent = dialogStylesText;
     const overlay = document.createElement('div');
@@ -1480,6 +1481,45 @@ async function createDialog() {
     let dragState = null;
     let didDragDialog = false;
 
+    function isInputFocused() {
+        return shadowRoot.activeElement === input;
+    }
+
+    function focusQuestionInput(options = {}) {
+        if (!host.isConnected) {
+            return false;
+        }
+
+        const { force = false } = options;
+        const activeElement = shadowRoot.activeElement;
+        const shouldSkipFocus = !force
+            && activeElement
+            && activeElement !== input
+            && (dialog.contains(activeElement) || intelliBox.contains(activeElement));
+
+        if (shouldSkipFocus) {
+            return false;
+        }
+
+        host.focus({ preventScroll: true });
+        input.focus({ preventScroll: true });
+        return isInputFocused();
+    }
+
+    function scheduleQuestionInputFocus() {
+        const attemptFocus = () => focusQuestionInput();
+        attemptFocus();
+        requestAnimationFrame(attemptFocus);
+
+        [50, 150, 300].forEach((delayMs) => {
+            setTimeout(() => {
+                if (!isInputFocused()) {
+                    focusQuestionInput();
+                }
+            }, delayMs);
+        });
+    }
+
     function setDialogDimmed(dimmed) {
         dialog.dataset.askpageDimmed = dimmed ? 'true' : 'false';
     }
@@ -1633,7 +1673,7 @@ async function createDialog() {
     ]);
 
     resizeQuestionInput({ resetToSingleLine: true });
-    input.focus();
+    scheduleQuestionInputFocus();
 
     function createInlineSlashCommandMarkup(command) {
         return `<span data-askpage-command="${command}"><code>${command}</code></span>`;
