@@ -5475,6 +5475,15 @@ async function createDialog() {
         return `Gemini 已回傳結果，但內容不是可顯示的文字${finishMessage}。請再試一次，或縮小問題範圍。`;
     }
 
+    function isExpectedNonDisplayableTextError(error) {
+        const message = `${error?.userMessage || ''}\n${error?.message || ''}`;
+
+        return [
+            '內容不是可顯示的文字',
+            '沒有產生可顯示的文字內容'
+        ].some((expectedMessage) => message.includes(expectedMessage));
+    }
+
     function isLikelyToolUnsupportedError(error) {
         const status = Number(error?.status || 0);
         const content = `${error?.message || ''}\n${error?.body || ''}`.toLowerCase();
@@ -6307,7 +6316,9 @@ async function createDialog() {
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
-            console.error('[AskPage] Gemini API call failed:', error);
+            if (!isExpectedNonDisplayableTextError(error)) {
+                console.error('[AskPage] Gemini API call failed:', error);
+            }
             if (streamedAnswer) {
                 streamedAnswer.discard();
             }
@@ -6460,7 +6471,9 @@ async function createDialog() {
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
-            console.error('[AskPage] OpenAI API call failed:', error);
+            if (!isExpectedNonDisplayableTextError(error)) {
+                console.error('[AskPage] OpenAI API call failed:', error);
+            }
             if (streamedAnswer) {
                 streamedAnswer.discard();
             }
@@ -6624,7 +6637,9 @@ async function createDialog() {
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
-            console.error('[AskPage] Azure OpenAI API call failed:', error);
+            if (!isExpectedNonDisplayableTextError(error)) {
+                console.error('[AskPage] Azure OpenAI API call failed:', error);
+            }
             if (streamedAnswer) {
                 streamedAnswer.discard();
             }
@@ -6760,7 +6775,9 @@ async function createDialog() {
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
-            console.error('[AskPage] OpenAI Compatible API call failed:', error);
+            if (!isExpectedNonDisplayableTextError(error)) {
+                console.error('[AskPage] OpenAI Compatible API call failed:', error);
+            }
             if (streamedAnswer) {
                 streamedAnswer.discard();
             }

@@ -4,6 +4,12 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.21.2] - 2026-05-02
+
+### 修正 / 更新（v0.21.2）
+
+- **LLM 空文字回應記錄降噪**：當模型已回傳結果但沒有可顯示文字時，仍會在對話框顯示錯誤提示，但不再將這類已知狀況寫入 Chrome extension error log。
+
 ## [0.21.1] - 2026-05-02
 
 ### 修正 / 更新（v0.21.1）
