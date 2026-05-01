@@ -11,6 +11,7 @@ let isDialogVisible = false;
 let conversationHistory = [];
 let conversationSelectedText = '';
 let activeDialogState = null;
+let activeScreenAnnotationCancel = null;
 let dialogStylesTextPromise = null;
 const MAX_CONVERSATION_MESSAGES = 20;
 const MAX_DIALOG_HISTORY_MESSAGES = 200;
@@ -65,6 +66,7 @@ const DIALOG_HOST_ID = 'askpage-dialog-host';
 const DIALOG_OVERLAY_ID = 'gemini-qna-overlay';
 const DIALOG_MESSAGES_ID = 'gemini-qna-messages';
 const DIALOG_STYLESHEET_PATH = 'style.css';
+const SCREEN_ANNOTATION_OVERLAY_ID = 'askpage-screen-annotation-overlay';
 const AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS = 100;
 
 async function getDialogStylesText() {
@@ -225,6 +227,10 @@ function scrollActiveMessagesToBottom(fallbackMessagesEl) {
 }
 
 function closeActiveDialog() {
+    if (typeof activeScreenAnnotationCancel === 'function') {
+        activeScreenAnnotationCancel();
+    }
+
     if (activeDialogState && activeDialogState.host && activeDialogState.host.isConnected && typeof activeDialogState.close === 'function') {
         activeDialogState.close();
         return true;
@@ -661,6 +667,363 @@ async function captureViewportScreenshot() {
             overlay.style.display = '';
         }
     }
+}
+
+function getVisibleElementRect(element) {
+    if (!element || typeof element.getBoundingClientRect !== 'function') {
+        return null;
+    }
+
+    const rect = element.getBoundingClientRect();
+    const left = Math.max(0, Math.min(window.innerWidth, rect.left));
+    const top = Math.max(0, Math.min(window.innerHeight, rect.top));
+    const right = Math.max(0, Math.min(window.innerWidth, rect.right));
+    const bottom = Math.max(0, Math.min(window.innerHeight, rect.bottom));
+
+    if (!Number.isFinite(left) || !Number.isFinite(top) || right - left < 1 || bottom - top < 1) {
+        return null;
+    }
+
+    return {
+        left,
+        top,
+        width: right - left,
+        height: bottom - top
+    };
+}
+
+function applyAnnotationBox(box, rect) {
+    if (!rect) {
+        box.style.display = 'none';
+        return;
+    }
+
+    box.style.display = 'block';
+    box.style.left = `${rect.left}px`;
+    box.style.top = `${rect.top}px`;
+    box.style.width = `${rect.width}px`;
+    box.style.height = `${rect.height}px`;
+}
+
+function getScreenAnnotationTargetElement(x, y, annotationOverlay) {
+    const elements = document.elementsFromPoint(x, y);
+    const targetElement = elements.find((element) => {
+        if (!(element instanceof Element)) {
+            return false;
+        }
+
+        if (element === annotationOverlay || annotationOverlay.contains(element)) {
+            return false;
+        }
+
+        if (element.id === DIALOG_HOST_ID || element.closest(`#${DIALOG_HOST_ID}`)) {
+            return false;
+        }
+
+        return element !== document.documentElement && element !== document.body;
+    });
+
+    return targetElement || document.body || document.documentElement;
+}
+
+async function captureAnnotatedViewportScreenshot() {
+    if (typeof activeScreenAnnotationCancel === 'function') {
+        console.warn('[AskPage] Screen annotation is already active.');
+        return null;
+    }
+
+    const dialogOverlay = getActiveDialogOverlay();
+    const previousDialogDisplay = dialogOverlay ? dialogOverlay.style.display : '';
+    if (dialogOverlay) {
+        dialogOverlay.style.display = 'none';
+    }
+
+    return await new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        const canvas = document.createElement('canvas');
+        const hoverBox = document.createElement('div');
+        const selectedBox = document.createElement('div');
+        const panel = document.createElement('div');
+        const panelText = document.createElement('span');
+        const cancelButton = document.createElement('button');
+        const context = canvas.getContext('2d');
+        let isDrawing = false;
+        let hasDrawnPath = false;
+        let hasPointerMovedAfterDown = false;
+        let isSettled = false;
+        let startPoint = null;
+        let lastPoint = null;
+        let selectedElement = null;
+
+        overlay.id = SCREEN_ANNOTATION_OVERLAY_ID;
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-label', 'AskPage 畫面標注模式');
+        overlay.style.cssText = `
+            position: fixed;
+            inset: 0;
+            z-index: 2147483647;
+            cursor: crosshair;
+            background: rgba(15, 23, 42, 0.03);
+            touch-action: none;
+        `;
+
+        canvas.style.cssText = `
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+        `;
+
+        const annotationBoxStyle = `
+            position: fixed;
+            display: none;
+            pointer-events: none;
+            box-sizing: border-box;
+            border-radius: 4px;
+        `;
+        hoverBox.style.cssText = `
+            ${annotationBoxStyle}
+            border: 3px solid #f97316;
+            background: rgba(249, 115, 22, 0.08);
+            box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.08);
+        `;
+        selectedBox.style.cssText = `
+            ${annotationBoxStyle}
+            border: 4px solid #ff2d55;
+            background: rgba(255, 45, 85, 0.08);
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.95), 0 0 20px rgba(255, 45, 85, 0.55);
+        `;
+
+        panel.style.cssText = `
+            position: fixed;
+            left: 50%;
+            top: 18px;
+            transform: translateX(-50%);
+            z-index: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            max-width: min(92vw, 760px);
+            padding: 10px 12px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.92);
+            color: #ffffff;
+            font: 600 13px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.28);
+            pointer-events: auto;
+        `;
+        panelText.textContent = '移動滑鼠可框選 DOM 元素；點擊選取。按住左鍵拖曳時只會畫線，不會選取 DOM。';
+        cancelButton.type = 'button';
+        cancelButton.textContent = '取消';
+        cancelButton.setAttribute('data-askpage-annotation-control', 'true');
+        cancelButton.style.cssText = `
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 999px;
+            padding: 4px 10px;
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.14);
+            cursor: pointer;
+            font: inherit;
+        `;
+
+        panel.appendChild(panelText);
+        panel.appendChild(cancelButton);
+        overlay.appendChild(canvas);
+        overlay.appendChild(hoverBox);
+        overlay.appendChild(selectedBox);
+        overlay.appendChild(panel);
+        document.documentElement.appendChild(overlay);
+
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = Math.max(1, Math.round(window.innerWidth * dpr));
+            canvas.height = Math.max(1, Math.round(window.innerHeight * dpr));
+            if (!context) {
+                return;
+            }
+            context.setTransform(dpr, 0, 0, dpr, 0, 0);
+            context.lineWidth = 5;
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            context.strokeStyle = '#ff2d55';
+            context.shadowColor = 'rgba(255, 255, 255, 0.9)';
+            context.shadowBlur = 2;
+        }
+
+        function updateHoverBox(x, y) {
+            if (isDrawing) {
+                return;
+            }
+
+            const hoveredElement = getScreenAnnotationTargetElement(x, y, overlay);
+            applyAnnotationBox(hoverBox, getVisibleElementRect(hoveredElement));
+        }
+
+        function updateSelectedBox(element) {
+            selectedElement = element;
+            applyAnnotationBox(selectedBox, getVisibleElementRect(selectedElement));
+        }
+
+        function detachAnnotationEventListeners() {
+            window.removeEventListener('pointermove', handlePointerMove, true);
+            window.removeEventListener('pointerup', handlePointerUp, true);
+            window.removeEventListener('keydown', handleAnnotationKeyDown, true);
+            window.removeEventListener('resize', resizeCanvas);
+            overlay.removeEventListener('pointerdown', handlePointerDown);
+            overlay.removeEventListener('contextmenu', preventAnnotationContextMenu);
+            cancelButton.removeEventListener('click', handleCancelClick);
+        }
+
+        function cleanup() {
+            detachAnnotationEventListeners();
+            overlay.remove();
+            if (dialogOverlay) {
+                dialogOverlay.style.display = previousDialogDisplay;
+            }
+            if (activeScreenAnnotationCancel === cancelAnnotation) {
+                activeScreenAnnotationCancel = null;
+            }
+        }
+
+        async function finishAnnotation() {
+            if (isSettled) {
+                return;
+            }
+
+            isSettled = true;
+            detachAnnotationEventListeners();
+            hoverBox.style.display = 'none';
+            if (hasPointerMovedAfterDown || hasDrawnPath) {
+                selectedBox.style.display = 'none';
+            }
+            panel.style.display = 'none';
+            overlay.style.background = 'transparent';
+            await new Promise((waitForPaint) => setTimeout(waitForPaint, 80));
+
+            try {
+                const screenshotDataUrl = await captureViewportScreenshot();
+                cleanup();
+                resolve(screenshotDataUrl);
+            } catch (error) {
+                console.error('[AskPage] Failed to capture annotated screenshot:', error);
+                cleanup();
+                resolve(null);
+            }
+        }
+
+        function cancelAnnotation() {
+            if (isSettled) {
+                return;
+            }
+
+            isSettled = true;
+            cleanup();
+            resolve(null);
+        }
+
+        function handlePointerDown(event) {
+            if (isSettled) {
+                return;
+            }
+
+            const targetElement = event.target instanceof Element ? event.target : null;
+            if (event.button !== 0 || targetElement?.closest('[data-askpage-annotation-control="true"]')) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            isDrawing = true;
+            hasDrawnPath = false;
+            hasPointerMovedAfterDown = false;
+            startPoint = { x: event.clientX, y: event.clientY };
+            lastPoint = startPoint;
+            selectedElement = null;
+            applyAnnotationBox(hoverBox, null);
+            applyAnnotationBox(selectedBox, null);
+        }
+
+        function handlePointerMove(event) {
+            if (isSettled || !overlay.isConnected) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (!isDrawing || !lastPoint) {
+                updateHoverBox(event.clientX, event.clientY);
+                return;
+            }
+
+            hasPointerMovedAfterDown = true;
+            applyAnnotationBox(hoverBox, null);
+            applyAnnotationBox(selectedBox, null);
+
+            if (startPoint && !hasDrawnPath && Math.hypot(event.clientX - startPoint.x, event.clientY - startPoint.y) <= 3) {
+                return;
+            }
+
+            if (!hasDrawnPath) {
+                hasDrawnPath = true;
+            }
+
+            if (context) {
+                context.beginPath();
+                context.moveTo(lastPoint.x, lastPoint.y);
+                context.lineTo(event.clientX, event.clientY);
+                context.stroke();
+            }
+
+            lastPoint = { x: event.clientX, y: event.clientY };
+        }
+
+        function handlePointerUp(event) {
+            if (isSettled || !isDrawing) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            isDrawing = false;
+
+            if (!hasDrawnPath && !hasPointerMovedAfterDown) {
+                updateSelectedBox(getScreenAnnotationTargetElement(event.clientX, event.clientY, overlay));
+            }
+
+            finishAnnotation();
+        }
+
+        function handleAnnotationKeyDown(event) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                cancelAnnotation();
+            }
+        }
+
+        function preventAnnotationContextMenu(event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        function handleCancelClick(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            cancelAnnotation();
+        }
+
+        resizeCanvas();
+        activeScreenAnnotationCancel = cancelAnnotation;
+        overlay.addEventListener('pointerdown', handlePointerDown);
+        overlay.addEventListener('contextmenu', preventAnnotationContextMenu);
+        cancelButton.addEventListener('click', handleCancelClick);
+        window.addEventListener('pointermove', handlePointerMove, true);
+        window.addEventListener('pointerup', handlePointerUp, true);
+        window.addEventListener('keydown', handleAnnotationKeyDown, true);
+        window.addEventListener('resize', resizeCanvas);
+    });
 }
 
 /* --------------------------------------------------
@@ -1390,8 +1753,21 @@ async function createDialog() {
     const inputImageStripMeta = document.createElement('span');
     inputImageStripMeta.className = 'askpage-input-image-strip-meta';
 
+    const inputImageStripActions = document.createElement('div');
+    inputImageStripActions.className = 'askpage-input-image-strip-actions';
+
+    const annotateScreenBtn = document.createElement('button');
+    annotateScreenBtn.type = 'button';
+    annotateScreenBtn.className = 'askpage-annotate-screen-btn';
+    annotateScreenBtn.textContent = '標注畫面';
+    annotateScreenBtn.title = '暫時隱藏對話框，選取或標注目前畫面後加入圖片上下文';
+    annotateScreenBtn.setAttribute('aria-label', '標注畫面並加入圖片上下文');
+    annotateScreenBtn.hidden = true;
+
     inputImageStripHeader.appendChild(inputImageStripTitle);
-    inputImageStripHeader.appendChild(inputImageStripMeta);
+    inputImageStripActions.appendChild(inputImageStripMeta);
+    inputImageStripActions.appendChild(annotateScreenBtn);
+    inputImageStripHeader.appendChild(inputImageStripActions);
 
     const inputImageStripList = document.createElement('div');
     inputImageStripList.className = 'askpage-input-image-strip-list';
@@ -1859,6 +2235,8 @@ async function createDialog() {
     let inputContextImageDataUrls = [];
     let inputContextImageNotice = '';
     let inputContextImageNoticeLevel = 'info';
+    let pendingAnnotatedScreenshotDataUrl = '';
+    let isScreenshotAnnotationAvailable = false;
     let dragEnterDepth = 0;
 
     function getQuestionInputMetrics() {
@@ -1914,6 +2292,9 @@ async function createDialog() {
 
     function clearInputContextImages(options = {}) {
         inputContextImageDataUrls = [];
+        if (options.preserveAnnotated !== true) {
+            pendingAnnotatedScreenshotDataUrl = '';
+        }
         if (options.preserveNotice !== true) {
             inputContextImageNotice = '';
             inputContextImageNoticeLevel = 'info';
@@ -1921,15 +2302,33 @@ async function createDialog() {
         renderInputContextImages();
     }
 
-    async function refreshInputImageContextAvailability(options = {}) {
-        const agentModeEnabled = await getAgentModeEnabled();
-        inputStack.dataset.askpageImageContextEnabled = agentModeEnabled ? 'true' : 'false';
+    function hasPendingAnnotatedScreenshotContext(imageDataUrls = inputContextImageDataUrls) {
+        return Boolean(pendingAnnotatedScreenshotDataUrl && imageDataUrls.includes(pendingAnnotatedScreenshotDataUrl));
+    }
 
-        if (!agentModeEnabled) {
+    async function refreshInputImageContextAvailability(options = {}) {
+        const [agentModeEnabled, screenshotEnabled] = await Promise.all([
+            getAgentModeEnabled(),
+            getScreenshotEnabled()
+        ]);
+        isScreenshotAnnotationAvailable = screenshotEnabled;
+        inputStack.dataset.askpageImageContextEnabled = agentModeEnabled ? 'true' : 'false';
+        inputStack.dataset.askpageScreenshotEnabled = screenshotEnabled ? 'true' : 'false';
+        annotateScreenBtn.hidden = !screenshotEnabled;
+        annotateScreenBtn.disabled = !screenshotEnabled;
+
+        if (!agentModeEnabled && !screenshotEnabled) {
             clearInputContextImages();
+        } else if (!agentModeEnabled && !hasPendingAnnotatedScreenshotContext()) {
+            clearInputContextImages({ preserveAnnotated: true });
+        } else if (!agentModeEnabled) {
+            inputContextImageDataUrls = [pendingAnnotatedScreenshotDataUrl];
+            renderInputContextImages();
         } else if (!inputContextImageDataUrls.length && options.clearNotice !== false) {
             inputContextImageNotice = '';
             inputContextImageNoticeLevel = 'info';
+            renderInputContextImages();
+        } else {
             renderInputContextImages();
         }
 
@@ -2004,10 +2403,18 @@ async function createDialog() {
     function renderInputContextImages() {
         const normalizedImages = normalizeInputImageDataUrls(inputContextImageDataUrls);
         inputContextImageDataUrls = normalizedImages;
+        if (pendingAnnotatedScreenshotDataUrl && !normalizedImages.includes(pendingAnnotatedScreenshotDataUrl)) {
+            pendingAnnotatedScreenshotDataUrl = '';
+        }
         inputImageStripList.innerHTML = '';
+        inputImageStripTitle.textContent = isScreenshotAnnotationAvailable
+            ? '圖片上下文 (可用標注畫面；代理模式可 Ctrl+V 或拖曳貼圖)'
+            : '圖片上下文 (可透過 Ctrl+V 或拖曳貼上參考圖片)';
         inputImageStripMeta.textContent = normalizedImages.length ? `${normalizedImages.length}/${MAX_INPUT_CONTEXT_IMAGES}` : '';
         inputImageStripNotice.textContent = inputContextImageNotice;
         inputImageStripNotice.dataset.level = inputContextImageNoticeLevel;
+        annotateScreenBtn.hidden = !isScreenshotAnnotationAvailable;
+        annotateScreenBtn.disabled = !isScreenshotAnnotationAvailable;
 
         normalizedImages.forEach((imageDataUrl, index) => {
             const item = document.createElement('div');
@@ -2059,7 +2466,7 @@ async function createDialog() {
             inputImageStripList.appendChild(item);
         });
 
-        inputImageStrip.hidden = !normalizedImages.length && !inputContextImageNotice;
+        inputImageStrip.hidden = !normalizedImages.length && !inputContextImageNotice && !isScreenshotAnnotationAvailable;
     }
 
     function setInputDropActive(active) {
@@ -2199,6 +2606,29 @@ async function createDialog() {
         }
 
         setInputImageNotice(`已加入 ${inputContextImageDataUrls.length} 張圖片，可直接送出給模型。`, 'info');
+    }
+
+    async function handleAnnotateScreenClick() {
+        const screenshotEnabled = await getScreenshotEnabled();
+        if (!screenshotEnabled) {
+            setInputImageNotice('請先啟用截圖功能，才能標注目前畫面。', 'warning');
+            await refreshInputImageContextAvailability({ clearNotice: false });
+            return;
+        }
+
+        setInputImageNotice('標注模式已啟動：點擊頁面元素，或按住左鍵拖曳畫線。', 'info');
+        const annotatedScreenshotDataUrl = await captureAnnotatedViewportScreenshot();
+        input.focus();
+        if (!annotatedScreenshotDataUrl) {
+            setInputImageNotice('已取消或未取得標注畫面，未加入圖片上下文。', 'info');
+            return;
+        }
+
+        await appendInputContextImages([annotatedScreenshotDataUrl], { emptyMessage: '沒有取得可加入的標注截圖。' });
+        if (inputContextImageDataUrls.includes(annotatedScreenshotDataUrl)) {
+            pendingAnnotatedScreenshotDataUrl = annotatedScreenshotDataUrl;
+            setInputImageNotice('已加入標注截圖；送出提示時不會再額外擷取一次畫面。', 'info');
+        }
     }
 
     async function handleInputImagePaste(event) {
@@ -2447,7 +2877,8 @@ async function createDialog() {
 
         const activeSelectedText = getActiveSelectedText(capturedSelectedText);
         const screenshotEnabled = await getScreenshotEnabled();
-        const screenshotDataUrl = screenshotEnabled ? await captureViewportScreenshot() : null;
+        const hasAnnotatedScreenshotContext = hasPendingAnnotatedScreenshotContext(inputImageDataUrls);
+        const screenshotDataUrl = screenshotEnabled && !hasAnnotatedScreenshotContext ? await captureViewportScreenshot() : null;
         appendMessage('user', displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
         addConversationTurn('user', question, displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
         clearInputContextImages();
@@ -2518,6 +2949,9 @@ async function createDialog() {
     input.addEventListener('compositionend', () => {
         isInputComposing = false;
         armCompositionEndGuard();
+    });
+    annotateScreenBtn.addEventListener('click', async () => {
+        await handleAnnotateScreenClick();
     });
     input.addEventListener('paste', handleInputImagePaste, true);
     input.addEventListener('dragenter', (event) => {
