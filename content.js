@@ -4626,6 +4626,195 @@ async function createDialog() {
         };
     }
 
+    function normalizeMetadataText(value, maxLength = 1200) {
+        return truncateToolText(String(value || '').replace(/\s+/g, ' ').trim(), maxLength);
+    }
+
+    function toAbsoluteUrl(value) {
+        const url = String(value || '').trim();
+        if (!url) {
+            return '';
+        }
+
+        try {
+            return new URL(url, document.baseURI).href;
+        } catch {
+            return url;
+        }
+    }
+
+    function addMetadataValue(target, key, value) {
+        const normalizedKey = String(key || '').trim().toLowerCase();
+        const normalizedValue = normalizeMetadataText(value);
+        if (!normalizedKey || !normalizedValue) {
+            return;
+        }
+
+        if (!target[normalizedKey]) {
+            target[normalizedKey] = [];
+        }
+        if (!target[normalizedKey].includes(normalizedValue)) {
+            target[normalizedKey].push(normalizedValue);
+        }
+    }
+
+    function flattenSingleMetadataValues(metadata) {
+        return Object.fromEntries(Object.entries(metadata).map(([key, values]) => [
+            key,
+            values.length === 1 ? values[0] : values
+        ]));
+    }
+
+    function collectMetaGroups() {
+        const groups = {
+            name: {},
+            property: {},
+            httpEquiv: {},
+            itemprop: {}
+        };
+
+        Array.from(document.querySelectorAll('meta')).forEach((meta) => {
+            const content = meta.getAttribute('content') || '';
+            addMetadataValue(groups.name, meta.getAttribute('name'), content);
+            addMetadataValue(groups.property, meta.getAttribute('property'), content);
+            addMetadataValue(groups.httpEquiv, meta.getAttribute('http-equiv'), content);
+            addMetadataValue(groups.itemprop, meta.getAttribute('itemprop'), content);
+        });
+
+        return {
+            name: flattenSingleMetadataValues(groups.name),
+            property: flattenSingleMetadataValues(groups.property),
+            httpEquiv: flattenSingleMetadataValues(groups.httpEquiv),
+            itemprop: flattenSingleMetadataValues(groups.itemprop)
+        };
+    }
+
+    function getMetadataValue(source, key) {
+        const value = source[key];
+        return Array.isArray(value) ? value[0] : (value || '');
+    }
+
+    function collectLinkMetadata() {
+        const links = Array.from(document.querySelectorAll('link')).map((link) => ({
+            rel: normalizeMetadataText(link.getAttribute('rel')),
+            href: toAbsoluteUrl(link.getAttribute('href')),
+            hreflang: normalizeMetadataText(link.getAttribute('hreflang')),
+            type: normalizeMetadataText(link.getAttribute('type')),
+            sizes: normalizeMetadataText(link.getAttribute('sizes')),
+            title: normalizeMetadataText(link.getAttribute('title'))
+        })).filter((link) => link.rel || link.href);
+
+        return {
+            canonical: links.find((link) => link.rel.split(/\s+/).includes('canonical'))?.href || '',
+            alternate: links.filter((link) => link.rel.split(/\s+/).includes('alternate')),
+            icons: links.filter((link) => link.rel.split(/\s+/).some((rel) => rel.includes('icon'))),
+            manifest: links.find((link) => link.rel.split(/\s+/).includes('manifest'))?.href || '',
+            all: links
+        };
+    }
+
+    function collectStructuredData() {
+        return Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
+            .slice(0, 10)
+            .map((script) => {
+                const text = (script.textContent || '').trim();
+                if (!text) {
+                    return null;
+                }
+
+                try {
+                    return JSON.parse(text);
+                } catch (error) {
+                    return {
+                        parseError: error.message,
+                        raw: normalizeMetadataText(text, 4000)
+                    };
+                }
+            })
+            .filter(Boolean);
+    }
+
+    function collectHeadingMetadata() {
+        const collectHeadings = (selector) => Array.from(document.querySelectorAll(selector))
+            .slice(0, 20)
+            .map((heading) => normalizeMetadataText(heading.innerText || heading.textContent, 300))
+            .filter(Boolean);
+
+        return {
+            h1: collectHeadings('h1'),
+            h2: collectHeadings('h2'),
+            h3: collectHeadings('h3')
+        };
+    }
+
+    function collectPageMetadata() {
+        const metaGroups = collectMetaGroups();
+        const linkMetadata = collectLinkMetadata();
+        const title = normalizeMetadataText(document.title || getMetadataValue(metaGroups.property, 'og:title') || getMetadataValue(metaGroups.name, 'title'));
+        const description = getMetadataValue(metaGroups.name, 'description') || getMetadataValue(metaGroups.property, 'og:description');
+        const canonicalUrl = linkMetadata.canonical || getMetadataValue(metaGroups.property, 'og:url') || window.location.href;
+        const ogImage = getMetadataValue(metaGroups.property, 'og:image');
+        const twitterImage = getMetadataValue(metaGroups.name, 'twitter:image');
+
+        return {
+            title,
+            url: window.location.href,
+            canonicalUrl: toAbsoluteUrl(canonicalUrl),
+            origin: window.location.origin,
+            path: window.location.pathname,
+            language: normalizeMetadataText(document.documentElement.lang || metaGroups.httpEquiv['content-language']),
+            charset: document.characterSet || '',
+            referrer: document.referrer || '',
+            seo: {
+                title,
+                description: normalizeMetadataText(description),
+                keywords: getMetadataValue(metaGroups.name, 'keywords'),
+                author: getMetadataValue(metaGroups.name, 'author'),
+                robots: getMetadataValue(metaGroups.name, 'robots'),
+                viewport: getMetadataValue(metaGroups.name, 'viewport'),
+                themeColor: getMetadataValue(metaGroups.name, 'theme-color'),
+                canonicalUrl: toAbsoluteUrl(canonicalUrl),
+                alternateLinks: linkMetadata.alternate
+            },
+            openGraph: {
+                title: getMetadataValue(metaGroups.property, 'og:title'),
+                type: getMetadataValue(metaGroups.property, 'og:type'),
+                url: toAbsoluteUrl(getMetadataValue(metaGroups.property, 'og:url')),
+                description: getMetadataValue(metaGroups.property, 'og:description'),
+                siteName: getMetadataValue(metaGroups.property, 'og:site_name'),
+                locale: getMetadataValue(metaGroups.property, 'og:locale'),
+                image: toAbsoluteUrl(ogImage),
+                raw: Object.fromEntries(Object.entries(metaGroups.property).filter(([key]) => key.startsWith('og:')))
+            },
+            twitterCard: {
+                card: getMetadataValue(metaGroups.name, 'twitter:card'),
+                title: getMetadataValue(metaGroups.name, 'twitter:title'),
+                description: getMetadataValue(metaGroups.name, 'twitter:description'),
+                site: getMetadataValue(metaGroups.name, 'twitter:site'),
+                creator: getMetadataValue(metaGroups.name, 'twitter:creator'),
+                image: toAbsoluteUrl(twitterImage),
+                raw: Object.fromEntries(Object.entries(metaGroups.name).filter(([key]) => key.startsWith('twitter:')))
+            },
+            links: linkMetadata,
+            headings: collectHeadingMetadata(),
+            structuredData: collectStructuredData(),
+            meta: metaGroups,
+            viewport: {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                devicePixelRatio: window.devicePixelRatio || 1
+            },
+            stats: {
+                textLength: (document.body?.innerText || '').length,
+                linkCount: document.links.length,
+                imageCount: document.images.length,
+                formCount: document.forms.length,
+                metaTagCount: document.querySelectorAll('meta').length,
+                jsonLdCount: document.querySelectorAll('script[type="application/ld+json"]').length
+            }
+        };
+    }
+
     function createToolResult(success, message, data = {}, warnings = [], matchedTargets = []) {
         return {
             success,
@@ -4679,6 +4868,14 @@ async function createDialog() {
 
     function getToolDefinitions() {
         return [
+            {
+                name: 'get_page_metadata',
+                description: '取得目前頁面的豐富中繼資料與上下文，包含 page title、SEO metadata、OpenGraph、Twitter Card、page url、canonical/alternate links、JSON-LD、headings 與頁面統計。',
+                parameters: {
+                    type: 'object',
+                    properties: {}
+                }
+            },
             {
                 name: 'inspect_selection',
                 description: '取得目前頁面選取範圍的文字與 HTML。當需要處理使用者選取內容時使用。',
@@ -4772,6 +4969,15 @@ async function createDialog() {
         }
 
         try {
+            if (name === 'get_page_metadata') {
+                const metadata = collectPageMetadata();
+                return {
+                    id,
+                    name,
+                    result: createToolResult(true, `已取得頁面 metadata：${metadata.title || metadata.url}`, metadata)
+                };
+            }
+
             if (name === 'inspect_selection') {
                 const selectionSnapshot = getSelectionSnapshot();
                 return {

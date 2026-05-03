@@ -4,6 +4,12 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.22.0] - 2026-05-04
+
+### 新增 / 改進（v0.22.0）
+
+- **頁面 metadata 工具**：代理模式新增 `get_page_metadata` 工具，可取得目前頁面的 title、URL、SEO metadata、OpenGraph、Twitter Card、canonical/alternate links、JSON-LD、headings 與頁面統計，讓模型能更完整理解頁面上下文。
+
 ## [0.21.2] - 2026-05-02
 
 ### 修正 / 更新（v0.21.2）

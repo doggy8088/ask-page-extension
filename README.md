@@ -7,6 +7,7 @@
 - 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI、Azure OpenAI 與 OpenAI Compatible，可自由切換
 - 💬 **多輪對話脈絡延續** - 追問時會自動帶入前文，切換不同 AI Provider 也能延續同一段對話
 - 🛠️ **單頁面 Tool Calling** - 模型可直接讀取頁面標題、選取範圍、表單欄位，並可填表、點擊元素、替換部分 DOM、執行 JavaScript
+- 🧭 **豐富頁面 metadata 讀取** - 代理模式可抓取 title、URL、SEO metadata、OpenGraph、Twitter Card、canonical/alternate links、JSON-LD 與頁面統計作為上下文
 - 🌊 **代理模式串流回應** - 代理模式會即時顯示可取得的 reasoning / thinking 文字與回答內容，減少等待空白感
 - 📸 **截圖模式與畫面標注** - 啟用後每次送出都會即時擷取目前可視範圍，也可先標注 DOM 元素或手繪線條，讓模型更精準理解目標區域
 - 🖼️ **手動附圖上下文** - 在代理模式下，可直接貼上或拖曳最多 4 張圖片到提問框，縮圖會顯示在輸入框上方，支援 hover 放大與點擊開新頁籤看原圖
@@ -75,6 +76,7 @@
 目前內建的頁面工具包括：
 
 - `inspect_selection`
+- `get_page_metadata`
 - `inspect_form_fields`
 - `fill_form_fields`
 - `run_js`
