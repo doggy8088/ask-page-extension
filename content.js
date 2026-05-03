@@ -1029,14 +1029,46 @@ async function captureAnnotatedViewportScreenshot() {
 /* --------------------------------------------------
     工具函式
 -------------------------------------------------- */
+function postProcessAssistantMarkdown(md) {
+    const text = String(md ?? '');
+    let isInsideFence = false;
+    let fenceMarker = '';
+
+    return text.split('\n').map((line) => {
+        const fenceMatch = line.match(/^\s*(```+|~~~+)/);
+        if (fenceMatch) {
+            const currentFenceMarker = fenceMatch[1][0];
+            if (!isInsideFence) {
+                isInsideFence = true;
+                fenceMarker = currentFenceMarker;
+            } else if (currentFenceMarker === fenceMarker) {
+                isInsideFence = false;
+                fenceMarker = '';
+            }
+
+            return line;
+        }
+
+        if (isInsideFence) {
+            return line;
+        }
+
+        return line.replace(
+            /^(\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?)(\*\*)([^*\n：]*[^\s*\n：])\s*：\*\*(\s*)/u,
+            '$1$2$3$2：$4'
+        );
+    }).join('\n');
+}
+
 function renderMarkdown(md) {
+    const processedMarkdown = postProcessAssistantMarkdown(md);
     try {
-        const rawHtml = marked.parse(md);
+        const rawHtml = marked.parse(processedMarkdown);
         // Safely sanitize HTML if DOMPurify is available
         return DOMPurify ? DOMPurify.sanitize(rawHtml) : rawHtml;
     } catch (err) {
         // Fallback to plain text if marked.js fails
-        return md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+        return processedMarkdown.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
     }
 }
 
@@ -3078,7 +3110,8 @@ async function createDialog() {
     btn.addEventListener('click', handleAsk);
 
     function renderAssistantMessageElement(element, text, options = {}) {
-        element.innerHTML = options.renderedHtml || renderMarkdown(text);
+        const displayText = options.renderedHtml ? text : postProcessAssistantMarkdown(text);
+        element.innerHTML = options.renderedHtml || renderMarkdown(displayText);
         enhanceCodeBlocks(element);
         bindInteractiveCommandElements(element);
 
@@ -3089,7 +3122,7 @@ async function createDialog() {
             copyBtn.title = '複製到剪貼簿';
             copyBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                await copyTextWithFeedback(copyBtn, options.copyText || text);
+                await copyTextWithFeedback(copyBtn, options.copyText || displayText);
             });
             element.appendChild(copyBtn);
         }
@@ -3157,7 +3190,7 @@ async function createDialog() {
                 scheduleRender();
             },
             finalize(finalText, historyOptions = {}) {
-                text = String(finalText || '').trim();
+                text = postProcessAssistantMarkdown(String(finalText || '').trim());
                 if (!text) {
                     discard();
                     return null;
@@ -3292,11 +3325,14 @@ async function createDialog() {
     }
 
     function appendPersistentMessage(role, text, options = {}, historyOptions = {}) {
-        appendMessage(role, text, options);
+        const messageText = role === 'assistant' && !options.renderedHtml
+            ? postProcessAssistantMarkdown(text)
+            : text;
+        appendMessage(role, messageText, options);
         addConversationTurn(
             role,
-            historyOptions.content ?? text,
-            historyOptions.displayContent ?? text,
+            historyOptions.content ?? messageText,
+            historyOptions.displayContent ?? messageText,
             {
                 renderedHtml: historyOptions.renderedHtml ?? options.renderedHtml,
                 includeInModelContext: historyOptions.includeInModelContext,
