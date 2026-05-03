@@ -1381,6 +1381,15 @@ function buildSystemPrompt({
             ? 'When you identify the user request as an operation that updates the current web page, including DOM, visible text, HTML, CSS, classes, attributes, layout, form values, or interactive state, always call run_js directly to perform the update instead of asking for confirmation or only explaining what to do.'
             : '',
         pageContextFormat === 'html'
+            ? 'Never respond to a page modification request by only giving suggestions, CSS, JavaScript, or instructions for the user to run. If you can express the change as JavaScript or CSS, you must execute it yourself with run_js.'
+            : '',
+        pageContextFormat === 'html'
+            ? 'Only stay in planning/discussion mode when the user explicitly asks you to plan first, not execute yet, compare options, or wait for approval. Otherwise, make the smallest necessary plan internally or in one brief sentence, then immediately execute the task with tools.'
+            : '',
+        pageContextFormat === 'html'
+            ? 'Do not ask the user to choose among implementation options when a reasonable default is available. Choose the safest practical approach, perform the page change, then report the result.'
+            : '',
+        pageContextFormat === 'html'
             ? 'Do not say that you cannot directly modify the page, HTML, DOM, or CSS when the change can be done through the available tools. Prefer performing the change with tools instead of refusing for capability reasons.'
             : '',
         pageContextFormat === 'html'
@@ -4990,7 +4999,7 @@ async function createDialog() {
             },
             {
                 name: 'run_js',
-                description: '在目前頁面的主世界執行通用 JavaScript。可用來讀取 DOM、查詢頁面資料、點擊元素、修改內容、呼叫頁面腳本，並支援 await。若要把結果回傳給模型，請使用 return。',
+                description: '在目前頁面的主世界執行通用 JavaScript。可用來讀取 DOM、查詢頁面資料、點擊元素、修改內容、注入 CSS、調整網頁排版、呼叫頁面腳本，並支援 await。當使用者要求修改、重排、套用樣式或操作目前網頁時，請直接使用此工具執行，不要只提供程式碼或建議。若要把結果回傳給模型，請使用 return。',
                 parameters: {
                     type: 'object',
                     properties: {
