@@ -3785,6 +3785,19 @@ async function createDialog() {
         console[level](`[AskPage] ${message}${detailText}`);
     }
 
+    function shouldSuppressStreamingRetryDiagnostic(providerLabel, analysis, error) {
+        return providerLabel === 'Gemini'
+            && analysis?.reasonCode === 'network-error'
+            && error?.name === 'TypeError'
+            && String(error?.message || '').toLowerCase() === 'failed to fetch';
+    }
+
+    function shouldSuppressGeminiEmptyResponseDiagnostic(responseData, responseCandidate) {
+        return !responseData?.promptFeedback?.blockReason
+            && responseCandidate?.finishReason === 'STOP'
+            && !responseCandidate?.finishMessage;
+    }
+
     function appendRetrySummary(message, retryCount) {
         return retryCount > 0
             ? `${message} 已重試 ${retryCount} 次仍失敗。`
@@ -4048,15 +4061,17 @@ async function createDialog() {
                 if (!receivedEvent && analysis.shouldRetry && retryCount < MAX_LLM_API_SERVICE_RETRIES) {
                     const nextRetryCount = retryCount + 1;
                     const delayMs = getRetryDelayMilliseconds(retryCount, error?.retryAfterMs);
-                    logDiagnostic('warn', `${providerLabel} streaming API request failed and will retry.`, {
-                        provider: providerLabel,
-                        retry: nextRetryCount,
-                        maxRetries: MAX_LLM_API_SERVICE_RETRIES,
-                        delayMs,
-                        reasonCode: analysis.reasonCode,
-                        shortReason: analysis.shortReason,
-                        error: buildApiDiagnosticPayload(error)
-                    });
+                    if (!shouldSuppressStreamingRetryDiagnostic(providerLabel, analysis, error)) {
+                        logDiagnostic('warn', `${providerLabel} streaming API request failed and will retry.`, {
+                            provider: providerLabel,
+                            retry: nextRetryCount,
+                            maxRetries: MAX_LLM_API_SERVICE_RETRIES,
+                            delayMs,
+                            reasonCode: analysis.reasonCode,
+                            shortReason: analysis.shortReason,
+                            error: buildApiDiagnosticPayload(error)
+                        });
+                    }
                     if (typeof onRetry === 'function') {
                         onRetry({
                             ...analysis,
@@ -6403,14 +6418,16 @@ async function createDialog() {
                 .map((part) => part.functionCall);
 
             if (!functionCalls.length && !textResponse) {
-                logDiagnostic('warn', 'Gemini returned an empty non-text response.', {
-                    responseId: responseData?.responseId || null,
-                    modelVersion: responseData?.modelVersion || null,
-                    promptBlockReason: responseData?.promptFeedback?.blockReason || null,
-                    finishReason: responseCandidate?.finishReason || null,
-                    finishMessage: responseCandidate?.finishMessage || null,
-                    usageMetadata: responseData?.usageMetadata || null
-                });
+                if (!shouldSuppressGeminiEmptyResponseDiagnostic(responseData, responseCandidate)) {
+                    logDiagnostic('warn', 'Gemini returned an empty non-text response.', {
+                        responseId: responseData?.responseId || null,
+                        modelVersion: responseData?.modelVersion || null,
+                        promptBlockReason: responseData?.promptFeedback?.blockReason || null,
+                        finishReason: responseCandidate?.finishReason || null,
+                        finishMessage: responseCandidate?.finishMessage || null,
+                        usageMetadata: responseData?.usageMetadata || null
+                    });
+                }
 
                 if (emptyResponseRetryCount < GEMINI_EMPTY_RESPONSE_RETRY_LIMIT && isGeminiRetriableEmptyResponse(responseData)) {
                     emptyResponseRetryCount++;

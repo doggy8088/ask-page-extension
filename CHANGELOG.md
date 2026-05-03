@@ -4,6 +4,18 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.22.2] - 2026-05-04
+
+### 修正 / 更新（v0.22.2）
+
+- **Gemini 空白 STOP 回應記錄降噪**：忽略 Gemini 回傳 `finishReason: STOP` 且沒有 prompt block / finish message 的空白非文字診斷 log，避免正常自動處理期間在 console 顯示不必要警告。
+
+## [0.22.1] - 2026-05-04
+
+### 修正 / 更新（v0.22.1）
+
+- **Gemini 串流重試記錄降噪**：忽略 Gemini streaming API 暫時性 `Failed to fetch` 網路重試診斷 log，避免自動重試期間在 console 產生不必要的錯誤感訊息。
+
 ## [0.22.0] - 2026-05-04
 
 ### 新增 / 改進（v0.22.0）
