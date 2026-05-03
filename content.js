@@ -4885,7 +4885,7 @@ async function createDialog() {
         return [
             {
                 name: 'get_page_metadata',
-                description: '取得目前頁面的豐富中繼資料與上下文，包含 page title、SEO metadata、OpenGraph、Twitter Card、page url、canonical/alternate links、JSON-LD、headings 與頁面統計。',
+                description: '當使用者要求「取得頁面資訊」、「取得網頁資訊」、「頁面資訊」、「網頁資料」或需要目前頁面的 metadata/context 時使用；取得 page title、SEO metadata、OpenGraph、Twitter Card、page url、canonical/alternate links、JSON-LD、headings 與頁面統計。',
                 parameters: {
                     type: 'object',
                     properties: {}
