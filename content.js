@@ -1053,9 +1053,22 @@ function postProcessAssistantMarkdown(md) {
             return line;
         }
 
-        return line.replace(
+        const normalizedListItemBoldColonLine = line.replace(
             /^(\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?)(\*\*)([^*\n：]*[^\s*\n：])\s*：\*\*(\s*)/u,
             '$1$2$3$2：$4'
+        );
+
+        const normalizedListItemBoldBoundaryWhitespaceLine = normalizedListItemBoldColonLine.replace(
+            /^(\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?\*\*)([^*\n]+?)(\*\*：.*)$/u,
+            (match, prefix, content, suffix) => {
+                const trimmedContent = content.trim();
+                return trimmedContent ? `${prefix}${trimmedContent}${suffix}` : match;
+            }
+        );
+
+        return normalizedListItemBoldBoundaryWhitespaceLine.replace(
+            /^(\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?\*\*[^*\n]+?\*\*：)\s+/u,
+            '$1'
         );
     }).join('\n');
 }
