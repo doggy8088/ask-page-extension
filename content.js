@@ -68,6 +68,7 @@ const DIALOG_MESSAGES_ID = 'gemini-qna-messages';
 const DIALOG_STYLESHEET_PATH = 'style.css';
 const SCREEN_ANNOTATION_OVERLAY_ID = 'askpage-screen-annotation-overlay';
 const AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS = 100;
+const DIALOG_DIM_DELAY_MS = 1000;
 
 async function getDialogStylesText() {
     if (!dialogStylesTextPromise) {
@@ -1912,8 +1913,33 @@ async function createDialog() {
 
     let dragState = null;
     let didDragDialog = false;
+    let dialogDimTimer = 0;
 
-    function setDialogDimmed(dimmed) {
+    function clearDialogDimTimer() {
+        if (!dialogDimTimer) {
+            return;
+        }
+
+        clearTimeout(dialogDimTimer);
+        dialogDimTimer = 0;
+    }
+
+    function setDialogDimmed(dimmed, options = {}) {
+        if (dimmed && options.delay === true) {
+            if (dialogDimTimer || dialog.dataset.askpageDimmed === 'true') {
+                return;
+            }
+
+            dialogDimTimer = setTimeout(() => {
+                dialogDimTimer = 0;
+                if (!shouldKeepDialogVisible()) {
+                    dialog.dataset.askpageDimmed = 'true';
+                }
+            }, DIALOG_DIM_DELAY_MS);
+            return;
+        }
+
+        clearDialogDimTimer();
         dialog.dataset.askpageDimmed = dimmed ? 'true' : 'false';
     }
 
@@ -2029,14 +2055,15 @@ async function createDialog() {
             return;
         }
 
-        setDialogDimmed(!dialog.contains(event.target) && !intelliBox.contains(event.target));
+        const isMouseOutsideDialog = !dialog.contains(event.target) && !intelliBox.contains(event.target);
+        setDialogDimmed(isMouseOutsideDialog, { delay: isMouseOutsideDialog });
     });
     overlay.addEventListener('mouseleave', () => {
         if (shouldKeepDialogVisible()) {
             return;
         }
 
-        setDialogDimmed(true);
+        setDialogDimmed(true, { delay: true });
     });
     dialog.addEventListener('mouseenter', () => {
         setDialogDimmed(false);
@@ -2234,6 +2261,8 @@ async function createDialog() {
     function closeDialog() {
         stopDialogDrag();
         hideIntelliBox();
+        clearDialogDimTimer();
+        window.removeEventListener('keydown', escapeKeyListener, true);
         window.removeEventListener('keydown', clearShortcutListener, true);
         dialogInputEventTypes.forEach((eventType) => {
             overlay.removeEventListener(eventType, stopDialogInputEventPropagation);
@@ -2256,12 +2285,23 @@ async function createDialog() {
         if (e.target === overlay) { closeDialog(); } else if (!intelliBox.contains(e.target) && !input.contains(e.target)) { hideIntelliBox(); }
     });
     const escapeKeyListener = (e) => {
-        if (e.key === 'Escape') {
+        if (e.key !== 'Escape') {
+            return;
+        }
+
+        const activeElement = shadowRoot.activeElement;
+        const isFocusInDialog = activeElement && (dialog.contains(activeElement) || intelliBox.contains(activeElement));
+        const pageActiveElement = document.activeElement;
+        const isPageWithoutFocus = !pageActiveElement ||
+            pageActiveElement === document.body ||
+            pageActiveElement === document.documentElement;
+        if (isFocusInDialog || dialog.contains(e.target) || intelliBox.contains(e.target) || isPageWithoutFocus) {
             e.preventDefault();
+            e.stopImmediatePropagation();
             closeDialog();
         }
     };
-    overlay.addEventListener('keydown', escapeKeyListener);
+    window.addEventListener('keydown', escapeKeyListener, true);
 
     function isClearShortcutEvent(e) {
         return e.ctrlKey &&
