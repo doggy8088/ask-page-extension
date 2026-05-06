@@ -1063,7 +1063,10 @@ function postProcessAssistantMarkdown(md) {
 function renderMarkdown(md) {
     const processedMarkdown = postProcessAssistantMarkdown(md);
     try {
-        const rawHtml = marked.parse(processedMarkdown);
+        const rawHtml = marked.parse(processedMarkdown, {
+            gfm: true,
+            breaks: true
+        });
         // Safely sanitize HTML if DOMPurify is available
         return DOMPurify ? DOMPurify.sanitize(rawHtml) : rawHtml;
     } catch (err) {
