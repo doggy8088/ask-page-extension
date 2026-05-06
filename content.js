@@ -2060,7 +2060,7 @@ async function createDialog() {
     }
 
     function buildPromptCommandListMarkdown() {
-        return `**內建斜線命令：**\n- ${createInlineSlashCommandMarkup('/clear')} - 清除歷史紀錄（也可按 Ctrl+L）\n- ${createInlineSlashCommandMarkup('/summary')} - 總結整個頁面`;
+        return `**內建斜線命令：**\n- ${createInlineSlashCommandMarkup('/clear')} - 清除歷史紀錄（也可按 Ctrl+L 快速鍵）\n- ${createInlineSlashCommandMarkup('/summary')} - 總結整個頁面`;
     }
 
     function buildPromptCommandListCopyText() {
