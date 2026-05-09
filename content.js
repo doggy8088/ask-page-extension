@@ -31,7 +31,7 @@ const LLM_API_RETRY_MAX_DELAY_MS = 16000;
 const HTML_CONTEXT_NOISE_SELECTOR = 'script, style, noscript, template';
 const GEMINI_MODEL_MAX_OUTPUT_TOKENS = {
     'gemini-3.1-pro-preview': 65536,
-    'gemini-3.1-flash-lite-preview': 65536,
+    'gemini-3.1-flash-lite': 65536,
     'gemini-3-pro-preview': 65536,
     'gemini-3-flash-preview': 65536,
     'gemini-2.5-pro': 65536,

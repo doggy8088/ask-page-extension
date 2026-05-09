@@ -1,6 +1,6 @@
 # 快速設定指南
 
-這是 AskPage 擴充功能 CI/CD 設定的快速指南，基於 doggy8088/felo-search-toolkit 儲存庫的最佳實踐。
+這是 AskPage (頁問) 擴充功能 CI/CD 設定的快速指南，基於 doggy8088/felo-search-toolkit 儲存庫的最佳實踐。
 
 ## 🎯 CI/CD 功能總覽
 

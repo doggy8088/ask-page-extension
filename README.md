@@ -1,4 +1,4 @@
-# AskPage 擴充功能
+# AskPage (頁問) 擴充功能
 
 使用 Gemini、OpenAI、Azure OpenAI 或 OpenAI Compatible API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
 
