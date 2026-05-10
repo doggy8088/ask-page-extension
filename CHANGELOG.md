@@ -4,6 +4,12 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.23.0] - 2026-05-10
+
+### 版本更新（v0.23.0）
+
+- **Minor version bump**：將擴充功能版本從 `0.22.19` 提升至 `0.23.0`。
+
 ## [0.22.19] - 2026-05-10
 
 ### 修正 / 更新（v0.22.19）
