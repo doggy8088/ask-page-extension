@@ -19,6 +19,7 @@ const MAX_PAGE_TEXT_CONTEXT_LENGTH = 15000;
 const MAX_SELECTED_TEXT_CONTEXT_LENGTH = 5000;
 const MAX_INPUT_VISIBLE_LINES = 5;
 const MAX_INPUT_CONTEXT_IMAGES = 4;
+const MAX_INPUT_CONTEXT_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_FORM_FIELD_DISCOVERY = 80;
 const MAX_TOOL_CALL_ROUNDS = 50;
 const GEMINI_EMPTY_RESPONSE_RETRY_LIMIT = 1;
@@ -1145,6 +1146,10 @@ function renderMarkdown(md) {
     }
 }
 
+function sanitizeHtml(html) {
+    return DOMPurify ? DOMPurify.sanitize(html) : html;
+}
+
 function escapeHtml(value) {
     return String(value || '')
         .replace(/&/g, '&amp;')
@@ -1874,15 +1879,37 @@ async function createDialog() {
     const inputImageStripHeader = document.createElement('div');
     inputImageStripHeader.className = 'askpage-input-image-strip-header';
 
+    const inputImageStripIcon = document.createElement('div');
+    inputImageStripIcon.className = 'askpage-input-image-strip-icon';
+    inputImageStripIcon.setAttribute('aria-hidden', 'true');
+    inputImageStripIcon.textContent = '🖼️';
+
+    const inputImageStripCopy = document.createElement('div');
+    inputImageStripCopy.className = 'askpage-input-image-strip-copy';
+
     const inputImageStripTitle = document.createElement('span');
     inputImageStripTitle.className = 'askpage-input-image-strip-title';
-    inputImageStripTitle.textContent = '圖片上下文 (可透過 Ctrl+V 或拖曳貼上參考圖片)';
+    inputImageStripTitle.textContent = '圖片上下文（可透過 Ctrl+V 或拖曳貼上參考圖片）';
 
     const inputImageStripMeta = document.createElement('span');
     inputImageStripMeta.className = 'askpage-input-image-strip-meta';
+    inputImageStripMeta.textContent = '支援 PNG / JPG / WebP 等圖片，單檔大小上限 10MB';
 
     const inputImageStripActions = document.createElement('div');
     inputImageStripActions.className = 'askpage-input-image-strip-actions';
+
+    const uploadImageInput = document.createElement('input');
+    uploadImageInput.type = 'file';
+    uploadImageInput.accept = 'image/png,image/jpeg,image/webp,image/*';
+    uploadImageInput.multiple = true;
+    uploadImageInput.hidden = true;
+
+    const uploadImageBtn = document.createElement('button');
+    uploadImageBtn.type = 'button';
+    uploadImageBtn.className = 'askpage-upload-image-btn';
+    uploadImageBtn.textContent = '上傳圖片';
+    uploadImageBtn.title = '選取圖片並加入本次提問上下文';
+    uploadImageBtn.setAttribute('aria-label', '上傳圖片並加入圖片上下文');
 
     const annotateScreenBtn = document.createElement('button');
     annotateScreenBtn.type = 'button';
@@ -1892,8 +1919,11 @@ async function createDialog() {
     annotateScreenBtn.setAttribute('aria-label', '標注畫面並加入圖片上下文');
     annotateScreenBtn.hidden = true;
 
-    inputImageStripHeader.appendChild(inputImageStripTitle);
-    inputImageStripActions.appendChild(inputImageStripMeta);
+    inputImageStripCopy.appendChild(inputImageStripTitle);
+    inputImageStripCopy.appendChild(inputImageStripMeta);
+    inputImageStripHeader.appendChild(inputImageStripIcon);
+    inputImageStripHeader.appendChild(inputImageStripCopy);
+    inputImageStripActions.appendChild(uploadImageBtn);
     inputImageStripActions.appendChild(annotateScreenBtn);
     inputImageStripHeader.appendChild(inputImageStripActions);
 
@@ -1906,6 +1936,7 @@ async function createDialog() {
     inputImageStrip.appendChild(inputImageStripHeader);
     inputImageStrip.appendChild(inputImageStripList);
     inputImageStrip.appendChild(inputImageStripNotice);
+    inputImageStrip.appendChild(uploadImageInput);
 
     const inputRow = document.createElement('div');
     inputRow.id = 'gemini-qna-input-row';
@@ -2167,11 +2198,13 @@ async function createDialog() {
     input.focus();
 
     function createInlineSlashCommandMarkup(command) {
-        return `<span data-askpage-command="${command}"><code>${command}</code></span>`;
+        const escapedCommand = escapeHtml(command);
+        return `<span data-askpage-command="${escapedCommand}"><code>${escapedCommand}</code></span>`;
     }
 
-    function buildPromptCommandListMarkdown() {
-        return `**內建斜線命令：**\n- ${createInlineSlashCommandMarkup('/clear')} - 清除歷史紀錄（也可按 Ctrl+L 快速鍵）\n- ${createInlineSlashCommandMarkup('/summary')} - 總結整個頁面`;
+    function createUsageCommandHtml(command, description) {
+        const commandHtml = createInlineSlashCommandMarkup(command);
+        return `<li><span class="askpage-usage-command">${commandHtml}</span><span class="askpage-usage-command-desc">－ ${escapeHtml(description)}</span></li>`;
     }
 
     function buildPromptCommandListCopyText() {
@@ -2193,14 +2226,94 @@ async function createDialog() {
         return `\n\n${notices.join('\n\n')}`;
     }
 
-    function buildCustomCommandListMarkdown(commands) {
-        if (!commands.length) {
-            return '';
-        }
+    function buildUsageModeSectionsHtml(options = {}) {
+        const screenshotEnabled = options.screenshotEnabled === true;
+        const agentModeEnabled = options.agentModeEnabled === true;
+        const screenshotTitle = screenshotEnabled
+            ? '截圖模式（目前為啟用狀態）'
+            : '截圖模式（目前為停用狀態）';
+        const screenshotText = screenshotEnabled
+            ? '系統會在提問時自動附帶目前可視範圍的截圖作為輔助分析。'
+            : '頁問只會對目前網頁的文字內容進行分析，不會自動附帶截圖。';
+        const agentTitle = agentModeEnabled
+            ? '代理模式（目前為啟用狀態）'
+            : '詢問模式（目前為啟用狀態）';
+        const agentText = agentModeEnabled
+            ? '系統會使用多步驟代理的工具調用能力來分析與操作目前頁面。'
+            : '系統只會根據頁面內容回答問題，不會呼叫頁面工具。';
 
-        return '\n\n**您的自訂命令：**\n' + commands
-            .map((cmd) => `- ${createInlineSlashCommandMarkup(cmd.cmd)} - ${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`)
-            .join('\n');
+        return `
+            <section class="askpage-usage-section">
+                <div class="askpage-usage-section-title"><span aria-hidden="true">📝</span><strong>${screenshotTitle}</strong></div>
+                <p>${screenshotText}</p>
+            </section>
+            <section class="askpage-usage-section">
+                <div class="askpage-usage-section-title"><span aria-hidden="true">🤖</span><strong>${agentTitle}</strong></div>
+                <p>${agentText}</p>
+            </section>
+        `;
+    }
+
+    function buildUsageCommandsHtml(customCommands) {
+        const customCommandListHtml = customCommands
+            .map((cmd) => {
+                const description = `${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`;
+                return createUsageCommandHtml(cmd.cmd, description);
+            })
+            .join('');
+        const customCommandItems = customCommands.length
+            ? `
+                <div class="askpage-usage-command-group">
+                    <div class="askpage-usage-subtitle">您的自訂命令：</div>
+                    <ul class="askpage-usage-command-list">
+                        ${customCommandListHtml}
+                    </ul>
+                </div>
+            `
+            : '';
+
+        return `
+            <section class="askpage-usage-section askpage-usage-commands">
+                <div class="askpage-usage-subtitle">內建斜線命令：</div>
+                <ul class="askpage-usage-command-list">
+                    ${createUsageCommandHtml('/clear', '清除歷史紀錄（也可按 Ctrl+L 快速鍵）')}
+                    ${createUsageCommandHtml('/summary', '總結整個頁面')}
+                </ul>
+                ${customCommandItems}
+            </section>
+        `;
+    }
+
+    function buildUsagePromptHtml(options = {}) {
+        const selectedText = String(options.selectedText || '').trim();
+        const selectedTextLength = options.selectedTextLength || 0;
+        const title = selectedTextLength ? '已偵測到選取文字' : '使用提示';
+        const icon = selectedTextLength ? '🎯' : '💡';
+        const intro = selectedTextLength
+            ? `您可以直接提問，系統將以選取的文字作為分析對象。<span class="askpage-usage-count">${selectedTextLength} 字元</span>`
+            : '您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。';
+        const selectedTextPreview = selectedText.length > 1200
+            ? `${selectedText.slice(0, 1200)}…`
+            : selectedText;
+        const selectedTextPreviewHtml = selectedText
+            ? `<pre class="askpage-selected-text-preview">${escapeHtml(selectedTextPreview)}</pre>`
+            : '';
+        const html = `
+            <div class="askpage-usage-card">
+                <section class="askpage-usage-section askpage-usage-intro">
+                    <div class="askpage-usage-heading">
+                        <span class="askpage-usage-heading-icon" aria-hidden="true">${icon}</span>
+                        <strong>${title}</strong>
+                    </div>
+                    <p>${intro}</p>
+                    ${selectedTextPreviewHtml}
+                </section>
+                ${buildUsageModeSectionsHtml(options)}
+                ${buildUsageCommandsHtml(options.customCommands || [])}
+            </div>
+        `;
+
+        return sanitizeHtml(html);
     }
 
     function buildCustomCommandListCopyText(commands) {
@@ -2248,29 +2361,31 @@ async function createDialog() {
         const screenshotEnabled = await getScreenshotEnabled();
         const agentModeEnabled = await getAgentModeEnabled();
         const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
-        const customCommandsList = buildCustomCommandListMarkdown(customCommands);
         const customCommandsCopyText = buildCustomCommandListCopyText(customCommands);
         const activeSelectedText = showUsageTipOnly ? '' : getActiveSelectedText(capturedSelectedText);
         const modeNotice = buildUsageModeNotice({ screenshotEnabled, agentModeEnabled });
-        const builtInCommandsText = buildPromptCommandListMarkdown();
         const builtInCommandsCopyText = buildPromptCommandListCopyText();
-        const optionsHintText = '\n\n滑鼠右鍵點擊擴充功能可透過選項功能設定更多自訂命令。';
+        const renderedHtml = buildUsagePromptHtml({
+            screenshotEnabled,
+            agentModeEnabled,
+            customCommands,
+            selectedText: activeSelectedText,
+            selectedTextLength: activeSelectedText.length
+        });
 
         if (activeSelectedText) {
-            const messageText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${modeNotice}\n\n💡 ${builtInCommandsText}${customCommandsList}${optionsHintText}`;
-            const copyText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。${modeNotice}\n\n💡 ${builtInCommandsCopyText}${customCommandsCopyText}${optionsHintText}`;
+            const copyText = `🎯 **已偵測到選取文字** (${activeSelectedText.length} 字元)\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n**選取內容：**\n${activeSelectedText}${modeNotice}\n\n💡 ${builtInCommandsCopyText}${customCommandsCopyText}`;
             return {
                 text: copyText,
-                renderedHtml: renderMarkdown(messageText),
+                renderedHtml,
                 copyText
             };
         }
 
-        const messageText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${modeNotice}\n\n${builtInCommandsText}${customCommandsList}${optionsHintText}`;
-        const copyText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${modeNotice}\n\n${builtInCommandsCopyText}${customCommandsCopyText}${optionsHintText}`;
+        const copyText = `💡 **使用提示:**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。${modeNotice}\n\n${builtInCommandsCopyText}${customCommandsCopyText}`;
         return {
             text: copyText,
-            renderedHtml: renderMarkdown(messageText),
+            renderedHtml,
             copyText
         };
     }
@@ -2576,11 +2691,15 @@ async function createDialog() {
         }
         inputImageStripList.innerHTML = '';
         inputImageStripTitle.textContent = isScreenshotAnnotationAvailable
-            ? '圖片上下文 (可用標注畫面；代理模式可 Ctrl+V 或拖曳貼圖)'
-            : '圖片上下文 (可透過 Ctrl+V 或拖曳貼上參考圖片)';
-        inputImageStripMeta.textContent = normalizedImages.length ? `${normalizedImages.length}/${MAX_INPUT_CONTEXT_IMAGES}` : '';
+            ? '圖片上下文（可上傳、貼上、拖曳，或標注目前畫面）'
+            : '圖片上下文（可透過 Ctrl+V 或拖曳貼上參考圖片）';
+        inputImageStripMeta.textContent = normalizedImages.length
+            ? `支援 PNG / JPG / WebP 等圖片，單檔大小上限 10MB · ${normalizedImages.length}/${MAX_INPUT_CONTEXT_IMAGES}`
+            : '支援 PNG / JPG / WebP 等圖片，單檔大小上限 10MB';
         inputImageStripNotice.textContent = inputContextImageNotice;
         inputImageStripNotice.dataset.level = inputContextImageNoticeLevel;
+        uploadImageBtn.hidden = inputStack.dataset.askpageImageContextEnabled !== 'true';
+        uploadImageBtn.disabled = inputStack.dataset.askpageImageContextEnabled !== 'true';
         annotateScreenBtn.hidden = !isScreenshotAnnotationAvailable;
         annotateScreenBtn.disabled = !isScreenshotAnnotationAvailable;
 
@@ -2660,6 +2779,10 @@ async function createDialog() {
     }
 
     function readFileAsDataUrl(file) {
+        if (file.size > MAX_INPUT_CONTEXT_IMAGE_FILE_BYTES) {
+            throw new Error('圖片檔案超過 10MB 上限。');
+        }
+
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => {
@@ -2796,6 +2919,27 @@ async function createDialog() {
         if (inputContextImageDataUrls.includes(annotatedScreenshotDataUrl)) {
             pendingAnnotatedScreenshotDataUrl = annotatedScreenshotDataUrl;
             setInputImageNotice('已加入標注截圖；送出提示時不會再額外擷取一次畫面。', 'info');
+        }
+    }
+
+    async function handleUploadImageFiles(files) {
+        const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith('image/'));
+        if (!imageFiles.length) {
+            setInputImageNotice('請選擇可用的圖片檔案。', 'warning');
+            return;
+        }
+
+        if (inputStack.dataset.askpageImageContextEnabled !== 'true') {
+            setInputImageNotice('請先切換到代理模式，才能手動附加圖片上下文。', 'warning');
+            return;
+        }
+
+        try {
+            const imageDataUrls = await Promise.all(imageFiles.map((file) => readFileAsDataUrl(file)));
+            await appendInputContextImages(imageDataUrls, { emptyMessage: '沒有可加入的圖片檔案。' });
+        } catch (error) {
+            console.error('[AskPage] Failed to read uploaded images:', error);
+            setInputImageNotice(`無法上傳圖片：${error.message}`, 'error');
         }
     }
 
@@ -3118,6 +3262,19 @@ async function createDialog() {
     });
     annotateScreenBtn.addEventListener('click', async () => {
         await handleAnnotateScreenClick();
+    });
+    uploadImageBtn.addEventListener('click', () => {
+        if (inputStack.dataset.askpageImageContextEnabled !== 'true') {
+            setInputImageNotice('請先切換到代理模式，才能手動附加圖片上下文。', 'warning');
+            return;
+        }
+
+        uploadImageInput.click();
+    });
+    uploadImageInput.addEventListener('change', async () => {
+        await handleUploadImageFiles(uploadImageInput.files);
+        uploadImageInput.value = '';
+        input.focus();
     });
     input.addEventListener('paste', handleInputImagePaste, true);
     input.addEventListener('dragenter', (event) => {
