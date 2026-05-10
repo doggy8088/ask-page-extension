@@ -566,6 +566,11 @@ async function updateProviderDisplay() {
             : 'Shift+Enter 可換行'; //，附圖僅代理模式可用';
         questionInput.placeholder = `正在使用 ${displayName}${modelText} 回答您的提問 (${inputHintText})`;
     }
+
+    const providerDisplayModel = getActiveDialogElementById('provider-display-model');
+    if (providerDisplayModel) {
+        providerDisplayModel.textContent = model ? `${displayName} · ${model}` : `${displayName} · 尚未設定模型`;
+    }
 }
 
 // Screenshot state management
@@ -1534,10 +1539,10 @@ async function createDialog() {
     const capturedSelectedText = initialSelection.toString().trim();
     const dialogStylesText = await getDialogStylesText();
     const modeToggleButtonBaseStyle = `
-        color: #dbeafe;
-        background: rgba(15, 23, 42, 0.24);
-        border-color: rgba(147, 197, 253, 0.34);
-        box-shadow: 0 1px 2px rgba(2, 6, 23, 0.22);
+        color: #c7d7ec;
+        background: rgba(7, 17, 31, 0.74);
+        border-color: rgba(107, 136, 171, 0.4);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.32);
     `;
     const modeToggleIconBaseStyle = `
         box-sizing: border-box;
@@ -1571,13 +1576,13 @@ async function createDialog() {
             inactiveText: '截圖',
             activeStateLabel: '含截圖',
             inactiveStateLabel: '無截圖',
-            activeColor: '#eff6ff',
-            activeBackground: 'rgba(37, 99, 235, 0.72)',
-            activeBorder: 'rgba(147, 197, 253, 0.78)',
-            activeShadow: '0 0 0 1px rgba(96, 165, 250, 0.24)',
-            inactiveColor: '#cbd5e1',
-            inactiveBackground: 'rgba(71, 85, 105, 0.68)',
-            inactiveBorder: 'rgba(148, 163, 184, 0.56)',
+            activeColor: '#f5fbff',
+            activeBackground: 'linear-gradient(180deg, rgba(31, 130, 255, 0.9), rgba(4, 86, 211, 0.86))',
+            activeBorder: 'rgba(107, 181, 255, 0.95)',
+            activeShadow: '0 0 0 1px rgba(70, 154, 255, 0.2), 0 0 22px rgba(0, 120, 255, 0.34)',
+            inactiveColor: '#899bb2',
+            inactiveBackground: 'rgba(12, 24, 39, 0.66)',
+            inactiveBorder: 'rgba(94, 116, 146, 0.46)',
             inactiveShadow: 'none',
             activeIcon: '📸',
             inactiveIcon: '📷',
@@ -1593,12 +1598,12 @@ async function createDialog() {
             activeText: '代理',
             inactiveText: '詢問',
             activeColor: '#fff7ed',
-            activeBackground: 'rgba(217, 119, 6, 0.72)',
-            activeBorder: 'rgba(253, 186, 116, 0.74)',
-            activeShadow: '0 0 0 1px rgba(251, 146, 60, 0.22)',
-            inactiveColor: '#dbeafe',
-            inactiveBackground: 'rgba(37, 99, 235, 0.36)',
-            inactiveBorder: 'rgba(96, 165, 250, 0.5)',
+            activeBackground: 'linear-gradient(180deg, rgba(234, 125, 42, 0.92), rgba(188, 74, 24, 0.88))',
+            activeBorder: 'rgba(255, 184, 114, 0.86)',
+            activeShadow: '0 0 0 1px rgba(255, 143, 68, 0.22), 0 0 20px rgba(255, 115, 43, 0.24)',
+            inactiveColor: '#d6e7fb',
+            inactiveBackground: 'rgba(12, 60, 118, 0.55)',
+            inactiveBorder: 'rgba(62, 146, 232, 0.58)',
             inactiveShadow: 'none',
             activeIcon: '🤖',
             inactiveIcon: '💬',
@@ -1611,6 +1616,16 @@ async function createDialog() {
 
     const host = document.createElement('div');
     host.id = DIALOG_HOST_ID;
+    host.style.setProperty('all', 'initial', 'important');
+    host.style.setProperty('display', 'block', 'important');
+    host.style.setProperty('position', 'fixed', 'important');
+    host.style.setProperty('inset', '0', 'important');
+    host.style.setProperty('z-index', '2147483647', 'important');
+    host.style.setProperty('width', 'auto', 'important');
+    host.style.setProperty('height', 'auto', 'important');
+    host.style.setProperty('overflow', 'visible', 'important');
+    host.style.setProperty('direction', 'ltr', 'important');
+    host.style.setProperty('color-scheme', 'dark', 'important');
     const shadowRoot = host.attachShadow({ mode: 'open' });
     const styleElement = document.createElement('style');
     styleElement.textContent = dialogStylesText;
@@ -1631,6 +1646,10 @@ async function createDialog() {
     providerInfo.className = 'askpage-header-info';
     const providerDisplay = document.createElement('div');
     providerDisplay.className = 'askpage-provider-display';
+    const providerBrandMark = document.createElement('span');
+    providerBrandMark.className = 'askpage-brand-mark';
+    providerBrandMark.setAttribute('aria-hidden', 'true');
+    providerBrandMark.textContent = '問';
     const providerDisplayName = document.createElement('div');
     providerDisplayName.id = 'provider-display-name';
     providerDisplayName.className = 'askpage-provider-name';
@@ -1725,10 +1744,10 @@ async function createDialog() {
     switchProviderBtn.className = 'askpage-toolbar-btn askpage-toolbar-btn-switch-provider';
     switchProviderBtn.style.cssText = `
         ${modeToggleButtonBaseStyle}
-        color: #e0f2fe;
-        background: rgba(29, 78, 216, 0.42);
-        border-color: rgba(125, 211, 252, 0.58);
-        box-shadow: 0 1px 2px rgba(2, 6, 23, 0.24);
+        color: #e8f6ff;
+        background: linear-gradient(180deg, rgba(18, 92, 184, 0.78), rgba(10, 50, 105, 0.78));
+        border-color: rgba(88, 172, 255, 0.68);
+        box-shadow: 0 0 16px rgba(0, 112, 255, 0.16);
     `;
     switchProviderIcon.setAttribute('aria-hidden', 'true');
     switchProviderIcon.textContent = '⇄';
@@ -1753,10 +1772,10 @@ async function createDialog() {
     optionsBtn.className = 'askpage-toolbar-btn askpage-toolbar-btn-options';
     optionsBtn.style.cssText = `
         ${modeToggleButtonBaseStyle}
-        color: #e5e7eb;
-        background: rgba(15, 23, 42, 0.34);
-        border-color: rgba(148, 163, 184, 0.52);
-        box-shadow: 0 1px 2px rgba(2, 6, 23, 0.22);
+        color: #d9e5f2;
+        background: rgba(7, 17, 31, 0.76);
+        border-color: rgba(107, 136, 171, 0.48);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.28);
     `;
     optionsBtnIcon.setAttribute('aria-hidden', 'true');
     optionsBtnIcon.textContent = '⚙️';
@@ -1780,7 +1799,9 @@ async function createDialog() {
     providerActions.appendChild(htmlModeBtn);
     providerActions.appendChild(switchProviderBtn);
     providerActions.appendChild(optionsBtn);
+    providerDisplay.appendChild(providerBrandMark);
     providerDisplay.appendChild(providerDisplayName);
+    providerDisplay.appendChild(providerDisplayModel);
     providerInfo.appendChild(providerDisplay);
     providerHeader.appendChild(providerInfo);
     providerHeader.appendChild(providerActions);
@@ -1876,7 +1897,8 @@ async function createDialog() {
     intelliBox.tabIndex = -1;
     const btn = document.createElement('button');
     btn.id = 'gemini-qna-btn';
-    btn.textContent = 'Ask';
+    btn.textContent = '問';
+    btn.setAttribute('aria-label', '送出提問');
 
     inputRow.appendChild(input);
     inputRow.appendChild(btn);
@@ -2998,9 +3020,7 @@ async function createDialog() {
             el.textContent = `${item.cmd} － ${item.desc}`;
             el.dataset.cmd = item.cmd;
             Object.assign(el.style, {
-                padding: '6px 16px',
-                background: idx === intelliIndex ? '#e3f2fd' : '',
-                fontWeight: idx === intelliIndex ? 'bold' : ''
+                padding: '6px 16px'
             });
             el.addEventListener('click', (e) => {
                 e.preventDefault();
