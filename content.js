@@ -69,6 +69,57 @@ const DIALOG_STYLESHEET_PATH = 'style.css';
 const SCREEN_ANNOTATION_OVERLAY_ID = 'askpage-screen-annotation-overlay';
 const AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS = 100;
 const DIALOG_DIM_DELAY_MS = 1000;
+const DIALOG_HOST_ISOLATION_STYLES = [
+    ['all', 'initial'],
+    ['display', 'block'],
+    ['position', 'fixed'],
+    ['inset', '0'],
+    ['z-index', '2147483647'],
+    ['width', 'auto'],
+    ['height', 'auto'],
+    ['overflow', 'visible'],
+    ['direction', 'ltr'],
+    ['color-scheme', 'dark']
+];
+
+function applyDialogHostIsolationStyles(host) {
+    if (!host) {
+        return;
+    }
+
+    DIALOG_HOST_ISOLATION_STYLES.forEach(([property, value]) => {
+        host.style.setProperty(property, value, 'important');
+    });
+}
+
+function getDialogHostMountParent() {
+    return document.documentElement || document.body;
+}
+
+function detachActiveDialogHostForPageTool() {
+    const host = getActiveDialogHost();
+    if (!host?.isConnected || !host.parentNode) {
+        return () => applyDialogHostIsolationStyles(host);
+    }
+
+    const parent = host.parentNode;
+    const nextSibling = host.nextSibling;
+    parent.removeChild(host);
+
+    return () => {
+        if (!host.isConnected) {
+            if (parent.isConnected && nextSibling?.parentNode === parent) {
+                parent.insertBefore(host, nextSibling);
+            } else if (parent.isConnected) {
+                parent.appendChild(host);
+            } else {
+                getDialogHostMountParent().appendChild(host);
+            }
+        }
+
+        applyDialogHostIsolationStyles(host);
+    };
+}
 
 async function getDialogStylesText() {
     if (!dialogStylesTextPromise) {
@@ -1400,6 +1451,12 @@ function buildSystemPrompt({
             ? 'You are in agent mode. Use the available page tools whenever the user asks you to inspect or modify the current page, selected text, or form fields. In particular, you can use run_js to read or modify the current page DOM, inline styles, classes, attributes, text, layout, and behavior.'
             : 'You are in inquiry mode. Do not use page tools in this mode. Answer only from the provided page content, selected text, and screenshot context. If the user asks for page modifications, say that agent mode can do it rather than claiming the page cannot be modified at all.',
         pageContextFormat === 'html'
+            ? 'The AskPage dialog itself is extension UI, not page content. Do not inspect, select, style, move, remove, or otherwise modify #askpage-dialog-host or its shadow DOM when using run_js.'
+            : '',
+        pageContextFormat === 'html'
+            ? 'Avoid applying CSS filters, transforms, opacity, or broad style rewrites to html/documentElement/body when modifying page appearance, because ancestor effects can visually affect extension UI. Prefer scoped CSS that targets the page content itself.'
+            : '',
+        pageContextFormat === 'html'
             ? 'When you identify the user request as an operation that updates the current web page, including DOM, visible text, HTML, CSS, classes, attributes, layout, form values, or interactive state, always call run_js directly to perform the update instead of asking for confirmation or only explaining what to do.'
             : '',
         pageContextFormat === 'html'
@@ -1616,16 +1673,7 @@ async function createDialog() {
 
     const host = document.createElement('div');
     host.id = DIALOG_HOST_ID;
-    host.style.setProperty('all', 'initial', 'important');
-    host.style.setProperty('display', 'block', 'important');
-    host.style.setProperty('position', 'fixed', 'important');
-    host.style.setProperty('inset', '0', 'important');
-    host.style.setProperty('z-index', '2147483647', 'important');
-    host.style.setProperty('width', 'auto', 'important');
-    host.style.setProperty('height', 'auto', 'important');
-    host.style.setProperty('overflow', 'visible', 'important');
-    host.style.setProperty('direction', 'ltr', 'important');
-    host.style.setProperty('color-scheme', 'dark', 'important');
+    applyDialogHostIsolationStyles(host);
     const shadowRoot = host.attachShadow({ mode: 'open' });
     const styleElement = document.createElement('style');
     styleElement.textContent = dialogStylesText;
@@ -1914,7 +1962,7 @@ async function createDialog() {
 
     shadowRoot.appendChild(styleElement);
     shadowRoot.appendChild(overlay);
-    document.body.appendChild(host);
+    getDialogHostMountParent().appendChild(host);
     activeDialogState = {
         host,
         shadowRoot,
@@ -5076,7 +5124,7 @@ async function createDialog() {
             },
             {
                 name: 'run_js',
-                description: '在目前頁面的主世界執行通用 JavaScript。可用來讀取 DOM、查詢頁面資料、點擊元素、修改內容、注入 CSS、調整網頁排版、呼叫頁面腳本，並支援 await。當使用者要求修改、重排、套用樣式或操作目前網頁時，請直接使用此工具執行，不要只提供程式碼或建議。若要把結果回傳給模型，請使用 return。',
+                description: '在目前頁面的主世界執行通用 JavaScript。可用來讀取 DOM、查詢頁面資料、點擊元素、修改內容、注入 CSS、調整網頁排版、呼叫頁面腳本，並支援 await。當使用者要求修改、重排、套用樣式或操作目前網頁時，請直接使用此工具執行，不要只提供程式碼或建議。頁問對話框是擴充功能 UI，不是網頁內容；不可選取、讀取、修改或套用樣式到 #askpage-dialog-host 或其 shadow DOM，也不要用 html/body 的 filter、transform、opacity 等祖先效果影響擴充功能 UI。若要把結果回傳給模型，請使用 return。',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -5286,10 +5334,16 @@ async function createDialog() {
                     };
                 }
 
-                const response = await chrome.runtime.sendMessage({
-                    action: 'execute-main-world-javascript',
-                    code
-                });
+                const restoreDialogHost = detachActiveDialogHostForPageTool();
+                let response;
+                try {
+                    response = await chrome.runtime.sendMessage({
+                        action: 'execute-main-world-javascript',
+                        code
+                    });
+                } finally {
+                    restoreDialogHost();
+                }
 
                 if (!response?.success) {
                     return {
