@@ -1646,10 +1646,11 @@ async function createDialog() {
     providerInfo.className = 'askpage-header-info';
     const providerDisplay = document.createElement('div');
     providerDisplay.className = 'askpage-provider-display';
-    const providerBrandMark = document.createElement('span');
+    const providerBrandMark = document.createElement('img');
     providerBrandMark.className = 'askpage-brand-mark';
+    providerBrandMark.src = chrome.runtime.getURL('icons/askpage-mark.png');
+    providerBrandMark.alt = '';
     providerBrandMark.setAttribute('aria-hidden', 'true');
-    providerBrandMark.textContent = '問';
     const providerDisplayName = document.createElement('div');
     providerDisplayName.id = 'provider-display-name';
     providerDisplayName.className = 'askpage-provider-name';

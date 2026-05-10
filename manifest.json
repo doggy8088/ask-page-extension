@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "頁問 AskPage",
-  "version": "0.22.14",
+  "version": "0.22.15",
   "description": "使用 Gemini API、OpenAI API、Azure OpenAI API 或 OpenAI Compatible API 詢問關於目前頁面的問題",
   "permissions": [
     "storage",
@@ -15,6 +15,7 @@
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
@@ -59,6 +60,11 @@
     {
       "resources": [
         "style.css",
+        "icons/askpage-mark.png",
+        "icons/icon16.png",
+        "icons/icon32.png",
+        "icons/icon48.png",
+        "icons/icon128.png",
         "lib/marked.min.js",
         "lib/purify.min.js"
       ],
@@ -69,6 +75,7 @@
   ],
   "icons": {
     "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   }

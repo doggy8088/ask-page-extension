@@ -1038,22 +1038,12 @@
 }
 
 .askpage-brand-mark {
-  display: inline-grid;
-  place-items: center;
+  display: block;
   width: 42px;
   height: 42px;
   flex: 0 0 auto;
-  border: 1px solid rgba(102, 183, 255, 0.72);
-  border-radius: 16px;
-  background:
-    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.48), transparent 20%),
-    linear-gradient(145deg, #0f90ff, #004ec5 72%);
-  color: #ffffff;
-  font-size: 20px;
-  font-weight: 900;
-  line-height: 1;
-  box-shadow: 0 0 22px rgba(0, 116, 255, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.42);
+  object-fit: contain;
+  filter: drop-shadow(0 0 14px rgba(53, 208, 127, 0.36));
 }
 
 .askpage-provider-display::after {
