@@ -651,12 +651,18 @@ async function getEnabledProviderModelOptions() {
 
     const options = [];
     for (const p of providers) {
-        if (p.type === 'gemini' || p.type === 'openai') {
+        if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq'].includes(p.type)) {
             const models = p.models || [];
             for (const model of models) {
                 options.push({
                     providerId: p.id,
-                    providerName: p.name || (p.type === 'gemini' ? 'Gemini' : 'OpenAI'),
+                    providerName: p.name || (
+                        p.type === 'gemini' ? 'Gemini' :
+                            p.type === 'openai' ? 'OpenAI' :
+                                p.type === 'anthropic' ? 'Anthropic' :
+                                    p.type === 'deepseek' ? 'DeepSeek' :
+                                        p.type === 'openrouter' ? 'OpenRouter' : 'Groq'
+                    ),
                     type: p.type,
                     model: model
                 });
@@ -667,6 +673,13 @@ async function getEnabledProviderModelOptions() {
                 providerName: p.name || 'Azure OpenAI',
                 type: p.type,
                 model: p.azureDeployment || 'gpt-4o-mini'
+            });
+        } else if (p.type === 'ollama') {
+            options.push({
+                providerId: p.id,
+                providerName: p.name || 'Ollama (Local)',
+                type: p.type,
+                model: p.ollamaModel || ''
             });
         } else if (p.type === 'openai-compatible') {
             options.push({
@@ -7474,10 +7487,31 @@ async function createDialog() {
     }
 
     async function askOpenAICompatible(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
-        console.log('[AskPage] ===== OPENAI COMPATIBLE API CALL STARTED =====');
         const activeConfig = await getActiveProviderConfig();
+        const providerType = activeConfig?.type || 'openai-compatible';
+        const providerLabel = providerType === 'deepseek' ? 'DeepSeek' :
+            providerType === 'openrouter' ? 'OpenRouter' :
+                providerType === 'groq' ? 'Groq' :
+                    providerType === 'ollama' ? 'Ollama' : 'OpenAI Compatible';
+
+        console.log(`[AskPage] ===== ${providerLabel.toUpperCase()} API CALL STARTED =====`);
         const encryptedApiKey = activeConfig?.apiKey || '';
-        const endpoint = activeConfig?.openaiCompatibleEndpoint || 'http://localhost:11434/v1';
+
+        let endpoint = activeConfig?.openaiCompatibleEndpoint || '';
+        if (!endpoint) {
+            if (providerType === 'deepseek') {
+                endpoint = 'https://api.deepseek.com/v1';
+            } else if (providerType === 'openrouter') {
+                endpoint = 'https://openrouter.ai/api/v1';
+            } else if (providerType === 'groq') {
+                endpoint = 'https://api.groq.com/openai/v1';
+            } else if (providerType === 'ollama') {
+                endpoint = activeConfig?.ollamaEndpoint || 'http://localhost:11434/v1';
+            } else {
+                endpoint = 'http://localhost:11434/v1';
+            }
+        }
+
         const selectedModel = activeConfig?.activeModel || '';
 
         let apiKey = '';
@@ -7503,11 +7537,11 @@ async function createDialog() {
             ? `${baseEndpoint}/responses`
             : (cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(selectedModel);
-        console.log('[AskPage] OpenAI Compatible max output tokens:', maxOutputTokens, 'model:', selectedModel || '(unspecified)', 'responses_api:', useResponsesApi);
+        console.log(`[AskPage] ${providerLabel} max output tokens:`, maxOutputTokens, 'model:', selectedModel || '(unspecified)', 'responses_api:', useResponsesApi);
 
         try {
             const answer = await runOpenAIStyleToolLoop({
-                providerLabel: 'OpenAI Compatible',
+                providerLabel: providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl, normalizedInputImages),
                 initialUseTools: agentModeEnabled,
                 initialMaxOutputTokens: maxOutputTokens,
@@ -7584,13 +7618,13 @@ async function createDialog() {
                 },
                 allowToolFallback: true,
                 onStatusUpdate: handleStatusUpdate,
-                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'OpenAI Compatible', traceEvent),
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
                 onAnswerDelta: agentModeEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
-                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, 'OpenAI Compatible', { type: 'reasoning-delta', text: delta })
+                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta })
             });
 
             const finalAnswer = answer.fallbackUsed
-                ? `⚠️ **目前這個 OpenAI Compatible 端點未完整支援 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n${answer.answer}`
+                ? `⚠️ **目前這個 ${providerLabel} 端點未完整支援 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n${answer.answer}`
                 : answer.answer;
             if (streamedAnswer) {
                 streamedAnswer.finalize(finalAnswer);
@@ -7601,7 +7635,222 @@ async function createDialog() {
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
             if (!isExpectedNonDisplayableTextError(error)) {
-                console.error('[AskPage] OpenAI Compatible API call failed:', error);
+                console.error(`[AskPage] ${providerLabel} API call failed:`, error);
+            }
+            if (streamedAnswer) {
+                streamedAnswer.discard();
+            }
+            const errorMessage = `錯誤: ${error.userMessage || error.message}`;
+            appendErrorMessageAndStore(errorMessage);
+            traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats(), errorMessage));
+        }
+    }
+
+    function formatMessagesForAnthropic(messages) {
+        return messages.map(msg => {
+            let content = msg.content;
+            if (Array.isArray(content)) {
+                content = content.map(item => {
+                    if (item.type === 'text') {
+                        return { type: 'text', text: item.text };
+                    }
+                    if (item.type === 'image_url') {
+                        const url = item.image_url?.url || '';
+                        const match = url.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
+                        if (match) {
+                            return {
+                                type: 'image',
+                                source: {
+                                    type: 'base64',
+                                    media_type: match[1],
+                                    data: match[2]
+                                }
+                            };
+                        }
+                    }
+                    return item;
+                });
+            }
+            return {
+                role: msg.role,
+                content: content
+            };
+        });
+    }
+
+    async function fetchAnthropicStream({
+        url,
+        requestBody,
+        headers,
+        buildHttpError,
+        onRetry,
+        onAnswerDelta = () => {}
+    }) {
+        let answerText = '';
+        let responseId = '';
+        let responseModel = requestBody.model || '';
+
+        await fetchSseWithRetry({
+            providerLabel: 'Anthropic',
+            url,
+            options: {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    ...requestBody,
+                    stream: true
+                })
+            },
+            buildHttpError,
+            onRetry,
+            onEvent: (sseEvent) => {
+                let chunk;
+                try {
+                    chunk = JSON.parse(sseEvent.data);
+                } catch (e) {
+                    return;
+                }
+
+                if (chunk.type === 'message_start' && chunk.message) {
+                    responseId = chunk.message.id || responseId;
+                    responseModel = chunk.message.model || responseModel;
+                }
+
+                if (chunk.type === 'content_block_delta' && chunk.delta && chunk.delta.text) {
+                    const textDelta = chunk.delta.text;
+                    answerText += textDelta;
+                    onAnswerDelta(textDelta);
+                }
+            }
+        });
+
+        return {
+            answer: answerText,
+            id: responseId,
+            model: responseModel
+        };
+    }
+
+    async function askAnthropic(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
+        console.log('[AskPage] ===== ANTHROPIC API CALL STARTED =====');
+        const activeConfig = await getActiveProviderConfig();
+        const encryptedApiKey = activeConfig?.apiKey || '';
+        const selectedModel = activeConfig?.activeModel || 'claude-3-5-sonnet-latest';
+
+        if (!encryptedApiKey) {
+            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 Anthropic API Key。');
+            return;
+        }
+
+        const apiKey = await decryptApiKey(encryptedApiKey);
+        if (!apiKey) {
+            appendErrorMessageAndStore('無法解密 Anthropic API Key，請重新設定。');
+            return;
+        }
+
+        const traceReporter = createExecutionTraceReporter();
+        const handleStatusUpdate = createProgressStatusHandler(traceReporter);
+
+        const normalizedInputImages = normalizeInputImageDataUrls(inputImageDataUrls);
+        const pageConversationContext = await preparePageConversationContext(capturedSelectedText, {
+            includeScreenshot: Boolean(screenshotDataUrl),
+            inputImageDataUrls: normalizedInputImages
+        });
+        const agentModeEnabled = await getAgentModeEnabled();
+        handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
+        const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
+
+        const maxOutputTokens = 4096;
+        console.log('[AskPage] Anthropic max output tokens:', maxOutputTokens, 'model:', selectedModel);
+
+        const allMessages = buildTextProviderMessages(pageConversationContext, question, screenshotDataUrl, normalizedInputImages);
+        const systemMessage = allMessages.find(msg => msg.role === 'system');
+        const systemPrompt = systemMessage ? systemMessage.content : '';
+        const messages = formatMessagesForAnthropic(allMessages.filter(msg => msg.role !== 'system'));
+
+        try {
+            const requestBody = {
+                model: selectedModel,
+                messages,
+                max_tokens: maxOutputTokens
+            };
+
+            if (systemPrompt) {
+                requestBody.system = systemPrompt;
+            }
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01'
+            };
+
+            const buildHttpError = (response, errorBody) => {
+                const retryAfterMs = getRetryAfterMilliseconds(response);
+                if (response.status === 401) {
+                    return createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 Anthropic API Key 設定。', { retryAfterMs });
+                }
+                if (response.status === 403) {
+                    return createHttpError(response.status, response.statusText, errorBody, 'Anthropic 拒絕了這次請求，請檢查權限或模型存取設定。', { retryAfterMs });
+                }
+                if (response.status === 404) {
+                    return createHttpError(response.status, response.statusText, errorBody, '找不到指定的 Anthropic 模型，請檢查模型設定。', { retryAfterMs });
+                }
+                if (response.status === 429) {
+                    return createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。', { retryAfterMs });
+                }
+                if (response.status >= 500) {
+                    return createHttpError(response.status, response.statusText, errorBody, 'Anthropic 服務暫時不可用，請稍後再試。', { retryAfterMs });
+                }
+                return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
+            };
+
+            const url = 'https://api.anthropic.com/v1/messages';
+            let finalAnswer = '';
+
+            if (agentModeEnabled) {
+                const streamResult = await fetchAnthropicStream({
+                    url,
+                    requestBody,
+                    headers,
+                    buildHttpError,
+                    onRetry: (retryInfo) => handleStatusUpdate(
+                        `Anthropic ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
+                    ),
+                    onAnswerDelta: (delta) => {
+                        if (streamedAnswer) {
+                            streamedAnswer.append(delta);
+                        }
+                    }
+                });
+                finalAnswer = `⚠️ **目前 Anthropic 提供者未完整支援 agent 模式下的 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n${streamResult.answer}`;
+            } else {
+                const response = await fetchJsonWithRetry({
+                    providerLabel: 'Anthropic',
+                    url,
+                    options: {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify(requestBody)
+                    },
+                    buildHttpError,
+                    onRetry: (retryInfo) => handleStatusUpdate(
+                        `Anthropic ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
+                    )
+                });
+                finalAnswer = response.content?.map(block => block.text).join('') || '';
+            }
+
+            if (streamedAnswer) {
+                streamedAnswer.finalize(finalAnswer);
+            } else {
+                appendPersistentMessage('assistant', finalAnswer);
+            }
+            conversationSelectedText = capturedSelectedText;
+            traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
+        } catch (error) {
+            if (!isExpectedNonDisplayableTextError(error)) {
+                console.error('[AskPage] Anthropic API call failed:', error);
             }
             if (streamedAnswer) {
                 streamedAnswer.discard();
@@ -7625,7 +7874,9 @@ async function createDialog() {
             await askOpenAI(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
         } else if (activeConfig.type === 'azure') {
             await askAzureOpenAI(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
-        } else if (activeConfig.type === 'openai-compatible') {
+        } else if (activeConfig.type === 'anthropic') {
+            await askAnthropic(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+        } else if (['openai-compatible', 'deepseek', 'openrouter', 'groq', 'ollama'].includes(activeConfig.type)) {
             await askOpenAICompatible(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
         } else {
             await askGemini(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);

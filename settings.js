@@ -71,9 +71,13 @@ let modalSave, modalCancel, modalCommandNameError;
 let providersList, addProviderBtn, providerModal, providerModalTitle, modalProviderName, modalProviderType;
 let modalProviderCancel, modalProviderSave;
 let modalGeminiFields, modalOpenaiFields, modalAzureFields, modalOpenaiCompatibleFields;
+let modalAnthropicFields, modalDeepseekFields, modalOpenrouterFields, modalGroqFields, modalOllamaFields;
 let modalGeminiApiKey, modalOpenaiApiKey, modalAzureApiKey, modalAzureEndpoint, modalAzureDeployment, modalAzureApiVersion;
 let modalOpenaiCompatibleEndpoint, modalOpenaiCompatibleApiKey, modalOpenaiCompatibleModel;
+let modalAnthropicApiKey, modalDeepseekApiKey, modalOpenrouterApiKey, modalGroqApiKey;
+let modalOllamaEndpoint, modalOllamaModel;
 let modalGeminiModelsList, modalOpenaiModelsList;
+let modalAnthropicModelsList, modalDeepseekModelsList, modalOpenrouterModelsList, modalGroqModelsList;
 let currentEditingProvider = null;
 let providers = [];
 
@@ -88,6 +92,55 @@ const BUILT_IN_COMMANDS = [
     { cmd: '/screenshot', desc: '切換截圖功能狀態', builtin: true },
     { cmd: '/agent', desc: '切換詢問 / 代理模式（代理模式會使用頁面 HTML 與工具調用）', builtin: true }
 ];
+
+const PREDEFINED_MODELS = {
+    gemini: [
+        'gemini-3.5-flash',
+        'gemini-3.1-pro-preview',
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-pro',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-flash-lite-latest',
+        'gemma-4-31b-it',
+        'gemma-4-26b-a4b-it'
+    ],
+    openai: [
+        'gpt-5.5',
+        'gpt-5.4',
+        'gpt-5.3',
+        'gpt-4o',
+        'gpt-4o-mini',
+        'gpt-4.1',
+        'gpt-4.1-mini'
+    ],
+    anthropic: [
+        'claude-opus-4-7',
+        'claude-sonnet-4-6',
+        'claude-haiku-4-5'
+    ],
+    deepseek: [
+        'deepseek-chat',
+        'deepseek-reasoner'
+    ],
+    openrouter: [
+        'qwen/qwen3.7-max',
+        'deepseek/deepseek-v4-flash',
+        'deepseek/deepseek-v4-pro',
+        'tencent/hy3-preview',
+        'xiaomi/mimo-v2.5-pro',
+        'xiaomi/mimo-v2.5',
+        'z-ai/glm-5',
+        'x-ai/grok-4.3',
+        'moonshotai/kimi-k2.6',
+        'minimax/minimax-m2.7'
+    ],
+    groq: [
+        'openai/gpt-oss-120b',
+        'qwen/qwen3-32b',
+        'llama-3.3-70b-versatile'
+    ]
+};
 
 // Current edit state
 let currentEditingCommand = null;
@@ -112,6 +165,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalOpenaiFields = document.getElementById('modal-openai-fields');
     modalAzureFields = document.getElementById('modal-azure-fields');
     modalOpenaiCompatibleFields = document.getElementById('modal-openai-compatible-fields');
+    modalAnthropicFields = document.getElementById('modal-anthropic-fields');
+    modalDeepseekFields = document.getElementById('modal-deepseek-fields');
+    modalOpenrouterFields = document.getElementById('modal-openrouter-fields');
+    modalGroqFields = document.getElementById('modal-groq-fields');
+    modalOllamaFields = document.getElementById('modal-ollama-fields');
 
     modalGeminiApiKey = document.getElementById('modalGeminiApiKey');
     modalOpenaiApiKey = document.getElementById('modalOpenaiApiKey');
@@ -124,8 +182,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalOpenaiCompatibleApiKey = document.getElementById('modalOpenaiCompatibleApiKey');
     modalOpenaiCompatibleModel = document.getElementById('modalOpenaiCompatibleModel');
 
+    modalAnthropicApiKey = document.getElementById('modalAnthropicApiKey');
+    modalDeepseekApiKey = document.getElementById('modalDeepseekApiKey');
+    modalOpenrouterApiKey = document.getElementById('modalOpenrouterApiKey');
+    modalGroqApiKey = document.getElementById('modalGroqApiKey');
+
+    modalOllamaEndpoint = document.getElementById('modalOllamaEndpoint');
+    modalOllamaModel = document.getElementById('modalOllamaModel');
+
     modalGeminiModelsList = document.getElementById('modalGeminiModelsList');
     modalOpenaiModelsList = document.getElementById('modalOpenaiModelsList');
+    modalAnthropicModelsList = document.getElementById('modalAnthropicModelsList');
+    modalDeepseekModelsList = document.getElementById('modalDeepseekModelsList');
+    modalOpenrouterModelsList = document.getElementById('modalOpenrouterModelsList');
+    modalGroqModelsList = document.getElementById('modalGroqModelsList');
 
     saveButton = document.getElementById('save');
     resetButton = document.getElementById('reset');
@@ -194,6 +264,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (e.target === commandModal) {
             closeModal();
         }
+    });
+
+    // Model actions event listeners (fetch models, manually input models, etc.)
+    document.querySelectorAll('.btn-action-models').forEach(btn => {
+        btn.addEventListener('click', handleModelAction);
     });
     providerModal.addEventListener('click', (e) => {
         if (e.target === providerModal) {
@@ -628,6 +703,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (p.type === 'azure') {
                 borderColor = '#0078d4';
                 typeLabel = 'Azure OpenAI';
+            } else if (p.type === 'anthropic') {
+                borderColor = '#d97706';
+                typeLabel = 'Anthropic Claude';
+            } else if (p.type === 'deepseek') {
+                borderColor = '#3b82f6';
+                typeLabel = 'DeepSeek';
+            } else if (p.type === 'openrouter') {
+                borderColor = '#fc521f';
+                typeLabel = 'OpenRouter';
+            } else if (p.type === 'groq') {
+                borderColor = '#f59e0b';
+                typeLabel = 'Groq';
+            } else if (p.type === 'ollama') {
+                borderColor = '#374151';
+                typeLabel = 'Ollama (Local)';
             } else if (p.type === 'openai-compatible') {
                 borderColor = '#a855f7';
                 typeLabel = 'OpenAI Compatible';
@@ -635,7 +725,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             div.style.borderLeft = `4px solid ${borderColor}`;
 
             let modelsHtml = '';
-            if (p.type === 'gemini' || p.type === 'openai') {
+            if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq'].includes(p.type)) {
                 const models = p.models || [];
                 modelsHtml = models.map(m => {
                     const isActive = (p.id === activeProviderId && m === activeModel);
@@ -644,14 +734,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (p.type === 'azure') {
                 const isActive = (p.id === activeProviderId && p.azureDeployment === activeModel);
                 modelsHtml = `<span class="model-badge ${isActive ? 'active' : ''}" data-action="set-active" data-provider-id="${p.id}" data-model="${p.azureDeployment}">${isActive ? '✓ ' : ''}${p.azureDeployment}</span>`;
+            } else if (p.type === 'ollama') {
+                const isActive = (p.id === activeProviderId && p.ollamaModel === activeModel);
+                modelsHtml = `<span class="model-badge ${isActive ? 'active' : ''}" data-action="set-active" data-provider-id="${p.id}" data-model="${p.ollamaModel}">${isActive ? '✓ ' : ''}${p.ollamaModel || '(未指定模型)'}</span>`;
             } else if (p.type === 'openai-compatible') {
                 const isActive = (p.id === activeProviderId && p.openaiCompatibleModel === activeModel);
-                modelsHtml = `<span class="model-badge ${isActive ? 'active' : ''}" data-action="set-active" data-provider-id="${p.id}" data-model="${p.openaiCompatibleModel || '(未指定模型)'}">${isActive ? '✓ ' : ''}${p.openaiCompatibleModel || '(未指定模型)'}</span>`;
+                modelsHtml = `<span class="model-badge ${isActive ? 'active' : ''}" data-action="set-active" data-provider-id="${p.id}" data-model="${p.openaiCompatibleModel}">${isActive ? '✓ ' : ''}${p.openaiCompatibleModel || '(未指定模型)'}</span>`;
             }
 
             let details = '';
             if (p.type === 'azure') {
                 details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;">端點: ${p.azureEndpoint || ''}</div>`;
+            } else if (p.type === 'ollama') {
+                details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;">端點: ${p.ollamaEndpoint || 'http://localhost:11434/v1'}</div>`;
             } else if (p.type === 'openai-compatible') {
                 details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;">端點: ${p.openaiCompatibleEndpoint || ''}</div>`;
             }
@@ -701,9 +796,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalOpenaiCompatibleApiKey.value = '';
         modalOpenaiCompatibleModel.value = '';
 
+        modalAnthropicApiKey.value = '';
+        modalDeepseekApiKey.value = '';
+        modalOpenrouterApiKey.value = '';
+        modalGroqApiKey.value = '';
+        modalOllamaEndpoint.value = 'http://localhost:11434/v1';
+        modalOllamaModel.value = '';
+
         // Uncheck checkboxes
-        modalGeminiModelsList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-        modalOpenaiModelsList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        modalGeminiModelsList.innerHTML = '';
+        modalOpenaiModelsList.innerHTML = '';
+        modalAnthropicModelsList.innerHTML = '';
+        modalDeepseekModelsList.innerHTML = '';
+        modalOpenrouterModelsList.innerHTML = '';
+        modalGroqModelsList.innerHTML = '';
 
         if (provider) {
             providerModalTitle.textContent = '編輯 AI 提供者';
@@ -720,18 +826,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
+            const configuredModels = provider.models || [];
+            const predefinedModels = PREDEFINED_MODELS[provider.type] || [];
+            const combinedModels = Array.from(new Set([...predefinedModels, ...configuredModels]));
+
             if (provider.type === 'gemini') {
                 modalGeminiApiKey.value = decryptedKey;
-                const models = provider.models || [];
-                modalGeminiModelsList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    if (models.includes(cb.value)) {cb.checked = true;}
-                });
+                renderModalModelsList(modalGeminiModelsList, combinedModels, configuredModels);
             } else if (provider.type === 'openai') {
                 modalOpenaiApiKey.value = decryptedKey;
-                const models = provider.models || [];
-                modalOpenaiModelsList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    if (models.includes(cb.value)) {cb.checked = true;}
-                });
+                renderModalModelsList(modalOpenaiModelsList, combinedModels, configuredModels);
             } else if (provider.type === 'azure') {
                 modalAzureApiKey.value = decryptedKey;
                 modalAzureEndpoint.value = provider.azureEndpoint || '';
@@ -741,14 +845,54 @@ document.addEventListener('DOMContentLoaded', async () => {
                 modalOpenaiCompatibleEndpoint.value = provider.openaiCompatibleEndpoint || 'http://localhost:11434/v1';
                 modalOpenaiCompatibleApiKey.value = decryptedKey;
                 modalOpenaiCompatibleModel.value = provider.openaiCompatibleModel || '';
+            } else if (provider.type === 'anthropic') {
+                modalAnthropicApiKey.value = decryptedKey;
+                renderModalModelsList(modalAnthropicModelsList, combinedModels, configuredModels);
+            } else if (provider.type === 'deepseek') {
+                modalDeepseekApiKey.value = decryptedKey;
+                renderModalModelsList(modalDeepseekModelsList, combinedModels, configuredModels);
+            } else if (provider.type === 'openrouter') {
+                modalOpenrouterApiKey.value = decryptedKey;
+                renderModalModelsList(modalOpenrouterModelsList, combinedModels, configuredModels);
+            } else if (provider.type === 'groq') {
+                modalGroqApiKey.value = decryptedKey;
+                renderModalModelsList(modalGroqModelsList, combinedModels, configuredModels);
+            } else if (provider.type === 'ollama') {
+                modalOllamaEndpoint.value = provider.ollamaEndpoint || 'http://localhost:11434/v1';
+                modalOllamaModel.value = provider.ollamaModel || '';
             }
         } else {
             providerModalTitle.textContent = '新增 AI 提供者';
-            // Default check first model
-            const firstGeminiCb = modalGeminiModelsList.querySelector('input[type="checkbox"]');
-            if (firstGeminiCb) {firstGeminiCb.checked = true;}
-            const firstOpenaiCb = modalOpenaiModelsList.querySelector('input[type="checkbox"]');
-            if (firstOpenaiCb) {firstOpenaiCb.checked = true;}
+
+            // Set Gemini defaults
+            const geminiModels = [...(PREDEFINED_MODELS['gemini'] || [])];
+            geminiModels.sort((a, b) => a.localeCompare(b));
+            renderModalModelsList(modalGeminiModelsList, geminiModels, [geminiModels[0]]);
+
+            // Set OpenAI defaults
+            const openaiModels = [...(PREDEFINED_MODELS['openai'] || [])];
+            openaiModels.sort((a, b) => a.localeCompare(b));
+            renderModalModelsList(modalOpenaiModelsList, openaiModels, [openaiModels[0]]);
+
+            // Set Anthropic defaults
+            const anthropicModels = [...(PREDEFINED_MODELS['anthropic'] || [])];
+            anthropicModels.sort((a, b) => a.localeCompare(b));
+            renderModalModelsList(modalAnthropicModelsList, anthropicModels, [anthropicModels[0]]);
+
+            // Set DeepSeek defaults
+            const deepseekModels = [...(PREDEFINED_MODELS['deepseek'] || [])];
+            deepseekModels.sort((a, b) => a.localeCompare(b));
+            renderModalModelsList(modalDeepseekModelsList, deepseekModels, [deepseekModels[0]]);
+
+            // Set OpenRouter defaults
+            const openrouterModels = [...(PREDEFINED_MODELS['openrouter'] || [])];
+            openrouterModels.sort((a, b) => a.localeCompare(b));
+            renderModalModelsList(modalOpenrouterModelsList, openrouterModels, [openrouterModels[0]]);
+
+            // Set Groq defaults
+            const groqModels = [...(PREDEFINED_MODELS['groq'] || [])];
+            groqModels.sort((a, b) => a.localeCompare(b));
+            renderModalModelsList(modalGroqModelsList, groqModels, [groqModels[0]]);
         }
 
         updateModalFieldsVisibility();
@@ -760,6 +904,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalGeminiFields.style.display = type === 'gemini' ? 'block' : 'none';
         modalOpenaiFields.style.display = type === 'openai' ? 'block' : 'none';
         modalAzureFields.style.display = type === 'azure' ? 'block' : 'none';
+        modalAnthropicFields.style.display = type === 'anthropic' ? 'block' : 'none';
+        modalDeepseekFields.style.display = type === 'deepseek' ? 'block' : 'none';
+        modalOpenrouterFields.style.display = type === 'openrouter' ? 'block' : 'none';
+        modalGroqFields.style.display = type === 'groq' ? 'block' : 'none';
+        modalOllamaFields.style.display = type === 'ollama' ? 'block' : 'none';
         modalOpenaiCompatibleFields.style.display = type === 'openai-compatible' ? 'block' : 'none';
     }
 
@@ -770,7 +919,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const providerData = {
             id: currentEditingProvider ? currentEditingProvider.id : 'provider_' + Date.now(),
-            name: name || (type === 'gemini' ? 'Google Gemini' : type === 'openai' ? 'OpenAI' : type === 'azure' ? 'Azure OpenAI' : 'OpenAI Compatible'),
+            name: name || (
+                type === 'gemini' ? 'Google Gemini' :
+                    type === 'openai' ? 'OpenAI' :
+                        type === 'azure' ? 'Azure OpenAI' :
+                            type === 'anthropic' ? 'Anthropic Claude' :
+                                type === 'deepseek' ? 'DeepSeek' :
+                                    type === 'openrouter' ? 'OpenRouter' :
+                                        type === 'groq' ? 'Groq' :
+                                            type === 'ollama' ? 'Ollama (Local)' : 'OpenAI Compatible'
+            ),
             type: type
         };
 
@@ -831,6 +989,78 @@ document.addEventListener('DOMContentLoaded', async () => {
             providerData.openaiCompatibleEndpoint = endpoint;
             providerData.openaiCompatibleModel = model;
             providerData.models = [model];
+        } else if (type === 'anthropic') {
+            apiKeyRaw = modalAnthropicApiKey.value.trim();
+            if (!apiKeyRaw) {
+                alert('請輸入 Anthropic API Key');
+                return;
+            }
+            const selectedModels = [];
+            modalAnthropicModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                selectedModels.push(cb.value);
+            });
+            if (selectedModels.length === 0) {
+                alert('請至少勾選一個 Anthropic 模型');
+                return;
+            }
+            providerData.models = selectedModels;
+        } else if (type === 'deepseek') {
+            apiKeyRaw = modalDeepseekApiKey.value.trim();
+            if (!apiKeyRaw) {
+                alert('請輸入 DeepSeek API Key');
+                return;
+            }
+            const selectedModels = [];
+            modalDeepseekModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                selectedModels.push(cb.value);
+            });
+            if (selectedModels.length === 0) {
+                alert('請至少勾選一個 DeepSeek 模型');
+                return;
+            }
+            providerData.models = selectedModels;
+        } else if (type === 'openrouter') {
+            apiKeyRaw = modalOpenrouterApiKey.value.trim();
+            if (!apiKeyRaw) {
+                alert('請輸入 OpenRouter API Key');
+                return;
+            }
+            const selectedModels = [];
+            modalOpenrouterModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                selectedModels.push(cb.value);
+            });
+            if (selectedModels.length === 0) {
+                alert('請至少勾選一個 OpenRouter 模型');
+                return;
+            }
+            providerData.models = selectedModels;
+        } else if (type === 'groq') {
+            apiKeyRaw = modalGroqApiKey.value.trim();
+            if (!apiKeyRaw) {
+                alert('請輸入 Groq API Key');
+                return;
+            }
+            const selectedModels = [];
+            modalGroqModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                selectedModels.push(cb.value);
+            });
+            if (selectedModels.length === 0) {
+                alert('請至少勾選一個 Groq 模型');
+                return;
+            }
+            providerData.models = selectedModels;
+        } else if (type === 'ollama') {
+            const endpoint = modalOllamaEndpoint.value.trim();
+            const model = modalOllamaModel.value.trim();
+
+            if (!endpoint || !model) {
+                alert('請填寫 Ollama API Endpoint 與模型名稱');
+                return;
+            }
+            providerData.ollamaEndpoint = endpoint;
+            providerData.ollamaModel = model;
+            providerData.models = [model];
+            apiKeyRaw = '';
         }
 
         if (apiKeyRaw) {
@@ -946,6 +1176,276 @@ document.addEventListener('DOMContentLoaded', async () => {
             deleteProvider(id);
         }
     });
+
+    function renderModalModelsList(container, models, checkedModels = []) {
+        container.innerHTML = '';
+
+        // Deduplicate and sort alphabetically by name
+        const uniqueSortedModels = Array.from(new Set(models)).sort((a, b) => a.localeCompare(b));
+
+        uniqueSortedModels.forEach(modelName => {
+            const isChecked = checkedModels.includes(modelName);
+            const label = document.createElement('label');
+            label.style.fontWeight = 'normal';
+            label.style.display = 'flex';
+            label.style.alignItems = 'center';
+            label.style.gap = '8px';
+            label.style.fontSize = '13px';
+            label.style.color = 'var(--text-primary)';
+            label.style.cursor = 'pointer';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = modelName;
+            checkbox.checked = isChecked;
+
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(' ' + modelName));
+            container.appendChild(label);
+        });
+    }
+
+    async function handleModelAction(e) {
+        const btn = e.currentTarget;
+        const providerType = btn.dataset.providerType;
+        const action = btn.dataset.action;
+
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = '⏳ 處理中...';
+
+        try {
+            if (action === 'fetch-models') {
+                await fetchAndRenderModels(providerType);
+            } else if (action === 'add-custom-model') {
+                addCustomModelName(providerType);
+            } else if (action === 'fetch-custom-models') {
+                await fetchCustomEndpointModels(providerType);
+            }
+        } catch (err) {
+            console.error('Model action failed', err);
+            alert(`操作失敗: ${err.message || err}`);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    async function fetchAndRenderModels(providerType) {
+        let apiKey = '';
+        let url = '';
+        const headers = {};
+
+        // 1. Get API Key based on providerType
+        if (providerType === 'gemini') {
+            apiKey = modalGeminiApiKey.value.trim();
+            if (!apiKey) {throw new Error('請先輸入 Gemini API Key');}
+            url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+        } else if (providerType === 'openai') {
+            apiKey = modalOpenaiApiKey.value.trim();
+            if (!apiKey) {throw new Error('請先輸入 OpenAI API Key');}
+            url = 'https://api.openai.com/v1/models';
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        } else if (providerType === 'anthropic') {
+            apiKey = modalAnthropicApiKey.value.trim();
+            if (!apiKey) {throw new Error('請先輸入 Anthropic API Key');}
+            url = 'https://api.anthropic.com/v1/models';
+            headers['x-api-key'] = apiKey;
+            headers['anthropic-version'] = '2023-06-01';
+            headers['anthropic-dangerous-direct-browser-access'] = 'true';
+        } else if (providerType === 'deepseek') {
+            apiKey = modalDeepseekApiKey.value.trim();
+            if (!apiKey) {throw new Error('請先輸入 DeepSeek API Key');}
+            url = 'https://api.deepseek.com/v1/models';
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        } else if (providerType === 'openrouter') {
+            apiKey = modalOpenrouterApiKey.value.trim();
+            if (!apiKey) {throw new Error('請先輸入 OpenRouter API Key');}
+            url = 'https://openrouter.ai/api/v1/models';
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        } else if (providerType === 'groq') {
+            apiKey = modalGroqApiKey.value.trim();
+            if (!apiKey) {throw new Error('請先輸入 Groq API Key');}
+            url = 'https://api.groq.com/openai/v1/models';
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+
+        // 2. Fetch from API
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`API 回傳錯誤: ${response.status} ${errText || ''}`);
+        }
+
+        const data = await response.json();
+        let models = [];
+
+        if (providerType === 'gemini') {
+            if (data.models && Array.isArray(data.models)) {
+                models = data.models
+                    .filter(m => m.name)
+                    .map(m => m.name.replace(/^models\//, ''));
+            }
+        } else if (['openai', 'deepseek', 'openrouter', 'groq', 'anthropic'].includes(providerType)) {
+            const list = data.data || data.models || [];
+            if (Array.isArray(list)) {
+                models = list.map(m => m.id || m.name).filter(Boolean);
+            }
+        }
+
+        if (models.length === 0) {
+            throw new Error('未找到任何可用的模型名稱');
+        }
+
+        // Get container
+        const container = getModelListContainer(providerType);
+        if (!container) {return;}
+
+        // Get current checked states
+        const checkedModels = [];
+        container.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+            checkedModels.push(cb.value);
+        });
+
+        // Get all models current in container
+        const currentModels = [];
+        container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            currentModels.push(cb.value);
+        });
+
+        // Merge, deduplicate, sort
+        const combinedModels = Array.from(new Set([
+            ...(PREDEFINED_MODELS[providerType] || []),
+            ...currentModels,
+            ...models
+        ]));
+
+        renderModalModelsList(container, combinedModels, checkedModels);
+        showStatus(`已成功載入 ${models.length} 個模型！`, 'success');
+    }
+
+    function addCustomModelName(providerType) {
+        const modelName = prompt('請輸入要手動新增的模型名稱：');
+        if (modelName === null) {return;} // User cancelled
+        const trimmed = modelName.trim();
+        if (!trimmed) {
+            alert('模型名稱不能為空');
+            return;
+        }
+
+        const container = getModelListContainer(providerType);
+        if (!container) {return;}
+
+        // Get current checked states
+        const checkedModels = [];
+        container.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+            checkedModels.push(cb.value);
+        });
+
+        // Get all models current in container
+        const currentModels = [];
+        container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            currentModels.push(cb.value);
+        });
+
+        // Add the new custom model if it's not already in the list
+        if (!currentModels.includes(trimmed)) {
+            currentModels.push(trimmed);
+        }
+
+        // Also check it automatically as standard UX
+        if (!checkedModels.includes(trimmed)) {
+            checkedModels.push(trimmed);
+        }
+
+        // Re-render
+        renderModalModelsList(container, currentModels, checkedModels);
+        showStatus(`已手動加入並選取模型：${trimmed}`, 'success');
+    }
+
+    async function fetchCustomEndpointModels(providerType) {
+        let endpoint = '';
+        let apiKey = '';
+        const headers = {};
+
+        if (providerType === 'ollama') {
+            endpoint = modalOllamaEndpoint.value.trim() || 'http://localhost:11434/v1';
+        } else if (providerType === 'openai-compatible') {
+            endpoint = modalOpenaiCompatibleEndpoint.value.trim();
+            if (!endpoint) {throw new Error('請先輸入 API Endpoint');}
+            apiKey = modalOpenaiCompatibleApiKey.value.trim();
+            if (apiKey) {
+                headers['Authorization'] = `Bearer ${apiKey}`;
+            }
+        }
+
+        let models = [];
+        if (providerType === 'ollama') {
+            try {
+                const response = await fetch(`${endpoint}/models`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.data && Array.isArray(data.data)) {
+                        models = data.data.map(m => m.id || m.name).filter(Boolean);
+                    }
+                } else {
+                    throw new Error();
+                }
+            } catch (e) {
+                const baseUrl = endpoint.replace(/\/v1\/?$/, '');
+                const response = await fetch(`${baseUrl}/api/tags`);
+                if (!response.ok) {throw new Error('無法連線至 Ollama 服務');}
+                const data = await response.json();
+                if (data.models && Array.isArray(data.models)) {
+                    models = data.models.map(m => m.name || m.model).filter(Boolean);
+                }
+            }
+        } else {
+            const url = endpoint.endsWith('/models') ? endpoint : `${endpoint.replace(/\/$/, '')}/models`;
+            const response = await fetch(url, { headers });
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`API 回傳錯誤: ${response.status} ${errText || ''}`);
+            }
+            const data = await response.json();
+            const list = data.data || data.models || [];
+            if (Array.isArray(list)) {
+                models = list.map(m => m.id || m.name).filter(Boolean);
+            }
+        }
+
+        if (models.length === 0) {
+            throw new Error('未找到任何可用的模型名稱');
+        }
+
+        // Sort alphabetically
+        models.sort((a, b) => a.localeCompare(b));
+
+        const promptMsg = '已成功載入下列模型名稱。請複製或直接輸入您要選取的模型名稱：\n\n' + models.join('\n');
+        const currentVal = providerType === 'ollama' ? modalOllamaModel.value : modalOpenaiCompatibleModel.value;
+        const choice = prompt(promptMsg, currentVal || models[0]);
+        if (choice !== null) {
+            const trimmedChoice = choice.trim();
+            if (trimmedChoice) {
+                if (providerType === 'ollama') {
+                    modalOllamaModel.value = trimmedChoice;
+                } else {
+                    modalOpenaiCompatibleModel.value = trimmedChoice;
+                }
+                showStatus(`已選取模型：${trimmedChoice}`, 'success');
+            }
+        }
+    }
+
+    function getModelListContainer(providerType) {
+        if (providerType === 'gemini') {return modalGeminiModelsList;}
+        if (providerType === 'openai') {return modalOpenaiModelsList;}
+        if (providerType === 'anthropic') {return modalAnthropicModelsList;}
+        if (providerType === 'deepseek') {return modalDeepseekModelsList;}
+        if (providerType === 'openrouter') {return modalOpenrouterModelsList;}
+        if (providerType === 'groq') {return modalGroqModelsList;}
+        return null;
+    }
 
     async function migrateOldSettings() {
         const result = await chrome.storage.local.get([

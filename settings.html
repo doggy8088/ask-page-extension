@@ -806,6 +806,11 @@
           <option value="gemini">Google Gemini</option>
           <option value="openai">OpenAI</option>
           <option value="azure">Azure OpenAI</option>
+          <option value="anthropic">Anthropic Claude</option>
+          <option value="deepseek">DeepSeek</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="groq">Groq</option>
+          <option value="ollama">Ollama (Local)</option>
           <option value="openai-compatible">OpenAI 相容端點</option>
         </select>
       </div>
@@ -817,35 +822,15 @@
           <input id="modalGeminiApiKey" type="password" placeholder="請輸入您的 Gemini API Key">
         </div>
         <div class="form-group" style="margin-top: 12px;">
-          <label>啟用模型 (可複選，最少選一個)</label>
-          <div id="modalGeminiModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 6px;">
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gemini-3.5-flash" checked> gemini-3.5-flash
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gemini-3.1-pro-preview"> gemini-3.1-pro-preview
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gemini-3.1-flash-lite"> gemini-3.1-flash-lite
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gemini-2.5-pro"> gemini-2.5-pro
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gemini-2.5-flash"> gemini-2.5-flash
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gemini-2.5-flash-lite"> gemini-2.5-flash-lite
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gemini-flash-lite-latest"> gemini-flash-lite-latest
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gemma-4-31b-it"> gemma-4-31b-it (16K)
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gemma-4-26b-a4b-it"> gemma-4-26b-a4b-it (16K)
-            </label>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label style="margin-bottom: 0;">啟用模型 (可複選，最少選一個)</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="gemini" data-action="fetch-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">🔍 載入所有可用模型</button>
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="gemini" data-action="add-custom-model" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">✏️ 手動輸入模型名稱</button>
+            </div>
+          </div>
+          <div id="modalGeminiModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
+            <!-- 動態載入 -->
           </div>
         </div>
       </div>
@@ -857,53 +842,15 @@
           <input id="modalOpenaiApiKey" type="password" placeholder="請輸入您的 OpenAI API Key">
         </div>
         <div class="form-group" style="margin-top: 12px;">
-          <label>啟用模型 (可複選，最少選一個)</label>
-          <div id="modalOpenaiModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 6px;">
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gpt-5.5"> gpt-5.5
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gpt-5.4"> gpt-5.4
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gpt-5.3"> gpt-5.3
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gpt-5.2"> gpt-5.2
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gpt-5.1"> gpt-5.1
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gpt-5"> gpt-5
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gpt-5-chat-latest"> gpt-5-chat-latest
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gpt-5-mini"> gpt-5-mini
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gpt-5-nano"> gpt-5-nano
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gpt-4o" checked> gpt-4o
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="gpt-4o-mini" checked> gpt-4o-mini
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="o4-mini"> o4-mini
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="o3"> o3
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="o3-mini"> o3-mini
-            </label>
-            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
-              <input type="checkbox" value="o3-pro"> o3-pro
-            </label>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label style="margin-bottom: 0;">啟用模型 (可複選，最少選一個)</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="openai" data-action="fetch-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">🔍 載入所有可用模型</button>
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="openai" data-action="add-custom-model" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">✏️ 手動輸入模型名稱</button>
+            </div>
+          </div>
+          <div id="modalOpenaiModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
+            <!-- 動態載入 -->
           </div>
         </div>
       </div>
@@ -946,8 +893,106 @@
           <input id="modalOpenaiCompatibleApiKey" type="password" placeholder="若不需要可留空">
         </div>
         <div class="form-group" style="margin-top: 8px;">
-          <label for="modalOpenaiCompatibleModel">模型名稱</label>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="margin-bottom: 0;" for="modalOpenaiCompatibleModel">模型名稱</label>
+            <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="openai-compatible" data-action="fetch-custom-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">🔍 載入端點模型</button>
+          </div>
           <input id="modalOpenaiCompatibleModel" type="text" placeholder="例如: llama3, mistral">
+        </div>
+      </div>
+
+      <!-- Anthropic Settings Fields -->
+      <div id="modal-anthropic-fields" class="provider-fields" style="display: none; margin-top: 12px;">
+        <div class="form-group">
+          <label for="modalAnthropicApiKey">Anthropic API Key</label>
+          <input id="modalAnthropicApiKey" type="password" placeholder="請輸入您的 Anthropic API Key">
+        </div>
+        <div class="form-group" style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label style="margin-bottom: 0;">啟用模型 (可複選，最少選一個)</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="anthropic" data-action="fetch-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">🔍 載入所有可用模型</button>
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="anthropic" data-action="add-custom-model" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">✏️ 手動輸入模型名稱</button>
+            </div>
+          </div>
+          <div id="modalAnthropicModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
+            <!-- 動態載入 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- DeepSeek Settings Fields -->
+      <div id="modal-deepseek-fields" class="provider-fields" style="display: none; margin-top: 12px;">
+        <div class="form-group">
+          <label for="modalDeepseekApiKey">DeepSeek API Key</label>
+          <input id="modalDeepseekApiKey" type="password" placeholder="請輸入您的 DeepSeek API Key">
+        </div>
+        <div class="form-group" style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label style="margin-bottom: 0;">啟用模型 (可複選，最少選一個)</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="deepseek" data-action="fetch-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">🔍 載入所有可用模型</button>
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="deepseek" data-action="add-custom-model" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">✏️ 手動輸入模型名稱</button>
+            </div>
+          </div>
+          <div id="modalDeepseekModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
+            <!-- 動態載入 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- OpenRouter Settings Fields -->
+      <div id="modal-openrouter-fields" class="provider-fields" style="display: none; margin-top: 12px;">
+        <div class="form-group">
+          <label for="modalOpenrouterApiKey">OpenRouter API Key</label>
+          <input id="modalOpenrouterApiKey" type="password" placeholder="請輸入您的 OpenRouter API Key">
+        </div>
+        <div class="form-group" style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label style="margin-bottom: 0;">啟用模型 (可複選，最少選一個)</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="openrouter" data-action="fetch-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">🔍 載入所有可用模型</button>
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="openrouter" data-action="add-custom-model" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">✏️ 手動輸入模型名稱</button>
+            </div>
+          </div>
+          <div id="modalOpenrouterModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
+            <!-- 動態載入 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Groq Settings Fields -->
+      <div id="modal-groq-fields" class="provider-fields" style="display: none; margin-top: 12px;">
+        <div class="form-group">
+          <label for="modalGroqApiKey">Groq API Key</label>
+          <input id="modalGroqApiKey" type="password" placeholder="請輸入您的 Groq API Key">
+        </div>
+        <div class="form-group" style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label style="margin-bottom: 0;">啟用模型 (可複選，最少選一個)</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="groq" data-action="fetch-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">🔍 載入所有可用模型</button>
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="groq" data-action="add-custom-model" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">✏️ 手動輸入模型名稱</button>
+            </div>
+          </div>
+          <div id="modalGroqModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
+            <!-- 動態載入 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Ollama Settings Fields -->
+      <div id="modal-ollama-fields" class="provider-fields" style="display: none; margin-top: 12px;">
+        <div class="form-group">
+          <label for="modalOllamaEndpoint">Ollama API Endpoint</label>
+          <input id="modalOllamaEndpoint" type="text" placeholder="例如: http://localhost:11434/v1">
+        </div>
+        <div class="form-group" style="margin-top: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="margin-bottom: 0;" for="modalOllamaModel">模型名稱</label>
+            <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="ollama" data-action="fetch-custom-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">🔍 載入本機模型</button>
+          </div>
+          <input id="modalOllamaModel" type="text" placeholder="例如: llama3.3, deepseek-r1">
         </div>
       </div>
 
