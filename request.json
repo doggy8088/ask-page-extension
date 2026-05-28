@@ -1,0 +1,42 @@
+{
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "hi"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "The user said \"hi\".\nThis is a standard greeting.\n\n    *   Acknowledge the greeting.\n    *   Offer assistance.\n    *   Maintain a friendly and helpful tone.\n\"Hello! How can I help you today?\" or \"Hi there! What's on your mind?\""
+          },
+          {
+            "text": "Hello! How can I help you today?"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "INSERT_INPUT_HERE"
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "thinkingConfig": {
+        "thinkingLevel": "HIGH"
+      }
+    },
+    "tools": [
+      {
+        "googleSearch": {
+        }
+      }
+    ]
+}

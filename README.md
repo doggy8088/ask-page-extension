@@ -183,6 +183,8 @@
 - gemini-2.5-flash
 - gemini-2.5-flash-lite
 - gemini-flash-lite-latest (預設)
+- gemma-4-31b-it
+- gemma-4-26b-a4b-it
 
 #### OpenAI 模型
 

@@ -23,6 +23,7 @@ const MAX_INPUT_CONTEXT_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_FORM_FIELD_DISCOVERY = 80;
 const MAX_TOOL_CALL_ROUNDS = 50;
 const GEMINI_EMPTY_RESPONSE_RETRY_LIMIT = 1;
+const DEBUG_API_CURL = false;
 const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 65536;
 const DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS = 32768;
 const OPENAI_STYLE_EMPTY_RESPONSE_RETRY_LIMIT = 1;
@@ -31,6 +32,8 @@ const LLM_API_RETRY_BASE_DELAY_MS = 1000;
 const LLM_API_RETRY_MAX_DELAY_MS = 16000;
 const HTML_CONTEXT_NOISE_SELECTOR = 'script, style, noscript, template';
 const GEMINI_MODEL_MAX_OUTPUT_TOKENS = {
+    'gemma-4-31b-it': 65536,
+    'gemma-4-26b-a4b-it': 65536,
     'gemini-3.5-flash': 65536,
     'gemini-3.1-pro-preview': 65536,
     'gemini-3.1-flash-lite': 65536,
@@ -4079,6 +4082,16 @@ async function createDialog() {
         ].some((keyword) => message.includes(keyword));
     }
 
+    function isQuotaExceededError(error) {
+        const content = `${error?.message || ''}\n${error?.apiMessage || ''}\n${error?.body || ''}`.toLowerCase();
+        return [
+            'quota exceeded',
+            'exceeded your current quota',
+            'insufficient quota',
+            'quota has been exceeded'
+        ].some((keyword) => content.includes(keyword));
+    }
+
     function getRetryDelayMilliseconds(retryCount, retryAfterMs = null) {
         const jitterMs = Math.floor(Math.random() * 250);
         const exponentialDelayMs = Math.min(LLM_API_RETRY_BASE_DELAY_MS * (2 ** retryCount), LLM_API_RETRY_MAX_DELAY_MS);
@@ -4104,6 +4117,49 @@ async function createDialog() {
             retryAfterMs: Number.isFinite(error?.retryAfterMs) ? error.retryAfterMs : null,
             bodyPreview: truncateToolText(error?.body || '', 600)
         };
+    }
+
+    function escapeShellSingleQuoted(value) {
+        return '\'' + String(value).replace(/'/g, '\'\\\'\'') + '\'';
+    }
+
+    function buildCopyableCurlCommand(url, options = {}) {
+        const body = typeof options.body === 'string' ? options.body : '';
+        const method = String(options.method || (body ? 'POST' : 'GET') || 'GET').toUpperCase();
+        const headers = options.headers && typeof options.headers === 'object' ? options.headers : {};
+        const commandParts = [
+            'curl',
+            '-sS',
+            '-X',
+            method,
+            escapeShellSingleQuoted(url)
+        ];
+
+        Object.entries(headers).forEach(([name, value]) => {
+            if (value === undefined || value === null || value === '') {
+                return;
+            }
+
+            commandParts.push('-H', escapeShellSingleQuoted(`${name}: ${value}`));
+        });
+
+        if (body) {
+            commandParts.push('--data-raw', escapeShellSingleQuoted(body));
+        }
+
+        return commandParts.join(' ');
+    }
+
+    function logCopyableCurlCommand(providerLabel, url, options, error) {
+        if (!DEBUG_API_CURL) {
+            return;
+        }
+
+        const command = buildCopyableCurlCommand(url, options);
+        console.error(`[AskPage] ${providerLabel} request failed. Copy this curl command to replay the same request:\n${command}`);
+        if (error?.status === 429) {
+            console.error('[AskPage] If this still returns 429, the issue is likely quota/rate limiting rather than a bad parameter.');
+        }
     }
 
     function logDiagnostic(level, message, details = null) {
@@ -4201,6 +4257,14 @@ async function createDialog() {
         }
 
         if (status === 429) {
+            if (isQuotaExceededError(error)) {
+                return {
+                    shouldRetry: false,
+                    reasonCode: 'quota-exceeded',
+                    shortReason: '配額已用盡',
+                    userMessage: `${providerLabel} 額度或用量限制已達上限${statusSuffix}。可能是上下文超出現有模型的 Context Window 限制或允許的 TPM (Token per minute) 上限。有些免費模型允許的 TPM 較小，例如 gemma-4-26b-a4b-it 的 TPM 就只有 16K 而已，所以執行「代理」模式比較容易超出限制，請更換模型或使用「詢問」模式減少輸入內容。錯誤訊息:\n${apiMessage ? ` ${apiMessage}` : ''}`
+                };
+            }
             return {
                 shouldRetry: true,
                 reasonCode: 'rate-limit',
@@ -4244,6 +4308,7 @@ async function createDialog() {
         transformResponse
     }) {
         let retryCount = 0;
+        let curlCommandLogged = false;
 
         for (;;) {
             try {
@@ -4258,6 +4323,10 @@ async function createDialog() {
                     : responseData;
             } catch (error) {
                 const analysis = analyzeProviderApiError(providerLabel, error, retryCount);
+                if (!curlCommandLogged) {
+                    logCopyableCurlCommand(providerLabel, url, options, error);
+                    curlCommandLogged = true;
+                }
                 if (analysis.shouldRetry && retryCount < MAX_LLM_API_SERVICE_RETRIES) {
                     const nextRetryCount = retryCount + 1;
                     const delayMs = getRetryDelayMilliseconds(retryCount, error?.retryAfterMs);
@@ -4369,6 +4438,7 @@ async function createDialog() {
         onEvent
     }) {
         let retryCount = 0;
+        let curlCommandLogged = false;
 
         for (;;) {
             let receivedEvent = false;
@@ -4386,6 +4456,10 @@ async function createDialog() {
                 return;
             } catch (error) {
                 const analysis = analyzeProviderApiError(providerLabel, error, retryCount);
+                if (!curlCommandLogged) {
+                    logCopyableCurlCommand(providerLabel, url, options, error);
+                    curlCommandLogged = true;
+                }
                 if (!receivedEvent && analysis.shouldRetry && retryCount < MAX_LLM_API_SERVICE_RETRIES) {
                     const nextRetryCount = retryCount + 1;
                     const delayMs = getRetryDelayMilliseconds(retryCount, error?.retryAfterMs);
@@ -6030,6 +6104,59 @@ async function createDialog() {
         return `Gemini 已回傳結果，但內容不是可顯示的文字${finishMessage}。請再試一次，或縮小問題範圍。`;
     }
 
+    function formatGeminiUsageMetadataSummary(usageMetadata) {
+        if (!usageMetadata || typeof usageMetadata !== 'object') {
+            return '';
+        }
+
+        const parts = [];
+        if (Number.isFinite(usageMetadata.promptTokenCount)) {
+            parts.push(`prompt=${usageMetadata.promptTokenCount}`);
+        }
+        if (Number.isFinite(usageMetadata.candidatesTokenCount)) {
+            parts.push(`candidates=${usageMetadata.candidatesTokenCount}`);
+        }
+        if (Number.isFinite(usageMetadata.totalTokenCount)) {
+            parts.push(`total=${usageMetadata.totalTokenCount}`);
+        }
+        if (usageMetadata.serviceTier) {
+            parts.push(`tier=${usageMetadata.serviceTier}`);
+        }
+
+        const promptDetails = Array.isArray(usageMetadata.promptTokensDetails)
+            ? usageMetadata.promptTokensDetails
+                .map((detail) => {
+                    if (!detail || typeof detail !== 'object') {
+                        return '';
+                    }
+
+                    const modality = detail.modality ? String(detail.modality).trim() : '';
+                    const tokenCount = Number.isFinite(detail.tokenCount) ? detail.tokenCount : null;
+                    if (!modality && tokenCount === null) {
+                        return '';
+                    }
+
+                    return tokenCount === null ? modality : `${modality}:${tokenCount}`;
+                })
+                .filter(Boolean)
+            : [];
+
+        if (promptDetails.length) {
+            parts.push(`promptDetails=[${promptDetails.join(', ')}]`);
+        }
+
+        return parts.length ? parts.join(', ') : '';
+    }
+
+    function logGeminiUsageMetadata(responseData) {
+        const summary = formatGeminiUsageMetadataSummary(responseData?.usageMetadata);
+        if (!summary) {
+            return;
+        }
+
+        console.log(`[AskPage] Gemini usageMetadata: ${summary}`);
+    }
+
     function isExpectedNonDisplayableTextError(error) {
         const message = `${error?.userMessage || ''}\n${error?.message || ''}`;
 
@@ -6743,6 +6870,7 @@ async function createDialog() {
                     buildHttpError: buildGeminiHttpError,
                     onRetry: handleRetry
                 });
+            logGeminiUsageMetadata(responseData);
             const responseCandidate = getGeminiPrimaryCandidate(responseData);
             const responseContent = responseCandidate?.content;
             const parts = responseContent?.parts || [];
