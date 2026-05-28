@@ -241,7 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Handle modal provider type switching
-    modalProviderType.addEventListener('change', updateModalFieldsVisibility);
+    modalProviderType.addEventListener('change', handleProviderTypeChange);
 
     // Modal event listeners
     addCommandBtn.addEventListener('click', () => openModal());
@@ -863,6 +863,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } else {
             providerModalTitle.textContent = '新增 AI 提供者';
+            modalProviderName.value = modalProviderType.options[modalProviderType.selectedIndex].text;
 
             // Set Gemini defaults
             const geminiModels = [...(PREDEFINED_MODELS['gemini'] || [])];
@@ -910,6 +911,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalGroqFields.style.display = type === 'groq' ? 'block' : 'none';
         modalOllamaFields.style.display = type === 'ollama' ? 'block' : 'none';
         modalOpenaiCompatibleFields.style.display = type === 'openai-compatible' ? 'block' : 'none';
+    }
+
+    function handleProviderTypeChange() {
+        const optionTexts = Array.from(modalProviderType.options).map(opt => opt.text);
+        const currentName = modalProviderName.value.trim();
+
+        if (currentName === '' || optionTexts.includes(currentName)) {
+            modalProviderName.value = modalProviderType.options[modalProviderType.selectedIndex].text;
+        }
+
+        updateModalFieldsVisibility();
     }
 
     async function saveProvider() {
