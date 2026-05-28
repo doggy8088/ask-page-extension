@@ -39,6 +39,36 @@ async function decryptApiKey(encryptedData, key) {
     return decoder.decode(decrypted);
 }
 
+function normalizeModelIdentifier(model = '') {
+    return String(model || '')
+        .trim()
+        .toLowerCase()
+        .replace(/-\d{4}-\d{2}-\d{2}$/, '');
+}
+
+function isGpt5FamilyModel(model = '') {
+    const normalized = normalizeModelIdentifier(model);
+    return normalized.startsWith('gpt-5') || normalized.includes('gpt-5');
+}
+
+function isGpt41FamilyModel(model = '') {
+    const normalized = normalizeModelIdentifier(model);
+    return normalized.startsWith('gpt-4.1') || normalized.includes('gpt-4.1');
+}
+
+function shouldUseResponsesApi(model = '') {
+    return isGpt5FamilyModel(model) || isGpt41FamilyModel(model);
+}
+
+function getAzureResponsesApiVersion(apiVersion = '') {
+    const normalizedVersion = String(apiVersion || '').trim().toLowerCase();
+    if (normalizedVersion === 'preview' || normalizedVersion === 'v1') {
+        return normalizedVersion;
+    }
+    return 'preview';
+}
+
+
 async function getOrCreateEncryptionKey() {
     return new Promise((resolve) => {
         chrome.storage.local.get(['ENCRYPTION_KEY'], async (result) => {
@@ -69,7 +99,7 @@ let modalSave, modalCancel, modalCommandNameError;
 
 // Multi-provider UI elements
 let providersList, addProviderBtn, providerModal, providerModalTitle, modalProviderName, modalProviderType;
-let modalProviderCancel, modalProviderSave;
+let modalProviderCancel, modalProviderSave, modalProviderTest, modalProviderTestResult;
 let modalGeminiFields, modalOpenaiFields, modalAzureFields, modalOpenaiCompatibleFields;
 let modalAnthropicFields, modalDeepseekFields, modalOpenrouterFields, modalGroqFields, modalOllamaFields;
 let modalGeminiApiKey, modalOpenaiApiKey, modalAzureApiKey, modalAzureEndpoint, modalAzureDeployment, modalAzureApiVersion;
@@ -160,6 +190,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalProviderType = document.getElementById('modalProviderType');
     modalProviderCancel = document.getElementById('modalProviderCancel');
     modalProviderSave = document.getElementById('modalProviderSave');
+    modalProviderTest = document.getElementById('modalProviderTest');
+    modalProviderTestResult = document.getElementById('modalProviderTestResult');
 
     modalGeminiFields = document.getElementById('modal-gemini-fields');
     modalOpenaiFields = document.getElementById('modal-openai-fields');
@@ -258,6 +290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentEditingProvider = null;
     });
     modalProviderSave.addEventListener('click', saveProvider);
+    modalProviderTest.addEventListener('click', testProviderConnection);
 
     // Close modals when clicking outside
     commandModal.addEventListener('click', (e) => {
@@ -784,6 +817,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const encryptionKey = await getOrCreateEncryptionKey();
 
         // Reset fields
+        if (modalProviderTestResult) {
+            modalProviderTestResult.textContent = '';
+            modalProviderTestResult.style.display = 'none';
+        }
         modalProviderName.value = '';
         modalProviderType.value = 'gemini';
         modalGeminiApiKey.value = '';
@@ -922,6 +959,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         updateModalFieldsVisibility();
+
+        if (modalProviderTestResult) {
+            modalProviderTestResult.textContent = '';
+            modalProviderTestResult.style.display = 'none';
+        }
     }
 
     async function saveProvider() {
@@ -1122,6 +1164,190 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentEditingProvider = null;
         renderProviders(activeProviderId, activeModel);
         showStatus('提供者已儲存！', 'success');
+    }
+
+    async function testProviderConnection() {
+        const type = modalProviderType.value;
+
+        // Clear previous results
+        modalProviderTestResult.textContent = '';
+        modalProviderTestResult.style.display = 'none';
+
+        // Disable button and show status
+        modalProviderTest.disabled = true;
+        const originalText = modalProviderTest.textContent;
+        modalProviderTest.textContent = '⏳ 測試中...';
+
+        try {
+            let response;
+            let url = '';
+            const headers = {};
+            let method = 'GET';
+            let body = null;
+
+            if (type === 'gemini') {
+                const apiKey = modalGeminiApiKey.value.trim();
+                if (!apiKey) {
+                    throw new Error('請先輸入 Gemini API Key');
+                }
+                url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+            } else if (type === 'openai') {
+                const apiKey = modalOpenaiApiKey.value.trim();
+                if (!apiKey) {
+                    throw new Error('請先輸入 OpenAI API Key');
+                }
+                url = 'https://api.openai.com/v1/models';
+                headers['Authorization'] = `Bearer ${apiKey}`;
+            } else if (type === 'anthropic') {
+                const apiKey = modalAnthropicApiKey.value.trim();
+                if (!apiKey) {
+                    throw new Error('請先輸入 Anthropic API Key');
+                }
+                url = 'https://api.anthropic.com/v1/models';
+                headers['x-api-key'] = apiKey;
+                headers['anthropic-version'] = '2023-06-01';
+                headers['anthropic-dangerous-direct-browser-access'] = 'true';
+            } else if (type === 'deepseek') {
+                const apiKey = modalDeepseekApiKey.value.trim();
+                if (!apiKey) {
+                    throw new Error('請先輸入 DeepSeek API Key');
+                }
+                url = 'https://api.deepseek.com/v1/models';
+                headers['Authorization'] = `Bearer ${apiKey}`;
+            } else if (type === 'openrouter') {
+                const apiKey = modalOpenrouterApiKey.value.trim();
+                if (!apiKey) {
+                    throw new Error('請先輸入 OpenRouter API Key');
+                }
+                url = 'https://openrouter.ai/api/v1/models';
+                headers['Authorization'] = `Bearer ${apiKey}`;
+            } else if (type === 'groq') {
+                const apiKey = modalGroqApiKey.value.trim();
+                if (!apiKey) {
+                    throw new Error('請先輸入 Groq API Key');
+                }
+                url = 'https://api.groq.com/openai/v1/models';
+                headers['Authorization'] = `Bearer ${apiKey}`;
+            } else if (type === 'azure') {
+                const apiKey = modalAzureApiKey.value.trim();
+                const endpoint = modalAzureEndpoint.value.trim();
+                const deployment = modalAzureDeployment.value.trim();
+                const apiVersion = modalAzureApiVersion.value;
+
+                if (!apiKey || !endpoint || !deployment) {
+                    throw new Error('請填寫 Azure OpenAI 的 API Key、Endpoint 與 Deployment Name');
+                }
+
+                const useResponsesApi = shouldUseResponsesApi(deployment);
+                const azureApiVersionForRequest = useResponsesApi ? getAzureResponsesApiVersion(apiVersion) : apiVersion;
+                const azureEndpoint = endpoint.trim().replace(/\/$/, '');
+
+                if (useResponsesApi) {
+                    url = `${azureEndpoint}/openai/v1/responses?api-version=${azureApiVersionForRequest}`;
+                    method = 'POST';
+                    headers['Content-Type'] = 'application/json';
+                    headers['api-key'] = apiKey;
+                    body = JSON.stringify({
+                        model: deployment,
+                        input: [{
+                            type: 'message',
+                            role: 'user',
+                            content: [{ type: 'input_text', text: 'Ping' }]
+                        }],
+                        max_output_tokens: 16
+                    });
+                } else {
+                    url = `${azureEndpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
+                    method = 'POST';
+                    headers['Content-Type'] = 'application/json';
+                    headers['api-key'] = apiKey;
+                    body = JSON.stringify({
+                        messages: [{ role: 'user', content: 'Ping' }],
+                        max_tokens: 1
+                    });
+                }
+            } else if (type === 'ollama') {
+                const endpoint = modalOllamaEndpoint.value.trim() || 'http://localhost:11434/v1';
+                const model = modalOllamaModel.value.trim();
+                if (!model) {
+                    throw new Error('請填寫 Ollama 模型名稱');
+                }
+                url = `${endpoint}/models`;
+            } else if (type === 'openai-compatible') {
+                const endpoint = modalOpenaiCompatibleEndpoint.value.trim();
+                const apiKey = modalOpenaiCompatibleApiKey.value.trim();
+                const model = modalOpenaiCompatibleModel.value.trim();
+
+                if (!endpoint || !model) {
+                    throw new Error('請填寫 API Endpoint 與模型名稱');
+                }
+
+                url = endpoint.endsWith('/models') ? endpoint : `${endpoint.replace(/\/$/, '')}/models`;
+                if (apiKey) {
+                    headers['Authorization'] = `Bearer ${apiKey}`;
+                }
+            } else {
+                throw new Error('未知的提供者類型');
+            }
+
+            // Perform request
+            const fetchOptions = { method, headers };
+            if (body) {
+                fetchOptions.body = body;
+            }
+
+            if (type === 'ollama') {
+                try {
+                    response = await fetch(url, fetchOptions);
+                    if (!response.ok) {
+                        throw new Error();
+                    }
+                } catch (e) {
+                    const baseUrl = url.replace(/\/v1\/?$/, '').replace(/\/models$/, '');
+                    response = await fetch(`${baseUrl}/api/tags`);
+                }
+            } else {
+                response = await fetch(url, fetchOptions);
+            }
+
+            if (!response.ok) {
+                let errText = '';
+                try {
+                    errText = await response.text();
+                    try {
+                        const parsed = JSON.parse(errText);
+                        if (parsed.error && parsed.error.message) {
+                            errText = parsed.error.message;
+                        } else if (parsed.error && typeof parsed.error === 'string') {
+                            errText = parsed.error;
+                        } else if (parsed.message) {
+                            errText = parsed.message;
+                        }
+                    } catch (_) {
+                        // ignore JSON parsing errors
+                    }
+                } catch (_) {
+                    // ignore response reading errors
+                }
+
+                throw new Error(errText || `HTTP ${response.status} ${response.statusText}`);
+            }
+
+            // Connection test succeeded!
+            modalProviderTestResult.textContent = '🟢 連線測試成功';
+            modalProviderTestResult.style.color = 'var(--success-color)';
+            modalProviderTestResult.style.display = 'inline-block';
+        } catch (err) {
+            console.error('Connection test failed details:', err);
+
+            const errorMsg = err.message || err;
+            modalProviderTestResult.textContent = `🔴 連線失敗: ${errorMsg}`;
+            modalProviderTestResult.style.color = 'var(--danger-color)';
+            modalProviderTestResult.style.display = 'inline-block';
+        } finally {
+            modalProviderTest.disabled = false;
+            modalProviderTest.textContent = originalText;
+        }
     }
 
     async function deleteProvider(id) {

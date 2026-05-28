@@ -431,11 +431,24 @@ function normalizeModelIdentifier(model = '') {
 }
 
 function isGpt5FamilyModel(model = '') {
-    return normalizeModelIdentifier(model).startsWith('gpt-5');
+    const normalized = normalizeModelIdentifier(model);
+    return normalized.startsWith('gpt-5') || normalized.includes('gpt-5');
+}
+
+function isGpt41FamilyModel(model = '') {
+    const normalized = normalizeModelIdentifier(model);
+    return normalized.startsWith('gpt-4.1') || normalized.includes('gpt-4.1');
+}
+
+function isReasoningModel(model = '') {
+    const normalized = normalizeModelIdentifier(model);
+    return isGpt5FamilyModel(model) ||
+           normalized.startsWith('o3') || normalized.includes('o3') ||
+           normalized.startsWith('o4') || normalized.includes('o4');
 }
 
 function shouldUseResponsesApi(model = '') {
-    return isGpt5FamilyModel(model);
+    return isGpt5FamilyModel(model) || isGpt41FamilyModel(model);
 }
 
 function getGeminiMaxOutputTokens(model = '') {
@@ -457,20 +470,20 @@ function getOpenAIStyleMaxOutputTokens(model = '') {
         return OPENAI_STYLE_MODEL_MAX_OUTPUT_TOKENS[normalizedModel];
     }
 
-    if (normalizedModel.startsWith('gpt-4o')) {
+    if (normalizedModel.startsWith('gpt-4o') || normalizedModel.includes('gpt-4o')) {
         return 16384;
     }
 
-    if (normalizedModel.startsWith('gpt-4.1')) {
+    if (isGpt41FamilyModel(normalizedModel)) {
         return 32768;
     }
 
-    if (normalizedModel.startsWith('gpt-5-chat')) {
+    if (normalizedModel.startsWith('gpt-5-chat') || normalizedModel.includes('gpt-5-chat')) {
         return 16384;
     }
 
-    if (normalizedModel.startsWith('gpt-5') || normalizedModel.startsWith('o3') || normalizedModel.startsWith('o4')) {
-        return normalizedModel.startsWith('gpt-5') ? 128000 : 100000;
+    if (isReasoningModel(normalizedModel)) {
+        return isGpt5FamilyModel(normalizedModel) ? 128000 : 100000;
     }
 
     return DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS;
@@ -7191,9 +7204,8 @@ async function createDialog() {
         const agentModeEnabled = await getAgentModeEnabled();
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
-        const normalizedSelectedModel = normalizeModelIdentifier(selectedModel);
-        const usesMaxCompletionTokens = normalizedSelectedModel.startsWith('gpt-5') || normalizedSelectedModel.startsWith('o3') || normalizedSelectedModel.startsWith('o4');
-        const supportsTemperature = !(normalizedSelectedModel.startsWith('gpt-5') || normalizedSelectedModel.startsWith('o3') || normalizedSelectedModel.startsWith('o4'));
+        const usesMaxCompletionTokens = isReasoningModel(selectedModel);
+        const supportsTemperature = !isReasoningModel(selectedModel);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(selectedModel);
         const useResponsesApi = shouldUseResponsesApi(selectedModel);
         console.log('[AskPage] OpenAI max output tokens:', maxOutputTokens, 'model:', selectedModel, 'responses_api:', useResponsesApi, 'reasoning_effort:', isGpt5FamilyModel(selectedModel) ? 'medium' : 'default');
@@ -7360,6 +7372,7 @@ async function createDialog() {
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
         const isGpt5Model = isGpt5FamilyModel(deployment);
+        const isReasoning = isReasoningModel(deployment);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(deployment);
         const useResponsesApi = shouldUseResponsesApi(deployment);
         const azureApiVersionForRequest = useResponsesApi ? getAzureResponsesApiVersion(apiVersion) : apiVersion;
@@ -7387,17 +7400,17 @@ async function createDialog() {
                     }
 
                     const requestBody = { messages };
-                    if (!isGpt5Model) {
+                    if (!isReasoning) {
                         requestBody.temperature = 0.7;
                     }
 
-                    if (isGpt5Model) {
+                    if (isReasoning) {
                         requestBody.max_completion_tokens = maxOutputTokens;
                     } else {
                         requestBody.max_tokens = maxOutputTokens;
                     }
 
-                    if (isGpt5Model) {
+                    if (isReasoning) {
                         requestBody.reasoning_effort = 'medium';
                     }
 
