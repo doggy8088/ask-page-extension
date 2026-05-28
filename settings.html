@@ -354,25 +354,34 @@
       margin-bottom: 0;
     }
 
-    #provider-tab .card {
-      display: grid;
-      grid-template-columns: minmax(220px, 0.7fr) minmax(0, 2fr);
-      gap: 14px;
-      align-items: start;
+    .model-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin: 2px;
     }
 
-    #provider-tab .card-header {
-      grid-column: 1 / -1;
-      margin-bottom: 0;
+    .model-badge:hover {
+      background: rgba(22, 135, 255, 0.1);
+      border-color: rgba(22, 135, 255, 0.4);
+      color: var(--text-primary);
     }
 
-    #provider-tab .card > .form-group {
-      margin-bottom: 0;
-      padding: 14px;
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      background: rgba(9, 23, 41, 0.48);
+    .model-badge.active {
+      background: rgba(22, 135, 255, 0.2);
+      border-color: rgba(22, 135, 255, 0.8);
+      color: #a3d0ff;
+      box-shadow: 0 0 10px rgba(22, 135, 255, 0.2);
     }
+
 
     /* Custom Commands */
     .commands-list {
@@ -705,117 +714,18 @@
                 <span class="icon">🔧</span>
                 AI 提供者設定
               </h2>
-              <p class="card-description">選擇您偏好的 AI 提供者並設定相關參數</p>
+              <p class="card-description">設定多個不同的 AI 提供者，並啟用一至多個模型，點擊模型名稱可切換為當前使用模型</p>
             </div>
 
-            <div class="form-group">
-              <label for="providerSelect">選擇 AI 提供者</label>
-              <select id="providerSelect">
-                <option value="openai">OpenAI</option>
-                <option value="azure">Azure OpenAI</option>
-                <option value="gemini">Google Gemini</option>
-                <option value="openai-compatible">OpenAI 相容端點</option>
-              </select>
+            <div id="providersList" class="commands-list" style="margin-bottom: 16px;">
+              <!-- 這裡會動態載入已設定的 AI 提供者 -->
             </div>
 
-            <div id="gemini-settings" class="provider-settings">
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="geminiApiKey">Gemini API Key</label>
-                  <input id="geminiApiKey" type="password" placeholder="請輸入您的 Gemini API Key">
-                </div>
-                <div class="form-group">
-                  <label for="geminiModelSelect">Gemini 模型</label>
-                  <select id="geminiModelSelect">
-                    <option value="gemini-3.5-flash">gemini-3.5-flash</option>
-                    <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
-                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-                    <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-                    <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
-                    <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
-                    <option value="gemma-4-31b-it">gemma-4-31b-it (TPM: 16K)</option>
-                    <option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it (TPM: 16K)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div id="openai-settings" class="provider-settings" style="display: none;">
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="openaiApiKey">OpenAI API Key</label>
-                  <input id="openaiApiKey" type="password" placeholder="請輸入您的 OpenAI API Key">
-                </div>
-                <div class="form-group">
-                  <label for="openaiModelSelect">OpenAI 模型</label>
-                  <select id="openaiModelSelect">
-                    <option value="gpt-5.5">gpt-5.5</option>
-                    <option value="gpt-5.4">gpt-5.4</option>
-                    <option value="gpt-5.3">gpt-5.3</option>
-                    <option value="gpt-5.2">gpt-5.2</option>
-                    <option value="gpt-5.1">gpt-5.1</option>
-                    <option value="gpt-5">gpt-5</option>
-                    <option value="gpt-5-chat-latest">gpt-5-chat-latest</option>
-                    <option value="gpt-5-mini">gpt-5-mini</option>
-                    <option value="gpt-5-nano">gpt-5-nano</option>
-                    <option value="gpt-4o">gpt-4o</option>
-                    <option value="gpt-4o-mini">gpt-4o-mini</option>
-                    <option value="gpt-4.1">gpt-4.1</option>
-                    <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                    <option value="o4-mini">o4-mini</option>
-                    <option value="o3">o3</option>
-                    <option value="o3-mini">o3-mini</option>
-                    <option value="o3-pro">o3-pro</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div id="azure-settings" class="provider-settings" style="display: none;">
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="azureApiKey">Azure OpenAI API Key</label>
-                  <input id="azureApiKey" type="password" placeholder="請輸入您的 Azure OpenAI API Key">
-                </div>
-                <div class="form-group">
-                  <label for="azureEndpoint">Azure OpenAI Endpoint</label>
-                  <input id="azureEndpoint" type="text" placeholder="例如: https://your-resource.openai.azure.com">
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="azureDeployment">Deployment Name</label>
-                  <input id="azureDeployment" type="text" placeholder="例如: gpt-4o-mini">
-                </div>
-                <div class="form-group">
-                  <label for="azureApiVersion">API Version</label>
-                  <select id="azureApiVersion">
-                    <option value="2024-10-21">2024-10-21</option>
-                    <option value="2024-12-01-preview">2024-12-01-preview</option>
-                    <option value="2025-01-01-preview">2025-01-01-preview</option>
-                    <option value="2025-02-01-preview">2025-02-01-preview</option>
-                    <option value="2025-03-01-preview">2025-03-01-preview</option>
-                    <option value="2025-04-01-preview">2025-04-01-preview</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div id="openai-compatible-settings" class="provider-settings" style="display: none;">
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="openaiCompatibleEndpoint">API Endpoint</label>
-                  <input id="openaiCompatibleEndpoint" type="text" placeholder="例如: http://localhost:11434/v1">
-                </div>
-                <div class="form-group">
-                  <label for="openaiCompatibleApiKey">API Key (選填)</label>
-                  <input id="openaiCompatibleApiKey" type="password" placeholder="若不需要可留空">
-                </div>
-              </div>
-              <div class="form-group">
-                <label for="openaiCompatibleModel">模型名稱</label>
-                <input id="openaiCompatibleModel" type="text" placeholder="例如: llama3, mistral">
+            <div class="add-command" id="addProvider">
+              <div class="add-command-content">
+                <div class="add-command-icon">➕</div>
+                <div>新增 AI 提供者</div>
+                <small>點擊新增 Gemini、OpenAI、Azure 或 Ollama 等提供者</small>
               </div>
             </div>
           </div>
@@ -876,6 +786,174 @@
       <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
         <button id="modalCancel" class="btn-secondary">取消</button>
         <button id="modalSave" class="btn-primary">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Provider Edit Modal -->
+  <div id="providerModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; padding: 20px;">
+    <div style="max-width: 650px; margin: 40px auto; background: var(--card-background); border-radius: 16px; padding: 24px; max-height: 85vh; overflow-y: auto;">
+      <h3 id="providerModalTitle" style="margin: 0 0 20px; color: var(--text-primary); font-size: 20px; font-weight: 700;">新增 AI 提供者</h3>
+
+      <div class="form-group">
+        <label for="modalProviderName">提供者自訂名稱</label>
+        <input id="modalProviderName" type="text" placeholder="例如：我的 Gemini 帳號">
+      </div>
+
+      <div class="form-group">
+        <label for="modalProviderType">提供者類型</label>
+        <select id="modalProviderType">
+          <option value="gemini">Google Gemini</option>
+          <option value="openai">OpenAI</option>
+          <option value="azure">Azure OpenAI</option>
+          <option value="openai-compatible">OpenAI 相容端點</option>
+        </select>
+      </div>
+
+      <!-- Gemini Settings Fields -->
+      <div id="modal-gemini-fields" class="provider-fields">
+        <div class="form-group">
+          <label for="modalGeminiApiKey">Gemini API Key</label>
+          <input id="modalGeminiApiKey" type="password" placeholder="請輸入您的 Gemini API Key">
+        </div>
+        <div class="form-group" style="margin-top: 12px;">
+          <label>啟用模型 (可複選，最少選一個)</label>
+          <div id="modalGeminiModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 6px;">
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gemini-3.5-flash" checked> gemini-3.5-flash
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gemini-3.1-pro-preview"> gemini-3.1-pro-preview
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gemini-3.1-flash-lite"> gemini-3.1-flash-lite
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gemini-2.5-pro"> gemini-2.5-pro
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gemini-2.5-flash"> gemini-2.5-flash
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gemini-2.5-flash-lite"> gemini-2.5-flash-lite
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gemini-flash-lite-latest"> gemini-flash-lite-latest
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gemma-4-31b-it"> gemma-4-31b-it (16K)
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gemma-4-26b-a4b-it"> gemma-4-26b-a4b-it (16K)
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- OpenAI Settings Fields -->
+      <div id="modal-openai-fields" class="provider-fields" style="display: none; margin-top: 12px;">
+        <div class="form-group">
+          <label for="modalOpenaiApiKey">OpenAI API Key</label>
+          <input id="modalOpenaiApiKey" type="password" placeholder="請輸入您的 OpenAI API Key">
+        </div>
+        <div class="form-group" style="margin-top: 12px;">
+          <label>啟用模型 (可複選，最少選一個)</label>
+          <div id="modalOpenaiModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 6px;">
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gpt-5.5"> gpt-5.5
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gpt-5.4"> gpt-5.4
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gpt-5.3"> gpt-5.3
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gpt-5.2"> gpt-5.2
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gpt-5.1"> gpt-5.1
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gpt-5"> gpt-5
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gpt-5-chat-latest"> gpt-5-chat-latest
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gpt-5-mini"> gpt-5-mini
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gpt-5-nano"> gpt-5-nano
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gpt-4o" checked> gpt-4o
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="gpt-4o-mini" checked> gpt-4o-mini
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="o4-mini"> o4-mini
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="o3"> o3
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="o3-mini"> o3-mini
+            </label>
+            <label style="font-weight: normal; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+              <input type="checkbox" value="o3-pro"> o3-pro
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Azure Settings Fields -->
+      <div id="modal-azure-fields" class="provider-fields" style="display: none; margin-top: 12px;">
+        <div class="form-group">
+          <label for="modalAzureApiKey">Azure OpenAI API Key</label>
+          <input id="modalAzureApiKey" type="password" placeholder="請輸入您的 Azure OpenAI API Key">
+        </div>
+        <div class="form-group" style="margin-top: 8px;">
+          <label for="modalAzureEndpoint">Azure OpenAI Endpoint</label>
+          <input id="modalAzureEndpoint" type="text" placeholder="例如: https://your-resource.openai.azure.com">
+        </div>
+        <div class="form-group" style="margin-top: 8px;">
+          <label for="modalAzureDeployment">Deployment Name</label>
+          <input id="modalAzureDeployment" type="text" placeholder="例如: gpt-4o-mini">
+        </div>
+        <div class="form-group" style="margin-top: 8px;">
+          <label for="modalAzureApiVersion">API Version</label>
+          <select id="modalAzureApiVersion">
+            <option value="2024-10-21">2024-10-21</option>
+            <option value="2024-12-01-preview">2024-12-01-preview</option>
+            <option value="2025-01-01-preview">2025-01-01-preview</option>
+            <option value="2025-02-01-preview">2025-02-01-preview</option>
+            <option value="2025-03-01-preview">2025-03-01-preview</option>
+            <option value="2025-04-01-preview">2025-04-01-preview</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- OpenAI Compatible Settings Fields -->
+      <div id="modal-openai-compatible-fields" class="provider-fields" style="display: none; margin-top: 12px;">
+        <div class="form-group">
+          <label for="modalOpenaiCompatibleEndpoint">API Endpoint</label>
+          <input id="modalOpenaiCompatibleEndpoint" type="text" placeholder="例如: http://localhost:11434/v1">
+        </div>
+        <div class="form-group" style="margin-top: 8px;">
+          <label for="modalOpenaiCompatibleApiKey">API Key (選填)</label>
+          <input id="modalOpenaiCompatibleApiKey" type="password" placeholder="若不需要可留空">
+        </div>
+        <div class="form-group" style="margin-top: 8px;">
+          <label for="modalOpenaiCompatibleModel">模型名稱</label>
+          <input id="modalOpenaiCompatibleModel" type="text" placeholder="例如: llama3, mistral">
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+        <button id="modalProviderCancel" class="btn-secondary">取消</button>
+        <button id="modalProviderSave" class="btn-primary">儲存</button>
       </div>
     </div>
   </div>

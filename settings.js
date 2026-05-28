@@ -63,13 +63,19 @@ async function getOrCreateEncryptionKey() {
 }
 
 // DOM elements - 將在 DOMContentLoaded 中初始化
-let providerSelect, geminiApiKeyInput, geminiModelSelect, openaiApiKeyInput, openaiModelSelect;
-let azureApiKeyInput, azureEndpointInput, azureDeploymentInput, azureApiVersionSelect;
-let openaiCompatibleEndpointInput, openaiCompatibleApiKeyInput, openaiCompatibleModelInput;
-let geminiSettings, openaiSettings, azureSettings, openaiCompatibleSettings;
 let saveButton, resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
 let modalSave, modalCancel, modalCommandNameError;
+
+// Multi-provider UI elements
+let providersList, addProviderBtn, providerModal, providerModalTitle, modalProviderName, modalProviderType;
+let modalProviderCancel, modalProviderSave;
+let modalGeminiFields, modalOpenaiFields, modalAzureFields, modalOpenaiCompatibleFields;
+let modalGeminiApiKey, modalOpenaiApiKey, modalAzureApiKey, modalAzureEndpoint, modalAzureDeployment, modalAzureApiVersion;
+let modalOpenaiCompatibleEndpoint, modalOpenaiCompatibleApiKey, modalOpenaiCompatibleModel;
+let modalGeminiModelsList, modalOpenaiModelsList;
+let currentEditingProvider = null;
+let providers = [];
 
 // Storage keys
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
@@ -93,24 +99,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.storage.local.set({ 'SETTINGS_OPENED': true });
 
     // 初始化 DOM 元素
-    providerSelect = document.getElementById('providerSelect');
-    geminiApiKeyInput = document.getElementById('geminiApiKey');
-    geminiModelSelect = document.getElementById('geminiModelSelect');
-    openaiApiKeyInput = document.getElementById('openaiApiKey');
-    openaiModelSelect = document.getElementById('openaiModelSelect');
-    azureApiKeyInput = document.getElementById('azureApiKey');
-    azureEndpointInput = document.getElementById('azureEndpoint');
-    azureDeploymentInput = document.getElementById('azureDeployment');
-    azureApiVersionSelect = document.getElementById('azureApiVersion');
-    geminiSettings = document.getElementById('gemini-settings');
-    openaiSettings = document.getElementById('openai-settings');
-    azureSettings = document.getElementById('azure-settings');
-    openaiCompatibleSettings = document.getElementById('openai-compatible-settings');
+    providersList = document.getElementById('providersList');
+    addProviderBtn = document.getElementById('addProvider');
+    providerModal = document.getElementById('providerModal');
+    providerModalTitle = document.getElementById('providerModalTitle');
+    modalProviderName = document.getElementById('modalProviderName');
+    modalProviderType = document.getElementById('modalProviderType');
+    modalProviderCancel = document.getElementById('modalProviderCancel');
+    modalProviderSave = document.getElementById('modalProviderSave');
 
-    // OpenAI Compatible inputs
-    openaiCompatibleEndpointInput = document.getElementById('openaiCompatibleEndpoint');
-    openaiCompatibleApiKeyInput = document.getElementById('openaiCompatibleApiKey');
-    openaiCompatibleModelInput = document.getElementById('openaiCompatibleModel');
+    modalGeminiFields = document.getElementById('modal-gemini-fields');
+    modalOpenaiFields = document.getElementById('modal-openai-fields');
+    modalAzureFields = document.getElementById('modal-azure-fields');
+    modalOpenaiCompatibleFields = document.getElementById('modal-openai-compatible-fields');
+
+    modalGeminiApiKey = document.getElementById('modalGeminiApiKey');
+    modalOpenaiApiKey = document.getElementById('modalOpenaiApiKey');
+    modalAzureApiKey = document.getElementById('modalAzureApiKey');
+    modalAzureEndpoint = document.getElementById('modalAzureEndpoint');
+    modalAzureDeployment = document.getElementById('modalAzureDeployment');
+    modalAzureApiVersion = document.getElementById('modalAzureApiVersion');
+
+    modalOpenaiCompatibleEndpoint = document.getElementById('modalOpenaiCompatibleEndpoint');
+    modalOpenaiCompatibleApiKey = document.getElementById('modalOpenaiCompatibleApiKey');
+    modalOpenaiCompatibleModel = document.getElementById('modalOpenaiCompatibleModel');
+
+    modalGeminiModelsList = document.getElementById('modalGeminiModelsList');
+    modalOpenaiModelsList = document.getElementById('modalOpenaiModelsList');
 
     saveButton = document.getElementById('save');
     resetButton = document.getElementById('reset');
@@ -155,31 +170,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // Handle provider switching
-    providerSelect.addEventListener('change', () => {
-        const provider = providerSelect.value;
-        if (provider === 'gemini') {
-            geminiSettings.style.display = 'block';
-            openaiSettings.style.display = 'none';
-            azureSettings.style.display = 'none';
-            openaiCompatibleSettings.style.display = 'none';
-        } else if (provider === 'openai') {
-            geminiSettings.style.display = 'none';
-            openaiSettings.style.display = 'block';
-            azureSettings.style.display = 'none';
-            openaiCompatibleSettings.style.display = 'none';
-        } else if (provider === 'azure') {
-            geminiSettings.style.display = 'none';
-            openaiSettings.style.display = 'none';
-            azureSettings.style.display = 'block';
-            openaiCompatibleSettings.style.display = 'none';
-        } else if (provider === 'openai-compatible') {
-            geminiSettings.style.display = 'none';
-            openaiSettings.style.display = 'none';
-            azureSettings.style.display = 'none';
-            openaiCompatibleSettings.style.display = 'block';
-        }
-    });
+    // Handle modal provider type switching
+    modalProviderType.addEventListener('change', updateModalFieldsVisibility);
 
     // Modal event listeners
     addCommandBtn.addEventListener('click', () => openModal());
@@ -189,14 +181,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         validateCommandNameInput({ showEmptyError: true });
     });
 
-    // Close modal when clicking outside
+    // Provider modal listeners
+    addProviderBtn.addEventListener('click', () => openProviderModal());
+    modalProviderCancel.addEventListener('click', () => {
+        providerModal.style.display = 'none';
+        currentEditingProvider = null;
+    });
+    modalProviderSave.addEventListener('click', saveProvider);
+
+    // Close modals when clicking outside
     commandModal.addEventListener('click', (e) => {
         if (e.target === commandModal) {
             closeModal();
         }
     });
+    providerModal.addEventListener('click', (e) => {
+        if (e.target === providerModal) {
+            providerModal.style.display = 'none';
+            currentEditingProvider = null;
+        }
+    });
 
-    // Keyboard shortcuts for modal
+    // Keyboard shortcuts for modals
     document.addEventListener('keydown', (e) => {
         if (commandModal.style.display === 'block') {
             if (e.key === 'Escape') {
@@ -204,99 +210,35 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (e.key === 'Enter' && e.ctrlKey) {
                 saveCommand();
             }
+        } else if (providerModal.style.display === 'block') {
+            if (e.key === 'Escape') {
+                providerModal.style.display = 'none';
+                currentEditingProvider = null;
+            } else if (e.key === 'Enter' && e.ctrlKey) {
+                saveProvider();
+            }
         }
     });
 
     // Save the settings
     saveButton.addEventListener('click', async () => {
-        const encryptionKey = await getOrCreateEncryptionKey();
-        const provider = providerSelect.value;
-        const geminiApiKey = geminiApiKeyInput.value.trim();
-        const geminiModel = geminiModelSelect.value;
-        const openaiApiKey = openaiApiKeyInput.value.trim();
-        const openaiModel = openaiModelSelect.value;
-        const azureApiKey = azureApiKeyInput.value.trim();
-        const azureEndpoint = azureEndpointInput.value.trim();
-        const azureDeployment = azureDeploymentInput.value.trim();
-        const azureApiVersion = azureApiVersionSelect.value;
-
-        // OpenAI Compatible values
-        const openaiCompatibleEndpoint = openaiCompatibleEndpointInput.value.trim();
-        const openaiCompatibleApiKey = openaiCompatibleApiKeyInput.value.trim();
-        const openaiCompatibleModel = openaiCompatibleModelInput.value.trim();
-
-        const settings = {
-            'PROVIDER': provider,
-            'GEMINI_MODEL': geminiModel,
-            'OPENAI_MODEL': openaiModel,
-            'AZURE_OPENAI_ENDPOINT': azureEndpoint,
-            'AZURE_OPENAI_DEPLOYMENT': azureDeployment,
-            'AZURE_OPENAI_API_VERSION': azureApiVersion,
-            'OPENAI_COMPATIBLE_ENDPOINT': openaiCompatibleEndpoint,
-            'OPENAI_COMPATIBLE_MODEL': openaiCompatibleModel,
-            [CUSTOM_COMMANDS_STORAGE]: customCommands
-        };
-
-        // Encrypt and save API keys
-        if (geminiApiKey) {
-            try {
-                const encryptedGeminiKey = await encryptApiKey(geminiApiKey, encryptionKey);
-                settings['GEMINI_API_KEY'] = encryptedGeminiKey;
-            } catch (error) {
-                console.error('Error encrypting Gemini API key:', error);
-                settings['GEMINI_API_KEY'] = geminiApiKey;
-            }
-        }
-
-        if (openaiApiKey) {
-            try {
-                const encryptedOpenaiKey = await encryptApiKey(openaiApiKey, encryptionKey);
-                settings['OPENAI_API_KEY'] = encryptedOpenaiKey;
-            } catch (error) {
-                console.error('Error encrypting OpenAI API key:', error);
-                settings['OPENAI_API_KEY'] = openaiApiKey;
-            }
-        }
-
-        if (azureApiKey) {
-            try {
-                const encryptedAzureKey = await encryptApiKey(azureApiKey, encryptionKey);
-                settings['AZURE_OPENAI_API_KEY'] = encryptedAzureKey;
-            } catch (error) {
-                console.error('Error encrypting Azure OpenAI API key:', error);
-                settings['AZURE_OPENAI_API_KEY'] = azureApiKey;
-            }
-        }
-
-        if (openaiCompatibleApiKey) {
-            try {
-                const encryptedCompatibleKey = await encryptApiKey(openaiCompatibleApiKey, encryptionKey);
-                settings['OPENAI_COMPATIBLE_API_KEY'] = encryptedCompatibleKey;
-            } catch (error) {
-                console.error('Error encrypting OpenAI Compatible API key:', error);
-                settings['OPENAI_COMPATIBLE_API_KEY'] = openaiCompatibleApiKey;
-            }
-        }
-
-        chrome.storage.local.set(settings, () => {
-            showStatus('設定已儲存！', 'success');
-        });
+        showStatus('設定已儲存！', 'success');
     });
 
     // Reset settings functionality
     resetButton.addEventListener('click', () => {
-        if (confirm('確定要重置所有設定嗎？\n\n注意：API Key 不會被清除，但其他所有設定將恢復為預設值。')) {
-            chrome.storage.local.get(['GEMINI_API_KEY', 'OPENAI_API_KEY', 'AZURE_OPENAI_API_KEY', 'ENCRYPTION_KEY'], (result) => {
+        if (confirm('確定要重置所有設定嗎？\n\n注意：API Key 與提供者設定不會被清除，但斜線命令與其他設定將恢復為預設值。')) {
+            chrome.storage.local.get(['PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL', 'ENCRYPTION_KEY'], (result) => {
                 chrome.storage.local.clear(() => {
                     const settingsToRestore = {};
-                    if (result.GEMINI_API_KEY) {
-                        settingsToRestore.GEMINI_API_KEY = result.GEMINI_API_KEY;
+                    if (result.PROVIDERS) {
+                        settingsToRestore.PROVIDERS = result.PROVIDERS;
                     }
-                    if (result.OPENAI_API_KEY) {
-                        settingsToRestore.OPENAI_API_KEY = result.OPENAI_API_KEY;
+                    if (result.ACTIVE_PROVIDER_ID) {
+                        settingsToRestore.ACTIVE_PROVIDER_ID = result.ACTIVE_PROVIDER_ID;
                     }
-                    if (result.AZURE_OPENAI_API_KEY) {
-                        settingsToRestore.AZURE_OPENAI_API_KEY = result.AZURE_OPENAI_API_KEY;
+                    if (result.ACTIVE_MODEL) {
+                        settingsToRestore.ACTIVE_MODEL = result.ACTIVE_MODEL;
                     }
                     if (result.ENCRYPTION_KEY) {
                         settingsToRestore.ENCRYPTION_KEY = result.ENCRYPTION_KEY;
@@ -368,7 +310,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 載入設定的其餘代碼
-    const encryptionKey = await getOrCreateEncryptionKey();
+    await getOrCreateEncryptionKey();
 
     // Modal functionality
     function openModal(command = null) {
@@ -625,156 +567,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     chrome.storage.local.get([
-        'PROVIDER', 'GEMINI_API_KEY', 'GEMINI_MODEL',
-        'OPENAI_API_KEY', 'OPENAI_MODEL',
-        'AZURE_OPENAI_API_KEY', 'AZURE_OPENAI_ENDPOINT',
-        'AZURE_OPENAI_DEPLOYMENT', 'AZURE_OPENAI_API_VERSION',
-        'OPENAI_COMPATIBLE_API_KEY', 'OPENAI_COMPATIBLE_ENDPOINT', 'OPENAI_COMPATIBLE_MODEL',
+        'PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL',
         'CUSTOM_SUMMARY_PROMPT', CUSTOM_COMMANDS_STORAGE
     ], async (result) => {
-        // Set provider
-        if (result.PROVIDER) {
-            providerSelect.value = result.PROVIDER;
-        } else {
-            providerSelect.value = 'gemini'; // Default to Gemini
+        let activeProviderId = result.ACTIVE_PROVIDER_ID || '';
+        let activeModel = result.ACTIVE_MODEL || '';
+        providers = result.PROVIDERS;
+
+        if (!providers || !Array.isArray(providers)) {
+            providers = await migrateOldSettings();
+            // Refetch active values
+            const activeResult = await chrome.storage.local.get(['ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL']);
+            activeProviderId = activeResult.ACTIVE_PROVIDER_ID || '';
+            activeModel = activeResult.ACTIVE_MODEL || '';
         }
 
-        // Show/hide settings based on provider
-        if (providerSelect.value === 'gemini') {
-            geminiSettings.style.display = 'block';
-            openaiSettings.style.display = 'none';
-            azureSettings.style.display = 'none';
-            openaiCompatibleSettings.style.display = 'none';
-        } else if (providerSelect.value === 'openai') {
-            geminiSettings.style.display = 'none';
-            openaiSettings.style.display = 'block';
-            azureSettings.style.display = 'none';
-            openaiCompatibleSettings.style.display = 'none';
-        } else if (providerSelect.value === 'azure') {
-            geminiSettings.style.display = 'none';
-            openaiSettings.style.display = 'none';
-            azureSettings.style.display = 'block';
-            openaiCompatibleSettings.style.display = 'none';
-        } else if (providerSelect.value === 'openai-compatible') {
-            geminiSettings.style.display = 'none';
-            openaiSettings.style.display = 'none';
-            azureSettings.style.display = 'none';
-            openaiCompatibleSettings.style.display = 'block';
-        }
-
-        // Load Gemini settings
-        if (result.GEMINI_API_KEY) {
-            try {
-                const decryptedKey = await decryptApiKey(result.GEMINI_API_KEY, encryptionKey);
-                geminiApiKeyInput.value = decryptedKey;
-            } catch (error) {
-                console.error('Error decrypting Gemini API key:', error);
-                if (typeof result.GEMINI_API_KEY === 'object' && result.GEMINI_API_KEY.encrypted) {
-                    geminiApiKeyInput.value = '';
-                    geminiApiKeyInput.placeholder = '解密失敗，請重新輸入 API Key';
-                    showStatus('API Key 解密失敗，請重新設定', 'error');
-                } else {
-                    geminiApiKeyInput.value = result.GEMINI_API_KEY;
-                }
-            }
-        }
-
-        if (result.GEMINI_MODEL) {
-            geminiModelSelect.value = result.GEMINI_MODEL;
-        } else {
-            geminiModelSelect.value = 'gemini-flash-lite-latest';
-        }
-
-        // Load OpenAI settings
-        if (result.OPENAI_API_KEY) {
-            try {
-                const decryptedKey = await decryptApiKey(result.OPENAI_API_KEY, encryptionKey);
-                openaiApiKeyInput.value = decryptedKey;
-            } catch (error) {
-                console.error('Error decrypting OpenAI API key:', error);
-                if (typeof result.OPENAI_API_KEY === 'object' && result.OPENAI_API_KEY.encrypted) {
-                    openaiApiKeyInput.value = '';
-                    openaiApiKeyInput.placeholder = '解密失敗，請重新輸入 API Key';
-                    if (!statusDiv.textContent) {
-                        showStatus('API Key 解密失敗，請重新設定', 'error');
-                    }
-                } else {
-                    openaiApiKeyInput.value = result.OPENAI_API_KEY;
-                }
-            }
-        }
-
-        if (result.OPENAI_MODEL) {
-            openaiModelSelect.value = result.OPENAI_MODEL;
-        } else {
-            openaiModelSelect.value = 'gpt-4o-mini';
-        }
-
-        // Load Azure OpenAI settings
-        if (result.AZURE_OPENAI_API_KEY) {
-            try {
-                const decryptedKey = await decryptApiKey(result.AZURE_OPENAI_API_KEY, encryptionKey);
-                azureApiKeyInput.value = decryptedKey;
-            } catch (error) {
-                console.error('Error decrypting Azure OpenAI API key:', error);
-                if (typeof result.AZURE_OPENAI_API_KEY === 'object' && result.AZURE_OPENAI_API_KEY.encrypted) {
-                    azureApiKeyInput.value = '';
-                    azureApiKeyInput.placeholder = '解密失敗，請重新輸入 API Key';
-                    if (!statusDiv.textContent) {
-                        showStatus('API Key 解密失敗，請重新設定', 'error');
-                    }
-                } else {
-                    azureApiKeyInput.value = result.AZURE_OPENAI_API_KEY;
-                }
-            }
-        }
-
-        if (result.AZURE_OPENAI_ENDPOINT) {
-            azureEndpointInput.value = result.AZURE_OPENAI_ENDPOINT;
-        }
-
-        if (result.AZURE_OPENAI_DEPLOYMENT) {
-            azureDeploymentInput.value = result.AZURE_OPENAI_DEPLOYMENT;
-        }
-
-        if (result.AZURE_OPENAI_API_VERSION) {
-            azureApiVersionSelect.value = result.AZURE_OPENAI_API_VERSION;
-        } else {
-            azureApiVersionSelect.value = '2024-10-21';
-        }
-
-        // Load OpenAI Compatible settings
-        if (result.OPENAI_COMPATIBLE_API_KEY) {
-            try {
-                const decryptedKey = await decryptApiKey(result.OPENAI_COMPATIBLE_API_KEY, encryptionKey);
-                openaiCompatibleApiKeyInput.value = decryptedKey;
-            } catch (error) {
-                console.error('Error decrypting OpenAI Compatible API key:', error);
-                if (typeof result.OPENAI_COMPATIBLE_API_KEY === 'object' && result.OPENAI_COMPATIBLE_API_KEY.encrypted) {
-                    openaiCompatibleApiKeyInput.value = '';
-                    openaiCompatibleApiKeyInput.placeholder = '解密失敗，請重新輸入 API Key';
-                } else {
-                    openaiCompatibleApiKeyInput.value = result.OPENAI_COMPATIBLE_API_KEY;
-                }
-            }
-        }
-
-        if (result.OPENAI_COMPATIBLE_ENDPOINT) {
-            openaiCompatibleEndpointInput.value = result.OPENAI_COMPATIBLE_ENDPOINT;
-        } else {
-            // Default value as requested
-            openaiCompatibleEndpointInput.value = 'http://localhost:11434/v1';
-        }
-
-        if (result.OPENAI_COMPATIBLE_MODEL) {
-            openaiCompatibleModelInput.value = result.OPENAI_COMPATIBLE_MODEL;
-        }
+        // Render providers list
+        renderProviders(activeProviderId, activeModel);
 
         // Load custom commands
         customCommands = result[CUSTOM_COMMANDS_STORAGE] || [];
 
         // Load custom summary prompt for built-in /summary command
-        const customSummaryPrompt = result.CUSTOM_SUMMARY_PROMPT || result.CUSTOM_SUMMARY_PROMPT;
+        const customSummaryPrompt = result.CUSTOM_SUMMARY_PROMPT;
         if (customSummaryPrompt) {
             const summaryCommand = BUILT_IN_COMMANDS.find(cmd => cmd.cmd === '/summary');
             if (summaryCommand) {
@@ -784,4 +599,466 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         renderCommands();
     });
+
+    // Render providers list
+    function renderProviders(activeProviderId, activeModel) {
+        providersList.innerHTML = '';
+
+        if (providers.length === 0) {
+            providersList.innerHTML = `
+                <div style="text-align: center; padding: 24px; color: var(--text-secondary);">
+                    尚未新增任何 AI 提供者，請點擊下方的「新增 AI 提供者」按鈕。
+                </div>
+            `;
+            return;
+        }
+
+        providers.forEach(p => {
+            const div = document.createElement('div');
+            div.className = 'command-item';
+
+            let borderColor = 'rgba(117, 216, 255, 0.48)';
+            let typeLabel = '';
+            if (p.type === 'gemini') {
+                borderColor = '#4285F4';
+                typeLabel = 'Google Gemini';
+            } else if (p.type === 'openai') {
+                borderColor = '#10a37f';
+                typeLabel = 'OpenAI';
+            } else if (p.type === 'azure') {
+                borderColor = '#0078d4';
+                typeLabel = 'Azure OpenAI';
+            } else if (p.type === 'openai-compatible') {
+                borderColor = '#a855f7';
+                typeLabel = 'OpenAI Compatible';
+            }
+            div.style.borderLeft = `4px solid ${borderColor}`;
+
+            let modelsHtml = '';
+            if (p.type === 'gemini' || p.type === 'openai') {
+                const models = p.models || [];
+                modelsHtml = models.map(m => {
+                    const isActive = (p.id === activeProviderId && m === activeModel);
+                    return `<span class="model-badge ${isActive ? 'active' : ''}" data-action="set-active" data-provider-id="${p.id}" data-model="${m}">${isActive ? '✓ ' : ''}${m}</span>`;
+                }).join(' ');
+            } else if (p.type === 'azure') {
+                const isActive = (p.id === activeProviderId && p.azureDeployment === activeModel);
+                modelsHtml = `<span class="model-badge ${isActive ? 'active' : ''}" data-action="set-active" data-provider-id="${p.id}" data-model="${p.azureDeployment}">${isActive ? '✓ ' : ''}${p.azureDeployment}</span>`;
+            } else if (p.type === 'openai-compatible') {
+                const isActive = (p.id === activeProviderId && p.openaiCompatibleModel === activeModel);
+                modelsHtml = `<span class="model-badge ${isActive ? 'active' : ''}" data-action="set-active" data-provider-id="${p.id}" data-model="${p.openaiCompatibleModel || '(未指定模型)'}">${isActive ? '✓ ' : ''}${p.openaiCompatibleModel || '(未指定模型)'}</span>`;
+            }
+
+            let details = '';
+            if (p.type === 'azure') {
+                details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;">端點: ${p.azureEndpoint || ''}</div>`;
+            } else if (p.type === 'openai-compatible') {
+                details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;">端點: ${p.openaiCompatibleEndpoint || ''}</div>`;
+            }
+
+            div.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <span class="command-name" style="font-size: 16px; font-weight: 700; color: var(--text-primary);">${p.name || typeLabel}</span>
+                            <span style="font-size: 12px; opacity: 0.8; padding: 2px 6px; background: rgba(255,255,255,0.08); border-radius: 4px; font-weight: 600;">${typeLabel}</span>
+                        </div>
+                        ${details}
+                        <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px;">
+                            ${modelsHtml}
+                        </div>
+                    </div>
+                    <div class="command-actions" style="flex-shrink: 0; margin-left: 16px; display: flex; gap: 8px;">
+                        <button class="btn-secondary btn-small" data-action="edit-provider" data-id="${p.id}">
+                            ✏️ 編輯
+                        </button>
+                        <button class="btn-danger btn-small" data-action="delete-provider" data-id="${p.id}">
+                            🗑️ 刪除
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            providersList.appendChild(div);
+        });
+    }
+
+    // Provider modal handling
+    async function openProviderModal(provider = null) {
+        currentEditingProvider = provider;
+        const encryptionKey = await getOrCreateEncryptionKey();
+
+        // Reset fields
+        modalProviderName.value = '';
+        modalProviderType.value = 'gemini';
+        modalGeminiApiKey.value = '';
+        modalOpenaiApiKey.value = '';
+        modalAzureApiKey.value = '';
+        modalAzureEndpoint.value = '';
+        modalAzureDeployment.value = '';
+        modalAzureApiVersion.value = '2024-10-21';
+        modalOpenaiCompatibleEndpoint.value = 'http://localhost:11434/v1';
+        modalOpenaiCompatibleApiKey.value = '';
+        modalOpenaiCompatibleModel.value = '';
+
+        // Uncheck checkboxes
+        modalGeminiModelsList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        modalOpenaiModelsList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+
+        if (provider) {
+            providerModalTitle.textContent = '編輯 AI 提供者';
+            modalProviderName.value = provider.name || '';
+            modalProviderType.value = provider.type;
+
+            let decryptedKey = '';
+            if (provider.apiKey) {
+                try {
+                    decryptedKey = await decryptApiKey(provider.apiKey, encryptionKey);
+                } catch (e) {
+                    console.error('Decryption failed', e);
+                    decryptedKey = typeof provider.apiKey === 'string' ? provider.apiKey : '';
+                }
+            }
+
+            if (provider.type === 'gemini') {
+                modalGeminiApiKey.value = decryptedKey;
+                const models = provider.models || [];
+                modalGeminiModelsList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    if (models.includes(cb.value)) {cb.checked = true;}
+                });
+            } else if (provider.type === 'openai') {
+                modalOpenaiApiKey.value = decryptedKey;
+                const models = provider.models || [];
+                modalOpenaiModelsList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    if (models.includes(cb.value)) {cb.checked = true;}
+                });
+            } else if (provider.type === 'azure') {
+                modalAzureApiKey.value = decryptedKey;
+                modalAzureEndpoint.value = provider.azureEndpoint || '';
+                modalAzureDeployment.value = provider.azureDeployment || '';
+                modalAzureApiVersion.value = provider.azureApiVersion || '2024-10-21';
+            } else if (provider.type === 'openai-compatible') {
+                modalOpenaiCompatibleEndpoint.value = provider.openaiCompatibleEndpoint || 'http://localhost:11434/v1';
+                modalOpenaiCompatibleApiKey.value = decryptedKey;
+                modalOpenaiCompatibleModel.value = provider.openaiCompatibleModel || '';
+            }
+        } else {
+            providerModalTitle.textContent = '新增 AI 提供者';
+            // Default check first model
+            const firstGeminiCb = modalGeminiModelsList.querySelector('input[type="checkbox"]');
+            if (firstGeminiCb) {firstGeminiCb.checked = true;}
+            const firstOpenaiCb = modalOpenaiModelsList.querySelector('input[type="checkbox"]');
+            if (firstOpenaiCb) {firstOpenaiCb.checked = true;}
+        }
+
+        updateModalFieldsVisibility();
+        providerModal.style.display = 'block';
+    }
+
+    function updateModalFieldsVisibility() {
+        const type = modalProviderType.value;
+        modalGeminiFields.style.display = type === 'gemini' ? 'block' : 'none';
+        modalOpenaiFields.style.display = type === 'openai' ? 'block' : 'none';
+        modalAzureFields.style.display = type === 'azure' ? 'block' : 'none';
+        modalOpenaiCompatibleFields.style.display = type === 'openai-compatible' ? 'block' : 'none';
+    }
+
+    async function saveProvider() {
+        const name = modalProviderName.value.trim();
+        const type = modalProviderType.value;
+        const encryptionKey = await getOrCreateEncryptionKey();
+
+        const providerData = {
+            id: currentEditingProvider ? currentEditingProvider.id : 'provider_' + Date.now(),
+            name: name || (type === 'gemini' ? 'Google Gemini' : type === 'openai' ? 'OpenAI' : type === 'azure' ? 'Azure OpenAI' : 'OpenAI Compatible'),
+            type: type
+        };
+
+        let apiKeyRaw = '';
+        if (type === 'gemini') {
+            apiKeyRaw = modalGeminiApiKey.value.trim();
+            if (!apiKeyRaw) {
+                alert('請輸入 Gemini API Key');
+                return;
+            }
+            const selectedModels = [];
+            modalGeminiModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                selectedModels.push(cb.value);
+            });
+            if (selectedModels.length === 0) {
+                alert('請至少勾選一個 Gemini 模型');
+                return;
+            }
+            providerData.models = selectedModels;
+        } else if (type === 'openai') {
+            apiKeyRaw = modalOpenaiApiKey.value.trim();
+            if (!apiKeyRaw) {
+                alert('請輸入 OpenAI API Key');
+                return;
+            }
+            const selectedModels = [];
+            modalOpenaiModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                selectedModels.push(cb.value);
+            });
+            if (selectedModels.length === 0) {
+                alert('請至少勾選一個 OpenAI 模型');
+                return;
+            }
+            providerData.models = selectedModels;
+        } else if (type === 'azure') {
+            apiKeyRaw = modalAzureApiKey.value.trim();
+            const endpoint = modalAzureEndpoint.value.trim();
+            const deployment = modalAzureDeployment.value.trim();
+            const apiVersion = modalAzureApiVersion.value;
+
+            if (!apiKeyRaw || !endpoint || !deployment) {
+                alert('請填寫 Azure OpenAI 的 API Key、Endpoint 與 Deployment Name');
+                return;
+            }
+            providerData.azureEndpoint = endpoint;
+            providerData.azureDeployment = deployment;
+            providerData.azureApiVersion = apiVersion;
+            providerData.models = [deployment];
+        } else if (type === 'openai-compatible') {
+            const endpoint = modalOpenaiCompatibleEndpoint.value.trim();
+            apiKeyRaw = modalOpenaiCompatibleApiKey.value.trim();
+            const model = modalOpenaiCompatibleModel.value.trim();
+
+            if (!endpoint || !model) {
+                alert('請填寫 API Endpoint 與模型名稱');
+                return;
+            }
+            providerData.openaiCompatibleEndpoint = endpoint;
+            providerData.openaiCompatibleModel = model;
+            providerData.models = [model];
+        }
+
+        if (apiKeyRaw) {
+            try {
+                providerData.apiKey = await encryptApiKey(apiKeyRaw, encryptionKey);
+            } catch (err) {
+                console.error('Encryption failed', err);
+                providerData.apiKey = apiKeyRaw;
+            }
+        } else {
+            providerData.apiKey = '';
+        }
+
+        if (currentEditingProvider) {
+            const index = providers.findIndex(p => p.id === currentEditingProvider.id);
+            if (index !== -1) {
+                providers[index] = providerData;
+            }
+        } else {
+            providers.push(providerData);
+        }
+
+        await chrome.storage.local.set({ PROVIDERS: providers });
+
+        const activeResult = await chrome.storage.local.get(['ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL']);
+        let activeProviderId = activeResult.ACTIVE_PROVIDER_ID || '';
+        let activeModel = activeResult.ACTIVE_MODEL || '';
+
+        let activeValid = false;
+        const currentActiveProvider = providers.find(p => p.id === activeProviderId);
+        if (currentActiveProvider) {
+            if (currentActiveProvider.models && currentActiveProvider.models.includes(activeModel)) {
+                activeValid = true;
+            }
+        }
+
+        if (!activeValid && providers.length > 0) {
+            activeProviderId = providers[0].id;
+            activeModel = providers[0].models ? providers[0].models[0] : '';
+            await chrome.storage.local.set({
+                ACTIVE_PROVIDER_ID: activeProviderId,
+                ACTIVE_MODEL: activeModel
+            });
+        }
+
+        providerModal.style.display = 'none';
+        currentEditingProvider = null;
+        renderProviders(activeProviderId, activeModel);
+        showStatus('提供者已儲存！', 'success');
+    }
+
+    async function deleteProvider(id) {
+        const providerName = providers.find(p => p.id === id)?.name || '';
+        if (confirm(`確定要刪除「${providerName}」提供者嗎？`)) {
+            const index = providers.findIndex(p => p.id === id);
+            if (index !== -1) {
+                providers.splice(index, 1);
+                await chrome.storage.local.set({ PROVIDERS: providers });
+
+                const activeResult = await chrome.storage.local.get(['ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL']);
+                let activeProviderId = activeResult.ACTIVE_PROVIDER_ID || '';
+                let activeModel = activeResult.ACTIVE_MODEL || '';
+
+                if (activeProviderId === id || providers.length === 0) {
+                    if (providers.length > 0) {
+                        activeProviderId = providers[0].id;
+                        activeModel = providers[0].models ? providers[0].models[0] : '';
+                    } else {
+                        activeProviderId = '';
+                        activeModel = '';
+                    }
+                    await chrome.storage.local.set({
+                        ACTIVE_PROVIDER_ID: activeProviderId,
+                        ACTIVE_MODEL: activeModel
+                    });
+                }
+
+                renderProviders(activeProviderId, activeModel);
+                showStatus('提供者已刪除', 'success');
+            }
+        }
+    }
+
+    providersList.addEventListener('click', async (e) => {
+        const target = e.target;
+
+        if (target.classList.contains('model-badge')) {
+            const providerId = target.dataset.providerId;
+            const model = target.dataset.model;
+
+            await chrome.storage.local.set({
+                ACTIVE_PROVIDER_ID: providerId,
+                ACTIVE_MODEL: model
+            });
+
+            renderProviders(providerId, model);
+            showStatus(`已切換使用模型為 ${model}`, 'success');
+            return;
+        }
+
+        const button = target.closest('button');
+        if (!button) {return;}
+
+        const action = button.dataset.action;
+        const id = button.dataset.id;
+
+        if (action === 'edit-provider') {
+            const provider = providers.find(p => p.id === id);
+            if (provider) {
+                openProviderModal(provider);
+            }
+        } else if (action === 'delete-provider') {
+            deleteProvider(id);
+        }
+    });
+
+    async function migrateOldSettings() {
+        const result = await chrome.storage.local.get([
+            'PROVIDERS',
+            'PROVIDER',
+            'GEMINI_API_KEY', 'GEMINI_MODEL',
+            'OPENAI_API_KEY', 'OPENAI_MODEL',
+            'AZURE_OPENAI_API_KEY', 'AZURE_OPENAI_ENDPOINT', 'AZURE_OPENAI_DEPLOYMENT', 'AZURE_OPENAI_API_VERSION',
+            'OPENAI_COMPATIBLE_API_KEY', 'OPENAI_COMPATIBLE_ENDPOINT', 'OPENAI_COMPATIBLE_MODEL'
+        ]);
+
+        if (result.PROVIDERS && Array.isArray(result.PROVIDERS)) {
+            return result.PROVIDERS;
+        }
+
+        const migratedProviders = [];
+        let activeProviderId = '';
+        let activeModel = '';
+
+        if (result.GEMINI_API_KEY || result.GEMINI_MODEL) {
+            const id = 'provider_gemini_default';
+            const model = result.GEMINI_MODEL || 'gemini-flash-lite-latest';
+            migratedProviders.push({
+                id,
+                name: 'Google Gemini',
+                type: 'gemini',
+                apiKey: result.GEMINI_API_KEY || '',
+                models: [model]
+            });
+            if (result.PROVIDER === 'gemini' || !result.PROVIDER) {
+                activeProviderId = id;
+                activeModel = model;
+            }
+        }
+
+        if (result.OPENAI_API_KEY || result.OPENAI_MODEL) {
+            const id = 'provider_openai_default';
+            const model = result.OPENAI_MODEL || 'gpt-4o-mini';
+            migratedProviders.push({
+                id,
+                name: 'OpenAI',
+                type: 'openai',
+                apiKey: result.OPENAI_API_KEY || '',
+                models: [model]
+            });
+            if (result.PROVIDER === 'openai') {
+                activeProviderId = id;
+                activeModel = model;
+            }
+        }
+
+        if (result.AZURE_OPENAI_API_KEY || result.AZURE_OPENAI_ENDPOINT) {
+            const id = 'provider_azure_default';
+            const deployment = result.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o-mini';
+            migratedProviders.push({
+                id,
+                name: 'Azure OpenAI',
+                type: 'azure',
+                apiKey: result.AZURE_OPENAI_API_KEY || '',
+                azureEndpoint: result.AZURE_OPENAI_ENDPOINT || '',
+                azureDeployment: deployment,
+                azureApiVersion: result.AZURE_OPENAI_API_VERSION || '2024-10-21',
+                models: [deployment]
+            });
+            if (result.PROVIDER === 'azure') {
+                activeProviderId = id;
+                activeModel = deployment;
+            }
+        }
+
+        if (result.OPENAI_COMPATIBLE_ENDPOINT || result.OPENAI_COMPATIBLE_MODEL) {
+            const id = 'provider_openai_compatible_default';
+            const model = result.OPENAI_COMPATIBLE_MODEL || '';
+            migratedProviders.push({
+                id,
+                name: 'OpenAI Compatible',
+                type: 'openai-compatible',
+                apiKey: result.OPENAI_COMPATIBLE_API_KEY || '',
+                openaiCompatibleEndpoint: result.OPENAI_COMPATIBLE_ENDPOINT || 'http://localhost:11434/v1',
+                openaiCompatibleModel: model,
+                models: [model]
+            });
+            if (result.PROVIDER === 'openai-compatible') {
+                activeProviderId = id;
+                activeModel = model;
+            }
+        }
+
+        if (migratedProviders.length === 0) {
+            const id = 'provider_gemini_default';
+            const model = 'gemini-flash-lite-latest';
+            migratedProviders.push({
+                id,
+                name: 'Google Gemini',
+                type: 'gemini',
+                apiKey: '',
+                models: [model]
+            });
+            activeProviderId = id;
+            activeModel = model;
+        }
+
+        if (!activeProviderId) {
+            activeProviderId = migratedProviders[0].id;
+            activeModel = migratedProviders[0].models ? migratedProviders[0].models[0] : '';
+        }
+
+        await chrome.storage.local.set({
+            PROVIDERS: migratedProviders,
+            ACTIVE_PROVIDER_ID: activeProviderId,
+            ACTIVE_MODEL: activeModel
+        });
+
+        return migratedProviders;
+    }
 });

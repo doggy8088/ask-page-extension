@@ -370,37 +370,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 /* --------------------------------------------------
     Chrome Extension Replacements for GM functions
 -------------------------------------------------- */
-const API_KEY_STORAGE = 'GEMINI_API_KEY';
-const MODEL_STORAGE = 'GEMINI_MODEL';
 const PROMPT_HISTORY_STORAGE = 'ASKPAGE_PROMPT_HISTORY';
 
 // New storage keys for multi-provider support
-const PROVIDER_STORAGE = 'PROVIDER';
-const OPENAI_API_KEY_STORAGE = 'OPENAI_API_KEY';
-const OPENAI_MODEL_STORAGE = 'OPENAI_MODEL';
-const AZURE_OPENAI_API_KEY_STORAGE = 'AZURE_OPENAI_API_KEY';
-const AZURE_OPENAI_ENDPOINT_STORAGE = 'AZURE_OPENAI_ENDPOINT';
-const AZURE_OPENAI_DEPLOYMENT_STORAGE = 'AZURE_OPENAI_DEPLOYMENT';
-const AZURE_OPENAI_API_VERSION_STORAGE = 'AZURE_OPENAI_API_VERSION';
-const OPENAI_COMPATIBLE_API_KEY_STORAGE = 'OPENAI_COMPATIBLE_API_KEY';
-const OPENAI_COMPATIBLE_ENDPOINT_STORAGE = 'OPENAI_COMPATIBLE_ENDPOINT';
-const OPENAI_COMPATIBLE_MODEL_STORAGE = 'OPENAI_COMPATIBLE_MODEL';
 const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
 
 // Storage keys for custom slash command prompts
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
-const SWITCHABLE_PROVIDERS = ['gemini', 'openai', 'azure', 'openai-compatible'];
 
 async function getValue(key, defaultValue) {
     const result = await chrome.storage.local.get([key]);
     return result[key] || defaultValue;
-}
-
-async function getStoredValue(key) {
-    const result = await chrome.storage.local.get([key]);
-    return result[key];
 }
 
 function setValue(key, value) {
@@ -544,47 +526,209 @@ async function decryptApiKey(encryptedData) {
     }
 }
 
-// Provider switching function
-async function switchProvider() {
-    const currentProvider = await getValue(PROVIDER_STORAGE, 'gemini');
-    const providerModelStorageMap = {
-        gemini: MODEL_STORAGE,
-        openai: OPENAI_MODEL_STORAGE,
-        azure: AZURE_OPENAI_DEPLOYMENT_STORAGE,
-        'openai-compatible': OPENAI_COMPATIBLE_MODEL_STORAGE
-    };
-    const currentProviderIndex = Math.max(0, SWITCHABLE_PROVIDERS.indexOf(currentProvider));
-    let newProvider = currentProvider;
+// Migration script for old settings format
+async function migrateOldSettings() {
+    const result = await chrome.storage.local.get([
+        'PROVIDERS',
+        'PROVIDER',
+        'GEMINI_API_KEY', 'GEMINI_MODEL',
+        'OPENAI_API_KEY', 'OPENAI_MODEL',
+        'AZURE_OPENAI_API_KEY', 'AZURE_OPENAI_ENDPOINT', 'AZURE_OPENAI_DEPLOYMENT', 'AZURE_OPENAI_API_VERSION',
+        'OPENAI_COMPATIBLE_API_KEY', 'OPENAI_COMPATIBLE_ENDPOINT', 'OPENAI_COMPATIBLE_MODEL'
+    ]);
 
-    const isProviderSwitchable = async (provider) => {
-        if (provider === 'gemini') {
-            return true;
-        }
+    if (result.PROVIDERS && Array.isArray(result.PROVIDERS)) {
+        return result.PROVIDERS;
+    }
 
-        const modelStorageKey = providerModelStorageMap[provider];
-        if (!modelStorageKey) {
-            return false;
-        }
+    const migratedProviders = [];
+    let activeProviderId = '';
+    let activeModel = '';
 
-        const modelValue = await getStoredValue(modelStorageKey);
-        return typeof modelValue === 'string' && modelValue.trim().length > 0;
-    };
-
-    for (let offset = 1; offset <= SWITCHABLE_PROVIDERS.length; offset++) {
-        const candidateProvider = SWITCHABLE_PROVIDERS[(currentProviderIndex + offset) % SWITCHABLE_PROVIDERS.length];
-        if (await isProviderSwitchable(candidateProvider)) {
-            newProvider = candidateProvider;
-            break;
+    if (result.GEMINI_API_KEY || result.GEMINI_MODEL) {
+        const id = 'provider_gemini_default';
+        const model = result.GEMINI_MODEL || 'gemini-flash-lite-latest';
+        migratedProviders.push({
+            id,
+            name: 'Google Gemini',
+            type: 'gemini',
+            apiKey: result.GEMINI_API_KEY || '',
+            models: [model]
+        });
+        if (result.PROVIDER === 'gemini' || !result.PROVIDER) {
+            activeProviderId = id;
+            activeModel = model;
         }
     }
 
-    if (newProvider === currentProvider) {
-        console.log('[AskPage] No other provider has a configured model. Keeping current provider:', currentProvider);
+    if (result.OPENAI_API_KEY || result.OPENAI_MODEL) {
+        const id = 'provider_openai_default';
+        const model = result.OPENAI_MODEL || 'gpt-4o-mini';
+        migratedProviders.push({
+            id,
+            name: 'OpenAI',
+            type: 'openai',
+            apiKey: result.OPENAI_API_KEY || '',
+            models: [model]
+        });
+        if (result.PROVIDER === 'openai') {
+            activeProviderId = id;
+            activeModel = model;
+        }
+    }
+
+    if (result.AZURE_OPENAI_API_KEY || result.AZURE_OPENAI_ENDPOINT) {
+        const id = 'provider_azure_default';
+        const deployment = result.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o-mini';
+        migratedProviders.push({
+            id,
+            name: 'Azure OpenAI',
+            type: 'azure',
+            apiKey: result.AZURE_OPENAI_API_KEY || '',
+            azureEndpoint: result.AZURE_OPENAI_ENDPOINT || '',
+            azureDeployment: deployment,
+            azureApiVersion: result.AZURE_OPENAI_API_VERSION || '2024-10-21',
+            models: [deployment]
+        });
+        if (result.PROVIDER === 'azure') {
+            activeProviderId = id;
+            activeModel = deployment;
+        }
+    }
+
+    if (result.OPENAI_COMPATIBLE_ENDPOINT || result.OPENAI_COMPATIBLE_MODEL) {
+        const id = 'provider_openai_compatible_default';
+        const model = result.OPENAI_COMPATIBLE_MODEL || '';
+        migratedProviders.push({
+            id,
+            name: 'OpenAI Compatible',
+            type: 'openai-compatible',
+            apiKey: result.OPENAI_COMPATIBLE_API_KEY || '',
+            openaiCompatibleEndpoint: result.OPENAI_COMPATIBLE_ENDPOINT || 'http://localhost:11434/v1',
+            openaiCompatibleModel: model,
+            models: [model]
+        });
+        if (result.PROVIDER === 'openai-compatible') {
+            activeProviderId = id;
+            activeModel = model;
+        }
+    }
+
+    if (migratedProviders.length === 0) {
+        const id = 'provider_gemini_default';
+        const model = 'gemini-flash-lite-latest';
+        migratedProviders.push({
+            id,
+            name: 'Google Gemini',
+            type: 'gemini',
+            apiKey: '',
+            models: [model]
+        });
+        activeProviderId = id;
+        activeModel = model;
+    }
+
+    if (!activeProviderId) {
+        activeProviderId = migratedProviders[0].id;
+        activeModel = migratedProviders[0].models ? migratedProviders[0].models[0] : '';
+    }
+
+    await chrome.storage.local.set({
+        PROVIDERS: migratedProviders,
+        ACTIVE_PROVIDER_ID: activeProviderId,
+        ACTIVE_MODEL: activeModel
+    });
+
+    return migratedProviders;
+}
+
+// Get all enabled model/provider combinations
+async function getEnabledProviderModelOptions() {
+    let providers = await getValue('PROVIDERS', null);
+    if (!providers || !Array.isArray(providers)) {
+        providers = await migrateOldSettings();
+    }
+
+    const options = [];
+    for (const p of providers) {
+        if (p.type === 'gemini' || p.type === 'openai') {
+            const models = p.models || [];
+            for (const model of models) {
+                options.push({
+                    providerId: p.id,
+                    providerName: p.name || (p.type === 'gemini' ? 'Gemini' : 'OpenAI'),
+                    type: p.type,
+                    model: model
+                });
+            }
+        } else if (p.type === 'azure') {
+            options.push({
+                providerId: p.id,
+                providerName: p.name || 'Azure OpenAI',
+                type: p.type,
+                model: p.azureDeployment || 'gpt-4o-mini'
+            });
+        } else if (p.type === 'openai-compatible') {
+            options.push({
+                providerId: p.id,
+                providerName: p.name || 'OpenAI Compatible',
+                type: p.type,
+                model: p.openaiCompatibleModel || ''
+            });
+        }
+    }
+    return options;
+}
+
+// Get active provider config details
+async function getActiveProviderConfig() {
+    let providers = await getValue('PROVIDERS', null);
+    if (!providers || !Array.isArray(providers)) {
+        providers = await migrateOldSettings();
+    }
+    let activeProviderId = await getValue('ACTIVE_PROVIDER_ID', '');
+    let activeModel = await getValue('ACTIVE_MODEL', '');
+
+    let activeConfig = providers.find(p => p.id === activeProviderId);
+    if (!activeConfig && providers.length > 0) {
+        activeConfig = providers[0];
+        activeProviderId = activeConfig.id;
+        activeModel = activeConfig.models ? activeConfig.models[0] : '';
+        await setValue('ACTIVE_PROVIDER_ID', activeProviderId);
+        await setValue('ACTIVE_MODEL', activeModel);
+    }
+
+    if (activeConfig) {
+        return {
+            ...activeConfig,
+            activeModel: activeModel
+        };
+    }
+    return null;
+}
+
+// Provider switching function
+async function switchProvider() {
+    const options = await getEnabledProviderModelOptions();
+    if (options.length === 0) {
+        console.log('[AskPage] No enabled provider models available to switch.');
         return;
     }
 
-    console.log('[AskPage] Switching provider from', currentProvider, 'to', newProvider);
-    await setValue(PROVIDER_STORAGE, newProvider);
+    const activeProviderId = await getValue('ACTIVE_PROVIDER_ID', '');
+    const activeModel = await getValue('ACTIVE_MODEL', '');
+
+    let activeIndex = options.findIndex(opt => opt.providerId === activeProviderId && opt.model === activeModel);
+    if (activeIndex === -1) {
+        activeIndex = 0;
+    }
+
+    const nextIndex = (activeIndex + 1) % options.length;
+    const nextOption = options[nextIndex];
+
+    console.log('[AskPage] Switching provider to:', nextOption.providerName, 'Model:', nextOption.model);
+    await setValue('ACTIVE_PROVIDER_ID', nextOption.providerId);
+    await setValue('ACTIVE_MODEL', nextOption.model);
 
     // Update dialog UI if visible
     const overlay = getActiveDialogOverlay();
@@ -595,24 +739,16 @@ async function switchProvider() {
 
 // Update provider display in dialog
 async function updateProviderDisplay() {
-    const provider = await getValue(PROVIDER_STORAGE, 'gemini');
+    const activeConfig = await getActiveProviderConfig();
     const agentModeEnabled = await getAgentModeEnabled();
     const questionInput = getActiveDialogElementById('gemini-qna-input');
-    let model;
-    let displayName;
 
-    if (provider === 'gemini') {
-        model = await getValue(MODEL_STORAGE, 'gemini-flash-lite-latest');
-        displayName = 'Gemini';
-    } else if (provider === 'openai') {
-        model = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
-        displayName = 'OpenAI';
-    } else if (provider === 'azure') {
-        model = await getValue(AZURE_OPENAI_DEPLOYMENT_STORAGE, 'gpt-4o-mini');
-        displayName = 'Azure OpenAI';
-    } else if (provider === 'openai-compatible') {
-        model = await getValue(OPENAI_COMPATIBLE_MODEL_STORAGE, '');
-        displayName = 'OpenAI Compatible';
+    let displayName = 'Gemini';
+    let model = 'gemini-flash-lite-latest';
+
+    if (activeConfig) {
+        displayName = activeConfig.name || activeConfig.type;
+        model = activeConfig.activeModel;
     }
 
     if (questionInput) {
@@ -6950,8 +7086,9 @@ async function createDialog() {
         console.log('[AskPage] Question:', question);
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
 
-        const encryptedApiKey = await getValue(API_KEY_STORAGE, '');
-        const selectedModel = await getValue(MODEL_STORAGE, 'gemini-flash-lite-latest');
+        const activeConfig = await getActiveProviderConfig();
+        const encryptedApiKey = activeConfig?.apiKey || '';
+        const selectedModel = activeConfig?.activeModel || 'gemini-flash-lite-latest';
 
         console.log('[AskPage] Selected model:', selectedModel);
         console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
@@ -7015,8 +7152,9 @@ async function createDialog() {
 
     async function askOpenAI(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
         console.log('[AskPage] ===== OPENAI API CALL STARTED =====');
-        const encryptedApiKey = await getValue(OPENAI_API_KEY_STORAGE, '');
-        const selectedModel = await getValue(OPENAI_MODEL_STORAGE, 'gpt-4o-mini');
+        const activeConfig = await getActiveProviderConfig();
+        const encryptedApiKey = activeConfig?.apiKey || '';
+        const selectedModel = activeConfig?.activeModel || 'gpt-4o-mini';
 
         if (!encryptedApiKey) {
             appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 OpenAI API Key。');
@@ -7170,10 +7308,11 @@ async function createDialog() {
 
     async function askAzureOpenAI(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
         console.log('[AskPage] ===== AZURE OPENAI API CALL STARTED =====');
-        const encryptedApiKey = await getValue(AZURE_OPENAI_API_KEY_STORAGE, '');
-        const endpoint = await getValue(AZURE_OPENAI_ENDPOINT_STORAGE, '');
-        const deployment = await getValue(AZURE_OPENAI_DEPLOYMENT_STORAGE, '');
-        const apiVersion = await getValue(AZURE_OPENAI_API_VERSION_STORAGE, '2024-10-21');
+        const activeConfig = await getActiveProviderConfig();
+        const encryptedApiKey = activeConfig?.apiKey || '';
+        const endpoint = activeConfig?.azureEndpoint || '';
+        const deployment = activeConfig?.azureDeployment || '';
+        const apiVersion = activeConfig?.azureApiVersion || '2024-10-21';
 
         if (!encryptedApiKey) {
             appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 Azure OpenAI API Key。');
@@ -7336,9 +7475,10 @@ async function createDialog() {
 
     async function askOpenAICompatible(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
         console.log('[AskPage] ===== OPENAI COMPATIBLE API CALL STARTED =====');
-        const encryptedApiKey = await getValue(OPENAI_COMPATIBLE_API_KEY_STORAGE, '');
-        const endpoint = await getValue(OPENAI_COMPATIBLE_ENDPOINT_STORAGE, 'http://localhost:11434/v1');
-        const selectedModel = await getValue(OPENAI_COMPATIBLE_MODEL_STORAGE, '');
+        const activeConfig = await getActiveProviderConfig();
+        const encryptedApiKey = activeConfig?.apiKey || '';
+        const endpoint = activeConfig?.openaiCompatibleEndpoint || 'http://localhost:11434/v1';
+        const selectedModel = activeConfig?.activeModel || '';
 
         let apiKey = '';
         if (encryptedApiKey) {
@@ -7473,14 +7613,19 @@ async function createDialog() {
     }
 
     async function askAI(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
-        const provider = await getValue(PROVIDER_STORAGE, 'gemini');
-        console.log('[AskPage] Using provider:', provider);
+        const activeConfig = await getActiveProviderConfig();
+        if (!activeConfig) {
+            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 AI 提供者。');
+            return;
+        }
 
-        if (provider === 'openai') {
+        console.log('[AskPage] Using active provider type:', activeConfig.type);
+
+        if (activeConfig.type === 'openai') {
             await askOpenAI(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
-        } else if (provider === 'azure') {
+        } else if (activeConfig.type === 'azure') {
             await askAzureOpenAI(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
-        } else if (provider === 'openai-compatible') {
+        } else if (activeConfig.type === 'openai-compatible') {
             await askOpenAICompatible(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
         } else {
             await askGemini(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
