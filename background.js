@@ -1,3 +1,21 @@
+function isIgnorableConnectionError(error) {
+    const message = error?.message || String(error || '');
+    return message.includes('Could not establish connection') ||
+        message.includes('Receiving end does not exist');
+}
+
+function logSendMessageError(prefix, error) {
+    if (isIgnorableConnectionError(error)) {
+        return;
+    }
+
+    console.error(prefix, error);
+
+    if (error?.message) {
+        console.error('[AskPage] Error details:', error.message);
+    }
+}
+
 // Listens for the command to toggle the dialog
 chrome.commands.onCommand.addListener((command, tab) => {
     console.log('[AskPage] ===== COMMAND RECEIVED =====');
@@ -41,8 +59,7 @@ chrome.commands.onCommand.addListener((command, tab) => {
                 console.log('[AskPage] Message sent successfully, response:', response);
             }
         ).catch((error) => {
-            console.error('[AskPage] Error sending message:', error);
-            console.error('[AskPage] Error details:', error.message);
+            logSendMessageError('[AskPage] Error sending message:', error);
         });
     } else if (command === 'switch-provider') {
         console.log('[AskPage] Processing switch-provider command');
@@ -73,8 +90,7 @@ chrome.commands.onCommand.addListener((command, tab) => {
                 console.log('[AskPage] Provider switch message sent successfully, response:', response);
             }
         ).catch((error) => {
-            console.error('[AskPage] Error sending provider switch message:', error);
-            console.error('[AskPage] Error details:', error.message);
+            logSendMessageError('[AskPage] Error sending provider switch message:', error);
         });
     } else {
         console.warn('[AskPage] Unknown command received:', command);
@@ -124,7 +140,7 @@ chrome.action.onClicked.addListener((tab) => {
                 console.log('[AskPage] toggle-dialog sent via icon click, response:', response);
             }
         ).catch((error) => {
-            console.error('[AskPage] Error sending toggle-dialog via icon click:', error);
+            logSendMessageError('[AskPage] Error sending toggle-dialog via icon click:', error);
         });
     });
 });
