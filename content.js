@@ -2134,7 +2134,7 @@ async function createDialog() {
         display: 'none', position: 'fixed', left: '0', top: '0', zIndex: '2147483648',
         border: '1px solid #ccc', borderRadius: '8px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)', minWidth: '180px', fontSize: '14px',
-        maxHeight: '180px', overflowY: 'auto', padding: '4px 0',
+        maxHeight: '180px', overflowY: 'auto', overscrollBehavior: 'contain', padding: '4px 0',
         fontFamily: 'system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji',
         cursor: 'pointer', userSelect: 'none',
         background: '#ffffff',
@@ -2316,6 +2316,14 @@ async function createDialog() {
     messagesEl.addEventListener('touchmove', handleMessagesUserScrollIntent, { passive: true });
     messagesEl.addEventListener('keydown', handleMessagesScrollKey, true);
     messagesEl.addEventListener('scroll', handleMessagesScroll, { passive: true });
+
+    // 阻止 wheel 與 touchmove 事件冒泡到宿主頁面，避免觸發背景頁面的滾動 (特別是具有自訂滾動/滾動攔截的頁面)
+    overlay.addEventListener('wheel', (event) => {
+        event.stopPropagation();
+    }, { passive: true });
+    overlay.addEventListener('touchmove', (event) => {
+        event.stopPropagation();
+    }, { passive: true });
 
     overlay.addEventListener('mousemove', (event) => {
         if (shouldKeepDialogVisible()) {

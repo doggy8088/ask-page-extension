@@ -204,6 +204,7 @@
   flex: 1 1 auto;
   padding: 20px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   background: #f5f5f5;
   color: #000000;
   line-height: 1.6;
@@ -575,6 +576,7 @@
   padding: 12px 16px;
   border-radius: 8px;
   overflow: auto;
+  overscroll-behavior: contain;
   margin: 12px 0;
   font-size: 13px;
   line-height: 1.4;
@@ -1251,6 +1253,7 @@
   margin: 2px 0 0;
   padding: 12px 14px;
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid rgba(117, 216, 255, 0.28);
   border-radius: 12px;
   background: rgba(2, 8, 17, 0.54);
