@@ -13,6 +13,7 @@ let conversationSelectedText = '';
 let activeDialogState = null;
 let activeScreenAnnotationCancel = null;
 let dialogStylesTextPromise = null;
+let lastDialogPosition = null;
 const MAX_CONVERSATION_MESSAGES = 20;
 const MAX_DIALOG_HISTORY_MESSAGES = 200;
 const MAX_PAGE_TEXT_CONTEXT_LENGTH = 15000;
@@ -2089,8 +2090,8 @@ async function createDialog() {
     inputImageStripCopy.appendChild(inputImageStripMeta);
     inputImageStripHeader.appendChild(inputImageStripIcon);
     inputImageStripHeader.appendChild(inputImageStripCopy);
-    inputImageStripActions.appendChild(uploadImageBtn);
     inputImageStripActions.appendChild(annotateScreenBtn);
+    inputImageStripActions.appendChild(uploadImageBtn);
     inputImageStripHeader.appendChild(inputImageStripActions);
 
     const inputImageStripList = document.createElement('div');
@@ -2225,12 +2226,21 @@ async function createDialog() {
 
     function getDialogClampedPosition(left, top) {
         const rect = dialog.getBoundingClientRect();
-        const margin = 12;
-        const maxLeft = Math.max(margin, window.innerWidth - rect.width - margin);
-        const maxTop = Math.max(margin, window.innerHeight - rect.height - margin);
+        const minVisibleWidth = Math.min(40, rect.width);
+        const minVisibleHeight = Math.min(40, rect.height);
+
+        // Allow dragging mostly off-screen horizontally, keeping at least minVisibleWidth visible.
+        const minLeft = -(rect.width - minVisibleWidth);
+        const maxLeft = window.innerWidth - minVisibleWidth;
+
+        // Allow dragging mostly off-screen vertically at the bottom.
+        // Keep top >= 0 so the drag handle (header) is always visible and reachable.
+        const minTop = 0;
+        const maxTop = window.innerHeight - minVisibleHeight;
+
         return {
-            left: Math.min(Math.max(left, margin), maxLeft),
-            top: Math.min(Math.max(top, margin), maxTop)
+            left: Math.min(Math.max(left, minLeft), maxLeft),
+            top: Math.min(Math.max(top, minTop), maxTop)
         };
     }
 
@@ -2239,6 +2249,10 @@ async function createDialog() {
         dialog.style.left = `${clampedPosition.left}px`;
         dialog.style.top = `${clampedPosition.top}px`;
         dialog.style.transform = 'none';
+        lastDialogPosition = {
+            left: clampedPosition.left,
+            top: clampedPosition.top
+        };
     }
 
     function stopDialogDrag() {
@@ -2291,7 +2305,11 @@ async function createDialog() {
         event.preventDefault();
     });
 
-    resetDialogPosition();
+    if (lastDialogPosition) {
+        setDialogPosition(lastDialogPosition.left, lastDialogPosition.top);
+    } else {
+        resetDialogPosition();
+    }
     setDialogDimmed(false);
 
     const messagesScrollKeys = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
@@ -2378,7 +2396,7 @@ async function createDialog() {
 
     function createUsageCommandHtml(command, description) {
         const commandHtml = createInlineSlashCommandMarkup(command);
-        return `<li><span class="askpage-usage-command">${commandHtml}</span><span class="askpage-usage-command-desc">－ ${escapeHtml(description)}</span></li>`;
+        return `<li><span class="askpage-usage-command">${commandHtml}</span><span class="askpage-usage-command-desc"> － ${escapeHtml(description)}</span></li>`;
     }
 
     function buildPromptCommandListCopyText() {

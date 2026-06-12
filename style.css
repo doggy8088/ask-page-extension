@@ -1297,7 +1297,8 @@
   display: inline-flex !important;
   align-items: center;
   min-width: 74px;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-left: 8px !important;
   border-color: rgba(117, 216, 255, 0.26) !important;
   border-radius: 8px !important;
   background: rgba(27, 59, 99, 0.72) !important;
