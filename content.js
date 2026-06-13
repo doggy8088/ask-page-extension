@@ -4867,8 +4867,10 @@ async function createDialog() {
     }
 
     function dispatchFieldEvents(element) {
+        element.dispatchEvent(new Event('focus', { bubbles: true }));
         element.dispatchEvent(new Event('input', { bubbles: true }));
         element.dispatchEvent(new Event('change', { bubbles: true }));
+        element.dispatchEvent(new Event('blur', { bubbles: true }));
     }
 
     function coerceBooleanValue(value, defaultValue = false) {
@@ -5660,8 +5662,11 @@ async function createDialog() {
 
                     if (descriptor.fieldType === 'checkbox') {
                         const nextChecked = coerceBooleanValue(instruction.checked ?? instruction.value ?? instruction.text, true);
-                        setNativeProperty(descriptor.element, 'checked', nextChecked);
-                        dispatchFieldEvents(descriptor.element);
+                        if (descriptor.element.checked !== nextChecked) {
+                            descriptor.element.click();
+                        } else {
+                            dispatchFieldEvents(descriptor.element);
+                        }
                         return {
                             success: true,
                             selector: descriptor.selector,
@@ -5704,8 +5709,11 @@ async function createDialog() {
                             };
                         }
 
-                        setNativeProperty(matchedOption.element, 'checked', true);
-                        dispatchFieldEvents(matchedOption.element);
+                        if (!matchedOption.element.checked) {
+                            matchedOption.element.click();
+                        } else {
+                            dispatchFieldEvents(matchedOption.element);
+                        }
                         return {
                             success: true,
                             selector: matchedOption.selector,
