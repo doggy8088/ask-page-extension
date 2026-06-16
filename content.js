@@ -74,6 +74,8 @@ const DIALOG_MESSAGES_ID = 'gemini-qna-messages';
 const DIALOG_STYLESHEET_PATH = 'style.css';
 const SCREEN_ANNOTATION_OVERLAY_ID = 'askpage-screen-annotation-overlay';
 const AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS = 100;
+const AUTO_SCROLL_ANIMATION_DURATION_MS = 240;
+const ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX = 90;
 const DIALOG_DIM_DELAY_MS = 1000;
 const DIALOG_HOST_ISOLATION_STYLES = [
     ['all', 'initial'],
@@ -214,6 +216,15 @@ function clearAutoScrollResetTimer(dialogState) {
     dialogState.autoScrollResetTimer = 0;
 }
 
+function clearAutoScrollAnimationFrame(dialogState) {
+    if (!dialogState?.autoScrollAnimationFrame) {
+        return;
+    }
+
+    cancelAnimationFrame(dialogState.autoScrollAnimationFrame);
+    dialogState.autoScrollAnimationFrame = 0;
+}
+
 function shouldIgnoreProgrammaticMessagesScroll(dialogState, messagesElement) {
     const isAtLastProgrammaticPosition = Math.abs(messagesElement.scrollTop - dialogState.lastProgrammaticScrollTop) <= 1;
     const maxScrollTop = Math.max(0, messagesElement.scrollHeight - messagesElement.clientHeight);
@@ -241,15 +252,120 @@ function resumeActiveMessagesAutoScroll(fallbackMessagesEl) {
     scrollMessagesToBottom(targetMessagesEl);
 }
 
-function appendNodeToActiveMessages(messageNode, fallbackMessagesEl) {
+function setAutoScrollResetState(dialogState) {
+    if (!dialogState) {
+        return;
+    }
+
+    clearAutoScrollResetTimer(dialogState);
+    dialogState.autoScrollResetTimer = setTimeout(() => {
+        if (activeDialogState === dialogState) {
+            dialogState.isAutoScrolling = false;
+            dialogState.autoScrollResetTimer = 0;
+        }
+    }, AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS);
+}
+
+function animateScrollTo(messagesElement, targetScrollTop, options = {}) {
+    const dialogState = getActiveDialogStateForMessages(messagesElement);
+    const force = options.force === true;
+    if (dialogState?.autoScrollSuspended && !force) {
+        return;
+    }
+
+    const maxScrollTop = Math.max(0, messagesElement.scrollHeight - messagesElement.clientHeight);
+    const clampedScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
+
+    if (!dialogState) {
+        messagesElement.scrollTop = clampedScrollTop;
+        return;
+    }
+
+    const duration = Number.isFinite(options.duration) ? options.duration : AUTO_SCROLL_ANIMATION_DURATION_MS;
+    const currentScrollTop = messagesElement.scrollTop;
+    const distance = clampedScrollTop - currentScrollTop;
+
+    dialogState.isAutoScrolling = true;
+    clearAutoScrollResetTimer(dialogState);
+    clearAutoScrollAnimationFrame(dialogState);
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion || duration <= 0 || Math.abs(distance) <= 1) {
+        messagesElement.scrollTop = clampedScrollTop;
+        dialogState.lastProgrammaticScrollTop = clampedScrollTop;
+        setAutoScrollResetState(dialogState);
+        return;
+    }
+
+    const start = performance.now();
+    const easeOutCubic = (value) => {
+        return 1 - Math.pow(1 - value, 3);
+    };
+
+    const step = (now) => {
+        const elapsed = now - start;
+        const progress = Math.min(1, elapsed / duration);
+        const eased = easeOutCubic(progress);
+        messagesElement.scrollTop = currentScrollTop + (distance * eased);
+        dialogState.lastProgrammaticScrollTop = messagesElement.scrollTop;
+
+        if (progress < 1) {
+            dialogState.autoScrollAnimationFrame = requestAnimationFrame(step);
+        } else {
+            messagesElement.scrollTop = clampedScrollTop;
+            dialogState.lastProgrammaticScrollTop = clampedScrollTop;
+            dialogState.autoScrollAnimationFrame = 0;
+            setAutoScrollResetState(dialogState);
+        }
+    };
+
+    dialogState.autoScrollAnimationFrame = requestAnimationFrame(step);
+}
+
+function appendNodeToActiveMessages(messageNode, fallbackMessagesEl, options = {}) {
     const targetMessagesEl = getActiveMessagesElement(fallbackMessagesEl);
     if (!targetMessagesEl) {
         return false;
     }
 
     targetMessagesEl.appendChild(messageNode);
-    scrollMessagesToBottom(targetMessagesEl);
-    return true;
+    const autoScrollMode = options.autoScrollMode || 'bottom';
+    if (autoScrollMode === 'message-top') {
+        scrollMessagesToMessageTop(targetMessagesEl, messageNode, {
+            scrollOffset: options.autoScrollOffset,
+            force: options.autoScrollForce === true
+        });
+    } else if (autoScrollMode === 'bottom') {
+        scrollMessagesToBottom(targetMessagesEl);
+    }
+    return messageNode;
+}
+
+function isCompletionTraceMessage(messageText) {
+    const text = String(messageText || '').trim();
+    return text.includes('頁問已經打完收工') || text.includes('頁問提早收工');
+}
+
+function scrollMessagesToMessageTop(messagesElement, messageElement, options = {}) {
+    if (!messagesElement || !messageElement) {
+        return;
+    }
+
+    const dialogState = getActiveDialogStateForMessages(messagesElement);
+    const force = options.force === true;
+    if (dialogState?.autoScrollSuspended && !force) {
+        return;
+    }
+    if (!messagesElement.contains(messageElement)) {
+        return;
+    }
+
+    const scrollOffset = Number.isFinite(options.scrollOffset) ? options.scrollOffset : 0;
+    const targetScrollTop = Math.max(0, messageElement.offsetTop - scrollOffset);
+    animateScrollTo(messagesElement, targetScrollTop, {
+        force,
+        duration: options.duration
+    });
 }
 
 function scrollMessagesToBottom(messagesElement) {
@@ -262,22 +378,7 @@ function scrollMessagesToBottom(messagesElement) {
         return;
     }
 
-    if (dialogState) {
-        dialogState.isAutoScrolling = true;
-        clearAutoScrollResetTimer(dialogState);
-    }
-
-    messagesElement.scrollTop = messagesElement.scrollHeight;
-
-    if (dialogState) {
-        dialogState.lastProgrammaticScrollTop = messagesElement.scrollTop;
-        dialogState.autoScrollResetTimer = setTimeout(() => {
-            if (activeDialogState === dialogState) {
-                dialogState.isAutoScrolling = false;
-                dialogState.autoScrollResetTimer = 0;
-            }
-        }, AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS);
-    }
+    animateScrollTo(messagesElement, messagesElement.scrollHeight);
 }
 
 function scrollActiveMessagesToBottom(fallbackMessagesEl) {
@@ -2171,6 +2272,7 @@ async function createDialog() {
         isAutoScrolling: false,
         lastProgrammaticScrollTop: 0,
         autoScrollResetTimer: 0,
+        autoScrollAnimationFrame: 0,
         elements: {
             [DIALOG_OVERLAY_ID]: overlay,
             [DIALOG_MESSAGES_ID]: messagesEl,
@@ -2645,6 +2747,7 @@ async function createDialog() {
         dialogInputEventTypes.forEach((eventType) => {
             overlay.removeEventListener(eventType, stopDialogInputEventPropagation);
         });
+        clearAutoScrollAnimationFrame(activeDialogState);
         clearAutoScrollResetTimer(activeDialogState);
         host.remove();
         if (activeDialogState && activeDialogState.host === host) {
@@ -3685,6 +3788,10 @@ async function createDialog() {
                     renderFrame = 0;
                 }
                 render({ suppressCopyButton: false });
+                scrollMessagesToMessageTop(messagesEl, messageElement, {
+                    scrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
+                    force: true
+                });
                 addConversationTurn('assistant', text, text, historyOptions);
                 return messageElement;
             },
@@ -3803,15 +3910,14 @@ async function createDialog() {
             appendUserScreenshotThumbnail(div, options.screenshotDataUrl);
             appendUserInputImageGallery(div, options.inputImageDataUrls);
         }
-        appendNodeToActiveMessages(div, messagesEl);
-        return div;
+        return appendNodeToActiveMessages(div, messagesEl, options);
     }
 
     function appendPersistentMessage(role, text, options = {}, historyOptions = {}) {
         const messageText = role === 'assistant' && !options.renderedHtml
             ? postProcessAssistantMarkdown(text)
             : text;
-        appendMessage(role, messageText, options);
+        const messageElement = appendMessage(role, messageText, options);
         addConversationTurn(
             role,
             historyOptions.content ?? messageText,
@@ -3825,13 +3931,16 @@ async function createDialog() {
                 inputImageDataUrls: historyOptions.inputImageDataUrls ?? options.inputImageDataUrls
             }
         );
+        return messageElement;
     }
 
     function appendAgentTraceMessage(text, kind = 'status', options = {}) {
+        const shouldAutoScroll = !isCompletionTraceMessage(text);
         appendPersistentMessage('assistant', text, {
             suppressCopyButton: true,
             renderedHtml: options.renderedHtml || '',
-            extraClassName: `askpage-agent-trace askpage-agent-trace-${kind}`
+            extraClassName: `askpage-agent-trace askpage-agent-trace-${kind}`,
+            autoScrollMode: shouldAutoScroll ? (options.autoScrollMode || 'bottom') : 'none'
         }, {
             renderedHtml: options.renderedHtml || '',
             includeInModelContext: false
@@ -7193,7 +7302,11 @@ async function createDialog() {
             if (streamedAnswer) {
                 streamedAnswer.finalize(answer);
             } else {
-                appendPersistentMessage('assistant', answer);
+                appendPersistentMessage('assistant', answer, {
+                    autoScrollMode: 'message-top',
+                    autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
+                    autoScrollForce: true
+                });
             }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
@@ -7348,7 +7461,11 @@ async function createDialog() {
             if (streamedAnswer) {
                 streamedAnswer.finalize(answer.answer);
             } else {
-                appendPersistentMessage('assistant', answer.answer);
+                appendPersistentMessage('assistant', answer.answer, {
+                    autoScrollMode: 'message-top',
+                    autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
+                    autoScrollForce: true
+                });
             }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
@@ -7516,7 +7633,11 @@ async function createDialog() {
             if (streamedAnswer) {
                 streamedAnswer.finalize(answer.answer);
             } else {
-                appendPersistentMessage('assistant', answer.answer);
+                appendPersistentMessage('assistant', answer.answer, {
+                    autoScrollMode: 'message-top',
+                    autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
+                    autoScrollForce: true
+                });
             }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
@@ -7676,7 +7797,11 @@ async function createDialog() {
             if (streamedAnswer) {
                 streamedAnswer.finalize(finalAnswer);
             } else {
-                appendPersistentMessage('assistant', finalAnswer);
+                appendPersistentMessage('assistant', finalAnswer, {
+                    autoScrollMode: 'message-top',
+                    autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
+                    autoScrollForce: true
+                });
             }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
@@ -7891,7 +8016,11 @@ async function createDialog() {
             if (streamedAnswer) {
                 streamedAnswer.finalize(finalAnswer);
             } else {
-                appendPersistentMessage('assistant', finalAnswer);
+                appendPersistentMessage('assistant', finalAnswer, {
+                    autoScrollMode: 'message-top',
+                    autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
+                    autoScrollForce: true
+                });
             }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
