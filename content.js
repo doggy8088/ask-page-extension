@@ -481,6 +481,7 @@ const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
 // Storage keys for custom slash command prompts
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
+const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
 
 async function getValue(key, defaultValue) {
     const result = await chrome.storage.local.get([key]);
@@ -1688,7 +1689,8 @@ function buildSystemPrompt({
     inputImageCount = 0,
     pageContextFormat = 'text',
     pageContextIsFiltered = false,
-    pageContextIsTruncated = false
+    pageContextIsTruncated = false,
+    customSystemPrompt = ''
 } = {}) {
     const pageContextDescription = pageContextFormat === 'html'
         ? `The page context is provided as ${pageContextIsTruncated ? 'filtered HTML markup' : 'filtered full-page HTML markup'} from the page container rather than plain text.${pageContextIsFiltered ? ' Script/style blocks, template-like noise, inline JavaScript URLs, inline event handlers, and inline styles have already been removed so you can focus on useful DOM structure for web automation.' : ''}`
@@ -1705,7 +1707,7 @@ function buildSystemPrompt({
         ? `The user also attached ${inputImageCount > 1 ? `${inputImageCount} images` : 'an image'} as additional visual context.`
         : '';
 
-    return [
+    const baseSystemPrompt = [
         'You are a helpful assistant that answers questions about web page content.',
         pageContextDescription,
         selectedTextDescription,
@@ -1755,6 +1757,11 @@ function buildSystemPrompt({
         'Do not provide any additional explanations or disclaimers unless explicitly asked.',
         'No prefix or suffix is needed for the response.'
     ].filter(Boolean).join(' ');
+
+    const normalizedCustomSystemPrompt = customSystemPrompt.trim();
+    return normalizedCustomSystemPrompt
+        ? `${baseSystemPrompt}\n\n${normalizedCustomSystemPrompt}`
+        : baseSystemPrompt;
 }
 
 function buildConversationContextText(pageContext, capturedSelectedText = '') {
@@ -1778,6 +1785,7 @@ function buildConversationContextText(pageContext, capturedSelectedText = '') {
 
 async function preparePageConversationContext(capturedSelectedText = '', options = {}) {
     const pageContext = await getPageContext();
+    const customSystemPrompt = await getValue(CUSTOM_SYSTEM_PROMPT_STORAGE, '');
     const hasSelectedText = Boolean(capturedSelectedText);
     const includeScreenshot = options.includeScreenshot === true;
     const inputImageCount = normalizeInputImageDataUrls(options.inputImageDataUrls).length;
@@ -1799,7 +1807,8 @@ async function preparePageConversationContext(capturedSelectedText = '', options
             inputImageCount,
             pageContextFormat: pageContext.format,
             pageContextIsFiltered: pageContext.isFiltered,
-            pageContextIsTruncated: pageContext.isTruncated
+            pageContextIsTruncated: pageContext.isTruncated,
+            customSystemPrompt
         }),
         conversationContextText: buildConversationContextText(pageContext, capturedSelectedText),
         contextMode

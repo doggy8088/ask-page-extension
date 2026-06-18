@@ -96,6 +96,7 @@ async function getOrCreateEncryptionKey() {
 let saveButton, resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
 let modalSave, modalCancel, modalCommandNameError;
+let customSystemPromptTextarea, customSystemPromptCount;
 
 // Multi-provider UI elements
 let providersList, addProviderBtn, providerModal, providerModalTitle, modalProviderName, modalProviderType;
@@ -114,6 +115,7 @@ let providers = [];
 // Storage keys
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
+const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
 
 // Built-in commands that cannot be deleted or modified
 const BUILT_IN_COMMANDS = [
@@ -252,6 +254,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCommandPrompt = document.getElementById('modalCommandPrompt');
     modalSave = document.getElementById('modalSave');
     modalCancel = document.getElementById('modalCancel');
+    customSystemPromptTextarea = document.getElementById('customSystemPrompt');
+    customSystemPromptCount = document.getElementById('customSystemPromptCount');
 
     // Tab navigation
     const tabButtons = document.querySelectorAll('.tab-btn');
@@ -282,6 +286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCommandName.addEventListener('input', () => {
         validateCommandNameInput({ showEmptyError: true });
     });
+    customSystemPromptTextarea.addEventListener('input', updateCustomSystemPromptCount);
 
     // Provider modal listeners
     addProviderBtn.addEventListener('click', () => openProviderModal());
@@ -330,6 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Save the settings
     saveButton.addEventListener('click', async () => {
+        await saveCustomSystemPrompt();
         showStatus('設定已儲存！', 'success');
     });
 
@@ -581,6 +587,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         chrome.storage.local.set({ [CUSTOM_COMMANDS_STORAGE]: customCommands });
     }
 
+    function updateCustomSystemPromptCount() {
+        const textLength = customSystemPromptTextarea.value.length;
+        customSystemPromptCount.textContent = `${textLength} 字元`;
+    }
+
+    async function saveCustomSystemPrompt() {
+        const customSystemPrompt = customSystemPromptTextarea.value.trim();
+        await chrome.storage.local.set({ [CUSTOM_SYSTEM_PROMPT_STORAGE]: customSystemPrompt });
+    }
+
     // Render commands list
     function renderCommands() {
         commandsList.innerHTML = '';
@@ -676,7 +692,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     chrome.storage.local.get([
         'PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL',
-        'CUSTOM_SUMMARY_PROMPT', CUSTOM_COMMANDS_STORAGE
+        'CUSTOM_SUMMARY_PROMPT', CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE
     ], async (result) => {
         let activeProviderId = result.ACTIVE_PROVIDER_ID || '';
         let activeModel = result.ACTIVE_MODEL || '';
@@ -706,6 +722,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         renderCommands();
+
+        customSystemPromptTextarea.value = result[CUSTOM_SYSTEM_PROMPT_STORAGE] || '';
+        updateCustomSystemPromptCount();
     });
 
     // Render providers list

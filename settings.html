@@ -681,7 +681,7 @@
         <img class="icon" src="icons/askpage-mark.png" alt="" aria-hidden="true">
         頁問: 偏好設定
       </h1>
-      <p>設定您的 AI 提供者和自訂斜線命令</p>
+      <p>設定您的 AI 提供者、自訂斜線命令和系統提示</p>
       <div class="button-group">
         <button id="save" class="btn-primary">💾 儲存</button>
         <button id="reset" class="btn-secondary">🔄 重置</button>
@@ -701,6 +701,10 @@
         <button class="tab-btn" data-tab="commands">
           <span class="icon">⚡</span>
           自訂斜線命令
+        </button>
+        <button class="tab-btn" data-tab="system-prompt">
+          <span class="icon">📝</span>
+          調整系統提示
         </button>
       </div>
 
@@ -753,6 +757,26 @@
                 <div>新增自訂斜線命令</div>
                 <small>點擊新增您專屬的斜線命令</small>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom System Prompt Tab -->
+        <div id="system-prompt-tab" class="tab-pane">
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">
+                <span class="icon">📝</span>
+                調整系統提示
+              </h2>
+              <p class="card-description">這段內容會附加在內建系統提示最後面；留空則不追加。內建系統提示不會被覆寫。</p>
+            </div>
+
+            <div class="form-group">
+              <label for="customSystemPrompt">追加提示詞</label>
+              <textarea id="customSystemPrompt" placeholder="請輸入要附加到系統提示最後面的內容..." spellcheck="false"></textarea>
+              <small style="color: var(--text-secondary);">儲存後，所有 AI 提供者都會在送出請求時套用這段追加提示詞。</small>
+              <small id="customSystemPromptCount" style="color: var(--text-secondary);">0 字元</small>
             </div>
           </div>
         </div>
