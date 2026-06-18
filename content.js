@@ -4021,7 +4021,7 @@ async function createDialog() {
         }
 
         if (baseStatus.includes('已取得最終回覆，正在整理答案')) {
-            return withRoundBadge('我已經拿到結果，正在整理成最後答覆。');
+            return '';
         }
 
         return roundMatch ? `${roundBadge}${baseStatus}` : trimmedStatus;
@@ -7009,7 +7009,7 @@ async function createDialog() {
             }
 
             if (!toolCalls.length) {
-                reportStatus('已取得最終回覆，正在整理答案...');
+                console.debug(`[AskPage] ${providerLabel} 已取得最終回覆，正在整理答案...`);
                 return {
                     answer: answerText,
                     fallbackUsed
@@ -7210,7 +7210,7 @@ async function createDialog() {
             }
 
             if (!functionCalls.length) {
-                reportStatus('已取得最終回覆，正在整理答案...');
+                console.debug('[AskPage] Gemini 已取得最終回覆，正在整理答案...');
                 return textResponse;
             }
 
