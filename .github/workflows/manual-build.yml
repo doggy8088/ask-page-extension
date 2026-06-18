@@ -19,7 +19,7 @@ jobs:
 
     steps:
     - name: 檢出程式碼
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: 設定版本號
       id: version
@@ -102,14 +102,14 @@ jobs:
         unzip -l "$PACKAGE_NAME"
 
     - name: 上傳套件到 Artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: extension-package-${{ steps.version.outputs.version }}
         path: ${{ env.PACKAGE_NAME }}
 
     - name: 建立 GitHub Release
       if: ${{ github.event.inputs.create_release == 'true' }}
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         tag_name: ${{ steps.version.outputs.version }}
         name: 頁問 ${{ steps.version.outputs.version }}

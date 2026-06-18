@@ -15,12 +15,12 @@ jobs:
 
     steps:
     - name: 取出程式碼
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
-        node-version: '20'
+        node-version: '24'
 
     - name: Get version
       id: get_version
@@ -30,7 +30,7 @@ jobs:
 
     - name: 建立 GitHub Release
       id: create_release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v3
       with:
         tag_name: v${{ steps.get_version.outputs.version }}
         name: 頁問 v${{ steps.get_version.outputs.version }}
@@ -43,7 +43,7 @@ jobs:
         zip -r "$filePath" manifest.json background.js content.js popup.html popup.js settings.html settings.js style.css icons lib CHANGELOG.md README.md
 
     - name: Upload Release Asset
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v3
       with:
         tag_name: v${{ steps.get_version.outputs.version }}
         files: ./AskPageExtension_v${{ steps.get_version.outputs.version }}.zip
@@ -77,11 +77,17 @@ jobs:
           echo "✅ 所有必要的 Chrome Web Store secrets 都已設定"
         fi
 
-    - name: Publish to Chrome Web Store
-      uses: mnao305/chrome-extension-upload@v4.0.1
+    - name: Upload to Chrome Web Store
+      uses: mnao305/chrome-extension-upload@v6.0.0
       with:
         file-path: 'AskPageExtension_v${{ steps.get_version.outputs.version }}.zip'
         extension-id: ${{ secrets.EXTENSION_ID }}
         client-id: ${{ secrets.CLIENT_ID }}
         client-secret: ${{ secrets.CLIENT_SECRET }}
         refresh-token: ${{ secrets.REFRESH_TOKEN }}
+        publish: false
+
+    - name: Chrome Web Store publish note
+      run: |
+        echo "Chrome Web Store 套件已上傳。" >> $GITHUB_STEP_SUMMARY
+        echo "請到 Chrome Web Store Developer Dashboard 手動送出發布，避免 publish API 回傳 400 時造成 CI 失敗。" >> $GITHUB_STEP_SUMMARY
