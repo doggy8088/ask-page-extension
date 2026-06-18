@@ -1190,13 +1190,35 @@
 
 .askpage-usage-card {
   display: grid;
-  gap: 16px;
-  padding: 22px 24px 18px;
+  gap: 12px;
+  padding: 16px 18px 14px;
+}
+
+.askpage-usage-primary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.92fr);
+  gap: 12px;
+  align-items: stretch;
 }
 
 .askpage-usage-section {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+}
+
+.askpage-usage-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.askpage-usage-mode {
+  align-content: start;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(117, 216, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(5, 18, 33, 0.48);
 }
 
 .askpage-usage-heading,
@@ -1211,7 +1233,7 @@
   color: #80d8ff;
   font-size: 16px;
   font-weight: 900;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 
 .askpage-usage-heading-icon {
@@ -1220,20 +1242,15 @@
 
 .askpage-usage-section-title {
   color: #5fc8ff;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 900;
 }
 
 .askpage-usage-card p {
   margin: 0;
   color: #cfdded;
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-.askpage-usage-section:not(.askpage-usage-intro) p,
-.askpage-usage-commands {
-  padding-left: 32px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .askpage-usage-count {
@@ -1249,43 +1266,82 @@
 }
 
 .askpage-selected-text-preview {
-  max-height: 180px;
+  max-height: 88px;
   margin: 2px 0 0;
-  padding: 12px 14px;
-  overflow: auto;
+  padding: 10px 12px;
+  overflow: hidden;
   overscroll-behavior: contain;
   border: 1px solid rgba(117, 216, 255, 0.28);
   border-radius: 12px;
   background: rgba(2, 8, 17, 0.54);
   color: #e8f6ff;
   font-family: var(--askpage-font);
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .askpage-usage-subtitle {
-  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
   color: #dceaff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
-.askpage-usage-command-group {
-  margin-top: 12px;
+.askpage-usage-subtitle::after {
+  display: block;
+  height: 1px;
+  flex: 1 1 auto;
+  min-width: 24px;
+  background: linear-gradient(90deg, rgba(117, 216, 255, 0.34), transparent);
+  content: '';
+}
+
+.askpage-usage-command-panel {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(117, 216, 255, 0.18);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(10, 30, 52, 0.58), rgba(4, 14, 27, 0.38)),
+    rgba(4, 14, 27, 0.42);
+}
+
+.askpage-usage-commands {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .askpage-usage-command-list {
   display: grid;
+  grid-template-columns: 1fr;
   gap: 7px;
   margin: 0;
-  padding-left: 18px;
+  padding-left: 0;
+  min-width: 0;
+  list-style: none;
   color: #cfdded;
 }
 
-.askpage-usage-command-list li {
-  padding-left: 2px;
+.askpage-usage-command-item {
+  display: grid;
+  grid-template-columns: minmax(78px, auto) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid rgba(117, 216, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(2, 10, 20, 0.38);
 }
 
 .askpage-usage-command {
@@ -1296,9 +1352,10 @@
 .askpage-usage-command code {
   display: inline-flex !important;
   align-items: center;
-  min-width: 74px;
-  justify-content: flex-start;
-  padding-left: 8px !important;
+  min-width: 78px;
+  justify-content: center;
+  padding-left: 7px !important;
+  padding-right: 7px !important;
   border-color: rgba(117, 216, 255, 0.26) !important;
   border-radius: 8px !important;
   background: rgba(27, 59, 99, 0.72) !important;
@@ -1307,7 +1364,37 @@
 }
 
 .askpage-usage-command-desc {
+  display: -webkit-box;
+  min-width: 0;
+  padding-top: 2px;
   color: #cfdded;
+  overflow: hidden;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.askpage-usage-more-link {
+  justify-self: start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #80d8ff;
+  cursor: pointer;
+  font-family: var(--askpage-font);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.askpage-usage-more-link:hover,
+.askpage-usage-more-link:focus-visible {
+  color: #d9f5ff;
+  outline: none;
 }
 
 #gemini-qna-messages .gemini-msg-assistant p,
@@ -1332,15 +1419,46 @@
 
 #gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-usage-card p,
 #gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-usage-command-list,
-#gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-usage-command-list li,
+#gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-usage-command-item,
 #gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-usage-command-desc {
   color: #cfdded;
 }
 
+#gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-usage-command-list {
+  display: grid;
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  list-style-type: none;
+}
+
+#gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-usage-command-list .askpage-usage-command-item {
+  display: grid;
+  grid-template-columns: minmax(78px, auto) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  list-style: none;
+  list-style-type: none;
+}
+
+#gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-usage-command-list .askpage-usage-command-item::marker {
+  color: transparent;
+  font-size: 0;
+  content: '';
+}
+
+#gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-usage-more-link {
+  color: #80d8ff;
+  font-family: var(--askpage-font);
+}
+
 #gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-usage-card p {
   margin: 0;
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 #gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-usage-subtitle {
@@ -1391,16 +1509,16 @@
 }
 
 #gemini-qna-messages .gemini-msg-assistant.askpage-usage-prompt .askpage-selected-text-preview {
-  max-height: 180px;
+  max-height: 88px;
   margin: 2px 0 0;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-color: rgba(117, 216, 255, 0.28);
   border-radius: 12px;
   background: rgba(2, 8, 17, 0.54);
   color: #e8f6ff;
   font-family: var(--askpage-font);
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1633,6 +1751,24 @@
   #gemini-qna-messages .gemini-msg-user,
   #gemini-qna-messages .gemini-msg-assistant {
     max-width: 100%;
+  }
+
+  .askpage-usage-card {
+    padding: 14px;
+  }
+
+  .askpage-usage-primary-grid,
+  .askpage-usage-mode-grid,
+  .askpage-usage-commands {
+    grid-template-columns: 1fr;
+  }
+
+  .askpage-usage-command-list {
+    grid-template-columns: 1fr;
+  }
+
+  .askpage-usage-command-item {
+    grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
   }
 }
 

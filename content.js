@@ -481,6 +481,7 @@ const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
 // Storage keys for custom slash command prompts
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
+const CUSTOM_COMMAND_USAGE_STORAGE = 'CUSTOM_COMMAND_USAGE';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
 
 async function getValue(key, defaultValue) {
@@ -490,6 +491,60 @@ async function getValue(key, defaultValue) {
 
 function setValue(key, value) {
     return chrome.storage.local.set({ [key]: value });
+}
+
+function normalizeCommandUsageMap(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {};
+    }
+
+    return Object.entries(value).reduce((usageMap, [command, count]) => {
+        const normalizedCommand = String(command || '').trim();
+        const normalizedCount = Number(count);
+        if (!normalizedCommand || !Number.isFinite(normalizedCount) || normalizedCount <= 0) {
+            return usageMap;
+        }
+
+        usageMap[normalizedCommand] = normalizedCount;
+        return usageMap;
+    }, {});
+}
+
+async function getCustomCommandUsageMap() {
+    return normalizeCommandUsageMap(await getValue(CUSTOM_COMMAND_USAGE_STORAGE, {}));
+}
+
+async function incrementCustomCommandUsage(command) {
+    const normalizedCommand = String(command || '').trim();
+    if (!normalizedCommand) {
+        return;
+    }
+
+    const usageMap = await getCustomCommandUsageMap();
+    usageMap[normalizedCommand] = (usageMap[normalizedCommand] || 0) + 1;
+    await setValue(CUSTOM_COMMAND_USAGE_STORAGE, usageMap);
+}
+
+function getTopCustomCommands(customCommands, usageMap, limit = 2) {
+    if (!Array.isArray(customCommands) || customCommands.length <= limit) {
+        return customCommands || [];
+    }
+
+    return customCommands
+        .map((command, index) => ({
+            command,
+            index,
+            usageCount: usageMap[command.cmd] || 0
+        }))
+        .sort((a, b) => {
+            if (b.usageCount !== a.usageCount) {
+                return b.usageCount - a.usageCount;
+            }
+
+            return a.index - b.index;
+        })
+        .slice(0, limit)
+        .map((item) => item.command);
 }
 
 // API key masking for console output
@@ -2507,7 +2562,8 @@ async function createDialog() {
 
     function createUsageCommandHtml(command, description) {
         const commandHtml = createInlineSlashCommandMarkup(command);
-        return `<li><span class="askpage-usage-command">${commandHtml}</span><span class="askpage-usage-command-desc"> － ${escapeHtml(description)}</span></li>`;
+        const escapedDescription = escapeHtml(description);
+        return `<li class="askpage-usage-command-item"><span class="askpage-usage-command">${commandHtml}</span><span class="askpage-usage-command-desc" title="${escapedDescription}">${escapedDescription}</span></li>`;
     }
 
     function buildPromptCommandListCopyText() {
@@ -2533,55 +2589,70 @@ async function createDialog() {
         const screenshotEnabled = options.screenshotEnabled === true;
         const agentModeEnabled = options.agentModeEnabled === true;
         const screenshotTitle = screenshotEnabled
-            ? '截圖模式（目前為啟用狀態）'
-            : '截圖模式（目前為停用狀態）';
+            ? '截圖：啟用'
+            : '截圖：停用';
         const screenshotText = screenshotEnabled
-            ? '系統會在提問時自動附帶目前可視範圍的截圖作為輔助分析。'
-            : '頁問只會對目前網頁的文字內容進行分析，不會自動附帶截圖。';
+            ? '提問時自動附帶目前可視範圍截圖。'
+            : '只分析網頁文字，不自動附帶截圖。';
         const agentTitle = agentModeEnabled
-            ? '代理模式（目前為啟用狀態）'
-            : '詢問模式（目前為啟用狀態）';
+            ? '代理：啟用'
+            : '詢問：啟用';
         const agentText = agentModeEnabled
-            ? '系統會使用多步驟代理的工具調用能力來分析與操作目前頁面。'
-            : '系統只會根據頁面內容回答問題，不會呼叫頁面工具。';
+            ? '可用多步驟工具呼叫分析與操作目前頁面。'
+            : '根據頁面內容回答，不呼叫頁面工具。';
 
         return `
-            <section class="askpage-usage-section">
+            <div class="askpage-usage-mode-grid">
+            <section class="askpage-usage-section askpage-usage-mode">
                 <div class="askpage-usage-section-title"><span aria-hidden="true">📝</span><strong>${screenshotTitle}</strong></div>
                 <p>${screenshotText}</p>
             </section>
-            <section class="askpage-usage-section">
+            <section class="askpage-usage-section askpage-usage-mode">
                 <div class="askpage-usage-section-title"><span aria-hidden="true">🤖</span><strong>${agentTitle}</strong></div>
                 <p>${agentText}</p>
             </section>
+            </div>
         `;
     }
 
-    function buildUsageCommandsHtml(customCommands) {
-        const customCommandListHtml = customCommands
+    function buildUsageCommandsHtml(customCommands, options = {}) {
+        const customCommandUsageMap = options.customCommandUsageMap || {};
+        const visibleCustomCommands = getTopCustomCommands(customCommands, customCommandUsageMap, 2);
+        const hiddenCustomCommandCount = Math.max(0, customCommands.length - visibleCustomCommands.length);
+        const customCommandListHtml = visibleCustomCommands
             .map((cmd) => {
                 const description = `${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`;
                 return createUsageCommandHtml(cmd.cmd, description);
             })
             .join('');
+        const moreCustomCommandsLink = hiddenCustomCommandCount > 0
+            ? `
+                <button type="button" class="askpage-usage-more-link" data-askpage-open-options="true" title="開啟偏好設定查看所有自訂命令" aria-label="開啟偏好設定查看所有自訂命令">
+                    查看更多（另有 ${hiddenCustomCommandCount} 個）
+                </button>
+            `
+            : '';
         const customCommandItems = customCommands.length
             ? `
-                <div class="askpage-usage-command-group">
-                    <div class="askpage-usage-subtitle">您的自訂命令：</div>
+                <div class="askpage-usage-command-panel">
+                    <div class="askpage-usage-subtitle">自訂命令</div>
                     <ul class="askpage-usage-command-list">
                         ${customCommandListHtml}
                     </ul>
+                    ${moreCustomCommandsLink}
                 </div>
             `
             : '';
 
         return `
             <section class="askpage-usage-section askpage-usage-commands">
-                <div class="askpage-usage-subtitle">內建斜線命令：</div>
-                <ul class="askpage-usage-command-list">
-                    ${createUsageCommandHtml('/clear', '清除歷史紀錄（也可按 Ctrl+L 快速鍵）')}
-                    ${createUsageCommandHtml('/summary', '總結整個頁面')}
-                </ul>
+                <div class="askpage-usage-command-panel">
+                    <div class="askpage-usage-subtitle">內建命令</div>
+                    <ul class="askpage-usage-command-list">
+                        ${createUsageCommandHtml('/clear', '清除歷史紀錄（Ctrl+L）')}
+                        ${createUsageCommandHtml('/summary', '總結整個頁面')}
+                    </ul>
+                </div>
                 ${customCommandItems}
             </section>
         `;
@@ -2593,26 +2664,31 @@ async function createDialog() {
         const title = selectedTextLength ? '已偵測到選取文字' : '使用提示';
         const icon = selectedTextLength ? '🎯' : '💡';
         const intro = selectedTextLength
-            ? `您可以直接提問，系統將以選取的文字作為分析對象。<span class="askpage-usage-count">${selectedTextLength} 字元</span>`
-            : '您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。';
-        const selectedTextPreview = selectedText.length > 1200
-            ? `${selectedText.slice(0, 1200)}…`
+            ? `將以選取文字作為主要分析對象。<span class="askpage-usage-count">${selectedTextLength} 字元</span>`
+            : '直接提問目前頁面，或先選取文字範圍再提問。';
+        const selectedTextPreview = selectedText.length > 420
+            ? `${selectedText.slice(0, 420)}…`
             : selectedText;
         const selectedTextPreviewHtml = selectedText
             ? `<pre class="askpage-selected-text-preview">${escapeHtml(selectedTextPreview)}</pre>`
             : '';
+        const usageCommandsHtml = buildUsageCommandsHtml(options.customCommands || [], {
+            customCommandUsageMap: options.customCommandUsageMap || {}
+        });
         const html = `
             <div class="askpage-usage-card">
-                <section class="askpage-usage-section askpage-usage-intro">
-                    <div class="askpage-usage-heading">
-                        <span class="askpage-usage-heading-icon" aria-hidden="true">${icon}</span>
-                        <strong>${title}</strong>
-                    </div>
-                    <p>${intro}</p>
-                    ${selectedTextPreviewHtml}
-                </section>
-                ${buildUsageModeSectionsHtml(options)}
-                ${buildUsageCommandsHtml(options.customCommands || [])}
+                <div class="askpage-usage-primary-grid">
+                    <section class="askpage-usage-section askpage-usage-intro">
+                        <div class="askpage-usage-heading">
+                            <span class="askpage-usage-heading-icon" aria-hidden="true">${icon}</span>
+                            <strong>${title}</strong>
+                        </div>
+                        <p>${intro}</p>
+                        ${selectedTextPreviewHtml}
+                    </section>
+                    ${buildUsageModeSectionsHtml(options)}
+                </div>
+                ${usageCommandsHtml}
             </div>
         `;
 
@@ -2657,6 +2733,19 @@ async function createDialog() {
                 await triggerInlineSlashCommand(command);
             });
         });
+
+        container.querySelectorAll('[data-askpage-open-options="true"]').forEach((element) => {
+            element.addEventListener('click', async (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                try {
+                    await requestOpenOptionsPage();
+                } catch (error) {
+                    console.error('[AskPage] Failed to open options page:', error);
+                    appendMessage('assistant', '❌ **無法開啟偏好設定**\n\n請稍後再試一次。');
+                }
+            });
+        });
     }
 
     async function buildUsagePromptMessage(options = {}) {
@@ -2664,6 +2753,7 @@ async function createDialog() {
         const screenshotEnabled = await getScreenshotEnabled();
         const agentModeEnabled = await getAgentModeEnabled();
         const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+        const customCommandUsageMap = await getCustomCommandUsageMap();
         const customCommandsCopyText = buildCustomCommandListCopyText(customCommands);
         const activeSelectedText = showUsageTipOnly ? '' : getActiveSelectedText(capturedSelectedText);
         const modeNotice = buildUsageModeNotice({ screenshotEnabled, agentModeEnabled });
@@ -2672,6 +2762,7 @@ async function createDialog() {
             screenshotEnabled,
             agentModeEnabled,
             customCommands,
+            customCommandUsageMap,
             selectedText: activeSelectedText,
             selectedTextLength: activeSelectedText.length
         });
@@ -3471,6 +3562,7 @@ async function createDialog() {
             const customCommand = customCommands.find(cmd => cmd.cmd === question);
 
             if (customCommand) {
+                await incrementCustomCommandUsage(customCommand.cmd);
                 // Replace the command with its prompt
                 question = customCommand.prompt;
                 displayedQuestion = question;
