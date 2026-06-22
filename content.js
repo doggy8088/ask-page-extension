@@ -3819,6 +3819,29 @@ async function createDialog() {
         let messageElement = null;
         let text = '';
         let renderFrame = 0;
+        let isMessageTopPinned = false;
+
+        const pinMessageTop = (options = {}) => {
+            if (!messageElement || isMessageTopPinned) {
+                return;
+            }
+
+            const targetMessagesEl = getActiveMessagesElement(messagesEl);
+            if (!targetMessagesEl) {
+                return;
+            }
+
+            const targetScrollTop = Math.max(0, messageElement.offsetTop - ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX);
+            const maxScrollTop = Math.max(0, targetMessagesEl.scrollHeight - targetMessagesEl.clientHeight);
+
+            scrollMessagesToMessageTop(targetMessagesEl, messageElement, {
+                scrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
+                force: options.force === true,
+                duration: 0
+            });
+
+            isMessageTopPinned = targetScrollTop <= maxScrollTop + 1;
+        };
 
         const ensureMessageElement = () => {
             if (messageElement) {
@@ -3827,7 +3850,11 @@ async function createDialog() {
 
             messageElement = document.createElement('div');
             messageElement.className = 'gemini-msg-assistant askpage-streaming-answer';
-            appendNodeToActiveMessages(messageElement, messagesEl);
+            appendNodeToActiveMessages(messageElement, messagesEl, {
+                autoScrollMode: 'message-top',
+                autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
+                autoScrollForce: true
+            });
             return messageElement;
         };
 
@@ -3840,7 +3867,7 @@ async function createDialog() {
                 suppressCopyButton: options.suppressCopyButton === true,
                 copyText: text
             });
-            scrollActiveMessagesToBottom(messagesEl);
+            pinMessageTop();
         };
 
         const discard = () => {
@@ -3848,12 +3875,13 @@ async function createDialog() {
                 cancelAnimationFrame(renderFrame);
                 renderFrame = 0;
             }
-            if (messageElement) {
-                messageElement.remove();
-                messageElement = null;
-            }
-            text = '';
-        };
+                if (messageElement) {
+                    messageElement.remove();
+                    messageElement = null;
+                }
+                text = '';
+                isMessageTopPinned = false;
+            };
 
         const scheduleRender = () => {
             if (renderFrame) {
@@ -3891,8 +3919,10 @@ async function createDialog() {
                 render({ suppressCopyButton: false });
                 scrollMessagesToMessageTop(messagesEl, messageElement, {
                     scrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
-                    force: true
+                    force: false,
+                    duration: 0
                 });
+                isMessageTopPinned = true;
                 addConversationTurn('assistant', text, text, historyOptions);
                 return messageElement;
             },
