@@ -4277,6 +4277,7 @@ async function createDialog() {
                     cancelAnimationFrame(renderFrame);
                     renderFrame = 0;
                 }
+                messageElement.classList.remove('askpage-streaming-answer');
                 render({ suppressCopyButton: false });
                 scrollMessagesToMessageTop(messagesEl, messageElement, {
                     scrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
