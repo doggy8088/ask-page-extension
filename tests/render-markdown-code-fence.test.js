@@ -49,6 +49,7 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     createMarkdownCodeFence,
     extractHtmlDocumentTitle,
     formatApiTokenUsageSummary,
+    getResponsesApiOutputTextFromResponse,
     splitHtmlForCodePen,
     getAssistantDisplayMarkdown,
     getAssistantStoredText,
@@ -68,6 +69,7 @@ const {
     createMarkdownCodeFence,
     extractHtmlDocumentTitle,
     formatApiTokenUsageSummary,
+    getResponsesApiOutputTextFromResponse,
     splitHtmlForCodePen,
     getAssistantDisplayMarkdown,
     getAssistantStoredText,
@@ -279,5 +281,42 @@ assert.strictEqual(
 );
 assert.strictEqual(createApiTokenUsageSummary('Unknown', { foo: 'bar' }), null);
 assert.strictEqual(formatApiTokenUsageSummary(createApiTokenUsageAccumulator()), '');
+
+assert.strictEqual(getResponsesApiOutputTextFromResponse({
+    output: [{
+        type: 'message',
+        content: [{
+            type: 'text',
+            text: 'fallback text part'
+        }]
+    }]
+}), 'fallback text part');
+
+assert.strictEqual(getResponsesApiOutputTextFromResponse({
+    output: [{
+        type: 'message',
+        content: [{
+            type: 'output_text',
+            text: {
+                value: 'nested text value'
+            }
+        }]
+    }]
+}), 'nested text value');
+
+assert.strictEqual(getResponsesApiOutputTextFromResponse({
+    output: [{
+        type: 'message',
+        content: 'direct message content'
+    }]
+}), 'direct message content');
+
+assert.strictEqual(getResponsesApiOutputTextFromResponse({
+    output: [{
+        type: 'function_call',
+        name: 'run_js',
+        arguments: '{"code":"document.title"}'
+    }]
+}), '');
 
 console.log('render-markdown-code-fence: ok');

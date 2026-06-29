@@ -1907,6 +1907,84 @@ function formatApiTokenUsageSummary(tokenUsage) {
     return parts.length ? `Tokens: ${parts.join(' · ')}` : '';
 }
 
+function getResponsesApiTextPartValue(part) {
+    if (typeof part === 'string') {
+        return part;
+    }
+
+    if (!part || typeof part !== 'object') {
+        return '';
+    }
+
+    if (typeof part.text === 'string') {
+        return part.text;
+    }
+
+    if (part.text && typeof part.text.value === 'string') {
+        return part.text.value;
+    }
+
+    if (typeof part.output_text === 'string') {
+        return part.output_text;
+    }
+
+    if (typeof part.content === 'string') {
+        return part.content;
+    }
+
+    return '';
+}
+
+function isResponsesApiOutputTextPart(part) {
+    if (typeof part === 'string') {
+        return true;
+    }
+
+    if (!part || typeof part !== 'object') {
+        return false;
+    }
+
+    const type = String(part.type || '').trim().toLowerCase();
+    return !type || type === 'output_text' || type === 'text';
+}
+
+function getResponsesApiOutputTextFromResponse(responseData) {
+    if (typeof responseData?.output_text === 'string' && responseData.output_text.trim()) {
+        return responseData.output_text.trim();
+    }
+
+    const output = Array.isArray(responseData?.output) ? responseData.output : [];
+    const messageText = output
+        .filter((item) => item?.type === 'message' && (Array.isArray(item.content) || item.content || typeof item.text === 'string'))
+        .flatMap((item) => {
+            if (Array.isArray(item.content)) {
+                return item.content;
+            }
+
+            if (item.content) {
+                return [item.content];
+            }
+
+            return [item];
+        })
+        .filter(isResponsesApiOutputTextPart)
+        .map(getResponsesApiTextPartValue)
+        .filter(Boolean)
+        .join('\n')
+        .trim();
+
+    if (messageText) {
+        return messageText;
+    }
+
+    return output
+        .filter(isResponsesApiOutputTextPart)
+        .map(getResponsesApiTextPartValue)
+        .filter(Boolean)
+        .join('\n')
+        .trim();
+}
+
 function getCodeLanguage(codeElement) {
     const languageClass = Array.from(codeElement.classList).find((className) => (
         className.startsWith('language-') || className.startsWith('lang-')
@@ -6804,18 +6882,7 @@ async function createDialog() {
     }
 
     function getResponsesApiOutputText(responseData) {
-        if (typeof responseData?.output_text === 'string') {
-            return responseData.output_text.trim();
-        }
-
-        const output = Array.isArray(responseData?.output) ? responseData.output : [];
-        return output
-            .filter((item) => item?.type === 'message' && Array.isArray(item.content))
-            .flatMap((item) => item.content)
-            .filter((part) => part?.type === 'output_text' && typeof part.text === 'string')
-            .map((part) => part.text)
-            .join('\n')
-            .trim();
+        return getResponsesApiOutputTextFromResponse(responseData);
     }
 
     function getResponsesApiRefusalText(responseData) {
@@ -6855,6 +6922,10 @@ async function createDialog() {
     }
 
     function normalizeResponsesApiResponse(responseData) {
+        if (Array.isArray(responseData?.choices)) {
+            return responseData;
+        }
+
         const toolCalls = getResponsesApiToolCalls(responseData);
         const answerText = getResponsesApiOutputText(responseData);
         const refusalText = getResponsesApiRefusalText(responseData);
@@ -7433,6 +7504,7 @@ async function createDialog() {
         onAnswerDelta = () => {},
         onReasoningDelta = () => {}
     }) {
+        let isChatCompletionsFormat = false;
         const state = {
             id: '',
             model: requestBody.model || '',
@@ -7442,6 +7514,26 @@ async function createDialog() {
             reasoningText: '',
             outputItems: [],
             completedResponse: null
+        };
+        const syncOutputTextFromFinalText = (text) => {
+            const finalText = String(text || '');
+            if (!finalText || finalText === state.outputText) {
+                return;
+            }
+
+            if (!state.outputText) {
+                state.outputText = finalText;
+                onAnswerDelta(finalText);
+                return;
+            }
+
+            if (finalText.startsWith(state.outputText)) {
+                const delta = finalText.slice(state.outputText.length);
+                state.outputText = finalText;
+                if (delta) {
+                    onAnswerDelta(delta);
+                }
+            }
         };
 
         await fetchSseWithRetry({
@@ -7459,6 +7551,49 @@ async function createDialog() {
             onRetry,
             onEvent: (sseEvent) => {
                 const payload = parseSseJsonEvent(providerLabel, sseEvent);
+
+                if (payload.choices || payload.object === 'chat.completion.chunk') {
+                    isChatCompletionsFormat = true;
+                    state.id = payload.id || state.id;
+                    state.model = payload.model || state.model;
+                    state.usage = payload.usage || state.usage;
+
+                    const choice = Array.isArray(payload.choices) ? payload.choices[0] : null;
+                    if (!choice) {
+                        return;
+                    }
+
+                    const delta = choice.delta || {};
+                    const contentDelta = typeof delta.content === 'string' ? delta.content : '';
+                    const reasoningDelta = [
+                        delta.reasoning_content,
+                        delta.reasoning,
+                        delta.reasoning_text
+                    ].filter((value) => typeof value === 'string').join('');
+
+                    if (contentDelta) {
+                        state.outputText += contentDelta;
+                        onAnswerDelta(contentDelta);
+                    }
+
+                    if (reasoningDelta) {
+                        state.reasoningText += reasoningDelta;
+                        onReasoningDelta(reasoningDelta);
+                    }
+
+                    if (Array.isArray(delta.tool_calls)) {
+                        if (!state.chatToolCalls) {
+                            state.chatToolCalls = [];
+                        }
+                        delta.tool_calls.forEach((toolCallDelta) => appendOpenAIChatToolCallDelta(state.chatToolCalls, toolCallDelta));
+                    }
+
+                    if (choice.finish_reason) {
+                        state.chatFinishReason = choice.finish_reason;
+                    }
+                    return;
+                }
+
                 const eventType = payload.type || sseEvent.event;
                 const response = payload.response || payload;
                 state.id = response.id || state.id;
@@ -7481,6 +7616,17 @@ async function createDialog() {
                 if (eventType === 'response.output_text.delta' && typeof payload.delta === 'string') {
                     state.outputText += payload.delta;
                     onAnswerDelta(payload.delta);
+                    return;
+                }
+
+                if (eventType === 'response.output_text.done' && typeof payload.text === 'string') {
+                    syncOutputTextFromFinalText(payload.text);
+                    return;
+                }
+
+                if (eventType === 'response.content_part.added' || eventType === 'response.content_part.done') {
+                    const partText = getResponsesApiTextPartValue(payload.part || payload.content_part);
+                    syncOutputTextFromFinalText(partText);
                     return;
                 }
 
@@ -7514,6 +7660,30 @@ async function createDialog() {
                 }
             }
         });
+
+        if (isChatCompletionsFormat) {
+            const message = {
+                role: 'assistant',
+                content: state.outputText || null,
+                tool_calls: Array.isArray(state.chatToolCalls) ? state.chatToolCalls.filter(Boolean) : undefined
+            };
+            if (message.tool_calls && !message.tool_calls.length) {
+                delete message.tool_calls;
+            }
+            if (state.reasoningText.trim()) {
+                message.reasoning_summaries = [state.reasoningText.trim()];
+            }
+            return {
+                id: state.id,
+                model: state.model,
+                usage: state.usage,
+                choices: [{
+                    finish_reason: state.chatFinishReason || 'stop',
+                    message
+                }],
+                reasoning_summaries: state.reasoningText.trim() ? [state.reasoningText.trim()] : []
+            };
+        }
 
         const responseData = state.completedResponse || buildResponsesApiResponseFromStream(state);
         const normalizedResponse = normalizeResponsesApiResponse(responseData);
