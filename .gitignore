@@ -63,3 +63,5 @@ key.pem
 # 文件暫存
 .docusaurus
 .cache
+
+tasks/

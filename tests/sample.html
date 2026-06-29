@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>針對 Google 搜尋生成式 AI 功能最佳化之測驗</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success-bg: #ecfdf5;
+      --success-text: #047857;
+      --danger-bg: #fef2f2;
+      --danger-text: #b91c1c;
+      --warning-bg: #fffbeb;
+      --warning-text: #92400e;
+      --code-bg: #eef2ff;
+      --code-border: #c7d2fe;
+      --code-text: #3730a3;
+      --radius: 18px;
+      --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    code.inline-code {
+      display: inline-block;
+      padding: 0.08em 0.42em;
+      border: 1px solid var(--code-border);
+      border-radius: 0.45em;
+      background: var(--code-bg);
+      color: var(--code-text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+      line-height: 1.45;
+      white-space: nowrap;
+    }
+
+    .app {
+      width: min(1080px, calc(100% - 32px));
+      margin: 32px auto;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #ffffff, #eef4ff);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      margin: 0 0 12px;
+      font-size: clamp(1.7rem, 4vw, 2.6rem);
+      line-height: 1.2;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    .status {
+      position: sticky;
+      top: 12px;
+      z-index: 10;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      backdrop-filter: blur(10px);
+      margin-bottom: 24px;
+    }
+
+    .progress-wrap {
+      display: grid;
+      gap: 8px;
+    }
+
+    .progress-text {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    progress {
+      width: 100%;
+      height: 12px;
+      overflow: hidden;
+      border: 0;
+      border-radius: 999px;
+      background: #e5e7eb;
+    }
+
+    progress::-webkit-progress-bar {
+      background: #e5e7eb;
+      border-radius: 999px;
+    }
+
+    progress::-webkit-progress-value {
+      background: var(--primary);
+      border-radius: 999px;
+    }
+
+    progress::-moz-progress-bar {
+      background: var(--primary);
+      border-radius: 999px;
+    }
+
+    .question-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 18px;
+    }
+
+    .question-card.incomplete {
+      border-color: #f59e0b;
+      background: var(--warning-bg);
+    }
+
+    .question-card h2 {
+      margin: 0 0 18px;
+      font-size: 1.16rem;
+      line-height: 1.5;
+    }
+
+    fieldset {
+      border: 0;
+      padding: 0;
+      margin: 0;
+    }
+
+    legend {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    .option {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      background: #fff;
+      transition: 0.18s ease;
+    }
+
+    .option:hover {
+      border-color: #bfdbfe;
+      background: #eff6ff;
+    }
+
+    .option input {
+      margin-top: 6px;
+      width: 18px;
+      height: 18px;
+      accent-color: var(--primary);
+    }
+
+    .option.correct {
+      border-color: #10b981;
+      background: var(--success-bg);
+      color: var(--success-text);
+      font-weight: 700;
+    }
+
+    .option.wrong {
+      border-color: #ef4444;
+      background: var(--danger-bg);
+      color: var(--danger-text);
+      font-weight: 700;
+    }
+
+    .feedback {
+      display: none;
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-weight: 700;
+    }
+
+    .feedback.show {
+      display: block;
+    }
+
+    .feedback.ok {
+      color: var(--success-text);
+      background: var(--success-bg);
+    }
+
+    .feedback.no {
+      color: var(--danger-text);
+      background: var(--danger-bg);
+    }
+
+    .feedback.warn {
+      color: var(--warning-text);
+      background: var(--warning-bg);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: flex-end;
+      margin: 28px 0 64px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 18px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+
+    .secondary:hover {
+      background: #d1d5db;
+    }
+
+    .result {
+      display: none;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .result.show {
+      display: block;
+    }
+
+    .result h2 {
+      margin: 0 0 10px;
+    }
+
+    .score {
+      font-size: clamp(2rem, 5vw, 3.8rem);
+      font-weight: 900;
+      line-height: 1;
+      color: var(--primary);
+      margin: 16px 0 8px;
+    }
+
+    @media (max-width: 720px) {
+      .status {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        justify-content: stretch;
+      }
+
+      button {
+        width: 100%;
+      }
+
+      .hero,
+      .question-card,
+      .result {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <h1>針對 Google 搜尋生成式 AI 功能最佳化之測驗</h1>
+      <div class="meta">
+        <span class="pill">題數：10 題</span>
+        <span class="pill">題型：單選題</span>
+        <span class="pill">作答模式：提交後顯示成績</span>
+      </div>
+    </section>
+
+    <section class="status" aria-label="測驗狀態">
+      <div class="progress-wrap">
+        <div class="progress-text">
+          <span id="progressLabel">已作答 0 / 10 題</span>
+          <span id="timerLabel">作答時間 00:00</span>
+        </div>
+        <progress id="progressBar" value="0" max="10"></progress>
+      </div>
+      <button class="secondary" type="button" id="resetTopButton">重新作答</button>
+    </section>
+
+    <section id="result" class="result" aria-live="polite"></section>
+
+    <form id="examForm" novalidate>
+      <div id="questions"></div>
+
+      <div class="actions">
+        <button class="secondary" type="button" id="resetButton">清除答案</button>
+        <button class="primary" type="submit">提交測驗</button>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    const inlineCode = (text) => ({
+      type: "html",
+      value: `<code class="inline-code">${escapeHTML(text)}</code>`
+    });
+
+    const text = (value) => ({
+      type: "text",
+      value
+    });
+
+    const quizData = [
+      {
+        question: [text("根據文章內容，SEO 最佳做法在生成式 AI 搜尋環境中是否仍有效用？")],
+        answer: "B",
+        options: {
+          A: [text("完全無效，因為 AI 運作方式完全不同。")],
+          B: [text("是，因為這些功能是以 Google 搜尋的核心排名與品質系統為基礎。")],
+          C: [text("僅對付費搜尋廣告有效。")],
+          D: [text("僅在網站內容超過 1 萬字時才有效。")]
+        }
+      },
+      {
+        question: [text("Google 搜尋的生成式 AI 功能中，哪項技術會運用核心搜尋排名系統，從索引中找出相關內容來提升回覆的品質與準確度？")],
+        answer: "A",
+        options: {
+          A: [text("檢索增強生成 (RAG)")],
+          B: [text("關鍵字堆疊")],
+          C: [text("自動內容重寫")],
+          D: [text("內容分塊技術")]
+        }
+      },
+      {
+        question: [text("下列哪一項不是製作「非同質化內容」的建議做法？")],
+        answer: "C",
+        options: {
+          A: [text("提供獨特的個人觀點或實際經驗。")],
+          B: [text("撰寫對讀者實用且可靠的內容。")],
+          C: [text("盡可能使用生成式 AI 工具大量產出內容以覆蓋所有關鍵字。")],
+          D: [text("加入高品質的圖片和影片。")]
+        }
+      },
+      {
+        question: [text("關於「分塊」內容 (將內容分成小塊以利 AI 讀取)，文中建議為何？")],
+        answer: "C",
+        options: {
+          A: [text("必須將內容分成小於 300 字的區塊。")],
+          B: [text("這是提升 AI 搜尋曝光度的必要手段。")],
+          C: [text("不需要這麼做，AI 系統已具備理解網頁多主題細微差異的能力。")],
+          D: [text("僅適用於電子商務網站。")]
+        }
+      },
+      {
+        question: [
+          text("關於 "),
+          inlineCode("llms.txt"),
+          text(" 等機器可讀檔案，文中提到 Google 搜尋的處理方式為何？")
+        ],
+        answer: "B",
+        options: {
+          A: [text("Google 搜尋會優先索引這些檔案以提升排名。")],
+          B: [text("Google 搜尋會忽略這些標記，不會影響在 Google 搜尋中的曝光度。")],
+          C: [text("這是未來 SEO 的核心標準。")],
+          D: [text("必須安裝特定的外掛程式才能讓 Google 讀取。")]
+        }
+      },
+      {
+        question: [text("若想針對生成式 AI 搜尋最佳化當地商家或電子商務資訊，下列何者為官方建議工具？")],
+        answer: "C",
+        options: {
+          A: [text("購買第三方 GEO 服務。")],
+          B: [
+            text("使用 "),
+            inlineCode("llms.txt"),
+            text(" 宣告產品目錄。")
+          ],
+          C: [text("使用 Merchant Center 和 Google 商家檔案。")],
+          D: [text("建立大量的社群媒體連結。")]
+        }
+      },
+      {
+        question: [text("關於「結構化資料」在生成式 AI 搜尋中的角色，下列敘述何者正確？")],
+        answer: "C",
+        options: {
+          A: [text("生成式 AI 搜尋強制要求網站必須使用結構化資料。")],
+          B: [text("不再需要任何 schema.org 標記。")],
+          C: [text("雖然生成式 AI 搜尋不需要，但仍建議作為整體 SEO 策略一部分，以顯示複合式搜尋結果。")],
+          D: [text("結構化資料會導致 AI 搜尋排名下降。")]
+        }
+      },
+      {
+        question: [text("AI 代理 (Agentic experiences) 瀏覽網站時，主要會檢查哪些內容以執行任務？")],
+        answer: "B",
+        options: {
+          A: [text("網站的廣告收入。")],
+          B: [text("視覺化呈現內容 (如螢幕截圖)、DOM 結構與無障礙樹狀結構。")],
+          C: [text("訪客的個人瀏覽紀錄。")],
+          D: [
+            text("網站是否安裝了 "),
+            inlineCode("llms.txt"),
+            text("。")
+          ]
+        }
+      },
+      {
+        question: [text("如果網站使用 JavaScript 架構，在進行 SEO 最佳化時應注意什麼？")],
+        answer: "B",
+        options: {
+          A: [text("必須完全移除 JavaScript，因為 Google 無法處理。")],
+          B: [text("必須遵循 JavaScript SEO 最佳做法，確保內容可被檢索。")],
+          C: [text("不需要採取任何行動，Google 會自動處理。")],
+          D: [text("必須將所有內容轉換為圖片。")]
+        }
+      },
+      {
+        question: [text("文中針對「過度宣傳」與「針對使用者查詢變化建立內容」的警告為何？")],
+        answer: "B",
+        options: {
+          A: [text("這是提升排名的唯一途徑。")],
+          B: [text("若目的是為了操控排名或生成式 AI 回覆，則違反大量內容濫用垃圾內容政策。")],
+          C: [text("Google 搜尋完全鼓勵這種針對性的內容製造策略。")],
+          D: [text("只要內容長度夠長，就不會被視為垃圾內容。")]
+        }
+      }
+    ];
+
+    const questionsEl = document.querySelector("#questions");
+    const form = document.querySelector("#examForm");
+    const resultEl = document.querySelector("#result");
+    const progressBar = document.querySelector("#progressBar");
+    const progressLabel = document.querySelector("#progressLabel");
+    const timerLabel = document.querySelector("#timerLabel");
+    const resetButton = document.querySelector("#resetButton");
+    const resetTopButton = document.querySelector("#resetTopButton");
+
+    let submitted = false;
+    let startedAt = Date.now();
+    let timerId = window.setInterval(updateTimer, 1000);
+
+    function escapeHTML(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function renderParts(parts) {
+      return parts.map((part) => {
+        if (part.type === "html") {
+          return part.value;
+        }
+
+        return escapeHTML(part.value);
+      }).join("");
+    }
+
+    function renderQuiz() {
+      questionsEl.innerHTML = quizData.map((item, index) => {
+        const number = index + 1;
+        const question = renderParts(item.question);
+        const options = Object.entries(item.options).map(([key, parts]) => `
+          <label class="option" data-question="${index}" data-option="${key}">
+            <input type="radio" name="q${index}" value="${key}" />
+            <span><strong>${key}.</strong> ${renderParts(parts)}</span>
+          </label>
+        `).join("");
+
+        return `
+          <article class="question-card" id="question-${index}">
+            <h2>${number}. ${question}</h2>
+            <fieldset>
+              <legend>第 ${number} 題</legend>
+              ${options}
+            </fieldset>
+            <div class="feedback" id="feedback-${index}"></div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function getSelectedAnswer(index) {
+      const selected = form.querySelector(`input[name="q${index}"]:checked`);
+      return selected ? selected.value : null;
+    }
+
+    function updateProgress() {
+      const answered = quizData.filter((_, index) => getSelectedAnswer(index)).length;
+      progressBar.value = answered;
+      progressLabel.textContent = `已作答 ${answered} / ${quizData.length} 題`;
+    }
+
+    function updateTimer() {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const minutes = String(Math.floor(elapsed / 60)).padStart(2, "0");
+      const seconds = String(elapsed % 60).padStart(2, "0");
+      timerLabel.textContent = `作答時間 ${minutes}:${seconds}`;
+    }
+
+    function clearVisualState() {
+      document.querySelectorAll(".question-card").forEach(card => {
+        card.classList.remove("incomplete");
+      });
+
+      document.querySelectorAll(".option").forEach(option => {
+        option.classList.remove("correct", "wrong");
+      });
+
+      document.querySelectorAll(".feedback").forEach(feedback => {
+        feedback.className = "feedback";
+        feedback.textContent = "";
+      });
+    }
+
+    function handleSubmit(event) {
+      event.preventDefault();
+      clearVisualState();
+
+      const unanswered = quizData
+        .map((_, index) => ({ index, answer: getSelectedAnswer(index) }))
+        .filter(item => !item.answer);
+
+      if (unanswered.length > 0) {
+        unanswered.forEach(item => {
+          const card = document.querySelector(`#question-${item.index}`);
+          const feedback = document.querySelector(`#feedback-${item.index}`);
+
+          card.classList.add("incomplete");
+          feedback.textContent = "本題尚未作答。";
+          feedback.classList.add("show", "warn");
+        });
+
+        resultEl.className = "result show";
+        resultEl.innerHTML = `
+          <h2>尚未完成</h2>
+          <p>目前還有 ${unanswered.length} 題尚未作答，請完成後再提交。</p>
+        `;
+
+        document.querySelector(`#question-${unanswered[0].index}`).scrollIntoView({
+          behavior: "smooth",
+          block: "center"
+        });
+
+        return;
+      }
+
+      submitted = true;
+      window.clearInterval(timerId);
+
+      let score = 0;
+
+      quizData.forEach((item, index) => {
+        const selected = getSelectedAnswer(index);
+        const correct = item.answer;
+        const feedback = document.querySelector(`#feedback-${index}`);
+        const correctOption = document.querySelector(`[data-question="${index}"][data-option="${correct}"]`);
+        const selectedOption = document.querySelector(`[data-question="${index}"][data-option="${selected}"]`);
+
+        if (selected === correct) {
+          score += 1;
+          correctOption.classList.add("correct");
+          feedback.textContent = "答對。";
+          feedback.classList.add("show", "ok");
+        } else {
+          selectedOption.classList.add("wrong");
+          correctOption.classList.add("correct");
+          feedback.textContent = `答錯。正確答案是 ${correct}。`;
+          feedback.classList.add("show", "no");
+        }
+      });
+
+      const percent = Math.round((score / quizData.length) * 100);
+
+      resultEl.className = "result show";
+      resultEl.innerHTML = `
+        <h2>測驗結果</h2>
+        <div class="score">${score} / ${quizData.length}</div>
+        <p>答對率：${percent}%</p>
+        <p>${timerLabel.textContent}</p>
+      `;
+
+      resultEl.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }
+
+    function resetExam() {
+      submitted = false;
+      form.reset();
+      clearVisualState();
+
+      resultEl.className = "result";
+      resultEl.innerHTML = "";
+
+      startedAt = Date.now();
+      window.clearInterval(timerId);
+      timerId = window.setInterval(updateTimer, 1000);
+
+      updateTimer();
+      updateProgress();
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    }
+
+    renderQuiz();
+    updateTimer();
+    updateProgress();
+
+    form.addEventListener("change", () => {
+      if (!submitted) {
+        updateProgress();
+      }
+    });
+
+    form.addEventListener("submit", handleSubmit);
+    resetButton.addEventListener("click", resetExam);
+    resetTopButton.addEventListener("click", resetExam);
+  </script>
+</body>
+</html>
+

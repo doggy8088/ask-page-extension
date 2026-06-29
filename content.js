@@ -77,6 +77,9 @@ const AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS = 100;
 const AUTO_SCROLL_ANIMATION_DURATION_MS = 240;
 const ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX = 90;
 const DIALOG_DIM_DELAY_MS = 1000;
+const COLLAPSED_PREVIEW_LINE_LIMIT = 5;
+const COLLAPSED_TEXT_PREVIEW_MIN_CHARS = 600;
+const CODEPEN_PREFILL_ENDPOINT = 'https://codepen.io/cpe/pen/define/';
 const DIALOG_HOST_ISOLATION_STYLES = [
     ['all', 'initial'],
     ['display', 'block'],
@@ -1415,17 +1418,21 @@ function postProcessAssistantMarkdown(md) {
     const text = String(md ?? '');
     let isInsideFence = false;
     let fenceMarker = '';
+    let fenceLength = 0;
 
     return text.split('\n').map((line) => {
         const fenceMatch = line.match(/^\s*(```+|~~~+)/);
         if (fenceMatch) {
-            const currentFenceMarker = fenceMatch[1][0];
+            const currentFence = fenceMatch[1];
+            const currentFenceMarker = currentFence[0];
             if (!isInsideFence) {
                 isInsideFence = true;
                 fenceMarker = currentFenceMarker;
-            } else if (currentFenceMarker === fenceMarker) {
+                fenceLength = currentFence.length;
+            } else if (currentFenceMarker === fenceMarker && currentFence.length >= fenceLength) {
                 isInsideFence = false;
                 fenceMarker = '';
+                fenceLength = 0;
             }
 
             return line;
@@ -1455,12 +1462,224 @@ function postProcessAssistantMarkdown(md) {
     }).join('\n');
 }
 
+function isRawHtmlAssistantResponse(value) {
+    const trimmedText = String(value ?? '').trim();
+
+    return /^<!doctype(?:\s|>)/i.test(trimmedText)
+        || /^<\/?[a-z][\w:-]*(?:\s[^>]*)?>/i.test(trimmedText)
+        || /^<[a-z][\w:-]*\/>/i.test(trimmedText);
+}
+
+function createMarkdownCodeFence(value, language = '') {
+    const text = String(value ?? '');
+    const languageHint = String(language || '').trim();
+    const backtickRuns = text.match(/`+/g) || [];
+    const longestBacktickRun = backtickRuns.reduce((maxLength, run) => Math.max(maxLength, run.length), 0);
+    const fence = '`'.repeat(Math.max(3, longestBacktickRun + 1));
+    const fenceStart = `${fence}${languageHint ? languageHint : ''}\n`;
+    const fenceEnd = text.endsWith('\n') ? fence : `\n${fence}`;
+
+    return `${fenceStart}${text}${fenceEnd}`;
+}
+
+function getAssistantStoredText(text) {
+    return isRawHtmlAssistantResponse(text)
+        ? String(text ?? '')
+        : postProcessAssistantMarkdown(text);
+}
+
+function getAssistantDisplayMarkdown(text) {
+    if (isRawHtmlAssistantResponse(text)) {
+        return createMarkdownCodeFence(text, 'html');
+    }
+
+    return postProcessAssistantMarkdown(text);
+}
+
+function getTextLineCount(value) {
+    const text = String(value ?? '');
+    return text ? text.split(/\r\n|\r|\n/).length : 1;
+}
+
+function shouldCollapseTextPreview(value, lineLimit = COLLAPSED_PREVIEW_LINE_LIMIT) {
+    const text = String(value ?? '');
+    return getTextLineCount(text) > lineLimit || text.length > COLLAPSED_TEXT_PREVIEW_MIN_CHARS;
+}
+
+function extractHtmlDocumentTitle(htmlText) {
+    const titleMatch = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(String(htmlText ?? ''));
+    if (!titleMatch) {
+        return '';
+    }
+
+    return titleMatch[1]
+        .replace(/<[^>]*>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 120);
+}
+
+function getHtmlAttributeValue(attributeText, attributeName) {
+    const unquotedAttributeValuePattern = '[^\\s"\'=<>`]+';
+    const pattern = new RegExp(`${attributeName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|(${unquotedAttributeValuePattern}))`, 'i');
+    const match = pattern.exec(String(attributeText || ''));
+
+    return match ? (match[1] || match[2] || match[3] || '').trim() : '';
+}
+
+function extractHtmlTagContent(htmlText, tagName) {
+    const pattern = new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
+    const match = pattern.exec(String(htmlText || ''));
+
+    return match ? match[1] : '';
+}
+
+function normalizeCodePenExternalUrls(urls) {
+    return Array.from(new Set(urls.map((url) => String(url || '').trim()).filter(Boolean))).join(';');
+}
+
+function extractCodePenPanelParts(markup) {
+    const cssParts = [];
+    const jsParts = [];
+    const cssExternal = [];
+    const jsExternal = [];
+    let cleanedMarkup = String(markup || '');
+
+    cleanedMarkup = cleanedMarkup.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (match, cssText) => {
+        const css = String(cssText || '').trim();
+        if (css) {
+            cssParts.push(css);
+        }
+        return '';
+    });
+
+    cleanedMarkup = cleanedMarkup.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (match, attributes, jsText) => {
+        const src = getHtmlAttributeValue(attributes, 'src');
+        const js = String(jsText || '').trim();
+
+        if (src) {
+            jsExternal.push(src);
+        } else if (js) {
+            jsParts.push(js);
+        }
+
+        return '';
+    });
+
+    cleanedMarkup = cleanedMarkup.replace(/<link\b([^>]*?)>/gi, (match, attributes) => {
+        const rel = getHtmlAttributeValue(attributes, 'rel').toLowerCase();
+        const href = getHtmlAttributeValue(attributes, 'href');
+
+        if (href && rel.split(/\s+/).includes('stylesheet')) {
+            cssExternal.push(href);
+            return '';
+        }
+
+        return match;
+    });
+
+    cleanedMarkup = cleanedMarkup.replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, '');
+
+    return {
+        markup: cleanedMarkup.trim(),
+        cssParts,
+        jsParts,
+        cssExternal,
+        jsExternal
+    };
+}
+
+function splitHtmlForCodePen(htmlText) {
+    const sourceHtml = String(htmlText ?? '');
+    const headContent = extractHtmlTagContent(sourceHtml, 'head');
+    const bodyContent = extractHtmlTagContent(sourceHtml, 'body');
+    const fallbackHtml = sourceHtml
+        .replace(/<!doctype[^>]*>/i, '')
+        .replace(/<html\b[^>]*>/i, '')
+        .replace(/<\/html>/i, '')
+        .replace(/<head\b[^>]*>[\s\S]*?<\/head>/i, '')
+        .trim();
+    const headParts = extractCodePenPanelParts(headContent);
+    const bodyParts = extractCodePenPanelParts(bodyContent || fallbackHtml);
+    const cssParts = [...headParts.cssParts, ...bodyParts.cssParts];
+    const jsParts = [...headParts.jsParts, ...bodyParts.jsParts];
+    const cssExternal = normalizeCodePenExternalUrls([...headParts.cssExternal, ...bodyParts.cssExternal]);
+    const jsExternal = normalizeCodePenExternalUrls([...headParts.jsExternal, ...bodyParts.jsExternal]);
+
+    return {
+        title: extractHtmlDocumentTitle(sourceHtml),
+        head: headParts.markup,
+        html: bodyParts.markup,
+        css: cssParts.join('\n\n'),
+        js: jsParts.join('\n\n'),
+        css_external: cssExternal,
+        js_external: jsExternal
+    };
+}
+
+function buildCodePenPrefillData(htmlText) {
+    const splitHtml = splitHtmlForCodePen(htmlText);
+
+    const data = {
+        title: splitHtml.title || 'AskPage HTML Output',
+        description: 'Generated from AskPage',
+        html: splitHtml.html,
+        css: splitHtml.css,
+        js: splitHtml.js,
+        layout: 'left'
+    };
+
+    if (splitHtml.head) {
+        data.head = splitHtml.head;
+    }
+
+    if (splitHtml.css_external) {
+        data.css_external = splitHtml.css_external;
+    }
+
+    if (splitHtml.js_external) {
+        data.js_external = splitHtml.js_external;
+    }
+
+    return data;
+}
+
+/* eslint-disable-next-line no-unused-vars */
+function createCodePenPrefillForm(data) {
+    const form = document.createElement('form');
+    const input = document.createElement('input');
+
+    form.action = CODEPEN_PREFILL_ENDPOINT;
+    form.method = 'POST';
+    form.target = '_blank';
+    form.style.display = 'none';
+
+    input.type = 'hidden';
+    input.name = 'data';
+    input.value = JSON.stringify(data);
+
+    form.appendChild(input);
+    return form;
+}
+
+function openCodePenPrefill(htmlText) {
+    const data = buildCodePenPrefillData(htmlText);
+    chrome.storage.local.set({ 'askpage_codepen_data': data }, () => {
+        if (chrome.runtime.lastError) {
+            console.error('[AskPage] Failed to save CodePen prefill data:', chrome.runtime.lastError);
+            return;
+        }
+        chrome.runtime.sendMessage({ action: 'open-codepen' });
+    });
+}
+
 function renderMarkdown(md) {
     const processedMarkdown = postProcessAssistantMarkdown(md);
     try {
         const rawHtml = marked.parse(processedMarkdown, {
             gfm: true,
-            breaks: true
+            breaks: true,
+            renderer: createSafeMarkdownRenderer()
         });
         // Safely sanitize HTML if DOMPurify is available
         return DOMPurify ? DOMPurify.sanitize(rawHtml) : rawHtml;
@@ -1481,6 +1700,26 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function getSafeMarkdownCodeLanguageClass(language) {
+    const firstLanguagePart = String(language || '').trim().split(/\s+/)[0] || '';
+    const safeLanguage = firstLanguagePart.replace(/[^\w+-]/g, '');
+
+    return safeLanguage ? ` class="language-${escapeHtml(safeLanguage)}"` : '';
+}
+
+function createSafeMarkdownRenderer() {
+    const renderer = new marked.Renderer();
+
+    renderer.code = ({ text, lang }) => {
+        const languageClass = getSafeMarkdownCodeLanguageClass(lang);
+        return `<pre><code${languageClass}>${escapeHtml(text ?? '')}</code></pre>\n`;
+    };
+
+    renderer.codespan = ({ text }) => `<code>${escapeHtml(text ?? '')}</code>`;
+
+    return renderer;
 }
 
 function getCodeLanguage(codeElement) {
@@ -1576,7 +1815,12 @@ function highlightCodeBlock(codeElement) {
         };
     }
 
-    codeElement.innerHTML = highlightedResult.value;
+    codeElement.innerHTML = DOMPurify
+        ? DOMPurify.sanitize(highlightedResult.value, {
+            ALLOWED_TAGS: ['span'],
+            ALLOWED_ATTR: ['class']
+        })
+        : highlightedResult.value;
     codeElement.classList.add('hljs');
 
     if (highlightedResult.language) {
@@ -1608,8 +1852,74 @@ async function copyTextWithFeedback(button, text, options = {}) {
     }, resetDelay);
 }
 
+function createCodeBlockActionButton(className, label, title) {
+    const button = document.createElement('button');
+
+    button.type = 'button';
+    button.className = `askpage-code-block-action ${className}`;
+    button.textContent = label;
+    button.title = title;
+    button.setAttribute('aria-label', title);
+
+    return button;
+}
+
+function setCodeBlockExpanded(wrapper, toggleButton, isExpanded) {
+    wrapper.classList.toggle('is-collapsed', !isExpanded);
+    wrapper.classList.toggle('is-expanded', isExpanded);
+    toggleButton.textContent = isExpanded ? '收合' : '展開';
+    toggleButton.title = isExpanded ? '收合程式碼' : '展開完整程式碼';
+    toggleButton.setAttribute('aria-label', toggleButton.title);
+    toggleButton.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+}
+
+function appendCollapsibleTextPreview(container, text) {
+    const textValue = String(text ?? '');
+
+    if (!shouldCollapseTextPreview(textValue)) {
+        container.textContent = textValue;
+        return;
+    }
+
+    const wrapper = document.createElement('div');
+    const content = document.createElement('div');
+    const toggleButton = document.createElement('button');
+
+    wrapper.className = 'askpage-collapsible-text is-collapsed';
+    content.className = 'askpage-collapsible-text-content';
+    content.textContent = textValue;
+    toggleButton.type = 'button';
+    toggleButton.className = 'askpage-collapsible-text-toggle';
+    toggleButton.textContent = '展開全部';
+    toggleButton.setAttribute('aria-expanded', 'false');
+
+    const setExpanded = (isExpanded) => {
+        wrapper.classList.toggle('is-collapsed', !isExpanded);
+        wrapper.classList.toggle('is-expanded', isExpanded);
+        toggleButton.textContent = isExpanded ? '收合' : '展開全部';
+        toggleButton.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    };
+
+    content.addEventListener('click', () => {
+        if (wrapper.classList.contains('is-collapsed')) {
+            setExpanded(true);
+        }
+    });
+    toggleButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setExpanded(wrapper.classList.contains('is-collapsed'));
+    });
+
+    wrapper.appendChild(content);
+    wrapper.appendChild(toggleButton);
+    container.classList.add('askpage-user-collapsible');
+    container.appendChild(wrapper);
+}
+
 function enhanceCodeBlocks(container) {
     const codeBlocks = container.querySelectorAll('pre > code');
+    const isRawHtmlResponse = container.dataset.askpageRawHtmlResponse === 'true';
 
     codeBlocks.forEach((codeElement) => {
         if (codeElement.dataset.askpageCodeEnhanced === 'true') {
@@ -1621,30 +1931,73 @@ function enhanceCodeBlocks(container) {
             return;
         }
 
+        const codeText = codeElement.textContent || '';
         const highlightMeta = highlightCodeBlock(codeElement);
+        const shouldCollapseCode = shouldCollapseTextPreview(codeText);
         const wrapper = document.createElement('div');
         const header = document.createElement('div');
         const languageLabel = document.createElement('span');
-        const copyButton = document.createElement('button');
+        const actions = document.createElement('div');
+        const copyButton = createCodeBlockActionButton('askpage-code-block-copy', '📋', '複製程式碼');
 
         wrapper.className = 'askpage-code-block';
+        if (shouldCollapseCode) {
+            wrapper.classList.add('is-collapsible', 'is-collapsed');
+        }
         header.className = 'askpage-code-block-header';
         languageLabel.className = 'askpage-code-block-language';
         languageLabel.textContent = formatCodeLanguageLabel(highlightMeta.language, highlightMeta.isAutoDetected);
+        actions.className = 'askpage-code-block-actions';
 
-        copyButton.type = 'button';
-        copyButton.className = 'askpage-code-block-copy';
-        copyButton.innerHTML = '📋';
-        copyButton.title = '複製程式碼';
-        copyButton.setAttribute('aria-label', '複製程式碼');
         copyButton.addEventListener('click', async (event) => {
             event.preventDefault();
             event.stopPropagation();
-            await copyTextWithFeedback(copyButton, codeElement.textContent || '');
+            await copyTextWithFeedback(copyButton, codeText);
         });
 
+        if (isRawHtmlResponse) {
+            const codePenButton = createCodeBlockActionButton('askpage-code-block-codepen', 'CodePen', '在 CodePen 開啟');
+            const defaultCodePenLabel = codePenButton.textContent;
+            codePenButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                codePenButton.disabled = true;
+
+                try {
+                    openCodePenPrefill(codeText);
+                    codePenButton.textContent = '已開啟';
+                } catch (error) {
+                    console.error('[AskPage] Failed to open CodePen prefill:', error);
+                    codePenButton.textContent = '失敗';
+                }
+
+                setTimeout(() => {
+                    codePenButton.disabled = false;
+                    codePenButton.textContent = defaultCodePenLabel;
+                }, 1200);
+            });
+            actions.appendChild(codePenButton);
+        }
+
+        if (shouldCollapseCode) {
+            const toggleButton = createCodeBlockActionButton('askpage-code-block-toggle', '展開', '展開完整程式碼');
+            toggleButton.setAttribute('aria-expanded', 'false');
+            toggleButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setCodeBlockExpanded(wrapper, toggleButton, wrapper.classList.contains('is-collapsed'));
+            });
+            preElement.addEventListener('click', () => {
+                if (wrapper.classList.contains('is-collapsed')) {
+                    setCodeBlockExpanded(wrapper, toggleButton, true);
+                }
+            });
+            actions.appendChild(toggleButton);
+        }
+
+        actions.appendChild(copyButton);
         header.appendChild(languageLabel);
-        header.appendChild(copyButton);
+        header.appendChild(actions);
 
         preElement.parentElement.insertBefore(wrapper, preElement);
         wrapper.appendChild(header);
@@ -3797,19 +4150,27 @@ async function createDialog() {
     btn.addEventListener('click', handleAsk);
 
     function renderAssistantMessageElement(element, text, options = {}) {
-        const displayText = options.renderedHtml ? text : postProcessAssistantMarkdown(text);
+        const sourceText = String(text ?? '');
+        const isRawHtmlResponse = !options.renderedHtml && isRawHtmlAssistantResponse(sourceText);
+        const displayText = options.renderedHtml ? sourceText : getAssistantDisplayMarkdown(sourceText);
+        const copyText = options.renderedHtml ? sourceText : getAssistantStoredText(sourceText);
+        if (isRawHtmlResponse) {
+            element.dataset.askpageRawHtmlResponse = 'true';
+        } else {
+            delete element.dataset.askpageRawHtmlResponse;
+        }
         element.innerHTML = options.renderedHtml || renderMarkdown(displayText);
         enhanceCodeBlocks(element);
         bindInteractiveCommandElements(element);
 
-        if (!options.suppressCopyButton) {
+        if (!options.suppressCopyButton && !isRawHtmlResponse) {
             const copyBtn = document.createElement('button');
             copyBtn.className = 'copy-btn';
             copyBtn.innerHTML = '📋';
             copyBtn.title = '複製到剪貼簿';
             copyBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                await copyTextWithFeedback(copyBtn, options.copyText || displayText);
+                await copyTextWithFeedback(copyBtn, options.copyText || copyText);
             });
             element.appendChild(copyBtn);
         }
@@ -3875,13 +4236,13 @@ async function createDialog() {
                 cancelAnimationFrame(renderFrame);
                 renderFrame = 0;
             }
-                if (messageElement) {
-                    messageElement.remove();
-                    messageElement = null;
-                }
-                text = '';
-                isMessageTopPinned = false;
-            };
+            if (messageElement) {
+                messageElement.remove();
+                messageElement = null;
+            }
+            text = '';
+            isMessageTopPinned = false;
+        };
 
         const scheduleRender = () => {
             if (renderFrame) {
@@ -3905,7 +4266,7 @@ async function createDialog() {
                 scheduleRender();
             },
             finalize(finalText, historyOptions = {}) {
-                text = postProcessAssistantMarkdown(String(finalText || '').trim());
+                text = getAssistantStoredText(String(finalText || '').trim());
                 if (!text) {
                     discard();
                     return null;
@@ -4037,7 +4398,7 @@ async function createDialog() {
         if (role === 'assistant') {
             renderAssistantMessageElement(div, text, options);
         } else {
-            div.textContent = '你: ' + text;
+            appendCollapsibleTextPreview(div, '你: ' + text);
             appendUserScreenshotThumbnail(div, options.screenshotDataUrl);
             appendUserInputImageGallery(div, options.inputImageDataUrls);
         }
@@ -4046,7 +4407,7 @@ async function createDialog() {
 
     function appendPersistentMessage(role, text, options = {}, historyOptions = {}) {
         const messageText = role === 'assistant' && !options.renderedHtml
-            ? postProcessAssistantMarkdown(text)
+            ? getAssistantStoredText(text)
             : text;
         const messageElement = appendMessage(role, messageText, options);
         addConversationTurn(

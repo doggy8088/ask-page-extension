@@ -409,6 +409,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('[AskPage] Background received message:', request);
     console.log('[AskPage] From sender:', sender);
 
+    if (request.action === 'open-codepen') {
+        chrome.tabs.create({ url: chrome.runtime.getURL('codepen.html') });
+        sendResponse({ success: true });
+        return true;
+    }
+
     if (request.action === 'execute-main-world-javascript') {
         (async () => {
             try {
@@ -495,6 +501,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         return true;
     }
+
 });
 
 // Log when service worker starts

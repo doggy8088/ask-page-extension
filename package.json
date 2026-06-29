@@ -1,6 +1,6 @@
 {
   "name": "ask-page-extension",
-  "version": "0.28.2",
+  "version": "0.29.0",
   "description": "使用 Gemini API、OpenAI API、Azure OpenAI API 或 OpenAI Compatible API 詢問關於目前頁面的問題",
   "main": "background.js",
   "scripts": {
@@ -11,7 +11,7 @@
     "lint:fix": "eslint *.js --fix --ignore-pattern lib/",
     "build": "npm run lint",
     "package": "zip -r dist/AskPageExtension.zip manifest.json background.js content.js popup.html popup.js settings.html settings.js style.css icons/*.png lib CHANGELOG.md README.md",
-    "test": "echo '暫無測試項目' && exit 0",
+    "test": "node tests/render-markdown-code-fence.test.js",
     "clean": "rm -rf dist/ node_modules/ *.zip"
   },
   "keywords": [
