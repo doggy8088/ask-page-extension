@@ -135,15 +135,18 @@ form.target = '_self';
 }
 ```
 
-拆解規則大致如下：
+拆解規則詳細說明如下：
 
-- `<title>` 會成為 CodePen title。
-- `<body>` 內扣掉 `<script>` 與 `<style>` 後，會放進 `html`。
-- `<style>` 內容會合併到 `css`。
-- 沒有 `src` 的 `<script>` 內容會合併到 `js`。
-- `<link rel="stylesheet" href="...">` 會合併到 `css_external`，多筆用分號分隔。
-- `<script src="..."></script>` 會合併到 `js_external`，多筆用分號分隔。
-- `<head>` 裡剩下的非 title / style / stylesheet link 內容會放到 `head`。
+- **網頁標題 (`title`)**：利用正則表達式匹配 `<title>` 標籤，擷取內容並去除裡面的 HTML 標籤後，作為 CodePen 的 `title`。
+- **樣式與外部樣式表 (CSS)**：
+  - **內部樣式**：使用正則找出內容中所有的 `<style>...</style>` 標籤，將內部的 CSS 合併，填入 CodePen 的 `css` 面板（原 HTML 內之標籤會被替換移除）。
+  - **外部樣式表**：找出所有 `<link rel="stylesheet" href="...">`，擷取 `href` 並去重後，以分號 `;` 串接作為 `css_external`（原 HTML 內之標籤會被替換移除）。
+- **腳本與外部腳本 (JS)**：
+  - **內部腳本**：使用正則找出所有無 `src` 的內嵌 `<script>...</script>` 標籤，將 JavaScript 程式碼合併，填入 CodePen 的 `js` 面板（原 HTML 內之標籤會被替換移除）。
+  - **外部腳本**：使用正則找出帶有 `src` 屬性的 `<script src="..."></script>`，擷取 `src` 網址並去重後，以分號 `;` 串接作為 `js_external`（原 HTML 內之標籤會被替換移除）。
+- **HTML 結構與 Head 剩餘設定 (`html` 與 `head`)**：
+  - 經過上述拆解替換後，`<head>` 裡剩下的非 title / style / stylesheet link 內容（例如 `<meta>`）會填入 CodePen 的 `head` 屬性。
+  - `<body>`（或沒有 `<body>` 時的 fallback 網頁本體）剩餘的 HTML 內容，會被填入 CodePen 的 `html` 面板。
 
 這樣比把整份完整 HTML 全塞進 CodePen 的 HTML panel 更符合 CodePen 的三欄編輯體驗。
 

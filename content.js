@@ -1722,6 +1722,191 @@ function createSafeMarkdownRenderer() {
     return renderer;
 }
 
+function getFiniteTokenUsageValue(value) {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : null;
+}
+
+function getFirstFiniteTokenUsageValue(...values) {
+    for (const value of values) {
+        const tokenCount = getFiniteTokenUsageValue(value);
+        if (tokenCount !== null) {
+            return tokenCount;
+        }
+    }
+
+    return null;
+}
+
+function sumTokenUsageDetails(details) {
+    if (!Array.isArray(details)) {
+        return null;
+    }
+
+    let hasTokenCount = false;
+    const total = details.reduce((sum, detail) => {
+        const tokenCount = getFiniteTokenUsageValue(detail?.tokenCount ?? detail?.token_count);
+        if (tokenCount === null) {
+            return sum;
+        }
+
+        hasTokenCount = true;
+        return sum + tokenCount;
+    }, 0);
+
+    return hasTokenCount ? total : null;
+}
+
+function createApiTokenUsageAccumulator() {
+    return {
+        callCount: 0,
+        fields: {}
+    };
+}
+
+function hasApiTokenUsageField(fields, fieldName) {
+    return Object.prototype.hasOwnProperty.call(fields || {}, fieldName);
+}
+
+function addApiTokenUsageField(target, fieldName, value) {
+    const tokenCount = getFiniteTokenUsageValue(value);
+    if (tokenCount === null) {
+        return false;
+    }
+
+    target.fields[fieldName] = (target.fields[fieldName] || 0) + tokenCount;
+    return true;
+}
+
+function createApiTokenUsageSummary(providerLabel, usageData) {
+    if (!usageData || typeof usageData !== 'object') {
+        return null;
+    }
+
+    const summary = createApiTokenUsageAccumulator();
+    summary.providerLabel = String(providerLabel || '').trim();
+    const inputDetails = usageData.input_tokens_details || usageData.prompt_tokens_details || {};
+    const outputDetails = usageData.output_tokens_details || usageData.completion_tokens_details || {};
+    const cachedInputTokens = getFirstFiniteTokenUsageValue(
+        inputDetails.cached_tokens,
+        usageData.cachedContentTokenCount,
+        sumTokenUsageDetails(usageData.cacheTokensDetails),
+        usageData.cache_read_input_tokens
+    );
+
+    addApiTokenUsageField(summary, 'inputTokens', getFirstFiniteTokenUsageValue(
+        usageData.input_tokens,
+        usageData.prompt_tokens,
+        usageData.promptTokenCount
+    ));
+    addApiTokenUsageField(summary, 'inputCachedTokens', cachedInputTokens);
+    addApiTokenUsageField(summary, 'inputCacheCreationTokens', usageData.cache_creation_input_tokens);
+    addApiTokenUsageField(summary, 'outputTokens', getFirstFiniteTokenUsageValue(
+        usageData.output_tokens,
+        usageData.completion_tokens,
+        usageData.candidatesTokenCount
+    ));
+    addApiTokenUsageField(summary, 'outputReasoningTokens', getFirstFiniteTokenUsageValue(
+        outputDetails.reasoning_tokens,
+        usageData.thoughtsTokenCount
+    ));
+    addApiTokenUsageField(summary, 'acceptedPredictionTokens', outputDetails.accepted_prediction_tokens);
+    addApiTokenUsageField(summary, 'rejectedPredictionTokens', outputDetails.rejected_prediction_tokens);
+    addApiTokenUsageField(summary, 'toolInputTokens', usageData.toolUsePromptTokenCount);
+    addApiTokenUsageField(summary, 'totalTokens', getFirstFiniteTokenUsageValue(
+        usageData.total_tokens,
+        usageData.totalTokenCount
+    ));
+
+    if (!Object.keys(summary.fields).length) {
+        return null;
+    }
+
+    summary.callCount = 1;
+    return summary;
+}
+
+function mergeApiTokenUsageSummary(target, usageSummary) {
+    if (!target || !usageSummary || !usageSummary.callCount) {
+        return target;
+    }
+
+    target.callCount += usageSummary.callCount;
+    Object.entries(usageSummary.fields || {}).forEach(([fieldName, tokenCount]) => {
+        addApiTokenUsageField(target, fieldName, tokenCount);
+    });
+
+    return target;
+}
+
+function cloneApiTokenUsageAccumulator(tokenUsage) {
+    return {
+        callCount: tokenUsage?.callCount || 0,
+        fields: {
+            ...(tokenUsage?.fields || {})
+        }
+    };
+}
+
+function formatTokenUsageNumber(value) {
+    const tokenCount = getFiniteTokenUsageValue(value);
+    return tokenCount === null ? '' : Math.round(tokenCount).toLocaleString('en-US');
+}
+
+function formatApiTokenUsageSummary(tokenUsage) {
+    if (!tokenUsage || !tokenUsage.callCount) {
+        return '';
+    }
+
+    const fields = tokenUsage.fields || {};
+    const parts = [];
+    const inputExtras = [];
+    const outputExtras = [];
+
+    if (hasApiTokenUsageField(fields, 'inputCachedTokens')) {
+        inputExtras.push(`Cached ${formatTokenUsageNumber(fields.inputCachedTokens)}`);
+    }
+    if (hasApiTokenUsageField(fields, 'inputCacheCreationTokens')) {
+        inputExtras.push(`Cache Write ${formatTokenUsageNumber(fields.inputCacheCreationTokens)}`);
+    }
+    if (hasApiTokenUsageField(fields, 'inputTokens')) {
+        parts.push(`Input ${formatTokenUsageNumber(fields.inputTokens)}${inputExtras.length ? `（${inputExtras.join('，')}）` : ''}`);
+    } else {
+        inputExtras.forEach((extra) => parts.push(`Input ${extra}`));
+    }
+
+    if (hasApiTokenUsageField(fields, 'outputReasoningTokens')) {
+        outputExtras.push(`Reasoning ${formatTokenUsageNumber(fields.outputReasoningTokens)}`);
+    }
+    if (hasApiTokenUsageField(fields, 'acceptedPredictionTokens')) {
+        outputExtras.push(`Accepted Prediction ${formatTokenUsageNumber(fields.acceptedPredictionTokens)}`);
+    }
+    if (hasApiTokenUsageField(fields, 'rejectedPredictionTokens')) {
+        outputExtras.push(`Rejected Prediction ${formatTokenUsageNumber(fields.rejectedPredictionTokens)}`);
+    }
+    if (hasApiTokenUsageField(fields, 'outputTokens')) {
+        parts.push(`Output ${formatTokenUsageNumber(fields.outputTokens)}${outputExtras.length ? `（${outputExtras.join('，')}）` : ''}`);
+    } else {
+        outputExtras.forEach((extra) => parts.push(`Output ${extra}`));
+    }
+
+    if (hasApiTokenUsageField(fields, 'toolInputTokens')) {
+        parts.push(`Tool Input ${formatTokenUsageNumber(fields.toolInputTokens)}`);
+    }
+    if (hasApiTokenUsageField(fields, 'totalTokens')) {
+        parts.push(`Total ${formatTokenUsageNumber(fields.totalTokens)}`);
+    }
+    if (tokenUsage.callCount > 1) {
+        parts.push(`API 回報 ${formatTokenUsageNumber(tokenUsage.callCount)} 次`);
+    }
+
+    return parts.length ? `Tokens: ${parts.join(' · ')}` : '';
+}
+
 function getCodeLanguage(codeElement) {
     const languageClass = Array.from(codeElement.classList).find((className) => (
         className.startsWith('language-') || className.startsWith('lang-')
@@ -4553,6 +4738,7 @@ async function createDialog() {
         let streamedReasoningStored = false;
         let streamedReasoningRenderFrame = 0;
         let stepCount = 0;
+        const tokenUsage = createApiTokenUsageAccumulator();
         const startedAt = performance.now();
         const renderStreamedReasoning = () => {
             if (!streamedReasoningElement) {
@@ -4657,6 +4843,9 @@ async function createDialog() {
                     appendAgentTraceMessage(resultTrace.text, 'tool-result', { renderedHtml: resultTrace.renderedHtml });
                 });
             },
+            reportUsage(providerLabel, usageData) {
+                mergeApiTokenUsageSummary(tokenUsage, createApiTokenUsageSummary(providerLabel, usageData));
+            },
             reportCompletion(message) {
                 storeStreamedReasoning();
                 appendAgentTraceMessage(`✅ ${message}`, 'completion');
@@ -4664,16 +4853,19 @@ async function createDialog() {
             getStats() {
                 return {
                     stepCount,
-                    elapsedMilliseconds: performance.now() - startedAt
+                    elapsedMilliseconds: performance.now() - startedAt,
+                    tokenUsage: cloneApiTokenUsageAccumulator(tokenUsage)
                 };
             }
         };
     }
 
     function logAgentExecutionCompletion(success, stats, errorMessage = '') {
+        const tokenUsageText = formatApiTokenUsageSummary(stats.tokenUsage);
+        const tokenUsageSuffix = tokenUsageText ? `。${tokenUsageText}` : '';
         const finalMessage = success
-            ? `頁問已經打完收工，共執行 ${stats.stepCount} 個步驟。費時: ${formatElapsedDuration(stats.elapsedMilliseconds)}`
-            : `頁問提早收工，共執行 ${stats.stepCount} 個步驟。費時: ${formatElapsedDuration(stats.elapsedMilliseconds)}`;
+            ? `頁問已經打完收工，共執行 ${stats.stepCount} 個步驟。費時: ${formatElapsedDuration(stats.elapsedMilliseconds)}${tokenUsageSuffix}`
+            : `頁問提早收工，共執行 ${stats.stepCount} 個步驟。費時: ${formatElapsedDuration(stats.elapsedMilliseconds)}${tokenUsageSuffix}`;
         if (success) {
             console.info(`[AskPage] ${finalMessage}`);
         } else {
@@ -4715,6 +4907,11 @@ async function createDialog() {
 
         if (traceEvent.type === 'tool-result') {
             traceReporter.reportToolResults(traceEvent.toolResults || []);
+            return;
+        }
+
+        if (traceEvent.type === 'usage') {
+            traceReporter.reportUsage(providerLabel, traceEvent.usage);
             return;
         }
 
@@ -6671,16 +6868,31 @@ async function createDialog() {
                     ? 'content_filter'
                     : 'stop';
         const usage = responseData?.usage || {};
+        const normalizedUsage = {};
+        const inputTokens = getFirstFiniteTokenUsageValue(usage.input_tokens, usage.prompt_tokens);
+        const outputTokens = getFirstFiniteTokenUsageValue(usage.output_tokens, usage.completion_tokens);
+        const totalTokens = getFirstFiniteTokenUsageValue(usage.total_tokens);
+
+        if (inputTokens !== null) {
+            normalizedUsage.prompt_tokens = inputTokens;
+        }
+        if (usage.input_tokens_details || usage.prompt_tokens_details) {
+            normalizedUsage.prompt_tokens_details = usage.input_tokens_details || usage.prompt_tokens_details;
+        }
+        if (outputTokens !== null) {
+            normalizedUsage.completion_tokens = outputTokens;
+        }
+        if (usage.output_tokens_details || usage.completion_tokens_details) {
+            normalizedUsage.completion_tokens_details = usage.output_tokens_details || usage.completion_tokens_details;
+        }
+        if (totalTokens !== null) {
+            normalizedUsage.total_tokens = totalTokens;
+        }
 
         return {
             id: responseData?.id,
             model: responseData?.model,
-            usage: {
-                prompt_tokens: usage.input_tokens ?? usage.prompt_tokens ?? 0,
-                completion_tokens: usage.output_tokens ?? usage.completion_tokens ?? 0,
-                completion_tokens_details: usage.output_tokens_details || usage.completion_tokens_details || null,
-                total_tokens: usage.total_tokens ?? 0
-            },
+            usage: normalizedUsage,
             choices: [{
                 finish_reason: finishReason,
                 message: {
@@ -7466,6 +7678,7 @@ async function createDialog() {
                 throw error;
             }
 
+            onTrace({ type: 'usage', round, usage: responseData?.usage || null });
             const responseChoice = getOpenAIPrimaryChoice(responseData);
             const assistantMessage = responseChoice?.message;
             const reasoningSummaries = getOpenAIReasoningSummaries(assistantMessage, responseData);
@@ -7669,6 +7882,7 @@ async function createDialog() {
                     onRetry: handleRetry
                 });
             logGeminiUsageMetadata(responseData);
+            onTrace({ type: 'usage', round, usage: responseData?.usageMetadata || null });
             const responseCandidate = getGeminiPrimaryCandidate(responseData);
             const responseContent = responseCandidate?.content;
             const parts = responseContent?.parts || [];
@@ -8354,6 +8568,7 @@ async function createDialog() {
         let answerText = '';
         let responseId = '';
         let responseModel = requestBody.model || '';
+        let usage = null;
 
         await fetchSseWithRetry({
             providerLabel: 'Anthropic',
@@ -8379,6 +8594,11 @@ async function createDialog() {
                 if (chunk.type === 'message_start' && chunk.message) {
                     responseId = chunk.message.id || responseId;
                     responseModel = chunk.message.model || responseModel;
+                    usage = chunk.message.usage || usage;
+                }
+
+                if (chunk.usage) {
+                    usage = chunk.usage;
                 }
 
                 if (chunk.type === 'content_block_delta' && chunk.delta && chunk.delta.text) {
@@ -8392,7 +8612,8 @@ async function createDialog() {
         return {
             answer: answerText,
             id: responseId,
-            model: responseModel
+            model: responseModel,
+            usage
         };
     }
 
@@ -8488,6 +8709,7 @@ async function createDialog() {
                         }
                     }
                 });
+                traceReporter.reportUsage('Anthropic', streamResult.usage);
                 finalAnswer = `⚠️ **目前 Anthropic 提供者未完整支援 agent 模式下的 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n${streamResult.answer}`;
             } else {
                 const response = await fetchJsonWithRetry({
@@ -8503,6 +8725,7 @@ async function createDialog() {
                         `Anthropic ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
                     )
                 });
+                traceReporter.reportUsage('Anthropic', response.usage);
                 finalAnswer = response.content?.map(block => block.text).join('') || '';
             }
 

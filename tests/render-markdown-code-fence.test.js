@@ -43,13 +43,17 @@ sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     buildCodePenPrefillData,
+    createApiTokenUsageAccumulator,
+    createApiTokenUsageSummary,
     createCodePenPrefillForm,
     createMarkdownCodeFence,
     extractHtmlDocumentTitle,
+    formatApiTokenUsageSummary,
     splitHtmlForCodePen,
     getAssistantDisplayMarkdown,
     getAssistantStoredText,
     isRawHtmlAssistantResponse,
+    mergeApiTokenUsageSummary,
     renderMarkdown,
     shouldCollapseTextPreview
 };`, sandbox, {
@@ -58,13 +62,17 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
 
 const {
     buildCodePenPrefillData,
+    createApiTokenUsageAccumulator,
+    createApiTokenUsageSummary,
     createCodePenPrefillForm,
     createMarkdownCodeFence,
     extractHtmlDocumentTitle,
+    formatApiTokenUsageSummary,
     splitHtmlForCodePen,
     getAssistantDisplayMarkdown,
     getAssistantStoredText,
     isRawHtmlAssistantResponse,
+    mergeApiTokenUsageSummary,
     renderMarkdown,
     shouldCollapseTextPreview
 } = sandbox.__askPageTestExports;
@@ -223,5 +231,53 @@ assert.strictEqual(codePenForm.style.display, 'none');
 assert.strictEqual(codePenFormDataInput.type, 'hidden');
 assert.strictEqual(codePenFormDataInput.name, 'data');
 assert.deepStrictEqual(JSON.parse(codePenFormDataInput.value), JSON.parse(JSON.stringify(titledCodePenData)));
+
+const tokenUsage = createApiTokenUsageAccumulator();
+mergeApiTokenUsageSummary(tokenUsage, createApiTokenUsageSummary('Gemini', {
+    promptTokenCount: 1000,
+    cachedContentTokenCount: 250,
+    candidatesTokenCount: 300,
+    thoughtsTokenCount: 40,
+    totalTokenCount: 1340
+}));
+mergeApiTokenUsageSummary(tokenUsage, createApiTokenUsageSummary('OpenAI', {
+    prompt_tokens: 2000,
+    prompt_tokens_details: {
+        cached_tokens: 500
+    },
+    completion_tokens: 700,
+    completion_tokens_details: {
+        reasoning_tokens: 120,
+        accepted_prediction_tokens: 30,
+        rejected_prediction_tokens: 10
+    },
+    total_tokens: 2700
+}));
+mergeApiTokenUsageSummary(tokenUsage, createApiTokenUsageSummary('Anthropic', {
+    input_tokens: 300,
+    cache_creation_input_tokens: 50,
+    cache_read_input_tokens: 80,
+    output_tokens: 90
+}));
+
+assert.deepStrictEqual(JSON.parse(JSON.stringify(tokenUsage)), {
+    callCount: 3,
+    fields: {
+        inputTokens: 3300,
+        inputCachedTokens: 830,
+        outputTokens: 1090,
+        outputReasoningTokens: 160,
+        totalTokens: 4040,
+        acceptedPredictionTokens: 30,
+        rejectedPredictionTokens: 10,
+        inputCacheCreationTokens: 50
+    }
+});
+assert.strictEqual(
+    formatApiTokenUsageSummary(tokenUsage),
+    'Tokens: Input 3,300（Cached 830，Cache Write 50） · Output 1,090（Reasoning 160，Accepted Prediction 30，Rejected Prediction 10） · Total 4,040 · API 回報 3 次'
+);
+assert.strictEqual(createApiTokenUsageSummary('Unknown', { foo: 'bar' }), null);
+assert.strictEqual(formatApiTokenUsageSummary(createApiTokenUsageAccumulator()), '');
 
 console.log('render-markdown-code-fence: ok');
