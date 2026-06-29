@@ -1945,12 +1945,27 @@ function isResponsesApiOutputTextPart(part) {
     }
 
     const type = String(part.type || '').trim().toLowerCase();
-    return !type || type === 'output_text' || type === 'text';
+    if (!type || type === 'output_text' || type === 'text' || type === 'markdown') {
+        return true;
+    }
+
+    return typeof part.text === 'string' ||
+           (part.text && typeof part.text.value === 'string') ||
+           typeof part.output_text === 'string' ||
+           typeof part.content === 'string';
 }
 
 function getResponsesApiOutputTextFromResponse(responseData) {
     if (typeof responseData?.output_text === 'string' && responseData.output_text.trim()) {
         return responseData.output_text.trim();
+    }
+
+    if (typeof responseData?.text === 'string' && responseData.text.trim()) {
+        return responseData.text.trim();
+    }
+
+    if (typeof responseData?.content === 'string' && responseData.content.trim()) {
+        return responseData.content.trim();
     }
 
     const output = Array.isArray(responseData?.output) ? responseData.output : [];
@@ -6922,6 +6937,15 @@ async function createDialog() {
     }
 
     function normalizeResponsesApiResponse(responseData) {
+        if (responseData?.error) {
+            const errorMsg = typeof responseData.error === 'string'
+                ? responseData.error
+                : typeof responseData.error?.message === 'string'
+                    ? responseData.error.message
+                    : JSON.stringify(responseData.error);
+            throw new Error(`API 回報錯誤：${errorMsg}`);
+        }
+
         if (Array.isArray(responseData?.choices)) {
             return responseData;
         }
@@ -7552,6 +7576,15 @@ async function createDialog() {
             onEvent: (sseEvent) => {
                 const payload = parseSseJsonEvent(providerLabel, sseEvent);
 
+                if (payload?.error) {
+                    const errorMsg = typeof payload.error === 'string'
+                        ? payload.error
+                        : typeof payload.error?.message === 'string'
+                            ? payload.error.message
+                            : JSON.stringify(payload.error);
+                    throw new Error(`API 串流錯誤：${errorMsg}`);
+                }
+
                 if (payload.choices || payload.object === 'chat.completion.chunk') {
                     isChatCompletionsFormat = true;
                     state.id = payload.id || state.id;
@@ -7613,9 +7646,21 @@ async function createDialog() {
                     return;
                 }
 
-                if (eventType === 'response.output_text.delta' && typeof payload.delta === 'string') {
-                    state.outputText += payload.delta;
-                    onAnswerDelta(payload.delta);
+                if (eventType === 'response.output_text.delta' ||
+                    eventType === 'response.text.delta' ||
+                    eventType === 'response.content_part.delta' ||
+                    eventType === 'response.output.delta') {
+                    const deltaText = typeof payload.delta === 'string'
+                        ? payload.delta
+                        : typeof payload.delta?.text === 'string'
+                            ? payload.delta.text
+                            : typeof payload.text === 'string'
+                                ? payload.text
+                                : '';
+                    if (deltaText) {
+                        state.outputText += deltaText;
+                        onAnswerDelta(deltaText);
+                    }
                     return;
                 }
 
