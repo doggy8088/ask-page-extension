@@ -5021,8 +5021,8 @@ async function createDialog() {
         const durationText = `費時：${formatElapsedDuration(stats.elapsedMilliseconds)}`;
         const tokenUsageSuffix = tokenUsageText ? `\n\n${tokenUsageText}` : '';
         const finalMessage = success
-            ? `頁問已經打完收工，共執行 ${stats.stepCount} 個步驟。\n${durationText}${tokenUsageSuffix}`
-            : `頁問提早收工，共執行 ${stats.stepCount} 個步驟。\n${durationText}${tokenUsageSuffix}`;
+            ? `頁問已經打完收工，共執行 ${stats.stepCount} 個步驟，${durationText}${tokenUsageSuffix}`
+            : `頁問提早收工，共執行 ${stats.stepCount} 個步驟，${durationText}${tokenUsageSuffix}`;
         if (success) {
             console.info(`[AskPage] ${finalMessage}`);
         } else {
