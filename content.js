@@ -4071,6 +4071,41 @@ async function createDialog() {
         return newState;
     }
 
+    function normalizeCustomCommandMode(mode) {
+        return mode === 'inquiry' ? 'inquiry' : 'agent';
+    }
+
+    async function applyCustomCommandExecutionMode(customCommand) {
+        const targetMode = normalizeCustomCommandMode(customCommand.mode);
+        const targetAgentMode = targetMode === 'agent';
+        const targetScreenshotEnabled = customCommand.screenshotEnabled === true;
+
+        const [currentAgentMode, currentScreenshotEnabled] = await Promise.all([
+            getAgentModeEnabled(),
+            getScreenshotEnabled()
+        ]);
+
+        const updates = [];
+        if (currentAgentMode !== targetAgentMode) {
+            updates.push(setHtmlModeEnabled(targetAgentMode));
+        }
+        if (currentScreenshotEnabled !== targetScreenshotEnabled) {
+            updates.push(setScreenshotEnabled(targetScreenshotEnabled));
+        }
+
+        if (!updates.length) {
+            return;
+        }
+
+        await Promise.all(updates);
+        await Promise.all([
+            updateModeToggleButtons(),
+            updateProviderDisplay(),
+            refreshInputImageContextAvailability(),
+            refreshUsagePromptMessage()
+        ]);
+    }
+
     async function handleScreenshotModeToggle(options = {}) {
         const feedbackMode = options.feedback || 'none';
 
@@ -4195,6 +4230,7 @@ async function createDialog() {
             const customCommand = customCommands.find(cmd => cmd.cmd === question);
 
             if (customCommand) {
+                await applyCustomCommandExecutionMode(customCommand);
                 await incrementCustomCommandUsage(customCommand.cmd);
                 // Replace the command with its prompt
                 question = customCommand.prompt;

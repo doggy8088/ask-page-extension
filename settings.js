@@ -95,6 +95,7 @@ async function getOrCreateEncryptionKey() {
 // DOM elements - 將在 DOMContentLoaded 中初始化
 let saveButton, resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
+let modalCommandModeAgent, modalCommandModeInquiry, modalCommandScreenshotEnabled;
 let modalSave, modalCancel, modalCommandNameError;
 let customSystemPromptTextarea, customSystemPromptCount;
 
@@ -116,6 +117,11 @@ let providers = [];
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
+
+const CUSTOM_COMMAND_MODE_AGENT = 'agent';
+const CUSTOM_COMMAND_MODE_INQUIRY = 'inquiry';
+const DEFAULT_CUSTOM_COMMAND_MODE = CUSTOM_COMMAND_MODE_AGENT;
+const CUSTOM_COMMAND_PREVIEW_LENGTH = 50;
 
 // Built-in commands that cannot be deleted or modified
 const BUILT_IN_COMMANDS = [
@@ -252,6 +258,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCommandName = document.getElementById('modalCommandName');
     modalCommandNameError = document.getElementById('modalCommandNameError');
     modalCommandPrompt = document.getElementById('modalCommandPrompt');
+    modalCommandModeAgent = document.getElementById('modalCommandModeAgent');
+    modalCommandModeInquiry = document.getElementById('modalCommandModeInquiry');
+    modalCommandScreenshotEnabled = document.getElementById('modalCommandScreenshotEnabled');
     modalSave = document.getElementById('modalSave');
     modalCancel = document.getElementById('modalCancel');
     customSystemPromptTextarea = document.getElementById('customSystemPrompt');
@@ -416,18 +425,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Modal functionality
     function openModal(command = null) {
         currentEditingCommand = command;
+        const isBuiltIn = Boolean(command && command.builtin);
 
         if (command) {
             modalTitle.textContent = command.builtin ? '編輯內建命令' : '編輯自訂命令';
             modalCommandName.value = command.cmd;
             modalCommandName.disabled = command.builtin;
             modalCommandPrompt.value = command.prompt || '';
+
+            if (!isBuiltIn) {
+                const mode = normalizeCustomCommandMode(command.mode);
+                setCustomCommandMode(mode);
+                modalCommandScreenshotEnabled.checked = Boolean(command.screenshotEnabled);
+            } else {
+                setCustomCommandMode(DEFAULT_CUSTOM_COMMAND_MODE);
+                modalCommandScreenshotEnabled.checked = false;
+            }
         } else {
             modalTitle.textContent = '新增自訂命令';
             modalCommandName.value = '';
             modalCommandName.disabled = false;
             modalCommandPrompt.value = '';
+            setCustomCommandMode(DEFAULT_CUSTOM_COMMAND_MODE);
+            modalCommandScreenshotEnabled.checked = false;
         }
+
+        toggleModalCommandModeInputs(!isBuiltIn);
 
         clearCommandNameValidation();
         commandModal.style.display = 'block';
@@ -514,6 +537,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     function saveCommand() {
         const name = modalCommandName.value.trim();
         const prompt = modalCommandPrompt.value.trim();
+        const mode = getCustomCommandMode();
+        const screenshotEnabled = Boolean(modalCommandScreenshotEnabled && modalCommandScreenshotEnabled.checked);
 
         if (!validateCommandNameInput({ showEmptyError: true })) {
             return;
@@ -537,12 +562,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Editing custom command
                 const index = customCommands.findIndex(cmd => cmd.cmd === currentEditingCommand.cmd);
                 if (index !== -1) {
-                    customCommands[index] = { cmd: name, prompt: prompt };
+                    customCommands[index] = {
+                        cmd: name,
+                        prompt,
+                        mode,
+                        screenshotEnabled
+                    };
                 }
             }
         } else {
             // Adding new command
-            customCommands.push({ cmd: name, prompt: prompt });
+            customCommands.push({
+                cmd: name,
+                prompt,
+                mode,
+                screenshotEnabled
+            });
         }
 
         saveCustomCommands();
@@ -608,13 +643,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const isBuiltIn = command.builtin;
         const isEditable = command.editable || !isBuiltIn;
+        const desc = getCommandListDescription(command);
 
         div.innerHTML = `
             <div class="command-header">
                 <div>
                     <div class="command-name">${command.cmd}</div>
                     <div style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">
-                        ${command.desc || command.prompt || ''}
+                        ${desc}
                     </div>
                 </div>
                 <div class="command-actions">
@@ -629,15 +665,102 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </button>` : ''}
                 </div>
             </div>
-            ${command.prompt ? `
-                <div style="margin-top: 12px; padding: 12px; background: var(--background); border-radius: 8px; border: 1px solid var(--border-color);">
-                    <small style="color: var(--text-secondary); font-weight: 600;">提示內容:</small>
-                    <div style="margin-top: 4px; white-space: pre-wrap; font-size: 13px;">${command.prompt}</div>
-                </div>
-            ` : ''}
         `;
 
         return div;
+    }
+
+    function normalizeCustomCommandMode(mode) {
+        return mode === CUSTOM_COMMAND_MODE_INQUIRY ? CUSTOM_COMMAND_MODE_INQUIRY : DEFAULT_CUSTOM_COMMAND_MODE;
+    }
+
+    function normalizeCustomCommand(command) {
+        if (!command || typeof command !== 'object') {
+            return null;
+        }
+
+        const cmd = String(command.cmd || '').trim();
+        if (!cmd) {
+            return null;
+        }
+
+        return {
+            cmd: cmd,
+            prompt: String(command.prompt || ''),
+            mode: normalizeCustomCommandMode(command.mode),
+            screenshotEnabled: command.screenshotEnabled === true
+        };
+    }
+
+    function normalizeCustomCommands(commands) {
+        if (!Array.isArray(commands)) {
+            return [];
+        }
+
+        return commands
+            .map(normalizeCustomCommand)
+            .filter(Boolean);
+    }
+
+    function getCustomCommandMode() {
+        if (modalCommandModeInquiry && modalCommandModeInquiry.checked) {
+            return CUSTOM_COMMAND_MODE_INQUIRY;
+        }
+
+        return DEFAULT_CUSTOM_COMMAND_MODE;
+    }
+
+    function setCustomCommandMode(mode) {
+        const normalizedMode = normalizeCustomCommandMode(mode);
+
+        if (modalCommandModeAgent) {
+            modalCommandModeAgent.checked = normalizedMode === CUSTOM_COMMAND_MODE_AGENT;
+        }
+        if (modalCommandModeInquiry) {
+            modalCommandModeInquiry.checked = normalizedMode === CUSTOM_COMMAND_MODE_INQUIRY;
+        }
+    }
+
+    function toggleModalCommandModeInputs(enabled) {
+        if (modalCommandModeAgent && modalCommandModeAgent.closest) {
+            const modeSection = modalCommandModeAgent.closest('.form-group');
+            if (modeSection) {
+                modeSection.style.display = enabled ? 'block' : 'none';
+            }
+        }
+        if (modalCommandScreenshotEnabled && modalCommandScreenshotEnabled.closest) {
+            const screenshotSection = modalCommandScreenshotEnabled.closest('.form-group');
+            if (screenshotSection) {
+                screenshotSection.style.display = enabled ? 'block' : 'none';
+            }
+        }
+    }
+
+    function getPromptPreview(text, maxLength = CUSTOM_COMMAND_PREVIEW_LENGTH) {
+        const safeText = String(text || '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        if (!safeText) {
+            return '';
+        }
+
+        return safeText.length > maxLength
+            ? `${safeText.slice(0, maxLength)}...`
+            : safeText;
+    }
+
+    function getCommandListDescription(command) {
+        if (command.desc) {
+            return command.desc;
+        }
+
+        const promptText = command.prompt;
+        if (!promptText) {
+            return '';
+        }
+
+        return getPromptPreview(promptText);
     }
 
     // Add event delegation for command buttons
@@ -697,7 +820,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderProviders(activeProviderId, activeModel);
 
         // Load custom commands
-        customCommands = result[CUSTOM_COMMANDS_STORAGE] || [];
+        customCommands = normalizeCustomCommands(result[CUSTOM_COMMANDS_STORAGE]);
 
         // Load custom summary prompt for built-in /summary command
         const customSummaryPrompt = result.CUSTOM_SUMMARY_PROMPT;
