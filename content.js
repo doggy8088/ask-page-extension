@@ -3494,7 +3494,9 @@ async function createDialog() {
             didDragDialog = false;
             return;
         }
-        if (e.target === overlay) { closeDialog(); } else if (!intelliBox.contains(e.target) && !input.contains(e.target)) { hideIntelliBox(); }
+        if (!intelliBox.contains(e.target) && !input.contains(e.target)) {
+            hideIntelliBox();
+        }
     });
     const escapeKeyListener = (e) => {
         if (e.key !== 'Escape') {

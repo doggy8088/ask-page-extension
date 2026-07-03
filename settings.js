@@ -297,22 +297,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalProviderSave.addEventListener('click', saveProvider);
     modalProviderTest.addEventListener('click', testProviderConnection);
 
-    // Close modals when clicking outside
-    commandModal.addEventListener('click', (e) => {
-        if (e.target === commandModal) {
-            closeModal();
-        }
-    });
-
     // Model actions event listeners (fetch models, manually input models, etc.)
     document.querySelectorAll('.btn-action-models').forEach(btn => {
         btn.addEventListener('click', handleModelAction);
-    });
-    providerModal.addEventListener('click', (e) => {
-        if (e.target === providerModal) {
-            providerModal.style.display = 'none';
-            currentEditingProvider = null;
-        }
     });
 
     // Keyboard shortcuts for modals
