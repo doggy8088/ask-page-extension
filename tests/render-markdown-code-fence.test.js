@@ -277,7 +277,7 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(tokenUsage)), {
 });
 assert.strictEqual(
     formatApiTokenUsageSummary(tokenUsage),
-    'Tokens: Input 3,300（Cached 830，Cache Write 50） · Output 1,090（Reasoning 160，Accepted Prediction 30，Rejected Prediction 10） · Total 4,040 · API 回報 3 次'
+    'Token 用量統計：\n- 輸入：3,300（快取 830、快取寫入 50）\n- 輸出：1,090（推理 160、已接受預測 30、已否決預測 10）\n- 總計：4,040\n- API 回報：3 次'
 );
 assert.strictEqual(createApiTokenUsageSummary('Unknown', { foo: 'bar' }), null);
 assert.strictEqual(formatApiTokenUsageSummary(createApiTokenUsageAccumulator()), '');

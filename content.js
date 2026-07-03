@@ -1863,48 +1863,73 @@ function formatApiTokenUsageSummary(tokenUsage) {
     }
 
     const fields = tokenUsage.fields || {};
-    const parts = [];
+    const usageLines = [];
     const inputExtras = [];
     const outputExtras = [];
+    const getLine = (label, value, extras = []) => {
+        const normalizedValue = value || '';
+        const suffix = extras.length
+            ? `（${extras.join('、')}）`
+            : '';
+
+        if (!normalizedValue) {
+            return '';
+        }
+
+        return `- ${label}：${normalizedValue}${suffix}`;
+    };
 
     if (hasApiTokenUsageField(fields, 'inputCachedTokens')) {
-        inputExtras.push(`Cached ${formatTokenUsageNumber(fields.inputCachedTokens)}`);
+        inputExtras.push(`快取 ${formatTokenUsageNumber(fields.inputCachedTokens)}`);
     }
     if (hasApiTokenUsageField(fields, 'inputCacheCreationTokens')) {
-        inputExtras.push(`Cache Write ${formatTokenUsageNumber(fields.inputCacheCreationTokens)}`);
+        inputExtras.push(`快取寫入 ${formatTokenUsageNumber(fields.inputCacheCreationTokens)}`);
     }
     if (hasApiTokenUsageField(fields, 'inputTokens')) {
-        parts.push(`Input ${formatTokenUsageNumber(fields.inputTokens)}${inputExtras.length ? `（${inputExtras.join('，')}）` : ''}`);
-    } else {
-        inputExtras.forEach((extra) => parts.push(`Input ${extra}`));
+        const line = getLine('輸入', formatTokenUsageNumber(fields.inputTokens), inputExtras);
+        if (line) {
+            usageLines.push(line);
+        }
+    } else if (inputExtras.length) {
+        usageLines.push(`- 輸入：${inputExtras.join('、')}`);
     }
 
     if (hasApiTokenUsageField(fields, 'outputReasoningTokens')) {
-        outputExtras.push(`Reasoning ${formatTokenUsageNumber(fields.outputReasoningTokens)}`);
+        outputExtras.push(`推理 ${formatTokenUsageNumber(fields.outputReasoningTokens)}`);
     }
     if (hasApiTokenUsageField(fields, 'acceptedPredictionTokens')) {
-        outputExtras.push(`Accepted Prediction ${formatTokenUsageNumber(fields.acceptedPredictionTokens)}`);
+        outputExtras.push(`已接受預測 ${formatTokenUsageNumber(fields.acceptedPredictionTokens)}`);
     }
     if (hasApiTokenUsageField(fields, 'rejectedPredictionTokens')) {
-        outputExtras.push(`Rejected Prediction ${formatTokenUsageNumber(fields.rejectedPredictionTokens)}`);
+        outputExtras.push(`已否決預測 ${formatTokenUsageNumber(fields.rejectedPredictionTokens)}`);
     }
     if (hasApiTokenUsageField(fields, 'outputTokens')) {
-        parts.push(`Output ${formatTokenUsageNumber(fields.outputTokens)}${outputExtras.length ? `（${outputExtras.join('，')}）` : ''}`);
-    } else {
-        outputExtras.forEach((extra) => parts.push(`Output ${extra}`));
+        const line = getLine('輸出', formatTokenUsageNumber(fields.outputTokens), outputExtras);
+        if (line) {
+            usageLines.push(line);
+        }
+    } else if (outputExtras.length) {
+        usageLines.push(`- 輸出：${outputExtras.join('、')}`);
     }
 
     if (hasApiTokenUsageField(fields, 'toolInputTokens')) {
-        parts.push(`Tool Input ${formatTokenUsageNumber(fields.toolInputTokens)}`);
+        const line = getLine('工具輸入', formatTokenUsageNumber(fields.toolInputTokens));
+        if (line) {
+            usageLines.push(line);
+        }
     }
     if (hasApiTokenUsageField(fields, 'totalTokens')) {
-        parts.push(`Total ${formatTokenUsageNumber(fields.totalTokens)}`);
+        const line = getLine('總計', formatTokenUsageNumber(fields.totalTokens));
+        if (line) {
+            usageLines.push(line);
+        }
     }
     if (tokenUsage.callCount > 1) {
-        parts.push(`API 回報 ${formatTokenUsageNumber(tokenUsage.callCount)} 次`);
+        const line = `- API 回報：${formatTokenUsageNumber(tokenUsage.callCount)} 次`;
+        usageLines.push(line);
     }
 
-    return parts.length ? `Tokens: ${parts.join(' · ')}` : '';
+    return usageLines.length ? `Token 用量統計：\n${usageLines.join('\n')}` : '';
 }
 
 function getResponsesApiTextPartValue(part) {
@@ -4998,10 +5023,11 @@ async function createDialog() {
 
     function logAgentExecutionCompletion(success, stats, errorMessage = '') {
         const tokenUsageText = formatApiTokenUsageSummary(stats.tokenUsage);
-        const tokenUsageSuffix = tokenUsageText ? `。${tokenUsageText}` : '';
+        const durationText = `費時：${formatElapsedDuration(stats.elapsedMilliseconds)}`;
+        const tokenUsageSuffix = tokenUsageText ? `\n\n${tokenUsageText}` : '';
         const finalMessage = success
-            ? `頁問已經打完收工，共執行 ${stats.stepCount} 個步驟。費時: ${formatElapsedDuration(stats.elapsedMilliseconds)}${tokenUsageSuffix}`
-            : `頁問提早收工，共執行 ${stats.stepCount} 個步驟。費時: ${formatElapsedDuration(stats.elapsedMilliseconds)}${tokenUsageSuffix}`;
+            ? `頁問已經打完收工，共執行 ${stats.stepCount} 個步驟。\n${durationText}${tokenUsageSuffix}`
+            : `頁問提早收工，共執行 ${stats.stepCount} 個步驟。\n${durationText}${tokenUsageSuffix}`;
         if (success) {
             console.info(`[AskPage] ${finalMessage}`);
         } else {
