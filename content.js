@@ -1924,11 +1924,6 @@ function formatApiTokenUsageSummary(tokenUsage) {
             usageLines.push(line);
         }
     }
-    if (tokenUsage.callCount > 1) {
-        const line = `- API 回報：${formatTokenUsageNumber(tokenUsage.callCount)} 次`;
-        usageLines.push(line);
-    }
-
     return usageLines.length ? `Token 用量統計：\n${usageLines.join('\n')}` : '';
 }
 
