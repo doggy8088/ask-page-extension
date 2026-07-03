@@ -3494,6 +3494,11 @@ async function createDialog() {
             didDragDialog = false;
             return;
         }
+        if (e.target === overlay) {
+            closeDialog();
+            return;
+        }
+
         if (!intelliBox.contains(e.target) && !input.contains(e.target)) {
             hideIntelliBox();
         }
