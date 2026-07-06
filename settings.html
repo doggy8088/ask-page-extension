@@ -683,7 +683,6 @@
       </h1>
       <p>設定您的 AI 提供者、自訂斜線命令和系統提示</p>
       <div class="button-group">
-        <button id="save" class="btn-primary">💾 儲存</button>
         <button id="reset" class="btn-secondary">🔄 重置</button>
         <button id="export" class="btn-secondary">📤 匯出</button>
         <button id="import" class="btn-secondary">📥 匯入</button>
@@ -713,24 +712,21 @@
         <!-- AI Provider Tab -->
         <div id="provider-tab" class="tab-pane active">
           <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">
-                <span class="icon">🔧</span>
-                AI 提供者設定
-              </h2>
-              <p class="card-description">設定多個不同的 AI 提供者，並啟用一至多個模型，點擊模型名稱可切換為當前使用模型</p>
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+              <div>
+                <h2 class="card-title">
+                  <span class="icon">🔧</span>
+                  AI 提供者設定
+                </h2>
+                <p class="card-description" style="margin-top: 4px;">設定多個不同的 AI 提供者，並啟用一至多個模型，點擊模型名稱可切換為當前使用模型</p>
+              </div>
+              <button id="addProvider" class="btn-primary" style="margin-top: 0; min-width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 13px;" type="button">
+                <span>➕ 新增 AI 提供者</span>
+              </button>
             </div>
 
             <div id="providersList" class="commands-list" style="margin-bottom: 16px;">
               <!-- 這裡會動態載入已設定的 AI 提供者 -->
-            </div>
-
-            <div class="add-command" id="addProvider">
-              <div class="add-command-content">
-                <div class="add-command-icon">➕</div>
-                <div>新增 AI 提供者</div>
-                <small>點擊新增 Gemini、OpenAI、Azure 或 Ollama 等提供者</small>
-              </div>
             </div>
           </div>
         </div>
@@ -738,25 +734,22 @@
         <!-- Custom Commands Tab -->
         <div id="commands-tab" class="tab-pane">
           <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">
-                <span class="icon">⚡</span>
-                斜線命令管理
-              </h2>
-              <p class="card-description">管理內建和自訂的斜線命令</p>
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+              <div>
+                <h2 class="card-title">
+                  <span class="icon">⚡</span>
+                  斜線命令管理
+                </h2>
+                <p class="card-description" style="margin-top: 4px;">管理內建和自訂的斜線命令</p>
+              </div>
+              <button id="addCommand" class="btn-primary" style="margin-top: 0; min-width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 13px;" type="button">
+                <span>➕ 新增自訂斜線命令</span>
+              </button>
             </div>
 
             <div class="commands-list" id="commandsList">
               <!-- Built-in commands will be loaded here -->
               <!-- Custom commands will be loaded here -->
-            </div>
-
-            <div class="add-command" id="addCommand">
-              <div class="add-command-content">
-                <div class="add-command-icon">➕</div>
-                <div>新增自訂斜線命令</div>
-                <small>點擊新增您專屬的斜線命令</small>
-              </div>
             </div>
           </div>
         </div>
@@ -774,7 +767,7 @@
 
             <div class="form-group">
               <label for="customSystemPrompt">追加提示詞</label>
-              <textarea id="customSystemPrompt" placeholder="請輸入要附加到系統提示最後面的內容..." spellcheck="false"></textarea>
+              <textarea id="customSystemPrompt" placeholder="請輸入要附加到系統提示最後面的內容..." spellcheck="false" style="min-height: 168px;"></textarea>
               <small style="color: var(--text-secondary);">儲存後，所有 AI 提供者都會在送出請求時套用這段追加提示詞。</small>
               <small id="customSystemPromptCount" style="color: var(--text-secondary);">0 字元</small>
             </div>
@@ -850,6 +843,7 @@
           <option value="deepseek">DeepSeek</option>
           <option value="openrouter">OpenRouter</option>
           <option value="groq">Groq</option>
+          <option value="mistral">Mistral AI</option>
           <option value="ollama">Ollama (Local)</option>
           <option value="openai-compatible">OpenAI 相容端點</option>
         </select>
@@ -937,12 +931,23 @@
           <label for="modalOpenaiCompatibleApiKey">API Key (選填)</label>
           <input id="modalOpenaiCompatibleApiKey" type="password" placeholder="若不需要可留空">
         </div>
-        <div class="form-group" style="margin-top: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div id="modalOpenaiCompatibleModelInputGroup" class="form-group" style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
             <label style="margin-bottom: 0;" for="modalOpenaiCompatibleModel">模型名稱</label>
             <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="openai-compatible" data-action="fetch-custom-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">🔍 載入端點模型</button>
           </div>
-          <input id="modalOpenaiCompatibleModel" type="text" placeholder="例如: llama3, mistral">
+          <input id="modalOpenaiCompatibleModel" type="text" placeholder="例如: llama3, mistral" style="width: 100%;">
+        </div>
+        <div id="modalOpenaiCompatibleModelsListGroup" class="form-group" style="margin-top: 12px; display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px;">
+            <label style="margin-bottom: 0;">啟用模型 (可複選，最少選一個)</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="openai-compatible" data-action="switch-to-manual-input" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">✏️ 手動輸入模型名稱</button>
+            </div>
+          </div>
+          <div id="modalOpenaiCompatibleModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
+            <!-- 動態載入 -->
+          </div>
         </div>
       </div>
 
@@ -1021,6 +1026,25 @@
             </div>
           </div>
           <div id="modalGroqModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
+            <!-- 動態載入 -->
+          </div>
+        </div>
+      </div>
+      <!-- Mistral AI Settings Fields -->
+      <div id="modal-mistral-fields" class="provider-fields" style="display: none; margin-top: 12px;">
+        <div class="form-group">
+          <label for="modalMistralApiKey">Mistral API Key</label>
+          <input id="modalMistralApiKey" type="password" placeholder="請輸入您的 Mistral API Key">
+        </div>
+        <div class="form-group" style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label style="margin-bottom: 0;">啟用模型 (可複選，最少選一個)</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="mistral" data-action="fetch-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">🔍 載入所有可用模型</button>
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="mistral" data-action="add-custom-model" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;">✏️ 手動輸入模型名稱</button>
+            </div>
+          </div>
+          <div id="modalMistralModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
             <!-- 動態載入 -->
           </div>
         </div>

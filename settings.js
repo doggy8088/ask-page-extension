@@ -93,7 +93,7 @@ async function getOrCreateEncryptionKey() {
 }
 
 // DOM elements - 將在 DOMContentLoaded 中初始化
-let saveButton, resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
+let resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
 let modalCommandModeAgent, modalCommandModeInquiry, modalCommandScreenshotEnabled;
 let modalSave, modalCancel, modalCommandNameError;
@@ -103,13 +103,14 @@ let customSystemPromptTextarea, customSystemPromptCount;
 let providersList, addProviderBtn, providerModal, providerModalTitle, modalProviderName, modalProviderType;
 let modalProviderCancel, modalProviderSave, modalProviderTest, modalProviderTestResult;
 let modalGeminiFields, modalOpenaiFields, modalAzureFields, modalOpenaiCompatibleFields;
-let modalAnthropicFields, modalDeepseekFields, modalOpenrouterFields, modalGroqFields, modalOllamaFields;
+let modalAnthropicFields, modalDeepseekFields, modalOpenrouterFields, modalGroqFields, modalMistralFields, modalOllamaFields;
 let modalGeminiApiKey, modalOpenaiApiKey, modalAzureApiKey, modalAzureEndpoint, modalAzureDeployment, modalAzureApiVersion;
 let modalOpenaiCompatibleEndpoint, modalOpenaiCompatibleApiKey, modalOpenaiCompatibleModel;
-let modalAnthropicApiKey, modalDeepseekApiKey, modalOpenrouterApiKey, modalGroqApiKey;
+let modalOpenaiCompatibleModelInputGroup, modalOpenaiCompatibleModelsListGroup, modalOpenaiCompatibleModelsList;
+let modalAnthropicApiKey, modalDeepseekApiKey, modalOpenrouterApiKey, modalGroqApiKey, modalMistralApiKey;
 let modalOllamaEndpoint, modalOllamaModel;
 let modalGeminiModelsList, modalOpenaiModelsList;
-let modalAnthropicModelsList, modalDeepseekModelsList, modalOpenrouterModelsList, modalGroqModelsList;
+let modalAnthropicModelsList, modalDeepseekModelsList, modalOpenrouterModelsList, modalGroqModelsList, modalMistralModelsList;
 let currentEditingProvider = null;
 let providers = [];
 
@@ -117,6 +118,7 @@ let providers = [];
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
+const LAST_ACTIVE_TAB_STORAGE = 'LAST_ACTIVE_TAB';
 
 const CUSTOM_COMMAND_MODE_AGENT = 'agent';
 const CUSTOM_COMMAND_MODE_INQUIRY = 'inquiry';
@@ -177,6 +179,13 @@ const PREDEFINED_MODELS = {
         'openai/gpt-oss-120b',
         'qwen/qwen3-32b',
         'llama-3.3-70b-versatile'
+    ],
+    mistral: [
+        'mistral-large-latest',
+        'mistral-medium-latest',
+        'mistral-small-latest',
+        'codestral-latest',
+        'devstral-latest'
     ]
 };
 
@@ -209,6 +218,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalDeepseekFields = document.getElementById('modal-deepseek-fields');
     modalOpenrouterFields = document.getElementById('modal-openrouter-fields');
     modalGroqFields = document.getElementById('modal-groq-fields');
+    modalMistralFields = document.getElementById('modal-mistral-fields');
     modalOllamaFields = document.getElementById('modal-ollama-fields');
 
     modalGeminiApiKey = document.getElementById('modalGeminiApiKey');
@@ -221,11 +231,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalOpenaiCompatibleEndpoint = document.getElementById('modalOpenaiCompatibleEndpoint');
     modalOpenaiCompatibleApiKey = document.getElementById('modalOpenaiCompatibleApiKey');
     modalOpenaiCompatibleModel = document.getElementById('modalOpenaiCompatibleModel');
+    modalOpenaiCompatibleModelInputGroup = document.getElementById('modalOpenaiCompatibleModelInputGroup');
+    modalOpenaiCompatibleModelsListGroup = document.getElementById('modalOpenaiCompatibleModelsListGroup');
+    modalOpenaiCompatibleModelsList = document.getElementById('modalOpenaiCompatibleModelsList');
 
     modalAnthropicApiKey = document.getElementById('modalAnthropicApiKey');
     modalDeepseekApiKey = document.getElementById('modalDeepseekApiKey');
     modalOpenrouterApiKey = document.getElementById('modalOpenrouterApiKey');
     modalGroqApiKey = document.getElementById('modalGroqApiKey');
+    modalMistralApiKey = document.getElementById('modalMistralApiKey');
 
     modalOllamaEndpoint = document.getElementById('modalOllamaEndpoint');
     modalOllamaModel = document.getElementById('modalOllamaModel');
@@ -236,8 +250,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalDeepseekModelsList = document.getElementById('modalDeepseekModelsList');
     modalOpenrouterModelsList = document.getElementById('modalOpenrouterModelsList');
     modalGroqModelsList = document.getElementById('modalGroqModelsList');
+    modalMistralModelsList = document.getElementById('modalMistralModelsList');
 
-    saveButton = document.getElementById('save');
     resetButton = document.getElementById('reset');
     exportButton = document.getElementById('export');
     importButton = document.getElementById('import');
@@ -282,6 +296,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Update tab panes
             tabPanes.forEach(pane => pane.classList.remove('active'));
             document.getElementById(`${targetTab}-tab`).classList.add('active');
+
+            // Save active tab
+            chrome.storage.local.set({ [LAST_ACTIVE_TAB_STORAGE]: targetTab });
         });
     });
 
@@ -295,7 +312,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCommandName.addEventListener('input', () => {
         validateCommandNameInput({ showEmptyError: true });
     });
-    customSystemPromptTextarea.addEventListener('input', updateCustomSystemPromptCount);
+    let promptSaveTimeout;
+    customSystemPromptTextarea.addEventListener('input', () => {
+        updateCustomSystemPromptCount();
+        clearTimeout(promptSaveTimeout);
+        promptSaveTimeout = setTimeout(async () => {
+            await saveCustomSystemPrompt();
+            showStatus('系統提示已自動儲存！', 'success');
+        }, 500);
+    });
 
     // Provider modal listeners
     addProviderBtn.addEventListener('click', () => openProviderModal());
@@ -327,12 +352,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 saveProvider();
             }
         }
-    });
-
-    // Save the settings
-    saveButton.addEventListener('click', async () => {
-        await saveCustomSystemPrompt();
-        showStatus('設定已儲存！', 'success');
     });
 
     // Reset settings functionality
@@ -802,7 +821,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     chrome.storage.local.get([
         'PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL',
-        'CUSTOM_SUMMARY_PROMPT', CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE
+        'CUSTOM_SUMMARY_PROMPT', CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
+        LAST_ACTIVE_TAB_STORAGE
     ], async (result) => {
         let activeProviderId = result.ACTIVE_PROVIDER_ID || '';
         let activeModel = result.ACTIVE_MODEL || '';
@@ -835,6 +855,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         customSystemPromptTextarea.value = result[CUSTOM_SYSTEM_PROMPT_STORAGE] || '';
         updateCustomSystemPromptCount();
+
+        // Restore active tab
+        const lastActiveTab = result[LAST_ACTIVE_TAB_STORAGE];
+        if (lastActiveTab) {
+            const tabButton = document.querySelector(`.tab-btn[data-tab="${lastActiveTab}"]`);
+            if (tabButton) {
+                tabButton.click();
+            }
+        }
     });
 
     // Render providers list
@@ -877,6 +906,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (p.type === 'groq') {
                 borderColor = '#f59e0b';
                 typeLabel = 'Groq';
+            } else if (p.type === 'mistral') {
+                borderColor = '#f35f22';
+                typeLabel = 'Mistral AI';
             } else if (p.type === 'ollama') {
                 borderColor = '#374151';
                 typeLabel = 'Ollama (Local)';
@@ -887,7 +919,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             div.style.borderLeft = `4px solid ${borderColor}`;
 
             let modelsHtml = '';
-            if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq'].includes(p.type)) {
+            if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'openai-compatible'].includes(p.type)) {
                 const models = p.models || [];
                 modelsHtml = models.map(m => {
                     const isActive = (p.id === activeProviderId && m === activeModel);
@@ -899,9 +931,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (p.type === 'ollama') {
                 const isActive = (p.id === activeProviderId && p.ollamaModel === activeModel);
                 modelsHtml = `<span class="model-badge ${isActive ? 'active' : ''}" data-action="set-active" data-provider-id="${p.id}" data-model="${p.ollamaModel}">${isActive ? '✓ ' : ''}${p.ollamaModel || '(未指定模型)'}</span>`;
-            } else if (p.type === 'openai-compatible') {
-                const isActive = (p.id === activeProviderId && p.openaiCompatibleModel === activeModel);
-                modelsHtml = `<span class="model-badge ${isActive ? 'active' : ''}" data-action="set-active" data-provider-id="${p.id}" data-model="${p.openaiCompatibleModel}">${isActive ? '✓ ' : ''}${p.openaiCompatibleModel || '(未指定模型)'}</span>`;
             }
 
             let details = '';
@@ -966,6 +995,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalDeepseekApiKey.value = '';
         modalOpenrouterApiKey.value = '';
         modalGroqApiKey.value = '';
+        modalMistralApiKey.value = '';
         modalOllamaEndpoint.value = 'http://localhost:11434/v1';
         modalOllamaModel.value = '';
 
@@ -976,6 +1006,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalDeepseekModelsList.innerHTML = '';
         modalOpenrouterModelsList.innerHTML = '';
         modalGroqModelsList.innerHTML = '';
+        modalMistralModelsList.innerHTML = '';
+        modalOpenaiCompatibleModelsList.innerHTML = '';
+
+        modalOpenaiCompatibleModelInputGroup.style.display = 'block';
+        modalOpenaiCompatibleModelsListGroup.style.display = 'none';
 
         if (provider) {
             providerModalTitle.textContent = '編輯 AI 提供者';
@@ -1010,7 +1045,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (provider.type === 'openai-compatible') {
                 modalOpenaiCompatibleEndpoint.value = provider.openaiCompatibleEndpoint || 'http://localhost:11434/v1';
                 modalOpenaiCompatibleApiKey.value = decryptedKey;
-                modalOpenaiCompatibleModel.value = provider.openaiCompatibleModel || '';
+                const configuredModels = provider.models || [];
+                if (configuredModels.length > 1) {
+                    modalOpenaiCompatibleModelInputGroup.style.display = 'none';
+                    modalOpenaiCompatibleModelsListGroup.style.display = 'block';
+                    renderModalModelsList(modalOpenaiCompatibleModelsList, configuredModels, configuredModels);
+                    modalOpenaiCompatibleModel.value = '';
+                } else {
+                    modalOpenaiCompatibleModelInputGroup.style.display = 'block';
+                    modalOpenaiCompatibleModelsListGroup.style.display = 'none';
+                    modalOpenaiCompatibleModel.value = provider.openaiCompatibleModel || (configuredModels[0] || '');
+                }
             } else if (provider.type === 'anthropic') {
                 modalAnthropicApiKey.value = decryptedKey;
                 renderModalModelsList(modalAnthropicModelsList, combinedModels, configuredModels);
@@ -1023,6 +1068,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (provider.type === 'groq') {
                 modalGroqApiKey.value = decryptedKey;
                 renderModalModelsList(modalGroqModelsList, combinedModels, configuredModels);
+            } else if (provider.type === 'mistral') {
+                modalMistralApiKey.value = decryptedKey;
+                renderModalModelsList(modalMistralModelsList, combinedModels, configuredModels);
             } else if (provider.type === 'ollama') {
                 modalOllamaEndpoint.value = provider.ollamaEndpoint || 'http://localhost:11434/v1';
                 modalOllamaModel.value = provider.ollamaModel || '';
@@ -1060,6 +1108,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const groqModels = [...(PREDEFINED_MODELS['groq'] || [])];
             groqModels.sort((a, b) => a.localeCompare(b));
             renderModalModelsList(modalGroqModelsList, groqModels, [groqModels[0]]);
+
+            // Set Mistral defaults
+            const mistralModels = [...(PREDEFINED_MODELS['mistral'] || [])];
+            mistralModels.sort((a, b) => a.localeCompare(b));
+            renderModalModelsList(modalMistralModelsList, mistralModels, [mistralModels[0]]);
         }
 
         updateModalFieldsVisibility();
@@ -1075,6 +1128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalDeepseekFields.style.display = type === 'deepseek' ? 'block' : 'none';
         modalOpenrouterFields.style.display = type === 'openrouter' ? 'block' : 'none';
         modalGroqFields.style.display = type === 'groq' ? 'block' : 'none';
+        modalMistralFields.style.display = type === 'mistral' ? 'block' : 'none';
         modalOllamaFields.style.display = type === 'ollama' ? 'block' : 'none';
         modalOpenaiCompatibleFields.style.display = type === 'openai-compatible' ? 'block' : 'none';
     }
@@ -1110,7 +1164,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 type === 'deepseek' ? 'DeepSeek' :
                                     type === 'openrouter' ? 'OpenRouter' :
                                         type === 'groq' ? 'Groq' :
-                                            type === 'ollama' ? 'Ollama (Local)' : 'OpenAI Compatible'
+                                            type === 'mistral' ? 'Mistral AI' :
+                                                type === 'ollama' ? 'Ollama (Local)' : 'OpenAI Compatible'
             ),
             type: type
         };
@@ -1163,15 +1218,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (type === 'openai-compatible') {
             const endpoint = modalOpenaiCompatibleEndpoint.value.trim();
             apiKeyRaw = modalOpenaiCompatibleApiKey.value.trim();
-            const model = modalOpenaiCompatibleModel.value.trim();
 
-            if (!endpoint || !model) {
-                alert('請填寫 API Endpoint 與模型名稱');
+            if (!endpoint) {
+                alert('請填寫 API Endpoint');
                 return;
             }
-            providerData.openaiCompatibleEndpoint = endpoint;
-            providerData.openaiCompatibleModel = model;
-            providerData.models = [model];
+
+            if (modalOpenaiCompatibleModelsListGroup.style.display !== 'none') {
+                const selectedModels = [];
+                modalOpenaiCompatibleModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                    selectedModels.push(cb.value);
+                });
+                if (selectedModels.length === 0) {
+                    alert('請至少勾選一個模型');
+                    return;
+                }
+                providerData.openaiCompatibleEndpoint = endpoint;
+                providerData.openaiCompatibleModel = selectedModels[0];
+                providerData.models = selectedModels;
+            } else {
+                const modelStr = modalOpenaiCompatibleModel.value.trim();
+                if (!modelStr) {
+                    alert('請填寫模型名稱');
+                    return;
+                }
+                const models = modelStr.split(/[,，]/).map(m => m.trim()).filter(Boolean);
+                if (models.length === 0) {
+                    alert('請填寫模型名稱');
+                    return;
+                }
+                providerData.openaiCompatibleEndpoint = endpoint;
+                providerData.openaiCompatibleModel = models[0];
+                providerData.models = models;
+            }
         } else if (type === 'anthropic') {
             apiKeyRaw = modalAnthropicApiKey.value.trim();
             if (!apiKeyRaw) {
@@ -1229,6 +1308,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             if (selectedModels.length === 0) {
                 alert('請至少勾選一個 Groq 模型');
+                return;
+            }
+            providerData.models = selectedModels;
+        } else if (type === 'mistral') {
+            apiKeyRaw = modalMistralApiKey.value.trim();
+            if (!apiKeyRaw) {
+                alert('請輸入 Mistral API Key');
+                return;
+            }
+            const selectedModels = [];
+            modalMistralModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                selectedModels.push(cb.value);
+            });
+            if (selectedModels.length === 0) {
+                alert('請至少勾選一個 Mistral 模型');
                 return;
             }
             providerData.models = selectedModels;
@@ -1357,6 +1451,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 url = 'https://api.groq.com/openai/v1/models';
                 headers['Authorization'] = `Bearer ${apiKey}`;
+            } else if (type === 'mistral') {
+                const apiKey = modalMistralApiKey.value.trim();
+                if (!apiKey) {
+                    throw new Error('請先輸入 Mistral API Key');
+                }
+                url = 'https://api.mistral.ai/v1/models';
+                headers['Authorization'] = `Bearer ${apiKey}`;
             } else if (type === 'azure') {
                 const apiKey = modalAzureApiKey.value.trim();
                 const endpoint = modalAzureEndpoint.value.trim();
@@ -1405,10 +1506,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (type === 'openai-compatible') {
                 const endpoint = modalOpenaiCompatibleEndpoint.value.trim();
                 const apiKey = modalOpenaiCompatibleApiKey.value.trim();
-                const model = modalOpenaiCompatibleModel.value.trim();
 
-                if (!endpoint || !model) {
-                    throw new Error('請填寫 API Endpoint 與模型名稱');
+                if (!endpoint) {
+                    throw new Error('請填寫 API Endpoint');
                 }
 
                 url = endpoint.endsWith('/models') ? endpoint : `${endpoint.replace(/\/$/, '')}/models`;
@@ -1577,6 +1677,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const providerType = btn.dataset.providerType;
         const action = btn.dataset.action;
 
+        if (action === 'switch-to-manual-input') {
+            switchToManualInput(providerType);
+            return;
+        }
+
         btn.disabled = true;
         const originalText = btn.textContent;
         btn.textContent = '⏳ 處理中...';
@@ -1595,6 +1700,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         } finally {
             btn.disabled = false;
             btn.textContent = originalText;
+        }
+    }
+
+    function switchToManualInput(providerType) {
+        if (providerType === 'openai-compatible') {
+            const checkedModels = [];
+            modalOpenaiCompatibleModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                checkedModels.push(cb.value);
+            });
+
+            modalOpenaiCompatibleModelInputGroup.style.display = 'block';
+            modalOpenaiCompatibleModelsListGroup.style.display = 'none';
+
+            if (checkedModels.length > 0) {
+                modalOpenaiCompatibleModel.value = checkedModels.join(', ');
+            }
         }
     }
 
@@ -1635,6 +1756,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!apiKey) {throw new Error('請先輸入 Groq API Key');}
             url = 'https://api.groq.com/openai/v1/models';
             headers['Authorization'] = `Bearer ${apiKey}`;
+        } else if (providerType === 'mistral') {
+            apiKey = modalMistralApiKey.value.trim();
+            if (!apiKey) {throw new Error('請先輸入 Mistral API Key');}
+            url = 'https://api.mistral.ai/v1/models';
+            headers['Authorization'] = `Bearer ${apiKey}`;
         }
 
         // 2. Fetch from API
@@ -1653,7 +1779,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .filter(m => m.name)
                     .map(m => m.name.replace(/^models\//, ''));
             }
-        } else if (['openai', 'deepseek', 'openrouter', 'groq', 'anthropic'].includes(providerType)) {
+        } else if (['openai', 'deepseek', 'openrouter', 'groq', 'anthropic', 'mistral'].includes(providerType)) {
             const list = data.data || data.models || [];
             if (Array.isArray(list)) {
                 models = list.map(m => m.id || m.name).filter(Boolean);
@@ -1788,19 +1914,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Sort alphabetically
         models.sort((a, b) => a.localeCompare(b));
 
-        const promptMsg = '已成功載入下列模型名稱。請複製或直接輸入您要選取的模型名稱：\n\n' + models.join('\n');
-        const currentVal = providerType === 'ollama' ? modalOllamaModel.value : modalOpenaiCompatibleModel.value;
-        const choice = prompt(promptMsg, currentVal || models[0]);
-        if (choice !== null) {
-            const trimmedChoice = choice.trim();
-            if (trimmedChoice) {
-                if (providerType === 'ollama') {
+        if (providerType === 'ollama') {
+            const promptMsg = '已成功載入下列模型名稱。請複製或直接輸入您要選取的模型名稱：\n\n' + models.join('\n');
+            const currentVal = modalOllamaModel.value;
+            const choice = prompt(promptMsg, currentVal || models[0]);
+            if (choice !== null) {
+                const trimmedChoice = choice.trim();
+                if (trimmedChoice) {
                     modalOllamaModel.value = trimmedChoice;
-                } else {
-                    modalOpenaiCompatibleModel.value = trimmedChoice;
+                    showStatus(`已選取模型：${trimmedChoice}`, 'success');
                 }
-                showStatus(`已選取模型：${trimmedChoice}`, 'success');
             }
+        } else {
+            modalOpenaiCompatibleModelInputGroup.style.display = 'none';
+            modalOpenaiCompatibleModelsListGroup.style.display = 'block';
+
+            const checkedModels = [];
+            const textVal = modalOpenaiCompatibleModel.value.trim();
+            if (textVal) {
+                const parsedTextModels = textVal.split(/[,，]/).map(m => m.trim()).filter(Boolean);
+                parsedTextModels.forEach(m => {
+                    if (!checkedModels.includes(m)) {
+                        checkedModels.push(m);
+                    }
+                });
+            }
+            modalOpenaiCompatibleModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                const val = cb.value.trim();
+                if (val && !checkedModels.includes(val)) {
+                    checkedModels.push(val);
+                }
+            });
+
+            // Merge fetched models list with checked/manual models and deduplicate
+            const combinedModels = Array.from(new Set([...models, ...checkedModels]));
+
+            renderModalModelsList(modalOpenaiCompatibleModelsList, combinedModels, checkedModels);
+            showStatus(`已成功載入 ${models.length} 個模型！`, 'success');
         }
     }
 
@@ -1811,6 +1961,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (providerType === 'deepseek') {return modalDeepseekModelsList;}
         if (providerType === 'openrouter') {return modalOpenrouterModelsList;}
         if (providerType === 'groq') {return modalGroqModelsList;}
+        if (providerType === 'mistral') {return modalMistralModelsList;}
+        if (providerType === 'openai-compatible') {return modalOpenaiCompatibleModelsList;}
         return null;
     }
 

@@ -825,20 +825,31 @@ async function getEnabledProviderModelOptions() {
 
     const options = [];
     for (const p of providers) {
-        if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq'].includes(p.type)) {
+        if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'openai-compatible'].includes(p.type)) {
             const models = p.models || [];
-            for (const model of models) {
+            if (models.length > 0) {
+                for (const model of models) {
+                    options.push({
+                        providerId: p.id,
+                        providerName: p.name || (
+                            p.type === 'gemini' ? 'Gemini' :
+                                p.type === 'openai' ? 'OpenAI' :
+                                    p.type === 'anthropic' ? 'Anthropic' :
+                                        p.type === 'deepseek' ? 'DeepSeek' :
+                                            p.type === 'openrouter' ? 'OpenRouter' :
+                                                p.type === 'groq' ? 'Groq' :
+                                                    p.type === 'mistral' ? 'Mistral AI' : 'OpenAI Compatible'
+                        ),
+                        type: p.type,
+                        model: model
+                    });
+                }
+            } else if (p.type === 'openai-compatible') {
                 options.push({
                     providerId: p.id,
-                    providerName: p.name || (
-                        p.type === 'gemini' ? 'Gemini' :
-                            p.type === 'openai' ? 'OpenAI' :
-                                p.type === 'anthropic' ? 'Anthropic' :
-                                    p.type === 'deepseek' ? 'DeepSeek' :
-                                        p.type === 'openrouter' ? 'OpenRouter' : 'Groq'
-                    ),
+                    providerName: p.name || 'OpenAI Compatible',
                     type: p.type,
-                    model: model
+                    model: p.openaiCompatibleModel || ''
                 });
             }
         } else if (p.type === 'azure') {
@@ -854,13 +865,6 @@ async function getEnabledProviderModelOptions() {
                 providerName: p.name || 'Ollama (Local)',
                 type: p.type,
                 model: p.ollamaModel || ''
-            });
-        } else if (p.type === 'openai-compatible') {
-            options.push({
-                providerId: p.id,
-                providerName: p.name || 'OpenAI Compatible',
-                type: p.type,
-                model: p.openaiCompatibleModel || ''
             });
         }
     }
@@ -8646,7 +8650,8 @@ async function createDialog() {
         const providerLabel = providerType === 'deepseek' ? 'DeepSeek' :
             providerType === 'openrouter' ? 'OpenRouter' :
                 providerType === 'groq' ? 'Groq' :
-                    providerType === 'ollama' ? 'Ollama' : 'OpenAI Compatible';
+                    providerType === 'mistral' ? 'Mistral AI' :
+                        providerType === 'ollama' ? 'Ollama' : 'OpenAI Compatible';
 
         console.log(`[AskPage] ===== ${providerLabel.toUpperCase()} API CALL STARTED =====`);
         const encryptedApiKey = activeConfig?.apiKey || '';
@@ -8659,6 +8664,8 @@ async function createDialog() {
                 endpoint = 'https://openrouter.ai/api/v1';
             } else if (providerType === 'groq') {
                 endpoint = 'https://api.groq.com/openai/v1';
+            } else if (providerType === 'mistral') {
+                endpoint = 'https://api.mistral.ai/v1';
             } else if (providerType === 'ollama') {
                 endpoint = activeConfig?.ollamaEndpoint || 'http://localhost:11434/v1';
             } else {
@@ -9047,7 +9054,7 @@ async function createDialog() {
             await askAzureOpenAI(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
         } else if (activeConfig.type === 'anthropic') {
             await askAnthropic(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
-        } else if (['openai-compatible', 'deepseek', 'openrouter', 'groq', 'ollama'].includes(activeConfig.type)) {
+        } else if (['openai-compatible', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama'].includes(activeConfig.type)) {
             await askOpenAICompatible(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
         } else {
             await askGemini(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
