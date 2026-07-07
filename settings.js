@@ -356,30 +356,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Reset settings functionality
     resetButton.addEventListener('click', () => {
-        if (confirm('確定要重置所有設定嗎？\n\n注意：API Key 與提供者設定不會被清除，但斜線命令與其他設定將恢復為預設值。')) {
-            chrome.storage.local.get(['PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL', 'ENCRYPTION_KEY'], (result) => {
-                chrome.storage.local.clear(() => {
-                    const settingsToRestore = {};
-                    if (result.PROVIDERS) {
-                        settingsToRestore.PROVIDERS = result.PROVIDERS;
-                    }
-                    if (result.ACTIVE_PROVIDER_ID) {
-                        settingsToRestore.ACTIVE_PROVIDER_ID = result.ACTIVE_PROVIDER_ID;
-                    }
-                    if (result.ACTIVE_MODEL) {
-                        settingsToRestore.ACTIVE_MODEL = result.ACTIVE_MODEL;
-                    }
-                    if (result.ENCRYPTION_KEY) {
-                        settingsToRestore.ENCRYPTION_KEY = result.ENCRYPTION_KEY;
-                    }
-
-                    chrome.storage.local.set(settingsToRestore, () => {
-                        showStatus('設定已重置！', 'success');
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
-                    });
-                });
+        if (confirm('確定要重置所有設定嗎？\n\n這會清除 AI 提供者、API Key、斜線命令、提問歷史與所有其他設定。')) {
+            chrome.storage.local.clear(() => {
+                showStatus('設定已重置！', 'success');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
             });
         }
     });
