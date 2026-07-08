@@ -85,9 +85,9 @@ jobs:
         client-id: ${{ secrets.CLIENT_ID }}
         client-secret: ${{ secrets.CLIENT_SECRET }}
         refresh-token: ${{ secrets.REFRESH_TOKEN }}
-        publish: false
+        publish: true
 
     - name: Chrome Web Store publish note
       run: |
         echo "Chrome Web Store 套件已上傳。" >> $GITHUB_STEP_SUMMARY
-        echo "請到 Chrome Web Store Developer Dashboard 手動送出發布，避免 publish API 回傳 400 時造成 CI 失敗。" >> $GITHUB_STEP_SUMMARY
+        echo "已透過 Chrome Web Store API 送出發布。" >> $GITHUB_STEP_SUMMARY
