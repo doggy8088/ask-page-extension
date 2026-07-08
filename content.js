@@ -3307,21 +3307,16 @@ async function createDialog() {
                 return createUsageCommandHtml(cmd.cmd, description);
             })
             .join('');
-        const moreCustomCommandsLink = hiddenCustomCommandCount > 0
-            ? `
-                <button type="button" class="askpage-usage-more-link" data-askpage-open-options="true" title="開啟偏好設定查看所有自訂命令" aria-label="開啟偏好設定查看所有自訂命令">
-                    查看更多（另有 ${hiddenCustomCommandCount} 個）
-                </button>
-            `
-            : '';
+        const customCommandSubtitle = hiddenCustomCommandCount > 0
+            ? `自訂命令 (<button type="button" class="askpage-usage-more-link askpage-usage-count-link" data-askpage-open-options="true" title="開啟偏好設定查看所有自訂命令" aria-label="開啟偏好設定查看所有自訂命令">${hiddenCustomCommandCount + visibleCustomCommands.length}</button>)`
+            : '自訂命令';
         const customCommandItems = customCommands.length
             ? `
                 <div class="askpage-usage-command-panel">
-                    <div class="askpage-usage-subtitle">自訂命令</div>
+                    <div class="askpage-usage-subtitle">${customCommandSubtitle}</div>
                     <ul class="askpage-usage-command-list">
                         ${customCommandListHtml}
                     </ul>
-                    ${moreCustomCommandsLink}
                 </div>
             `
             : '';
