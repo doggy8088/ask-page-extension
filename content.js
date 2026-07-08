@@ -1697,6 +1697,27 @@ function sanitizeHtml(html) {
     return DOMPurify ? DOMPurify.sanitize(html) : html;
 }
 
+/**
+ * Converts Markdown text to a clean HTML string for clipboard use.
+ * Keeps semantic tags (strong, em, code, pre, table, etc.) but strips all
+ * class/style attributes so the paste target applies its own styling.
+ */
+function buildCleanHtmlForClipboard(markdownText) {
+    const rawHtml = renderMarkdown(markdownText);
+    const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+
+    // Remove extension-injected UI elements that should not be in clipboard HTML
+    doc.querySelectorAll('.copy-btn, .askpage-code-block-action, .askpage-code-block-actions, .askpage-lang-badge').forEach(el => el.remove());
+
+    // Strip class and style attributes from all elements to keep HTML clean
+    doc.body.querySelectorAll('*').forEach(el => {
+        el.removeAttribute('class');
+        el.removeAttribute('style');
+    });
+
+    return doc.body.innerHTML;
+}
+
 function escapeHtml(value) {
     return String(value || '')
         .replace(/&/g, '&amp;')
@@ -2142,7 +2163,13 @@ async function copyTextWithFeedback(button, text, options = {}) {
     const resetDelay = options.resetDelay || 1000;
 
     try {
-        await navigator.clipboard.writeText(text);
+        if (options.htmlText && typeof ClipboardItem !== 'undefined') {
+            const plainBlob = new Blob([text], { type: 'text/plain' });
+            const htmlBlob = new Blob([options.htmlText], { type: 'text/html' });
+            await navigator.clipboard.write([new ClipboardItem({ 'text/plain': plainBlob, 'text/html': htmlBlob })]);
+        } else {
+            await navigator.clipboard.writeText(text);
+        }
         button.innerHTML = successLabel;
     } catch (error) {
         console.error('複製失敗:', error);
@@ -3300,7 +3327,7 @@ async function createDialog() {
             : '';
 
         return `
-            <section class="askpage-usage-section askpage-usage-commands">
+            <section class="askpage-usage-section askpage-usage-commands${customCommands.length ? ' askpage-usage-commands--two-col' : ''}">
                 <div class="askpage-usage-command-panel">
                     <div class="askpage-usage-subtitle">內建命令</div>
                     <ul class="askpage-usage-command-list">
@@ -4515,7 +4542,9 @@ async function createDialog() {
             copyBtn.title = '複製到剪貼簿';
             copyBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                await copyTextWithFeedback(copyBtn, options.copyText || copyText);
+                const markdownText = options.copyText || copyText;
+                const cleanHtml = buildCleanHtmlForClipboard(markdownText);
+                await copyTextWithFeedback(copyBtn, markdownText, { htmlText: cleanHtml });
             });
             element.appendChild(copyBtn);
         }
