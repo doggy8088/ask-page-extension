@@ -295,7 +295,7 @@
       margin-bottom: 2px;
     }
 
-    input, select, textarea {
+    input:not([type="checkbox"]):not([type="radio"]), select, textarea {
       padding: 10px 12px;
       font-size: 14px;
       border: 1px solid rgba(111, 140, 173, 0.36);
@@ -314,13 +314,13 @@
       min-height: 84px;
     }
 
-    input:focus, select:focus, textarea:focus {
+    input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus {
       border-color: rgba(117, 216, 255, 0.68);
       background: rgba(12, 25, 43, 0.96);
       box-shadow: 0 0 0 4px rgba(22, 135, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     }
 
-    input:hover, select:hover, textarea:hover {
+    input:not([type="checkbox"]):not([type="radio"]):hover, select:hover, textarea:hover {
       border-color: var(--primary-color);
     }
 
