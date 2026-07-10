@@ -146,6 +146,9 @@ const PREDEFINED_MODELS = {
         'gemma-4-26b-a4b-it'
     ],
     openai: [
+        'gpt-5.6-sol',
+        'gpt-5.6-terra',
+        'gpt-5.6-luna',
         'gpt-5.5',
         'gpt-5.4',
         'gpt-5.3',
@@ -164,6 +167,12 @@ const PREDEFINED_MODELS = {
         'deepseek-reasoner'
     ],
     openrouter: [
+        'openai/gpt-5.6-sol-pro',
+        'openai/gpt-5.6-sol',
+        'openai/gpt-5.6-terra-pro',
+        'openai/gpt-5.6-terra',
+        'openai/gpt-5.6-luna-pro',
+        'openai/gpt-5.6-luna',
         'qwen/qwen3.7-max',
         'deepseek/deepseek-v4-flash',
         'deepseek/deepseek-v4-pro',
