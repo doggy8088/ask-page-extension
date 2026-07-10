@@ -4,6 +4,12 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.32.2] - 2026-07-11
+
+### 修正（v0.32.2）
+
+- **修正自訂命令截圖設定 Checkbox 閃爍與尺寸突變問題**：在偏好設定頁面中，將全域 `input` CSS 樣式排除 `checkbox` 與 `radio` 類型，防止在「新增自訂命令」時點擊「啟用截圖模式」或選取模式單選鈕時，元素因誤套用 padding、box-shadow 與 focus 樣式而造成尺寸突增與畫面閃爍。
+
 ## [0.32.1] - 2026-07-08
 
 ### 改進（v0.32.1）
