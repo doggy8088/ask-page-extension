@@ -4,6 +4,15 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.33.0] - 2026-07-11
+
+### 新增 / 改進（v0.33.0）
+
+- **新增 GPT-5.6 模型選項**：OpenAI 提供者新增 `gpt-5.6-sol`、`gpt-5.6-terra` 與 `gpt-5.6-luna`；OpenRouter 提供者新增 GPT-5.6 標準與 Pro 模型 ID。
+- **GPT-5.6 Responses API 相容性防護**：當 GPT-5.6 搭配 function tools 時意外進入 Chat Completions 路徑，現在會明確阻擋請求並提示必須使用 Responses API。
+- **OpenRouter 工具呼叫錯誤處理**：GPT-5.6 不再因端點工具不相容而靜默退回一般文字模式，避免在未提示的情況下遺失頁面操作能力。
+- **保留既有 GPT-5 行為**：正常 GPT-5.6 Responses API 請求維持既有 `medium` 推理設定、工具呼叫、多輪對話與輸出處理流程。
+
 ## [0.32.2] - 2026-07-11
 
 ### 修正（v0.32.2）

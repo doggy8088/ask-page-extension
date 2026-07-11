@@ -612,6 +612,17 @@ function shouldUseResponsesApi(model = '') {
     return isGpt5FamilyModel(model) || isGpt41FamilyModel(model);
 }
 
+function isGpt56FamilyModel(model = '') {
+    const normalized = normalizeModelIdentifier(model);
+    return normalized.startsWith('gpt-5.6') || normalized.includes('gpt-5.6');
+}
+
+function assertGpt56ChatCompletionsToolCompatibility(model, useResponsesApi, useTools) {
+    if (isGpt56FamilyModel(model) && useTools && !useResponsesApi) {
+        throw new Error('GPT-5.6 搭配 function tools 時必須使用 Responses API，無法使用 Chat Completions。');
+    }
+}
+
 function getGeminiMaxOutputTokens(model = '') {
     const normalizedModel = normalizeModelIdentifier(model);
     if (!normalizedModel) {
@@ -8379,6 +8390,8 @@ async function createDialog() {
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
                 buildRequestBody: (messages, useTools, maxOutputTokens) => {
+                    assertGpt56ChatCompletionsToolCompatibility(selectedModel, useResponsesApi, useTools);
+
                     if (useResponsesApi) {
                         return buildResponsesApiRequestBody(messages, {
                             model: selectedModel,
@@ -8555,6 +8568,8 @@ async function createDialog() {
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
                 buildRequestBody: (messages, useTools, maxOutputTokens) => {
+                    assertGpt56ChatCompletionsToolCompatibility(deployment, useResponsesApi, useTools);
+
                     if (useResponsesApi) {
                         return buildResponsesApiRequestBody(messages, {
                             model: deployment,
@@ -8732,6 +8747,8 @@ async function createDialog() {
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
                 buildRequestBody: (messages, useTools, maxOutputTokens) => {
+                    assertGpt56ChatCompletionsToolCompatibility(selectedModel, useResponsesApi, useTools);
+
                     if (useResponsesApi) {
                         return buildResponsesApiRequestBody(messages, {
                             model: selectedModel,
@@ -8801,7 +8818,7 @@ async function createDialog() {
                         transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined
                     });
                 },
-                allowToolFallback: true,
+                allowToolFallback: !isGpt56FamilyModel(selectedModel),
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
                 onAnswerDelta: agentModeEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
