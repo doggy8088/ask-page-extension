@@ -1,10 +1,10 @@
 # AskPage (頁問) 擴充功能
 
-使用 Gemini、OpenAI、Azure OpenAI 或 OpenAI Compatible API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
+使用 Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama 或 OpenAI Compatible API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
 
 ## ✨ 功能特色
 
-- 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI、Azure OpenAI 與 OpenAI Compatible，可自由切換
+- 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama Local、Ollama Cloud 與 OpenAI Compatible，可自由切換
 - 💬 **多輪對話脈絡延續** - 追問時會自動帶入前文，切換不同 AI Provider 也能延續同一段對話
 - 🛠️ **單頁面 Tool Calling** - 模型可直接讀取頁面標題、選取範圍、表單欄位，並可填表、點擊元素、替換部分 DOM、執行 JavaScript
 - 🧭 **豐富頁面 metadata 讀取** - 代理模式可抓取 title、URL、SEO metadata、OpenGraph、Twitter Card、canonical/alternate links、JSON-LD 與頁面統計作為上下文
@@ -129,7 +129,7 @@
 ### 第一次使用
 
 1. 點擊擴充功能圖示（第一次使用時會先開啟設定頁面完成設定）
-2. 在「AI 提供者」頁籤中選擇您偏好的 AI 提供者 (Gemini、OpenAI、Azure OpenAI 或 OpenAI Compatible)
+2. 在「AI 提供者」頁籤中選擇您偏好的 AI 提供者（包含 Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama Local、Ollama Cloud 與 OpenAI Compatible）
 3. 輸入對應的 API Key 和相關設定
 4. 選擇想要使用的模型或部署
 5. 點擊「儲存設定」
@@ -166,6 +166,13 @@
    - Endpoint URL (例如：`https://your-resource.openai.azure.com`)
 4. 在「Model deployments」中查看您的部署名稱
 5. 將這些資訊填入擴充功能設定中
+
+#### Ollama Cloud API Key
+
+1. 前往 [Ollama API Keys](https://ollama.com/settings/keys)
+2. 建立並複製 API Key
+3. 在提供者類型選擇「Ollama Cloud」，貼上 API Key 並勾選要啟用的雲端模型
+4. 如需同步最新清單，可點擊「載入最新雲端模型」
 
 #### OpenAI Compatible
 
@@ -214,6 +221,13 @@
   - Endpoint URL (例如：`https://your-resource.openai.azure.com`)
   - Deployment Name (您在 Azure 中建立的部署名稱)
   - API Version (預設：`2024-10-21`)
+
+#### Ollama Cloud
+
+- 使用固定端點 `https://ollama.com/v1`
+- 需要 Ollama Cloud API Key
+- 設定頁內建 6 個精選的 [Ollama Cloud 模型](https://ollama.com/search?c=cloud) ID，支援 Checkbox 複選
+- 可透過「載入最新雲端模型」從 Ollama API 更新模型清單
 
 #### OpenAI Compatible
 

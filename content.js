@@ -80,6 +80,9 @@ const DIALOG_DIM_DELAY_MS = 1000;
 const COLLAPSED_PREVIEW_LINE_LIMIT = 5;
 const COLLAPSED_TEXT_PREVIEW_MIN_CHARS = 600;
 const CODEPEN_PREFILL_ENDPOINT = 'https://codepen.io/cpe/pen/define/';
+const OLLAMA_CLOUD_FETCH_PORT = 'ollama-cloud-fetch';
+const OLLAMA_CLOUD_API_ORIGIN = 'https://ollama.com';
+const OLLAMA_CLOUD_ALLOWED_ENDPOINTS = new Set(['chat/completions', 'responses']);
 const DIALOG_HOST_ISOLATION_STYLES = [
     ['all', 'initial'],
     ['display', 'block'],
@@ -92,6 +95,187 @@ const DIALOG_HOST_ISOLATION_STYLES = [
     ['direction', 'ltr'],
     ['color-scheme', 'dark']
 ];
+
+function getOllamaCloudEndpointFromUrl(url) {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.origin !== OLLAMA_CLOUD_API_ORIGIN) {
+        throw new Error('Ollama Cloud Service Worker 不允許呼叫其他網域。');
+    }
+
+    const endpoint = parsedUrl.pathname.replace(/^\/v1\//, '').replace(/^\/+|\/+$/g, '');
+    if (!OLLAMA_CLOUD_ALLOWED_ENDPOINTS.has(endpoint)) {
+        throw new Error('Ollama Cloud Service Worker 不允許呼叫這個 API 端點。');
+    }
+
+    return endpoint;
+}
+
+function createOllamaCloudProxyError(errorData = {}) {
+    const error = new Error(errorData.message || 'Ollama Cloud Service Worker 請求失敗。');
+    error.name = errorData.name || 'Error';
+    return error;
+}
+
+function createOllamaCloudServiceWorkerFetch(apiKey) {
+    return async (url, options = {}) => {
+        const endpoint = getOllamaCloudEndpointFromUrl(url);
+        const method = String(options.method || 'GET').toUpperCase();
+        if (method !== 'POST') {
+            throw new Error('Ollama Cloud Service Worker 僅允許 POST 請求。');
+        }
+
+        const normalizedApiKey = String(apiKey || '').trim();
+        if (!normalizedApiKey) {
+            throw new Error('Ollama Cloud API Key 不可為空。');
+        }
+
+        let requestBody;
+        try {
+            requestBody = typeof options.body === 'string'
+                ? JSON.parse(options.body)
+                : options.body;
+        } catch (_) {
+            throw new Error('Ollama Cloud 請求內容不是有效的 JSON。');
+        }
+
+        if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) {
+            throw new Error('Ollama Cloud 請求內容格式不正確。');
+        }
+
+        return new Promise((resolve, reject) => {
+            let port;
+            let responseStarted = false;
+            let streamFinished = false;
+            let portDisconnected = false;
+            let streamController;
+            const encoder = new TextEncoder();
+            const responseStream = new ReadableStream({
+                start(controller) {
+                    streamController = controller;
+                },
+                cancel() {
+                    streamFinished = true;
+                    if (port && !portDisconnected) {
+                        portDisconnected = true;
+                        try {
+                            port.disconnect();
+                        } catch (_) {
+                            // Port may already be disconnected.
+                        }
+                    }
+                }
+            });
+
+            const disconnectPort = () => {
+                if (!port || portDisconnected) {
+                    return;
+                }
+                portDisconnected = true;
+                try {
+                    port.disconnect();
+                } catch (_) {
+                    // Port may already be disconnected.
+                }
+            };
+
+            const failRequest = (error) => {
+                if (streamFinished) {
+                    return;
+                }
+                streamFinished = true;
+                if (responseStarted) {
+                    streamController.error(error);
+                } else {
+                    reject(error);
+                }
+                disconnectPort();
+            };
+
+            try {
+                port = chrome.runtime.connect({ name: OLLAMA_CLOUD_FETCH_PORT });
+            } catch (error) {
+                failRequest(error);
+                return;
+            }
+
+            port.onMessage.addListener((message) => {
+                if (!message || streamFinished) {
+                    return;
+                }
+
+                if (message.type === 'response-start') {
+                    if (responseStarted) {
+                        failRequest(new Error('Ollama Cloud Service Worker 重複回傳回應資訊。'));
+                        return;
+                    }
+
+                    const status = Number(message.status);
+                    if (!Number.isInteger(status) || status < 200 || status > 599) {
+                        failRequest(new Error('Ollama Cloud Service Worker 回傳了無效的 HTTP 狀態。'));
+                        return;
+                    }
+
+                    responseStarted = true;
+                    resolve(new Response(responseStream, {
+                        status,
+                        statusText: String(message.statusText || ''),
+                        headers: new Headers(message.headers || {})
+                    }));
+                    return;
+                }
+
+                if (message.type === 'chunk') {
+                    if (!responseStarted) {
+                        failRequest(new Error('Ollama Cloud Service Worker 尚未提供回應資訊。'));
+                        return;
+                    }
+                    if (typeof message.chunk === 'string' && message.chunk) {
+                        streamController.enqueue(encoder.encode(message.chunk));
+                    }
+                    return;
+                }
+
+                if (message.type === 'complete') {
+                    if (!responseStarted) {
+                        failRequest(new Error('Ollama Cloud Service Worker 未提供 HTTP 回應。'));
+                        return;
+                    }
+                    streamFinished = true;
+                    streamController.close();
+                    disconnectPort();
+                    return;
+                }
+
+                if (message.type === 'error') {
+                    failRequest(createOllamaCloudProxyError(message.error));
+                }
+            });
+
+            port.onDisconnect.addListener(() => {
+                portDisconnected = true;
+                if (streamFinished) {
+                    return;
+                }
+
+                const disconnectMessage = chrome.runtime.lastError?.message || 'Ollama Cloud Service Worker 連線已中斷。';
+                const disconnectError = new Error(disconnectMessage);
+                disconnectError.name = 'TypeError';
+                failRequest(disconnectError);
+            });
+
+            try {
+                port.postMessage({
+                    type: 'request',
+                    endpoint,
+                    apiKey: normalizedApiKey,
+                    requestBody
+                });
+            } catch (error) {
+                failRequest(error);
+            }
+        });
+    };
+}
 
 function applyDialogHostIsolationStyles(host) {
     if (!host) {
@@ -836,7 +1020,7 @@ async function getEnabledProviderModelOptions() {
 
     const options = [];
     for (const p of providers) {
-        if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'openai-compatible'].includes(p.type)) {
+        if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
             const models = p.models || [];
             if (models.length > 0) {
                 for (const model of models) {
@@ -849,7 +1033,8 @@ async function getEnabledProviderModelOptions() {
                                         p.type === 'deepseek' ? 'DeepSeek' :
                                             p.type === 'openrouter' ? 'OpenRouter' :
                                                 p.type === 'groq' ? 'Groq' :
-                                                    p.type === 'mistral' ? 'Mistral AI' : 'OpenAI Compatible'
+                                                    p.type === 'mistral' ? 'Mistral AI' :
+                                                        p.type === 'ollama-cloud' ? 'Ollama Cloud' : 'OpenAI Compatible'
                         ),
                         type: p.type,
                         model: model
@@ -5488,14 +5673,15 @@ async function createDialog() {
         options,
         buildHttpError,
         onRetry,
-        transformResponse
+        transformResponse,
+        fetchImpl = fetch
     }) {
         let retryCount = 0;
         let curlCommandLogged = false;
 
         for (;;) {
             try {
-                const response = await fetch(url, options);
+                const response = await fetchImpl(url, options);
                 if (!response.ok) {
                     const errorBody = await response.text();
                     throw buildHttpError(response, errorBody);
@@ -5618,7 +5804,8 @@ async function createDialog() {
         options,
         buildHttpError,
         onRetry,
-        onEvent
+        onEvent,
+        fetchImpl = fetch
     }) {
         let retryCount = 0;
         let curlCommandLogged = false;
@@ -5626,7 +5813,7 @@ async function createDialog() {
         for (;;) {
             let receivedEvent = false;
             try {
-                const response = await fetch(url, options);
+                const response = await fetchImpl(url, options);
                 if (!response.ok) {
                     const errorBody = await response.text();
                     throw buildHttpError(response, errorBody);
@@ -7468,7 +7655,8 @@ async function createDialog() {
         buildHttpError,
         onRetry,
         onAnswerDelta = () => {},
-        onReasoningDelta = () => {}
+        onReasoningDelta = () => {},
+        fetchImpl = fetch
     }) {
         const message = {
             role: 'assistant',
@@ -7528,7 +7716,8 @@ async function createDialog() {
                 }
 
                 finishReason = choice.finish_reason || finishReason;
-            }
+            },
+            fetchImpl
         });
 
         message.content = message.content || null;
@@ -7629,7 +7818,8 @@ async function createDialog() {
         buildHttpError,
         onRetry,
         onAnswerDelta = () => {},
-        onReasoningDelta = () => {}
+        onReasoningDelta = () => {},
+        fetchImpl = fetch
     }) {
         let isChatCompletionsFormat = false;
         const state = {
@@ -7806,7 +7996,8 @@ async function createDialog() {
                 if (eventType === 'response.completed') {
                     state.completedResponse = payload.response || payload;
                 }
-            }
+            },
+            fetchImpl
         });
 
         if (isChatCompletionsFormat) {
@@ -8690,7 +8881,8 @@ async function createDialog() {
             providerType === 'openrouter' ? 'OpenRouter' :
                 providerType === 'groq' ? 'Groq' :
                     providerType === 'mistral' ? 'Mistral AI' :
-                        providerType === 'ollama' ? 'Ollama' : 'OpenAI Compatible';
+                        providerType === 'ollama' ? 'Ollama' :
+                            providerType === 'ollama-cloud' ? 'Ollama Cloud' : 'OpenAI Compatible';
 
         console.log(`[AskPage] ===== ${providerLabel.toUpperCase()} API CALL STARTED =====`);
         const encryptedApiKey = activeConfig?.apiKey || '';
@@ -8707,6 +8899,8 @@ async function createDialog() {
                 endpoint = 'https://api.mistral.ai/v1';
             } else if (providerType === 'ollama') {
                 endpoint = activeConfig?.ollamaEndpoint || 'http://localhost:11434/v1';
+            } else if (providerType === 'ollama-cloud') {
+                endpoint = 'https://ollama.com/v1';
             } else {
                 endpoint = 'http://localhost:11434/v1';
             }
@@ -8718,6 +8912,9 @@ async function createDialog() {
         if (encryptedApiKey) {
             apiKey = await decryptApiKey(encryptedApiKey);
         }
+        const providerFetch = providerType === 'ollama-cloud'
+            ? createOllamaCloudServiceWorkerFetch(apiKey)
+            : fetch;
 
         const traceReporter = createExecutionTraceReporter();
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
@@ -8778,7 +8975,7 @@ async function createDialog() {
                     const headers = {
                         'Content-Type': 'application/json'
                     };
-                    if (apiKey) {
+                    if (apiKey && providerType !== 'ollama-cloud') {
                         headers.Authorization = `Bearer ${apiKey}`;
                     }
 
@@ -8791,14 +8988,15 @@ async function createDialog() {
                     );
                     if (agentModeEnabled) {
                         const streamOptions = {
-                            providerLabel: 'OpenAI Compatible',
+                            providerLabel: providerLabel,
                             url,
                             requestBody,
                             headers,
                             buildHttpError,
                             onRetry,
                             onAnswerDelta: streamHandlers.onAnswerDelta,
-                            onReasoningDelta: streamHandlers.onReasoningDelta
+                            onReasoningDelta: streamHandlers.onReasoningDelta,
+                            fetchImpl: providerFetch
                         };
                         return useResponsesApi
                             ? await fetchResponsesApiStream(streamOptions)
@@ -8806,7 +9004,7 @@ async function createDialog() {
                     }
 
                     return await fetchJsonWithRetry({
-                        providerLabel: 'OpenAI Compatible',
+                        providerLabel: providerLabel,
                         url,
                         options: {
                             method: 'POST',
@@ -8815,7 +9013,8 @@ async function createDialog() {
                         },
                         buildHttpError,
                         onRetry,
-                        transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined
+                        transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined,
+                        fetchImpl: providerFetch
                     });
                 },
                 allowToolFallback: !isGpt56FamilyModel(selectedModel),
@@ -9095,7 +9294,7 @@ async function createDialog() {
             await askAzureOpenAI(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
         } else if (activeConfig.type === 'anthropic') {
             await askAnthropic(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
-        } else if (['openai-compatible', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama'].includes(activeConfig.type)) {
+        } else if (['openai-compatible', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama', 'ollama-cloud'].includes(activeConfig.type)) {
             await askOpenAICompatible(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
         } else {
             await askGemini(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);

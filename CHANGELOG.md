@@ -4,6 +4,12 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.34.0] - 2026-07-13
+
+### 新增 / 改進（v0.34.0）
+
+- **新增 Ollama Cloud 提供者**：使用 `https://ollama.com/v1` 與 Bearer API Key 呼叫 Ollama Cloud，設定頁內建 6 個精選 Cloud 模型 ID 的 Checkbox 複選清單，並可從 `/v1/models` 載入最新完整清單。對話請求改由擴充功能 Service Worker 發送並轉送串流回應，避免受到目前網頁來源的 CORS 原則阻擋。
+
 ## [0.33.0] - 2026-07-11
 
 ### 新增 / 改進（v0.33.0）

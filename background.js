@@ -404,6 +404,147 @@ async function executeMainWorldJavaScript(tabId, code) {
     return executionResults?.[0]?.result || createErrorResult('沒有取得 JavaScript 執行結果。', 'UserScriptsExecutionError');
 }
 
+const OLLAMA_CLOUD_FETCH_PORT = 'ollama-cloud-fetch';
+const OLLAMA_CLOUD_API_BASE_URL = 'https://ollama.com/v1';
+const OLLAMA_CLOUD_ALLOWED_ENDPOINTS = new Set(['chat/completions', 'responses']);
+
+function getOllamaCloudProxyRequest(message) {
+    if (!message || message.type !== 'request') {
+        throw new Error('無效的 Ollama Cloud Service Worker 請求。');
+    }
+
+    const endpoint = String(message.endpoint || '').trim();
+    if (!OLLAMA_CLOUD_ALLOWED_ENDPOINTS.has(endpoint)) {
+        throw new Error('不允許的 Ollama Cloud API 端點。');
+    }
+
+    const apiKey = String(message.apiKey || '').trim();
+    if (!apiKey) {
+        throw new Error('Ollama Cloud API Key 不可為空。');
+    }
+
+    const requestBody = message.requestBody;
+    if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) {
+        throw new Error('Ollama Cloud 請求內容格式不正確。');
+    }
+
+    return { endpoint, apiKey, requestBody };
+}
+
+function postOllamaCloudProxyMessage(port, message) {
+    try {
+        port.postMessage(message);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+chrome.runtime.onConnect.addListener((port) => {
+    if (port.name !== OLLAMA_CLOUD_FETCH_PORT) {
+        return;
+    }
+
+    const abortController = new AbortController();
+    let requestStarted = false;
+    let requestFinished = false;
+
+    port.onDisconnect.addListener(() => {
+        if (!requestFinished) {
+            abortController.abort();
+        }
+    });
+
+    port.onMessage.addListener((message) => {
+        if (requestStarted) {
+            postOllamaCloudProxyMessage(port, {
+                type: 'error',
+                error: {
+                    name: 'InvalidStateError',
+                    message: '每個 Ollama Cloud 連線只能處理一個請求。'
+                }
+            });
+            return;
+        }
+
+        requestStarted = true;
+
+        (async () => {
+            try {
+                const { endpoint, apiKey, requestBody } = getOllamaCloudProxyRequest(message);
+                const response = await fetch(`${OLLAMA_CLOUD_API_BASE_URL}/${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify(requestBody),
+                    signal: abortController.signal
+                });
+
+                if (!postOllamaCloudProxyMessage(port, {
+                    type: 'response-start',
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: {
+                        'content-type': response.headers.get('Content-Type') || '',
+                        'retry-after': response.headers.get('Retry-After') || ''
+                    }
+                })) {
+                    abortController.abort();
+                    return;
+                }
+
+                if (response.body && typeof response.body.getReader === 'function') {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+
+                    for (;;) {
+                        const { value, done } = await reader.read();
+                        if (done) {
+                            break;
+                        }
+
+                        const chunk = decoder.decode(value, { stream: true });
+                        if (chunk && !postOllamaCloudProxyMessage(port, { type: 'chunk', chunk })) {
+                            abortController.abort();
+                            return;
+                        }
+                    }
+
+                    const finalChunk = decoder.decode();
+                    if (finalChunk && !postOllamaCloudProxyMessage(port, { type: 'chunk', chunk: finalChunk })) {
+                        abortController.abort();
+                        return;
+                    }
+                } else {
+                    const responseText = await response.text();
+                    if (responseText && !postOllamaCloudProxyMessage(port, { type: 'chunk', chunk: responseText })) {
+                        abortController.abort();
+                        return;
+                    }
+                }
+
+                requestFinished = true;
+                postOllamaCloudProxyMessage(port, { type: 'complete' });
+            } catch (error) {
+                requestFinished = true;
+                if (abortController.signal.aborted) {
+                    return;
+                }
+
+                postOllamaCloudProxyMessage(port, {
+                    type: 'error',
+                    error: {
+                        name: error?.name || 'Error',
+                        message: error?.message || 'Ollama Cloud Service Worker 請求失敗。'
+                    }
+                });
+            }
+        })();
+    });
+});
+
 // Add message listener for debugging
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('[AskPage] Background received message:', request);
