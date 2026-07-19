@@ -1132,13 +1132,33 @@ function getProviderTypeLabel(providerType) {
     }
 }
 
+// Default provider names assigned by settings when the user leaves the
+// custom-name field empty. These differ from the type label for a few types,
+// so getProviderDisplayName treats them as "no custom name" to avoid showing
+// redundant labels like "Gemini (Google Gemini)".
+const PROVIDER_DEFAULT_NAMES = {
+    'gemini': 'Google Gemini',
+    'openai': 'OpenAI',
+    'azure': 'Azure OpenAI',
+    'anthropic': 'Anthropic Claude',
+    'deepseek': 'DeepSeek',
+    'openrouter': 'OpenRouter',
+    'groq': 'Groq',
+    'mistral': 'Mistral AI',
+    'ollama': 'Ollama (Local)',
+    'ollama-cloud': 'Ollama Cloud',
+    'openai-compatible': 'OpenAI Compatible'
+};
+
 // Build the display name for error messages. Returns `${typeLabel} (${customName})`
-// when the provider has a custom name that differs from its type label, otherwise
-// just the type label. This lets users tell apart multiple providers of the same type.
+// when the provider has a custom name that differs from its type label (and from the
+// built-in default name), otherwise just the type label. This lets users tell apart
+// multiple providers of the same type without showing redundant labels.
 function getProviderDisplayName(activeConfig) {
-    const typeLabel = getProviderTypeLabel(activeConfig?.type);
+    const type = activeConfig?.type;
+    const typeLabel = getProviderTypeLabel(type);
     const customName = String(activeConfig?.name || '').trim();
-    if (!customName || customName === typeLabel) {
+    if (!customName || customName === typeLabel || customName === PROVIDER_DEFAULT_NAMES[type]) {
         return typeLabel;
     }
     return `${typeLabel} (${customName})`;
