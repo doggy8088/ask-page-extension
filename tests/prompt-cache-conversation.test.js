@@ -60,10 +60,12 @@ vm.createContext(sandbox);
 vm.runInContext(`${contentScript}\nglobalThis.__promptCacheConversationTestExports = {
     addConversationTurn,
     applyPromptCacheRequestOptions,
+    buildGeminiRequestTools,
     buildGeminiConversationContents,
     buildSystemPrompt,
     clearConversationHistory,
     createApiTokenUsageSummary,
+    doesGeminiModelSupportCombinedTools,
     getConversationHistory: () => conversationHistory,
     getConversationMessagesForTextProviders,
     getInquiryPromptCacheKey,
@@ -73,10 +75,12 @@ vm.runInContext(`${contentScript}\nglobalThis.__promptCacheConversationTestExpor
 const {
     addConversationTurn,
     applyPromptCacheRequestOptions,
+    buildGeminiRequestTools,
     buildGeminiConversationContents,
     buildSystemPrompt,
     clearConversationHistory,
     createApiTokenUsageSummary,
+    doesGeminiModelSupportCombinedTools,
     getConversationHistory,
     getConversationMessagesForTextProviders,
     getInquiryPromptCacheKey,
@@ -228,6 +232,20 @@ function toPlainValue(value) {
         agentModeEnabled: false,
         promptCacheKey: 'askpage:test'
     }).prompt_cache_key, undefined);
+
+    const geminiInquiryTools = toPlainValue(buildGeminiRequestTools());
+    assert.deepStrictEqual(geminiInquiryTools, [{ google_search: {} }]);
+
+    const pageTool = { functionDeclarations: [{ name: 'run_js' }] };
+    const geminiAgentTools = toPlainValue(buildGeminiRequestTools([pageTool]));
+    assert.deepStrictEqual(geminiAgentTools[0], { google_search: {} });
+    assert.deepStrictEqual(geminiAgentTools[1], pageTool);
+
+    const geminiLegacyAgentTools = toPlainValue(buildGeminiRequestTools([pageTool], false));
+    assert.deepStrictEqual(geminiLegacyAgentTools, [pageTool]);
+    assert.strictEqual(doesGeminiModelSupportCombinedTools('gemini-3.5-flash'), true);
+    assert.strictEqual(doesGeminiModelSupportCombinedTools(' GEMINI-3.1-PRO-PREVIEW '), true);
+    assert.strictEqual(doesGeminiModelSupportCombinedTools('gemini-2.5-flash'), false);
 
     const usageSummary = createApiTokenUsageSummary('OpenAI', {
         prompt_tokens: 120,

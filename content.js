@@ -95,6 +95,16 @@ const DIALOG_HOST_ISOLATION_STYLES = [
     ['color-scheme', 'dark']
 ];
 
+function doesGeminiModelSupportCombinedTools(model = '') {
+    return normalizeModelIdentifier(model).startsWith('gemini-3');
+}
+
+function buildGeminiRequestTools(additionalTools = [], includeGoogleSearch = true) {
+    return includeGoogleSearch
+        ? [{ google_search: {} }, ...additionalTools]
+        : additionalTools;
+}
+
 function getOllamaCloudEndpointFromUrl(url) {
     const parsedUrl = new URL(url);
     if (parsedUrl.origin !== OLLAMA_CLOUD_API_ORIGIN) {
@@ -7597,14 +7607,18 @@ async function createDialog() {
         }));
     }
 
-    function getGeminiToolDefinitions() {
-        return [{
-            functionDeclarations: getToolDefinitions().map((tool) => ({
-                name: tool.name,
-                description: tool.description,
-                parameters: tool.parameters
-            }))
-        }];
+    function getGeminiToolDefinitions(model = '', includePageTools = false) {
+        const pageTools = includePageTools
+            ? [{
+                functionDeclarations: getToolDefinitions().map((tool) => ({
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: tool.parameters
+                }))
+            }]
+            : [];
+        const includeGoogleSearch = !includePageTools || doesGeminiModelSupportCombinedTools(model);
+        return buildGeminiRequestTools(pageTools, includeGoogleSearch);
     }
 
     function parseToolArguments(rawArguments) {
@@ -8879,9 +8893,7 @@ async function createDialog() {
             if (thinkingConfig) {
                 requestBody.generationConfig.thinkingConfig = thinkingConfig;
             }
-            if (enableTools) {
-                requestBody.tools = getGeminiToolDefinitions();
-            }
+            requestBody.tools = getGeminiToolDefinitions(selectedModel, enableTools);
 
             const buildGeminiHttpError = (response, errorBody) => {
                 const retryAfterMs = getRetryAfterMilliseconds(response);
