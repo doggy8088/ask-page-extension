@@ -5,6 +5,8 @@
 ## ✨ 功能特色
 
 - 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama Local、Ollama Cloud 與 OpenAI Compatible，可自由切換
+- **Gemini Google Search Grounding** - Gemini 詢問模式預設啟用 Google Search；Gemini 3 代理模式可同時使用網路搜尋與頁面工具
+- **完整詢問上下文** - 詢問模式會建立近似無障礙樹並固定第一問的頁面快照，完整保留後續文字、圖片與多輪對話
 - 💬 **多輪對話脈絡延續** - 追問時會自動帶入前文，切換不同 AI Provider 也能延續同一段對話
 - 🛠️ **單頁面 Tool Calling** - 模型可直接讀取頁面標題、選取範圍、表單欄位，並可填表、點擊元素、替換部分 DOM、執行 JavaScript
 - 🧭 **豐富頁面 metadata 讀取** - 代理模式可抓取 title、URL、SEO metadata、OpenGraph、Twitter Card、canonical/alternate links、JSON-LD 與頁面統計作為上下文
