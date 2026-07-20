@@ -1103,6 +1103,67 @@ async function getActiveProviderConfig() {
     return null;
 }
 
+// Map a provider type to its display label (the "提供者類型" shown to users).
+function getProviderTypeLabel(providerType) {
+    switch (providerType) {
+    case 'gemini':
+        return 'Gemini';
+    case 'openai':
+        return 'OpenAI';
+    case 'azure':
+        return 'Azure OpenAI';
+    case 'anthropic':
+        return 'Anthropic';
+    case 'deepseek':
+        return 'DeepSeek';
+    case 'openrouter':
+        return 'OpenRouter';
+    case 'groq':
+        return 'Groq';
+    case 'mistral':
+        return 'Mistral AI';
+    case 'ollama':
+        return 'Ollama';
+    case 'ollama-cloud':
+        return 'Ollama Cloud';
+    case 'openai-compatible':
+    default:
+        return 'OpenAI Compatible';
+    }
+}
+
+// Default provider names assigned by settings when the user leaves the
+// custom-name field empty. These differ from the type label for a few types,
+// so getProviderDisplayName treats them as "no custom name" to avoid showing
+// redundant labels like "Gemini (Google Gemini)".
+const PROVIDER_DEFAULT_NAMES = {
+    'gemini': 'Google Gemini',
+    'openai': 'OpenAI',
+    'azure': 'Azure OpenAI',
+    'anthropic': 'Anthropic Claude',
+    'deepseek': 'DeepSeek',
+    'openrouter': 'OpenRouter',
+    'groq': 'Groq',
+    'mistral': 'Mistral AI',
+    'ollama': 'Ollama (Local)',
+    'ollama-cloud': 'Ollama Cloud',
+    'openai-compatible': 'OpenAI Compatible'
+};
+
+// Build the display name for error messages. Returns `${typeLabel} (${customName})`
+// when the provider has a custom name that differs from its type label (and from the
+// built-in default name), otherwise just the type label. This lets users tell apart
+// multiple providers of the same type without showing redundant labels.
+function getProviderDisplayName(activeConfig) {
+    const type = activeConfig?.type;
+    const typeLabel = getProviderTypeLabel(type);
+    const customName = String(activeConfig?.name || '').trim();
+    if (!customName || customName === typeLabel || customName === PROVIDER_DEFAULT_NAMES[type]) {
+        return typeLabel;
+    }
+    return `${typeLabel} (${customName})`;
+}
+
 // Provider switching function
 async function switchProvider() {
     const options = await getEnabledProviderModelOptions();
@@ -6112,7 +6173,7 @@ async function createDialog() {
     }
 
     function shouldSuppressStreamingRetryDiagnostic(providerLabel, analysis, error) {
-        return providerLabel === 'Gemini'
+        return String(providerLabel || '').startsWith(getProviderTypeLabel('gemini'))
             && analysis?.reasonCode === 'network-error'
             && error?.name === 'TypeError'
             && String(error?.message || '').toLowerCase() === 'failed to fetch';
@@ -8042,21 +8103,21 @@ async function createDialog() {
         return !['SAFETY', 'RECITATION', 'LANGUAGE', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'IMAGE_SAFETY'].includes(finishReason);
     }
 
-    function buildGeminiEmptyResponseMessage(responseData) {
+    function buildGeminiEmptyResponseMessage(responseData, providerLabel = 'Gemini') {
         const promptFeedback = responseData?.promptFeedback;
         const promptSafetyDetails = formatGeminiSafetyDetails(promptFeedback?.safetyRatings);
 
         switch (promptFeedback?.blockReason) {
         case 'SAFETY':
-            return `Gemini 因安全性限制而未處理這次請求${promptSafetyDetails}，請調整提問內容後再試。`;
+            return `${providerLabel} 因安全性限制而未處理這次請求${promptSafetyDetails}，請調整提問內容後再試。`;
         case 'BLOCKLIST':
-            return 'Gemini 因請求內容包含封鎖詞而未處理這次請求，請調整提問內容後再試。';
+            return `${providerLabel} 因請求內容包含封鎖詞而未處理這次請求，請調整提問內容後再試。`;
         case 'PROHIBITED_CONTENT':
-            return 'Gemini 判定這次請求屬於禁止內容，因此未回傳答案。';
+            return `${providerLabel} 判定這次請求屬於禁止內容，因此未回傳答案。`;
         case 'IMAGE_SAFETY':
-            return 'Gemini 因圖片內容觸發安全性限制，因此未回傳答案。';
+            return `${providerLabel} 因圖片內容觸發安全性限制，因此未回傳答案。`;
         case 'OTHER':
-            return 'Gemini 沒有處理這次請求，請稍後再試。';
+            return `${providerLabel} 沒有處理這次請求，請稍後再試。`;
         default:
             break;
         }
@@ -8068,32 +8129,32 @@ async function createDialog() {
 
         switch (finishReason) {
         case 'MAX_TOKENS':
-            return `Gemini 已達輸出長度上限${finishMessage}，請縮小問題範圍後再試。`;
+            return `${providerLabel} 已達輸出長度上限${finishMessage}，請縮小問題範圍後再試。`;
         case 'SAFETY':
-            return `Gemini 因安全性限制而未回傳文字內容${candidateSafetyDetails || finishMessage}，請調整提問內容後再試。`;
+            return `${providerLabel} 因安全性限制而未回傳文字內容${candidateSafetyDetails || finishMessage}，請調整提問內容後再試。`;
         case 'RECITATION':
-            return `Gemini 因引用內容限制而未回傳文字內容${finishMessage}。`;
+            return `${providerLabel} 因引用內容限制而未回傳文字內容${finishMessage}。`;
         case 'LANGUAGE':
-            return `Gemini 因語言限制而未回傳文字內容${finishMessage}，請改用繁體中文或英文後再試。`;
+            return `${providerLabel} 因語言限制而未回傳文字內容${finishMessage}，請改用繁體中文或英文後再試。`;
         case 'BLOCKLIST':
-            return 'Gemini 因回應內容觸發封鎖詞限制而未回傳文字內容。';
+            return `${providerLabel} 因回應內容觸發封鎖詞限制而未回傳文字內容。`;
         case 'PROHIBITED_CONTENT':
-            return 'Gemini 因回應內容觸發禁止內容限制而未回傳文字內容。';
+            return `${providerLabel} 因回應內容觸發禁止內容限制而未回傳文字內容。`;
         case 'SPII':
-            return 'Gemini 因回應內容可能包含敏感個人資訊而未回傳文字內容。';
+            return `${providerLabel} 因回應內容可能包含敏感個人資訊而未回傳文字內容。`;
         case 'MALFORMED_FUNCTION_CALL':
-            return `Gemini 回傳了格式不正確的工具呼叫${finishMessage}，請再試一次。`;
+            return `${providerLabel} 回傳了格式不正確的工具呼叫${finishMessage}，請再試一次。`;
         case 'OTHER':
-            return `Gemini 沒有產生可顯示的文字內容${finishMessage}，請稍後再試。`;
+            return `${providerLabel} 沒有產生可顯示的文字內容${finishMessage}，請稍後再試。`;
         default:
             break;
         }
 
         if (!Array.isArray(responseData?.candidates) || !responseData.candidates.length) {
-            return 'Gemini 沒有回傳任何候選內容，可能是請求被系統攔下或模型暫時沒有產生答案。';
+            return `${providerLabel} 沒有回傳任何候選內容，可能是請求被系統攔下或模型暫時沒有產生答案。`;
         }
 
-        return `Gemini 已回傳結果，但內容不是可顯示的文字${finishMessage}。請再試一次，或縮小問題範圍。`;
+        return `${providerLabel} 已回傳結果，但內容不是可顯示的文字${finishMessage}。請再試一次，或縮小問題範圍。`;
     }
 
     function formatGeminiUsageMetadataSummary(usageMetadata) {
@@ -8666,14 +8727,15 @@ async function createDialog() {
         buildHttpError,
         onRetry,
         onAnswerDelta = () => {},
-        onReasoningDelta = () => {}
+        onReasoningDelta = () => {},
+        providerLabel = 'Gemini'
     }) {
         const responseData = {
             candidates: []
         };
 
         await fetchSseWithRetry({
-            providerLabel: 'Gemini',
+            providerLabel,
             url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?alt=sse&key=${apiKey}`,
             options: {
                 method: 'POST',
@@ -8683,7 +8745,7 @@ async function createDialog() {
             buildHttpError,
             onRetry,
             onEvent: (sseEvent) => {
-                const chunk = parseSseJsonEvent('Gemini', sseEvent);
+                const chunk = parseSseJsonEvent(providerLabel, sseEvent);
                 mergeGeminiStreamChunk(responseData, chunk, onAnswerDelta, onReasoningDelta);
             }
         });
@@ -8844,7 +8906,8 @@ async function createDialog() {
         onStatusUpdate = () => {},
         onTrace = () => {},
         onAnswerDelta = () => {},
-        onReasoningDelta = () => {}
+        onReasoningDelta = () => {},
+        providerLabel = 'Gemini'
     }) {
         const normalizedInputImages = normalizeInputImageDataUrls(inputImageDataUrls);
         const pageConversationContext = await getPageConversationContext(capturedSelectedText, {
@@ -8879,8 +8942,8 @@ async function createDialog() {
             reportStatus(formatRoundStatus(
                 round,
                 enableTools
-                    ? `${roundPrefix}正在請 Gemini 規劃任務...`
-                    : '正在請 Gemini 分析頁面並回答問題...'
+                    ? `${roundPrefix}正在請 ${providerLabel} 規劃任務...`
+                    : `正在請 ${providerLabel} 分析頁面並回答問題...`
             ));
             const requestBody = {
                 systemInstruction: {
@@ -8898,25 +8961,25 @@ async function createDialog() {
             const buildGeminiHttpError = (response, errorBody) => {
                 const retryAfterMs = getRetryAfterMilliseconds(response);
                 if (response.status === 401) {
-                    return createHttpError(response.status, response.statusText, errorBody, '無效的 Gemini API Key，請檢查您的 Gemini API Key 設定。', { retryAfterMs });
+                    return createHttpError(response.status, response.statusText, errorBody, `無效的 ${providerLabel} API Key，請檢查您的 ${providerLabel} API Key 設定。`, { retryAfterMs });
                 }
                 if (response.status === 403) {
-                    return createHttpError(response.status, response.statusText, errorBody, 'Gemini 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
+                    return createHttpError(response.status, response.statusText, errorBody, `${providerLabel} 拒絕了這次請求，請檢查 API 權限或模型存取設定。`, { retryAfterMs });
                 }
                 if (response.status === 404) {
-                    return createHttpError(response.status, response.statusText, errorBody, '找不到指定的 Gemini 模型，請檢查模型設定。', { retryAfterMs });
+                    return createHttpError(response.status, response.statusText, errorBody, `找不到指定的 ${providerLabel} 模型，請檢查模型設定。`, { retryAfterMs });
                 }
                 if (response.status === 429) {
-                    return createHttpError(response.status, response.statusText, errorBody, 'Gemini 服務目前忙碌或請求頻率過高，請稍後再試。', { retryAfterMs });
+                    return createHttpError(response.status, response.statusText, errorBody, `${providerLabel} 服務目前忙碌或請求頻率過高，請稍後再試。`, { retryAfterMs });
                 }
                 if (response.status >= 500) {
-                    return createHttpError(response.status, response.statusText, errorBody, 'Gemini 服務暫時不可用，請稍後再試。', { retryAfterMs });
+                    return createHttpError(response.status, response.statusText, errorBody, `${providerLabel} 服務暫時不可用，請稍後再試。`, { retryAfterMs });
                 }
                 return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
             };
             const handleRetry = (retryInfo) => reportStatus(formatRoundStatus(
                 round,
-                `Gemini ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
+                `${providerLabel} ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
             ));
             const responseData = enableTools
                 ? await fetchGeminiStream({
@@ -8926,10 +8989,11 @@ async function createDialog() {
                     buildHttpError: buildGeminiHttpError,
                     onRetry: handleRetry,
                     onAnswerDelta,
-                    onReasoningDelta
+                    onReasoningDelta,
+                    providerLabel
                 })
                 : await fetchJsonWithRetry({
-                    providerLabel: 'Gemini',
+                    providerLabel,
                     url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
                     options: {
                         method: 'POST',
@@ -8965,13 +9029,13 @@ async function createDialog() {
                     emptyResponseRetryCount++;
                     reportStatus(
                         responseCandidate?.finishReason === 'MAX_TOKENS'
-                            ? 'Gemini 回傳內容為空且疑似達到輸出上限，正在以模型最大輸出上限自動重試一次...'
-                            : 'Gemini 回傳內容為空，正在自動重試一次...'
+                            ? `${providerLabel} 回傳內容為空且疑似達到輸出上限，正在以模型最大輸出上限自動重試一次...`
+                            : `${providerLabel} 回傳內容為空，正在自動重試一次...`
                     );
                     continue;
                 }
 
-                throw new Error(buildGeminiEmptyResponseMessage(responseData));
+                throw new Error(buildGeminiEmptyResponseMessage(responseData, providerLabel));
             }
 
             if (!functionCalls.length) {
@@ -9023,12 +9087,13 @@ async function createDialog() {
         const activeConfig = await getActiveProviderConfig();
         const encryptedApiKey = activeConfig?.apiKey || '';
         const selectedModel = activeConfig?.activeModel || 'gemini-flash-lite-latest';
+        const providerLabel = getProviderDisplayName(activeConfig);
 
         console.log('[AskPage] Selected model:', selectedModel);
         console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
 
         if (!encryptedApiKey) {
-            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 Gemini API Key。');
+            appendErrorMessageAndStore(`請點擊擴充功能圖示設定您的 ${providerLabel} API Key。`);
             return;
         }
 
@@ -9037,7 +9102,7 @@ async function createDialog() {
         console.log('[AskPage] API key preview:', maskApiKey(apiKey));
 
         if (!apiKey) {
-            appendErrorMessageAndStore('無法解密 Gemini API Key，請重新設定。');
+            appendErrorMessageAndStore(`無法解密 ${providerLabel} API Key，請重新設定。`);
             return;
         }
 
@@ -9058,9 +9123,10 @@ async function createDialog() {
                 inputImageDataUrls,
                 enableTools: agentModeEnabled,
                 onStatusUpdate: handleStatusUpdate,
-                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'Gemini', traceEvent),
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
                 onAnswerDelta: streamedAnswer ? (delta) => streamedAnswer.append(delta) : () => {},
-                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, 'Gemini', { type: 'reasoning-delta', text: delta })
+                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta }),
+                providerLabel
             });
 
             if (streamedAnswer) {
@@ -9092,15 +9158,16 @@ async function createDialog() {
         const activeConfig = await getActiveProviderConfig();
         const encryptedApiKey = activeConfig?.apiKey || '';
         const selectedModel = activeConfig?.activeModel || 'gpt-4o-mini';
+        const providerLabel = getProviderDisplayName(activeConfig);
 
         if (!encryptedApiKey) {
-            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 OpenAI API Key。');
+            appendErrorMessageAndStore(`請點擊擴充功能圖示設定您的 ${providerLabel} API Key。`);
             return;
         }
 
         const apiKey = await decryptApiKey(encryptedApiKey);
         if (!apiKey) {
-            appendErrorMessageAndStore('無法解密 OpenAI API Key，請重新設定。');
+            appendErrorMessageAndStore(`無法解密 ${providerLabel} API Key，請重新設定。`);
             return;
         }
 
@@ -9124,7 +9191,7 @@ async function createDialog() {
 
         try {
             const answer = await runOpenAIStyleToolLoop({
-                providerLabel: 'OpenAI',
+                providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
                 initialUseTools: agentModeEnabled,
                 initialMaxOutputTokens: maxOutputTokens,
@@ -9182,25 +9249,25 @@ async function createDialog() {
                     const buildHttpError = (response, errorBody) => {
                         const retryAfterMs = getRetryAfterMilliseconds(response);
                         if (response.status === 401) {
-                            return createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 OpenAI API Key 設定。', { retryAfterMs });
+                            return createHttpError(response.status, response.statusText, errorBody, `無效的 API Key，請檢查您的 ${providerLabel} API Key 設定。`, { retryAfterMs });
                         }
                         if (response.status === 403) {
-                            return createHttpError(response.status, response.statusText, errorBody, 'OpenAI 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
+                            return createHttpError(response.status, response.statusText, errorBody, `${providerLabel} 拒絕了這次請求，請檢查 API 權限或模型存取設定。`, { retryAfterMs });
                         }
                         if (response.status === 404) {
-                            return createHttpError(response.status, response.statusText, errorBody, '找不到指定的 OpenAI 模型，請檢查模型設定。', { retryAfterMs });
+                            return createHttpError(response.status, response.statusText, errorBody, `找不到指定的 ${providerLabel} 模型，請檢查模型設定。`, { retryAfterMs });
                         }
                         if (response.status === 429) {
                             return createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。', { retryAfterMs });
                         }
                         if (response.status >= 500) {
-                            return createHttpError(response.status, response.statusText, errorBody, 'OpenAI 服務暫時不可用，請稍後再試。', { retryAfterMs });
+                            return createHttpError(response.status, response.statusText, errorBody, `${providerLabel} 服務暫時不可用，請稍後再試。`, { retryAfterMs });
                         }
                         return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
                     };
                     if (agentModeEnabled) {
                         const streamOptions = {
-                            providerLabel: 'OpenAI',
+                            providerLabel,
                             url: useResponsesApi ? 'https://api.openai.com/v1/responses' : 'https://api.openai.com/v1/chat/completions',
                             requestBody,
                             headers,
@@ -9215,7 +9282,7 @@ async function createDialog() {
                     }
 
                     return await fetchJsonWithRetry({
-                        providerLabel: 'OpenAI',
+                        providerLabel,
                         url: useResponsesApi ? 'https://api.openai.com/v1/responses' : 'https://api.openai.com/v1/chat/completions',
                         options: {
                             method: 'POST',
@@ -9228,9 +9295,9 @@ async function createDialog() {
                     });
                 },
                 onStatusUpdate: handleStatusUpdate,
-                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'OpenAI', traceEvent),
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
                 onAnswerDelta: agentModeEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
-                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, 'OpenAI', { type: 'reasoning-delta', text: delta })
+                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta })
             });
 
             if (streamedAnswer) {
@@ -9264,25 +9331,26 @@ async function createDialog() {
         const endpoint = activeConfig?.azureEndpoint || '';
         const deployment = activeConfig?.azureDeployment || '';
         const apiVersion = activeConfig?.azureApiVersion || '2024-10-21';
+        const providerLabel = getProviderDisplayName(activeConfig);
 
         if (!encryptedApiKey) {
-            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 Azure OpenAI API Key。');
+            appendErrorMessageAndStore(`請點擊擴充功能圖示設定您的 ${providerLabel} API Key。`);
             return;
         }
 
         if (!endpoint) {
-            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 Azure OpenAI Endpoint。');
+            appendErrorMessageAndStore(`請點擊擴充功能圖示設定您的 ${providerLabel} Endpoint。`);
             return;
         }
 
         if (!deployment) {
-            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 Azure OpenAI Deployment Name。');
+            appendErrorMessageAndStore(`請點擊擴充功能圖示設定您的 ${providerLabel} Deployment Name。`);
             return;
         }
 
         const apiKey = await decryptApiKey(encryptedApiKey);
         if (!apiKey) {
-            appendErrorMessageAndStore('無法解密 Azure OpenAI API Key，請重新設定。');
+            appendErrorMessageAndStore(`無法解密 ${providerLabel} API Key，請重新設定。`);
             return;
         }
 
@@ -9310,7 +9378,7 @@ async function createDialog() {
 
         try {
             const answer = await runOpenAIStyleToolLoop({
-                providerLabel: 'Azure OpenAI',
+                providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
                 initialUseTools: agentModeEnabled,
                 initialMaxOutputTokens: maxOutputTokens,
@@ -9356,10 +9424,10 @@ async function createDialog() {
                     const buildHttpError = (response, errorBody) => {
                         const retryAfterMs = getRetryAfterMilliseconds(response);
                         if (response.status === 401) {
-                            return createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 Azure OpenAI API Key 設定。', { retryAfterMs });
+                            return createHttpError(response.status, response.statusText, errorBody, `無效的 API Key，請檢查您的 ${providerLabel} API Key 設定。`, { retryAfterMs });
                         }
                         if (response.status === 403) {
-                            return createHttpError(response.status, response.statusText, errorBody, 'Azure OpenAI 拒絕了這次請求，請檢查 API 權限或模型存取設定。', { retryAfterMs });
+                            return createHttpError(response.status, response.statusText, errorBody, `${providerLabel} 拒絕了這次請求，請檢查 API 權限或模型存取設定。`, { retryAfterMs });
                         }
                         if (response.status === 404) {
                             return createHttpError(response.status, response.statusText, errorBody, '找不到指定的部署，請檢查您的 Endpoint 和 Deployment Name 設定。', { retryAfterMs });
@@ -9368,13 +9436,13 @@ async function createDialog() {
                             return createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。', { retryAfterMs });
                         }
                         if (response.status >= 500) {
-                            return createHttpError(response.status, response.statusText, errorBody, 'Azure OpenAI 服務暫時不可用，請稍後再試。', { retryAfterMs });
+                            return createHttpError(response.status, response.statusText, errorBody, `${providerLabel} 服務暫時不可用，請稍後再試。`, { retryAfterMs });
                         }
                         return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
                     };
                     if (agentModeEnabled) {
                         const streamOptions = {
-                            providerLabel: 'Azure OpenAI',
+                            providerLabel,
                             url: apiUrl,
                             requestBody,
                             headers,
@@ -9389,7 +9457,7 @@ async function createDialog() {
                     }
 
                     return await fetchJsonWithRetry({
-                        providerLabel: 'Azure OpenAI',
+                        providerLabel,
                         url: apiUrl,
                         options: {
                             method: 'POST',
@@ -9402,9 +9470,9 @@ async function createDialog() {
                     });
                 },
                 onStatusUpdate: handleStatusUpdate,
-                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, 'Azure OpenAI', traceEvent),
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
                 onAnswerDelta: agentModeEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
-                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, 'Azure OpenAI', { type: 'reasoning-delta', text: delta })
+                onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta })
             });
 
             if (streamedAnswer) {
@@ -9434,12 +9502,7 @@ async function createDialog() {
     async function askOpenAICompatible(capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
         const activeConfig = await getActiveProviderConfig();
         const providerType = activeConfig?.type || 'openai-compatible';
-        const providerLabel = providerType === 'deepseek' ? 'DeepSeek' :
-            providerType === 'openrouter' ? 'OpenRouter' :
-                providerType === 'groq' ? 'Groq' :
-                    providerType === 'mistral' ? 'Mistral AI' :
-                        providerType === 'ollama' ? 'Ollama' :
-                            providerType === 'ollama-cloud' ? 'Ollama Cloud' : 'OpenAI Compatible';
+        const providerLabel = getProviderDisplayName(activeConfig);
 
         console.log(`[AskPage] ===== ${providerLabel.toUpperCase()} API CALL STARTED =====`);
         const encryptedApiKey = activeConfig?.apiKey || '';
@@ -9646,7 +9709,8 @@ async function createDialog() {
         headers,
         buildHttpError,
         onRetry,
-        onAnswerDelta = () => {}
+        onAnswerDelta = () => {},
+        providerLabel = 'Anthropic'
     }) {
         let answerText = '';
         let responseId = '';
@@ -9654,7 +9718,7 @@ async function createDialog() {
         let usage = null;
 
         await fetchSseWithRetry({
-            providerLabel: 'Anthropic',
+            providerLabel,
             url,
             options: {
                 method: 'POST',
@@ -9705,15 +9769,16 @@ async function createDialog() {
         const activeConfig = await getActiveProviderConfig();
         const encryptedApiKey = activeConfig?.apiKey || '';
         const selectedModel = activeConfig?.activeModel || 'claude-3-5-sonnet-latest';
+        const providerLabel = getProviderDisplayName(activeConfig);
 
         if (!encryptedApiKey) {
-            appendErrorMessageAndStore('請點擊擴充功能圖示設定您的 Anthropic API Key。');
+            appendErrorMessageAndStore(`請點擊擴充功能圖示設定您的 ${providerLabel} API Key。`);
             return;
         }
 
         const apiKey = await decryptApiKey(encryptedApiKey);
         if (!apiKey) {
-            appendErrorMessageAndStore('無法解密 Anthropic API Key，請重新設定。');
+            appendErrorMessageAndStore(`無法解密 ${providerLabel} API Key，請重新設定。`);
             return;
         }
 
@@ -9762,19 +9827,19 @@ async function createDialog() {
             const buildHttpError = (response, errorBody) => {
                 const retryAfterMs = getRetryAfterMilliseconds(response);
                 if (response.status === 401) {
-                    return createHttpError(response.status, response.statusText, errorBody, '無效的 API Key，請檢查您的 Anthropic API Key 設定。', { retryAfterMs });
+                    return createHttpError(response.status, response.statusText, errorBody, `無效的 API Key，請檢查您的 ${providerLabel} API Key 設定。`, { retryAfterMs });
                 }
                 if (response.status === 403) {
-                    return createHttpError(response.status, response.statusText, errorBody, 'Anthropic 拒絕了這次請求，請檢查權限或模型存取設定。', { retryAfterMs });
+                    return createHttpError(response.status, response.statusText, errorBody, `${providerLabel} 拒絕了這次請求，請檢查權限或模型存取設定。`, { retryAfterMs });
                 }
                 if (response.status === 404) {
-                    return createHttpError(response.status, response.statusText, errorBody, '找不到指定的 Anthropic 模型，請檢查模型設定。', { retryAfterMs });
+                    return createHttpError(response.status, response.statusText, errorBody, `找不到指定的 ${providerLabel} 模型，請檢查模型設定。`, { retryAfterMs });
                 }
                 if (response.status === 429) {
                     return createHttpError(response.status, response.statusText, errorBody, 'API 請求頻率過高，請稍後再試。', { retryAfterMs });
                 }
                 if (response.status >= 500) {
-                    return createHttpError(response.status, response.statusText, errorBody, 'Anthropic 服務暫時不可用，請稍後再試。', { retryAfterMs });
+                    return createHttpError(response.status, response.statusText, errorBody, `${providerLabel} 服務暫時不可用，請稍後再試。`, { retryAfterMs });
                 }
                 return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
             };
@@ -9789,19 +9854,20 @@ async function createDialog() {
                     headers,
                     buildHttpError,
                     onRetry: (retryInfo) => handleStatusUpdate(
-                        `Anthropic ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
+                        `${providerLabel} ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
                     ),
                     onAnswerDelta: (delta) => {
                         if (streamedAnswer) {
                             streamedAnswer.append(delta);
                         }
-                    }
+                    },
+                    providerLabel
                 });
-                traceReporter.reportUsage('Anthropic', streamResult.usage);
-                finalAnswer = `⚠️ **目前 Anthropic 提供者未完整支援 agent 模式下的 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n${streamResult.answer}`;
+                traceReporter.reportUsage(providerLabel, streamResult.usage);
+                finalAnswer = `⚠️ **目前 ${providerLabel} 提供者未完整支援 agent 模式下的 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n${streamResult.answer}`;
             } else {
                 const response = await fetchJsonWithRetry({
-                    providerLabel: 'Anthropic',
+                    providerLabel,
                     url,
                     options: {
                         method: 'POST',
@@ -9810,10 +9876,10 @@ async function createDialog() {
                     },
                     buildHttpError,
                     onRetry: (retryInfo) => handleStatusUpdate(
-                        `Anthropic ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
+                        `${providerLabel} ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
                     )
                 });
-                traceReporter.reportUsage('Anthropic', response.usage);
+                traceReporter.reportUsage(providerLabel, response.usage);
                 finalAnswer = response.content?.map(block => block.text).join('') || '';
             }
 
