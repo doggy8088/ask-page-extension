@@ -61,6 +61,7 @@ vm.runInContext(`${contentScript}\nglobalThis.__promptCacheConversationTestExpor
     addConversationTurn,
     applyPromptCacheRequestOptions,
     buildGeminiRequestTools,
+    buildGeminiToolConfig,
     buildGeminiConversationContents,
     buildSystemPrompt,
     clearConversationHistory,
@@ -76,6 +77,7 @@ const {
     addConversationTurn,
     applyPromptCacheRequestOptions,
     buildGeminiRequestTools,
+    buildGeminiToolConfig,
     buildGeminiConversationContents,
     buildSystemPrompt,
     clearConversationHistory,
@@ -246,6 +248,11 @@ function toPlainValue(value) {
     assert.strictEqual(doesGeminiModelSupportCombinedTools('gemini-3.5-flash'), true);
     assert.strictEqual(doesGeminiModelSupportCombinedTools(' GEMINI-3.1-PRO-PREVIEW '), true);
     assert.strictEqual(doesGeminiModelSupportCombinedTools('gemini-2.5-flash'), false);
+    assert.deepStrictEqual(toPlainValue(buildGeminiToolConfig('gemini-3.5-flash', true)), {
+        includeServerSideToolInvocations: true
+    });
+    assert.strictEqual(buildGeminiToolConfig('gemini-3.5-flash', false), null);
+    assert.strictEqual(buildGeminiToolConfig('gemini-2.5-flash', true), null);
 
     const usageSummary = createApiTokenUsageSummary('OpenAI', {
         prompt_tokens: 120,

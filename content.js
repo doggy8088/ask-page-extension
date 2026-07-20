@@ -105,6 +105,14 @@ function buildGeminiRequestTools(additionalTools = [], includeGoogleSearch = tru
         : additionalTools;
 }
 
+function buildGeminiToolConfig(model = '', includePageTools = false) {
+    if (!includePageTools || !doesGeminiModelSupportCombinedTools(model)) {
+        return null;
+    }
+
+    return { includeServerSideToolInvocations: true };
+}
+
 function getOllamaCloudEndpointFromUrl(url) {
     const parsedUrl = new URL(url);
     if (parsedUrl.origin !== OLLAMA_CLOUD_API_ORIGIN) {
@@ -8713,9 +8721,7 @@ async function createDialog() {
                     return;
                 }
 
-                if (part.functionCall) {
-                    targetCandidate.content.parts.push(part);
-                }
+                targetCandidate.content.parts.push({ ...part });
             });
         });
     }
@@ -8957,6 +8963,10 @@ async function createDialog() {
                 requestBody.generationConfig.thinkingConfig = thinkingConfig;
             }
             requestBody.tools = getGeminiToolDefinitions(selectedModel, enableTools);
+            const toolConfig = buildGeminiToolConfig(selectedModel, enableTools);
+            if (toolConfig) {
+                requestBody.toolConfig = toolConfig;
+            }
 
             const buildGeminiHttpError = (response, errorBody) => {
                 const retryAfterMs = getRetryAfterMilliseconds(response);
