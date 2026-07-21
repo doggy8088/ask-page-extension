@@ -4,6 +4,12 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.35.2] - 2026-07-22
+
+### 新增 / 改進（v0.35.2）
+
+- **Gemini 模型更新**：新增 `gemini-3.6-flash` 與 `gemini-3.5-flash-lite` 模型，並調整模型排序讓最新模型優先顯示於選項前方。
+
 ## [0.35.0] - 2026-07-20
 
 ### 新增 / 改進（v0.35.0）

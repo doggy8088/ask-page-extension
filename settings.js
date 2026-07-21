@@ -135,6 +135,8 @@ const BUILT_IN_COMMANDS = [
 
 const PREDEFINED_MODELS = {
     gemini: [
+        'gemini-3.6-flash',
+        'gemini-3.5-flash-lite',
         'gemini-3.5-flash',
         'gemini-3.1-pro-preview',
         'gemini-3.1-flash-lite',
@@ -1093,42 +1095,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Set Gemini defaults
             const geminiModels = [...(PREDEFINED_MODELS['gemini'] || [])];
-            geminiModels.sort((a, b) => a.localeCompare(b));
             renderModalModelsList(modalGeminiModelsList, geminiModels, [geminiModels[0]]);
 
             // Set OpenAI defaults
             const openaiModels = [...(PREDEFINED_MODELS['openai'] || [])];
-            openaiModels.sort((a, b) => a.localeCompare(b));
             renderModalModelsList(modalOpenaiModelsList, openaiModels, [openaiModels[0]]);
 
             // Set Anthropic defaults
             const anthropicModels = [...(PREDEFINED_MODELS['anthropic'] || [])];
-            anthropicModels.sort((a, b) => a.localeCompare(b));
             renderModalModelsList(modalAnthropicModelsList, anthropicModels, [anthropicModels[0]]);
 
             // Set DeepSeek defaults
             const deepseekModels = [...(PREDEFINED_MODELS['deepseek'] || [])];
-            deepseekModels.sort((a, b) => a.localeCompare(b));
             renderModalModelsList(modalDeepseekModelsList, deepseekModels, [deepseekModels[0]]);
 
             // Set OpenRouter defaults
             const openrouterModels = [...(PREDEFINED_MODELS['openrouter'] || [])];
-            openrouterModels.sort((a, b) => a.localeCompare(b));
             renderModalModelsList(modalOpenrouterModelsList, openrouterModels, [openrouterModels[0]]);
 
             // Set Groq defaults
             const groqModels = [...(PREDEFINED_MODELS['groq'] || [])];
-            groqModels.sort((a, b) => a.localeCompare(b));
             renderModalModelsList(modalGroqModelsList, groqModels, [groqModels[0]]);
 
             // Set Mistral defaults
             const mistralModels = [...(PREDEFINED_MODELS['mistral'] || [])];
-            mistralModels.sort((a, b) => a.localeCompare(b));
             renderModalModelsList(modalMistralModelsList, mistralModels, [mistralModels[0]]);
 
             // Set Ollama Cloud defaults
             const ollamaCloudModels = [...(PREDEFINED_MODELS['ollama-cloud'] || [])];
-            ollamaCloudModels.sort((a, b) => a.localeCompare(b));
             renderModalModelsList(modalOllamaCloudModelsList, ollamaCloudModels, [ollamaCloudModels[0]]);
         }
 
@@ -1688,8 +1682,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderModalModelsList(container, models, checkedModels = []) {
         container.innerHTML = '';
 
-        // Deduplicate and sort alphabetically by name
-        const uniqueSortedModels = Array.from(new Set(models)).sort((a, b) => a.localeCompare(b));
+        // Deduplicate while preserving model list order
+        const uniqueSortedModels = Array.from(new Set(models));
 
         uniqueSortedModels.forEach(modelName => {
             const isChecked = checkedModels.includes(modelName);
