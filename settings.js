@@ -568,8 +568,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (!prompt) {
-            showStatus('請輸入提示內容', 'error');
-            return;
+            const isSummaryBuiltin = currentEditingCommand
+                && currentEditingCommand.builtin
+                && currentEditingCommand.cmd === '/summary';
+            if (!isSummaryBuiltin) {
+                showStatus('請輸入提示內容', 'error');
+                return;
+            }
         }
 
         if (currentEditingCommand) {
