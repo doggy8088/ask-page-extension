@@ -785,7 +785,7 @@
 
   <!-- Command Edit Modal -->
   <div id="commandModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; padding: 20px;">
-    <div style="max-width: 600px; margin: 50px auto; background: var(--card-background); border-radius: 16px; padding: 24px; max-height: 80vh; overflow-y: auto;">
+    <div style="max-width: 600px; margin: 50px auto; background: var(--card-background); border-radius: 16px; padding: 24px; max-height: 80vh; overflow-y: auto; box-sizing: border-box;">
       <h3 id="modalTitle" style="margin: 0 0 20px; color: var(--text-primary);">編輯斜線命令</h3>
 
       <div class="form-group">
@@ -797,7 +797,17 @@
 
       <div class="form-group">
         <label for="modalCommandPrompt">提示內容</label>
-        <textarea id="modalCommandPrompt" placeholder="請輸入當使用者執行此命令時要傳送給 AI 的提示內容..."></textarea>
+        <textarea id="modalCommandPrompt" aria-describedby="modalCommandPromptError modalCommandPromptHelp" placeholder="請輸入當使用者執行此命令時要傳送給 AI 的提示內容。使用 ${變數名} 產生填空，例如：Hi, I'm ${name} from ${country:TW}。"></textarea>
+        <small id="modalCommandPromptError" class="field-error"></small>
+        <small id="modalCommandPromptHelp" style="color: var(--text-secondary);">在提示內容中以 <code>${變數名}</code> 產生填空，使用者執行命令後可逐一填寫；用 <code>${變數名:預設值}</code> 設預設值。同名變數會同步填寫，最多只能有一組預設值。</small>
+      </div>
+
+      <div class="form-group">
+        <label for="modalCommandShowVariableLabels">
+          <input type="checkbox" id="modalCommandShowVariableLabels" />
+          展開提示詞時顯示變數名稱
+        </label>
+        <small style="color: var(--text-secondary);">未勾選時，未填寫的變數只會以空白提示顯示變數名稱，一旦輸入內容就會消失；勾選後則會持續顯示「變數名稱：」的標籤。</small>
       </div>
 
       <div class="form-group">

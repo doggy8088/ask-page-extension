@@ -686,6 +686,7 @@ const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
 
 // Storage keys for custom slash command prompts
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
+const CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE = 'CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS';
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
 const CUSTOM_COMMAND_USAGE_STORAGE = 'CUSTOM_COMMAND_USAGE';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
@@ -751,6 +752,180 @@ function getTopCustomCommands(customCommands, usageMap, limit = 2) {
         })
         .slice(0, limit)
         .map((item) => item.command);
+}
+
+const TEMPLATE_VARIABLE_PATTERN = /\$\{([^}]*)\}/g;
+
+// 單一來源掃描 ${...}，並以第一個 : 切出變數名與預設值，供下方三個函式共用。
+function tokenizeSnippetTemplate(template) {
+    const promptTemplate = String(template || '');
+    const tokens = [];
+    const pattern = new RegExp(TEMPLATE_VARIABLE_PATTERN.source, 'g');
+    let match;
+    let lastIndex = 0;
+    while ((match = pattern.exec(promptTemplate)) !== null) {
+        const literal = promptTemplate.slice(lastIndex, match.index);
+        if (literal) {
+            tokens.push({ type: 'literal', text: literal });
+        }
+
+        const inner = match[1];
+        const colonIndex = inner.indexOf(':');
+        const name = colonIndex === -1 ? inner : inner.slice(0, colonIndex);
+        if (name) {
+            const hasDefault = colonIndex !== -1;
+            const defaultValue = hasDefault ? inner.slice(colonIndex + 1) : '';
+            tokens.push({ type: 'variable', name, hasDefault, defaultValue });
+        } else {
+            tokens.push({ type: 'literal', text: match[0] });
+        }
+        lastIndex = pattern.lastIndex;
+    }
+
+    const trailingLiteral = promptTemplate.slice(lastIndex);
+    if (trailingLiteral) {
+        tokens.push({ type: 'literal', text: trailingLiteral });
+    }
+    return tokens;
+}
+
+function extractTemplateVariables(template = '') {
+    const tokens = tokenizeSnippetTemplate(template);
+    const variables = [];
+    const seen = new Map();
+    tokens.forEach((token) => {
+        if (token.type !== 'variable') {
+            return;
+        }
+        const { name, hasDefault, defaultValue } = token;
+        const existing = seen.get(name);
+        if (existing) {
+            if (hasDefault && existing.hasDefault && existing.defaultValue !== defaultValue) {
+                existing.conflict = true;
+            }
+            existing.occurrences += 1;
+        } else {
+            const entry = { name, hasDefault, defaultValue, occurrences: 1, conflict: false };
+            seen.set(name, entry);
+            variables.push(entry);
+        }
+    });
+    return variables;
+}
+
+// showVariableLabels 為 false（預設）時，空值以變數名稱本身作為暫時性佔位文字顯示，
+// 一旦填入內容即消失；為 true 時維持 name 標籤恆常顯示的展開方式，標籤固定以「: 」
+// （冒號加一個空格）結尾，這個空格純屬畫面排版，不計入送出內容。範本中作者自行寫的
+// 標點符號一律照樣顯示，不做任何隱藏。
+function expandSnippetTemplate(template, values, showVariableLabels) {
+    const tokens = tokenizeSnippetTemplate(template);
+    const valueMap = values || {};
+    const positions = [];
+    let display = '';
+    let prompt = '';
+    tokens.forEach((token) => {
+        if (token.type === 'literal') {
+            display += token.text;
+            prompt += token.text;
+            return;
+        }
+
+        const { name, hasDefault } = token;
+        const value = String(valueMap[name] ?? '');
+        if (showVariableLabels) {
+            const hintStart = display.length;
+            display += `${name}: `;
+            const hintEnd = display.length;
+            const start = display.length;
+            display += value;
+            prompt += value;
+            positions.push({ name, start, end: display.length, hasDefault, hintStart, hintEnd, isPlaceholder: false });
+        } else {
+            const isPlaceholder = value === '';
+            const start = display.length;
+            display += isPlaceholder ? name : value;
+            prompt += value;
+            positions.push({ name, start, end: display.length, hasDefault, hintStart: null, hintEnd: null, isPlaceholder });
+        }
+    });
+    return { display, prompt, positions };
+}
+
+// 重用 expandSnippetTemplate 已算出的 hint/value 邊界，避免重新解析變數語意。
+// showVariableLabels 必須與產生該 displayOffset 的畫面採用同一顯示模式，偏移量才不會偏移。
+function mapSnippetDisplayOffsetToPrompt(template, values, displayOffset, showVariableLabels) {
+    const tokens = tokenizeSnippetTemplate(template);
+    const { prompt, positions } = expandSnippetTemplate(template, values, showVariableLabels);
+    const targetOffset = Math.max(0, Number(displayOffset) || 0);
+    let positionIndex = 0;
+    let displayCursor = 0;
+    let promptCursor = 0;
+
+    for (let i = 0; i < tokens.length; i += 1) {
+        const token = tokens[i];
+        if (token.type === 'literal') {
+            if (targetOffset < displayCursor + token.text.length) {
+                return promptCursor + (targetOffset - displayCursor);
+            }
+            displayCursor += token.text.length;
+            promptCursor += token.text.length;
+            continue;
+        }
+
+        const position = positions[positionIndex];
+        positionIndex += 1;
+        const hintLength = (position.hintStart !== null && position.hintEnd !== null)
+            ? position.hintEnd - position.hintStart
+            : 0;
+        if (targetOffset < displayCursor + hintLength) {
+            return promptCursor;
+        }
+        displayCursor += hintLength;
+
+        // 佔位文字只佔畫面空間，對應的送出內容仍是空字串，因此送出端長度為 0。
+        const displayValueLength = position.end - position.start;
+        const promptValueLength = position.isPlaceholder ? 0 : displayValueLength;
+        if (targetOffset <= displayCursor + displayValueLength) {
+            const valueOffset = targetOffset - displayCursor;
+            if (position.isPlaceholder) {
+                return promptCursor;
+            }
+            return promptCursor + valueOffset;
+        }
+        displayCursor += displayValueLength;
+        promptCursor += promptValueLength;
+    }
+
+    return Math.min(promptCursor + (targetOffset - displayCursor), prompt.length);
+}
+
+// 佔位文字（未填值時顯示的變數名稱）整段都不是真實內容，任何觸及它的插入都必須視為
+// 「整段取代」：依編輯前的選取範圍與編輯後的完整字串反推這次真正輸入了什麼內容，
+// 而不是比對前後字串內容，避免殘留的佔位字元與新輸入內容混雜後被誤存為值。
+function deriveSnippetPlaceholderReplacement(oldValueLength, selectionStart, selectionEnd, newFullValue) {
+    const insertedLength = newFullValue.length - oldValueLength + (selectionEnd - selectionStart);
+    if (insertedLength <= 0) {
+        return '';
+    }
+    return newFullValue.slice(selectionStart, selectionStart + insertedLength);
+}
+
+// 選取範圍涵蓋目前 textarea 全部內容時，使用者的意圖是整段刪除或整段取代，
+// 必須放行原生行為並離開 snippet 模式，不受任何佔位文字／hint 保護規則限制。
+function isCompleteTextareaSelection(valueLength, selectionStart, selectionEnd) {
+    return valueLength > 0 && selectionStart === 0 && selectionEnd === valueLength;
+}
+
+// 純函式：依目前 undo 疊層決定「上一步」該回到哪裡。疊層還有記錄時回到最近一筆記錄；
+// 疊層清空後代表已經退回展開前的原始輸入（origin），這是回溯的最終邊界，不再繼續往回。
+function resolveSnippetUndoStep(undoStack, origin) {
+    if (Array.isArray(undoStack) && undoStack.length > 0) {
+        return { type: 'values' };
+    }
+    if (origin) {
+        return { type: 'origin' };
+    }
+    return { type: 'none' };
 }
 
 // API key masking for console output
@@ -3723,6 +3898,16 @@ async function createDialog() {
     input.rows = 1;
     input.wrap = 'soft';
 
+    // Snippet 變數著色 overlay：疊在 textarea 後方，snippet 模式時對非活動變數加底色
+    const snippetOverlay = document.createElement('div');
+    snippetOverlay.id = 'gemini-qna-snippet-overlay';
+    snippetOverlay.setAttribute('aria-hidden', 'true');
+
+    const inputWrapper = document.createElement('div');
+    inputWrapper.id = 'gemini-qna-input-wrapper';
+    inputWrapper.appendChild(snippetOverlay);
+    inputWrapper.appendChild(input);
+
     const inputStack = document.createElement('div');
     inputStack.id = 'gemini-qna-input-stack';
 
@@ -3794,23 +3979,32 @@ async function createDialog() {
 
     const inputRow = document.createElement('div');
     inputRow.id = 'gemini-qna-input-row';
+    Object.assign(inputRow.style, { position: 'relative' });
 
     // Dynamic intelliCommands based on screenshot state and custom commands
     async function getIntelliCommands() {
         const screenshotEnabled = await getScreenshotEnabled();
         const agentModeEnabled = await getAgentModeEnabled();
         const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+        const builtInSummaryPrompt = await getValue(CUSTOM_SUMMARY_PROMPT_STORAGE, '');
+        const summaryShowVariableLabels = await getValue(CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE, false);
+        const summaryTemplate = builtInSummaryPrompt || '請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」';
 
         const builtInCommands = [
             { cmd: '/clear', desc: '清除提問歷史紀錄' },
-            { cmd: '/summary', desc: '總結本頁內容' },
+            { cmd: '/summary', desc: '總結本頁內容', template: summaryTemplate, hasVariables: extractTemplateVariables(summaryTemplate).length > 0, showVariableLabels: summaryShowVariableLabels === true },
             { cmd: '/screenshot', desc: screenshotEnabled ? '停用截圖功能' : '啟用截圖功能' },
             { cmd: '/agent', desc: agentModeEnabled ? '切換為詢問模式（只做內容問答）' : '切換為代理模式（允許工具調用）' }
         ];
 
         const customCommandsForIntellisense = customCommands.map(cmd => ({
             cmd: cmd.cmd,
-            desc: cmd.prompt ? cmd.prompt.substring(0, 50) + (cmd.prompt.length > 50 ? '...' : '') : '自訂命令'
+            desc: cmd.prompt ? cmd.prompt.substring(0, 50) + (cmd.prompt.length > 50 ? '...' : '') : '自訂命令',
+            template: cmd.prompt || '',
+            hasVariables: extractTemplateVariables(cmd.prompt || '').length > 0,
+            mode: cmd.mode,
+            screenshotEnabled: cmd.screenshotEnabled === true,
+            showVariableLabels: cmd.showVariableLabels === true
         }));
 
         return [...builtInCommands, ...customCommandsForIntellisense];
@@ -3834,7 +4028,7 @@ async function createDialog() {
     btn.textContent = '問';
     btn.setAttribute('aria-label', '送出提問');
 
-    inputRow.appendChild(input);
+    inputRow.appendChild(inputWrapper);
     inputRow.appendChild(btn);
     inputStack.appendChild(inputImageStrip);
     inputStack.appendChild(inputRow);
@@ -4474,6 +4668,9 @@ async function createDialog() {
 
         input.style.height = `${nextHeight}px`;
         input.style.overflowY = input.scrollHeight > inputMetrics.maxHeight ? 'auto' : 'hidden';
+        if (snippetState && snippetState.positions) {
+            renderSnippetOverlay(input.value, snippetState.positions);
+        }
     }
 
     function setInputValue(value, options = {}) {
@@ -5069,6 +5266,7 @@ async function createDialog() {
 
     async function handleAsk() {
         hideIntelliBox();
+        finalizeSnippetInput();
         let question = input.value.trim();
         let displayedQuestion = question;
         const inputImageDataUrls = normalizeInputImageDataUrls(inputContextImageDataUrls);
@@ -5090,9 +5288,18 @@ async function createDialog() {
         }
 
         if (question === '/summary') {
-            // Use custom prompt if available, otherwise use default
             const customPrompt = await getValue(CUSTOM_SUMMARY_PROMPT_STORAGE, '');
-            question = customPrompt || '請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」';
+            const summaryPromptTemplate = customPrompt || '請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」';
+            if (extractTemplateVariables(summaryPromptTemplate).length > 0) {
+                // 有變數的範本應由 snippet 流程展開，不應直接以 /summary 送出
+                appendMessage('user', question);
+                appendMessage('assistant', '❌ **/summary 提示內容包含 ${變數}，請輸入 /summary 後按 Tab 展開並填寫變數。**');
+                clearInputContextImages();
+                setInputValue('', { resetToSingleLine: true });
+                input.focus();
+                return;
+            }
+            question = summaryPromptTemplate;
             displayedQuestion = question;
         }
 
@@ -5122,6 +5329,14 @@ async function createDialog() {
             const customCommand = customCommands.find(cmd => cmd.cmd === question);
 
             if (customCommand) {
+                if (extractTemplateVariables(customCommand.prompt || '').length > 0) {
+                    appendMessage('user', question);
+                    appendMessage('assistant', `❌ **${question} 提示內容包含 \${變數}，請輸入命令後按 Tab 展開並填寫變數。**`);
+                    clearInputContextImages();
+                    setInputValue('', { resetToSingleLine: true });
+                    input.focus();
+                    return;
+                }
                 await applyCustomCommandExecutionMode(customCommand);
                 await incrementCustomCommandUsage(customCommand.cmd);
                 // Replace the command with its prompt
@@ -5158,6 +5373,7 @@ async function createDialog() {
 
     let intelliActive = false;
     let intelliIndex = 0;
+    let snippetState = null;
     async function showIntelliBox(filtered) {
         if (!filtered.length) {
             hideIntelliBox();
@@ -5175,9 +5391,7 @@ async function createDialog() {
             el.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                setInputValue(item.cmd);
-                hideIntelliBox();
-                handleAsk();
+                completeIntelliCommand(item);
             });
             intelliBox.appendChild(el);
         });
@@ -5186,6 +5400,334 @@ async function createDialog() {
         intelliBox.style.top = rect.bottom + 2 + 'px';
         intelliBox.style.display = 'block';
         intelliActive = true;
+    }
+    function completeIntelliCommand(item) {
+        hideIntelliBox();
+        if (item.hasVariables && item.template) {
+            const origin = {
+                value: input.value,
+                selectionStart: input.selectionStart ?? input.value.length,
+                selectionEnd: input.selectionEnd ?? input.value.length
+            };
+            startSnippetMode(item, origin);
+            return;
+        }
+        setInputValue(item.cmd);
+        handleAsk();
+    }
+
+    function startSnippetMode(item, origin) {
+        const template = item.template;
+        const variables = extractTemplateVariables(template);
+        if (!variables.length) {
+            return;
+        }
+        // 先套用副作用（mode/usage），snippet 送出時直接當 prompt 不再走命令分支
+        if (item.cmd !== '/summary') {
+            applyCustomCommandExecutionMode({ mode: item.mode, screenshotEnabled: item.screenshotEnabled });
+            incrementCustomCommandUsage(item.cmd);
+        }
+
+        const values = {};
+        variables.forEach((v) => {
+            values[v.name] = v.hasDefault ? v.defaultValue : '';
+        });
+        snippetState = {
+            template,
+            variables,
+            values,
+            activeIndex: 0,
+            suppressInput: false,
+            selectingOnEnter: true,
+            undoStack: [],
+            redoStack: [],
+            showVariableLabels: item.showVariableLabels === true,
+            origin: origin ?? null
+        };
+        inputWrapper.classList.add('askpage-snippet-active');
+        renderSnippet();
+        input.focus();
+    }
+
+    function findActivePosition() {
+        if (!snippetState || !snippetState.positions.length) {
+            return null;
+        }
+        const activeName = snippetState.variables[snippetState.activeIndex]?.name;
+        if (!activeName) {
+            return null;
+        }
+        return snippetState.positions.find((p) => p.name === activeName) ?? null;
+    }
+
+    function renderSnippet() {
+        if (!snippetState) {
+            return;
+        }
+        const { display, prompt, positions } = expandSnippetTemplate(snippetState.template, snippetState.values, snippetState.showVariableLabels);
+        snippetState.displayValue = display;
+        snippetState.promptValue = prompt;
+        snippetState.positions = positions;
+        snippetState.suppressInput = true;
+        setInputValue(display);
+        snippetState.suppressInput = false;
+        renderSnippetOverlay(display, positions);
+        applyActiveSelection();
+    }
+
+    function renderSnippetOverlay(display, positions) {
+        if (!snippetState) {
+            return;
+        }
+        const activeName = snippetState.variables[snippetState.activeIndex]?.name;
+        // 對齊 input 的字型與 padding，確保換行位置一致
+        const computedStyle = window.getComputedStyle(input);
+        snippetOverlay.style.font = computedStyle.font;
+        snippetOverlay.style.lineHeight = computedStyle.lineHeight;
+        snippetOverlay.style.letterSpacing = computedStyle.letterSpacing;
+        snippetOverlay.style.padding = computedStyle.padding;
+        snippetOverlay.style.border = computedStyle.border;
+        snippetOverlay.style.boxSizing = computedStyle.boxSizing;
+
+        // 用 positions 切分文字，活動同名變數、候選變數與預設值 hint 分別著色
+        let html = '';
+        let cursor = 0;
+        const escapeHtml = (text) => text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        positions.forEach((pos) => {
+            const segmentStart = pos.hintStart ?? pos.start;
+            html += escapeHtml(display.slice(cursor, segmentStart));
+            if (pos.hintStart !== null && pos.hintEnd !== null) {
+                let hintCls = 'askpage-snippet-hint';
+                if (pos.name === activeName) {
+                    hintCls += ' askpage-snippet-active-hint';
+                }
+                html += `<span class="${hintCls}">${escapeHtml(display.slice(pos.hintStart, pos.hintEnd))}</span>`;
+            }
+            let cls = pos.name === activeName ? 'askpage-snippet-active-var' : 'askpage-snippet-var';
+            if (pos.isPlaceholder) {
+                cls += ' askpage-snippet-placeholder';
+            }
+            html += `<span class="${cls}">${escapeHtml(display.slice(pos.start, pos.end))}</span>`;
+            cursor = pos.end;
+        });
+        html += escapeHtml(display.slice(cursor));
+        snippetOverlay.innerHTML = html;
+        snippetOverlay.scrollTop = input.scrollTop;
+        snippetOverlay.scrollLeft = input.scrollLeft;
+    }
+
+    function applyActiveSelection() {
+        const pos = findActivePosition();
+        if (!pos) {
+            return;
+        }
+        snippetState.lastPrefix = input.value.slice(0, pos.start);
+        snippetState.lastSuffix = input.value.slice(pos.end);
+        // 佔位文字並非使用者輸入的內容，任何時候作為活動欄位都應整段選取，
+        // 避免游標停在佔位文字之後導致輸入時被誤接在後面而非取代它。
+        if (snippetState.selectingOnEnter || pos.isPlaceholder) {
+            input.setSelectionRange(pos.start, pos.end);
+        } else {
+            input.setSelectionRange(pos.end, pos.end);
+        }
+        input.focus();
+    }
+
+    function moveSnippetSelection(direction) {
+        if (!snippetState || !snippetState.variables.length) {
+            return false;
+        }
+        const count = snippetState.variables.length;
+        snippetState.activeIndex = (snippetState.activeIndex + direction + count) % count;
+        snippetState.selectingOnEnter = true;
+        renderSnippetOverlay(input.value, snippetState.positions);
+        applyActiveSelection();
+        return true;
+    }
+
+    function restoreSnippetValues(values) {
+        if (!snippetState) {
+            return;
+        }
+        snippetState.values = { ...values };
+        snippetState.selectingOnEnter = false;
+        renderSnippet();
+    }
+
+    function undoSnippetEdit() {
+        if (!snippetState) {
+            return Promise.resolve();
+        }
+        const step = resolveSnippetUndoStep(snippetState.undoStack, snippetState.origin);
+        if (step.type === 'values') {
+            snippetState.redoStack.push({ ...snippetState.values });
+            restoreSnippetValues(snippetState.undoStack.pop());
+            return Promise.resolve();
+        }
+        if (step.type === 'origin') {
+            return exitSnippetModeToOrigin();
+        }
+        return Promise.resolve();
+    }
+
+    function redoSnippetEdit() {
+        if (!snippetState || !snippetState.redoStack.length) {
+            return;
+        }
+        snippetState.undoStack.push({ ...snippetState.values });
+        restoreSnippetValues(snippetState.redoStack.pop());
+    }
+
+    async function exitSnippetModeToOrigin() {
+        if (!snippetState) {
+            return;
+        }
+        const origin = snippetState.origin;
+        exitSnippetMode();
+        if (!origin) {
+            return;
+        }
+        setInputValue(origin.value, { moveCaretToEnd: false });
+        input.setSelectionRange(origin.selectionStart, origin.selectionEnd);
+        input.focus();
+        await refreshIntelliSuggestionsForValue(origin.value);
+    }
+
+    async function handleSnippetHistoryShortcut(event) {
+        if (!snippetState || event.altKey || (!event.metaKey && !event.ctrlKey)) {
+            return false;
+        }
+        const key = event.key.toLowerCase();
+        const isUndo = key === 'z' && !event.shiftKey;
+        const isRedo = (key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey);
+        if (!isUndo && !isRedo) {
+            return false;
+        }
+        event.preventDefault();
+        if (isUndo) {
+            await undoSnippetEdit();
+        } else {
+            redoSnippetEdit();
+        }
+        return true;
+    }
+
+    function getTextReplacement(before, after) {
+        let start = 0;
+        while (start < before.length && start < after.length && before[start] === after[start]) {
+            start += 1;
+        }
+
+        let beforeEnd = before.length;
+        let afterEnd = after.length;
+        while (
+            beforeEnd > start
+            && afterEnd > start
+            && before[beforeEnd - 1] === after[afterEnd - 1]
+        ) {
+            beforeEnd -= 1;
+            afterEnd -= 1;
+        }
+
+        return {
+            start,
+            end: beforeEnd,
+            insertedText: after.slice(start, afterEnd)
+        };
+    }
+
+    function exitSnippetModeWithCurrentEdit() {
+        if (!snippetState) {
+            return;
+        }
+        const beforeDisplay = snippetState.displayValue ?? '';
+        const afterDisplay = input.value;
+        const replacement = getTextReplacement(beforeDisplay, afterDisplay);
+        const promptStart = mapSnippetDisplayOffsetToPrompt(
+            snippetState.template,
+            snippetState.values,
+            replacement.start,
+            snippetState.showVariableLabels
+        );
+        const promptEnd = mapSnippetDisplayOffsetToPrompt(
+            snippetState.template,
+            snippetState.values,
+            replacement.end,
+            snippetState.showVariableLabels
+        );
+        const promptValue = snippetState.promptValue ?? '';
+        const nextPrompt = promptValue.slice(0, promptStart)
+            + replacement.insertedText
+            + promptValue.slice(promptEnd);
+        const nextCaret = promptStart + replacement.insertedText.length;
+
+        exitSnippetMode();
+        setInputValue(nextPrompt, { moveCaretToEnd: false });
+        input.setSelectionRange(nextCaret, nextCaret);
+        input.focus();
+    }
+
+    function syncSnippetFromInput() {
+        if (!snippetState || snippetState.suppressInput) {
+            return;
+        }
+        const pos = findActivePosition();
+        if (!pos) {
+            finalizeSnippetInput();
+            return;
+        }
+        const pendingInsertion = snippetState.pendingPlaceholderInsertion;
+        snippetState.pendingPlaceholderInsertion = null;
+        let newValue;
+        if (pos.isPlaceholder && pendingInsertion && pendingInsertion.name === pos.name) {
+            // 佔位文字被觸及時整段取代：新值就是這次操作真正輸入的內容，
+            // 與選取範圍外殘留的佔位字元無關，即使輸入內容剛好等於變數名稱也視為真實值。
+            newValue = deriveSnippetPlaceholderReplacement(
+                pendingInsertion.oldLength,
+                pendingInsertion.start,
+                pendingInsertion.end,
+                input.value
+            );
+        } else {
+            const prefix = snippetState.lastPrefix;
+            const suffix = snippetState.lastSuffix;
+            const newFull = input.value;
+            if (prefix !== undefined && suffix !== undefined
+                && newFull.startsWith(prefix) && newFull.endsWith(suffix)
+                && newFull.length >= prefix.length + suffix.length) {
+                newValue = newFull.slice(prefix.length, newFull.length - suffix.length);
+            } else {
+                // 編輯活動值以外區域時，保留這次編輯與游標位置後退出 snippet
+                exitSnippetModeWithCurrentEdit();
+                return;
+            }
+        }
+        if (newValue === snippetState.values[pos.name]) {
+            return;
+        }
+        snippetState.undoStack.push({ ...snippetState.values });
+        snippetState.redoStack.length = 0;
+        snippetState.values[pos.name] = newValue;
+        snippetState.selectingOnEnter = false;
+        renderSnippet();
+    }
+
+    function exitSnippetMode() {
+        snippetState = null;
+        inputWrapper.classList.remove('askpage-snippet-active');
+        snippetOverlay.innerHTML = '';
+    }
+
+    function finalizeSnippetInput() {
+        if (!snippetState) {
+            return;
+        }
+        const promptValue = snippetState.promptValue ?? '';
+        exitSnippetMode();
+        setInputValue(promptValue);
     }
     function hideIntelliBox() {
         intelliBox.style.display = 'none';
@@ -5196,16 +5738,109 @@ async function createDialog() {
         const commands = await getIntelliCommands();
         return commands.filter(c => c.cmd.startsWith(val));
     }
-    input.addEventListener('input', async () => {
-        resizeQuestionInput();
-        const val = input.value;
-        if (!val.includes('\n') && val.startsWith('/')) {
-            const filtered = await filterIntelli(val);
+    async function refreshIntelliSuggestionsForValue(value) {
+        if (!value.includes('\n') && value.startsWith('/')) {
+            const filtered = await filterIntelli(value);
             intelliIndex = 0;
             showIntelliBox(filtered);
         } else {
             hideIntelliBox();
         }
+    }
+    input.addEventListener('beforeinput', (event) => {
+        if (!snippetState) {
+            return;
+        }
+
+        const selectionStart = input.selectionStart ?? 0;
+        const selectionEnd = input.selectionEnd ?? selectionStart;
+
+        // 使用者選取整個 textarea 內容時，不論是刪除、剪下或輸入取代，一律視為使用者
+        // 想離開 snippet 模式並讓瀏覽器原生行為直接生效，不受任何佔位文字／hint 保護限制。
+        if (isCompleteTextareaSelection(input.value.length, selectionStart, selectionEnd)) {
+            exitSnippetMode();
+            return;
+        }
+
+        const inputType = String(event.inputType || '');
+        const isDeletion = inputType.startsWith('delete');
+        const activePosition = findActivePosition();
+
+        // 記錄佔位文字被觸及的這次編輯前狀態（選取範圍與編輯前總長度），讓 input 事件
+        // 觸發時能反推「這次真正輸入了什麼」，不受組字（IME）或瀏覽器插入時機影響。
+        if (
+            !isDeletion
+            && activePosition
+            && activePosition.isPlaceholder
+            && selectionStart >= activePosition.start
+            && selectionEnd <= activePosition.end
+        ) {
+            snippetState.pendingPlaceholderInsertion = {
+                name: activePosition.name,
+                start: selectionStart,
+                end: selectionEnd,
+                oldLength: input.value.length
+            };
+        } else {
+            snippetState.pendingPlaceholderInsertion = null;
+        }
+
+        if (
+            isDeletion
+            && selectionStart === selectionEnd
+            && activePosition
+            && activePosition.start === activePosition.end
+            && selectionStart === activePosition.start
+        ) {
+            event.preventDefault();
+            return;
+        }
+
+        let editStart = selectionStart;
+        let editEnd = selectionEnd;
+        if (selectionStart === selectionEnd && inputType === 'deleteContentBackward') {
+            editStart = Math.max(0, selectionStart - 1);
+        } else if (selectionStart === selectionEnd && inputType === 'deleteContentForward') {
+            editEnd = Math.min(input.value.length, selectionEnd + 1);
+        }
+
+        // 佔位文字（未填值時顯示的變數名稱）不是真實內容，不可被部分或整段刪除，
+        // 只能透過輸入文字整段取代；因此任何觸及佔位範圍的刪除都直接擋下。
+        if (isDeletion && activePosition && activePosition.isPlaceholder) {
+            const touchesPlaceholder = editStart < activePosition.end && editEnd > activePosition.start;
+            if (touchesPlaceholder) {
+                event.preventDefault();
+                return;
+            }
+        }
+
+        const touchesHint = snippetState.positions.some((pos) => {
+            if (pos.hintStart === null || pos.hintEnd === null) {
+                return false;
+            }
+            if (editStart === editEnd) {
+                return editStart > pos.hintStart && editStart < pos.hintEnd;
+            }
+            return editStart < pos.hintEnd && editEnd > pos.hintStart;
+        });
+        if (touchesHint) {
+            event.preventDefault();
+        }
+    });
+    input.addEventListener('input', async () => {
+        resizeQuestionInput();
+        if (snippetState) {
+            syncSnippetFromInput();
+            return;
+        }
+        await refreshIntelliSuggestionsForValue(input.value);
+    });
+    input.addEventListener('scroll', () => {
+        if (!snippetState) {
+            return;
+        }
+        snippetOverlay.scrollTop = input.scrollTop;
+        snippetOverlay.scrollLeft = input.scrollLeft;
     });
 
     input.addEventListener('compositionstart', () => {
@@ -5321,14 +5956,28 @@ async function createDialog() {
             } else if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
                 if (filtered.length) {
                     e.preventDefault();
-                    setInputValue(filtered[intelliIndex].cmd);
-                    hideIntelliBox();
-                    handleAsk();
+                    completeIntelliCommand(filtered[intelliIndex]);
                 }
             } else if (e.key === 'Enter' && e.shiftKey) {
                 hideIntelliBox();
             } else if (e.key === 'Escape') {
                 hideIntelliBox();
+            }
+            return;
+        }
+        if (snippetState) {
+            if (await handleSnippetHistoryShortcut(e)) {
+                return;
+            }
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                moveSnippetSelection(e.shiftKey ? -1 : 1);
+            } else if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleAsk();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                finalizeSnippetInput();
             }
             return;
         }
