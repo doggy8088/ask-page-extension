@@ -69,6 +69,10 @@ assert.deepStrictEqual(json(tokenizeSnippetTemplate('Hi ${name} ${}, ${country:a
     { type: 'variable', name: 'country', hasDefault: true, defaultValue: 'a:b' }
 ]);
 
+assert.deepStrictEqual(json(tokenizeSnippetTemplate('${e\u0301:français}')), [
+    { type: 'variable', name: 'é', hasDefault: true, defaultValue: 'français' }
+]);
+
 // ---- 基礎：無變數 ----
 assert.deepStrictEqual(json(namesOf(extractTemplateVariables('沒有變數的提示'))), []);
 assert.deepStrictEqual(json(namesOf(extractTemplateVariables(''))), []);
@@ -100,6 +104,10 @@ assert.deepStrictEqual(json(extractTemplateVariables('${name} and ${name:Jack}')
     { name: 'name', hasDefault: true, defaultValue: 'Jack', occurrences: 2, conflict: false }
 ]);
 
+assert.deepStrictEqual(json(extractTemplateVariables('${é} and ${e\u0301:Jack}')), [
+    { name: 'é', hasDefault: true, defaultValue: 'Jack', occurrences: 2, conflict: false }
+]);
+
 // ---- 同名變數：兩個相同預設值，不衝突 ----
 assert.deepStrictEqual(json(extractTemplateVariables('${name:Jack} and ${name:Jack}')), [
     { name: 'name', hasDefault: true, defaultValue: 'Jack', occurrences: 2, conflict: false }
@@ -110,6 +118,11 @@ const conflictVars = extractTemplateVariables('${name:Jack} and ${name:Bob}');
 assert.strictEqual(conflictVars.length, 1);
 assert.strictEqual(conflictVars[0].name, 'name');
 assert.strictEqual(conflictVars[0].conflict, true);
+
+const normalizedConflictVars = extractTemplateVariables('${é:Jack} and ${e\u0301:Bob}');
+assert.strictEqual(normalizedConflictVars.length, 1);
+assert.strictEqual(normalizedConflictVars[0].name, 'é');
+assert.strictEqual(normalizedConflictVars[0].conflict, true);
 
 // ---- 預設值含冒號：第一個 : 之後全為預設 ----
 assert.deepStrictEqual(json(extractTemplateVariables('${name:a:b}')), [
@@ -304,6 +317,35 @@ assert.deepStrictEqual(
     json(expandSnippetTemplate('Hi ${name}', { name: '' })),
     json(expandSnippetTemplate('Hi ${name}', { name: '' }, false))
 );
+
+assert.deepStrictEqual(json(expandSnippetTemplate(
+    '${é} / ${e\u0301}',
+    { é: 'Zoë' },
+    false
+)), {
+    display: 'Zoë / Zoë',
+    prompt: 'Zoë / Zoë',
+    positions: [
+        {
+            name: 'é',
+            start: 0,
+            end: 3,
+            hasDefault: false,
+            hintStart: null,
+            hintEnd: null,
+            isPlaceholder: false
+        },
+        {
+            name: 'é',
+            start: 6,
+            end: 9,
+            hasDefault: false,
+            hintStart: null,
+            hintEnd: null,
+            isPlaceholder: false
+        }
+    ]
+});
 
 // ---- Snippet 顯示（預設不勾選）：一旦填入內容，佔位文字消失，且不會被當成值送出 ----
 assert.deepStrictEqual(json(expandSnippetTemplate(

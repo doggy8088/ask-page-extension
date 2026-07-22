@@ -459,7 +459,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         while ((match = pattern.exec(template)) !== null) {
             const inner = match[1];
             const colonIndex = inner.indexOf(':');
-            const name = colonIndex === -1 ? inner : inner.slice(0, colonIndex);
+            const rawName = colonIndex === -1 ? inner : inner.slice(0, colonIndex);
+            const name = rawName.normalize('NFC');
             if (!name) {
                 continue;
             }

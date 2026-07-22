@@ -36,7 +36,12 @@ assert.strictEqual(validateTemplateVariables('${name１:value}'), '');
 assert.match(validateTemplateVariables('${1name:value}'), /變數名稱/);
 assert.match(validateTemplateVariables('${name²:value}'), /變數名稱/);
 assert.match(validateTemplateVariables('${nameⅣ:value}'), /變數名稱/);
-assert.match(validateTemplateVariables('${e\u0301:value}'), /變數名稱/);
+assert.strictEqual(validateTemplateVariables('${e\u0301:value}'), '');
+assert.strictEqual(validateTemplateVariables('${é:value} ${e\u0301:value}'), '');
+assert.match(
+    validateTemplateVariables('${é:one} ${e\u0301:two}'),
+    /重複預設值不一致/
+);
 assert.match(
     validateTemplateVariables('${name:Jack} ${name:Bob}'),
     /重複預設值不一致/
