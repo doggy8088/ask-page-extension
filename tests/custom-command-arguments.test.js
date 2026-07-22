@@ -34,7 +34,7 @@ const sandbox = {
 sandbox.globalThis = sandbox;
 
 vm.createContext(sandbox);
-vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {\n    tokenizeSnippetTemplate,\n    extractTemplateVariables,\n    expandSnippetTemplate,\n    mapSnippetDisplayOffsetToPrompt,\n    deriveSnippetPlaceholderReplacement,\n    isCompleteTextareaSelection,\n    resolveSnippetUndoStep\n};`, sandbox, {
+vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {\n    tokenizeSnippetTemplate,\n    extractTemplateVariables,\n    expandSnippetTemplate,\n    mapSnippetDisplayOffsetToPrompt,\n    deriveSnippetPlaceholderReplacement,\n    isCompleteTextareaSelection,\n    resolveSnippetUndoStep,\n    getSnippetExecutionReady\n};`, sandbox, {
     filename: 'content.js'
 });
 
@@ -45,7 +45,8 @@ const {
     mapSnippetDisplayOffsetToPrompt,
     deriveSnippetPlaceholderReplacement,
     isCompleteTextareaSelection,
-    resolveSnippetUndoStep
+    resolveSnippetUndoStep,
+    getSnippetExecutionReady
 } = sandbox.__askPageTestExports;
 
 // vm context 與測試程序為不同 realm，陣列 prototype 不一致，
@@ -517,5 +518,11 @@ assert.deepStrictEqual(
     json(resolveSnippetUndoStep(drainedUndoStack, { value: '/gr', selectionStart: 3, selectionEnd: 3 })),
     { type: 'origin' }
 );
+
+// ---- Snippet 送出同步：保留展開命令啟動的非同步設定，送出前必須等待同一個 Promise ----
+const executionReady = Promise.resolve();
+assert.strictEqual(getSnippetExecutionReady({ executionReady }), executionReady);
+assert.strictEqual(getSnippetExecutionReady({}), null);
+assert.strictEqual(getSnippetExecutionReady(null), null);
 
 console.log('custom-command-arguments: ok');

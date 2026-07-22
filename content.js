@@ -933,6 +933,13 @@ function resolveSnippetUndoStep(undoStack, origin) {
     return { type: 'none' };
 }
 
+function getSnippetExecutionReady(state) {
+    if (!state || !state.executionReady) {
+        return null;
+    }
+    return state.executionReady;
+}
+
 // API key masking for console output
 function maskApiKey(apiKey) {
     if (!apiKey || apiKey.length < 8) { return apiKey; }
@@ -5271,7 +5278,11 @@ async function createDialog() {
 
     async function handleAsk() {
         hideIntelliBox();
+        const snippetExecutionReady = getSnippetExecutionReady(snippetState);
         finalizeSnippetInput();
+        if (snippetExecutionReady) {
+            await snippetExecutionReady;
+        }
         let question = input.value.trim();
         let displayedQuestion = question;
         const inputImageDataUrls = normalizeInputImageDataUrls(inputContextImageDataUrls);
@@ -5427,10 +5438,12 @@ async function createDialog() {
         if (!variables.length) {
             return;
         }
-        // 先套用副作用（mode/usage），snippet 送出時直接當 prompt 不再走命令分支
+        let executionReady = null;
         if (item.cmd !== '/summary') {
-            applyCustomCommandExecutionMode({ mode: item.mode, screenshotEnabled: item.screenshotEnabled });
-            incrementCustomCommandUsage(item.cmd);
+            executionReady = Promise.all([
+                applyCustomCommandExecutionMode({ mode: item.mode, screenshotEnabled: item.screenshotEnabled }),
+                incrementCustomCommandUsage(item.cmd)
+            ]);
         }
 
         const values = {};
@@ -5447,7 +5460,8 @@ async function createDialog() {
             undoStack: [],
             redoStack: [],
             showVariableLabels: item.showVariableLabels === true,
-            origin: origin ?? null
+            origin: origin ?? null,
+            executionReady
         };
         inputWrapper.classList.add('askpage-snippet-active');
         renderSnippet();
