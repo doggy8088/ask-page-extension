@@ -95,6 +95,10 @@ assert.deepStrictEqual(json(extractTemplateVariables('${name:Jack} and ${name}')
     { name: 'name', hasDefault: true, defaultValue: 'Jack', occurrences: 2, conflict: false }
 ]);
 
+assert.deepStrictEqual(json(extractTemplateVariables('${name} and ${name:Jack}')), [
+    { name: 'name', hasDefault: true, defaultValue: 'Jack', occurrences: 2, conflict: false }
+]);
+
 // ---- 同名變數：兩個相同預設值，不衝突 ----
 assert.deepStrictEqual(json(extractTemplateVariables('${name:Jack} and ${name:Jack}')), [
     { name: 'name', hasDefault: true, defaultValue: 'Jack', occurrences: 2, conflict: false }

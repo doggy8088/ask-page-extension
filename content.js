@@ -800,8 +800,13 @@ function extractTemplateVariables(template = '') {
         const { name, hasDefault, defaultValue } = token;
         const existing = seen.get(name);
         if (existing) {
-            if (hasDefault && existing.hasDefault && existing.defaultValue !== defaultValue) {
-                existing.conflict = true;
+            if (hasDefault) {
+                if (existing.hasDefault && existing.defaultValue !== defaultValue) {
+                    existing.conflict = true;
+                } else if (!existing.hasDefault) {
+                    existing.hasDefault = true;
+                    existing.defaultValue = defaultValue;
+                }
             }
             existing.occurrences += 1;
         } else {
