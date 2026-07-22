@@ -463,7 +463,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!name) {
                 continue;
             }
-            if (!/^[\p{L}_][\p{L}\p{M}\p{N}_]*$/u.test(name)) {
+            if (!/^[\p{L}_][\p{L}\p{Nd}_]*$/u.test(name)) {
                 return `變數名稱「${name}」無效，只能包含字母、數字與底線，且開頭不能是數字`;
             }
             const hasDefault = colonIndex !== -1;

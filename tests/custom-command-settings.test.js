@@ -31,7 +31,12 @@ const { validateTemplateVariables } = sandbox.__askPageSettingsTestExports;
 
 assert.strictEqual(validateTemplateVariables('${name:English}'), '');
 assert.strictEqual(validateTemplateVariables('${語言:中文}'), '');
+assert.strictEqual(validateTemplateVariables('${éclair:français}'), '');
+assert.strictEqual(validateTemplateVariables('${name１:value}'), '');
 assert.match(validateTemplateVariables('${1name:value}'), /變數名稱/);
+assert.match(validateTemplateVariables('${name²:value}'), /變數名稱/);
+assert.match(validateTemplateVariables('${nameⅣ:value}'), /變數名稱/);
+assert.match(validateTemplateVariables('${e\u0301:value}'), /變數名稱/);
 assert.match(
     validateTemplateVariables('${name:Jack} ${name:Bob}'),
     /重複預設值不一致/
