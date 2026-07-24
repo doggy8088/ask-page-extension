@@ -95,8 +95,8 @@ async function getOrCreateEncryptionKey() {
 // DOM elements - 將在 DOMContentLoaded 中初始化
 let resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
-let modalCommandModeAgent, modalCommandModeInquiry, modalCommandScreenshotEnabled;
-let modalSave, modalCancel, modalCommandNameError;
+let modalCommandModeAgent, modalCommandModeInquiry, modalCommandScreenshotEnabled, modalCommandShowVariableLabels;
+let modalSave, modalCancel, modalCommandNameError, modalCommandPromptError;
 let customSystemPromptTextarea, customSystemPromptCount;
 
 // Multi-provider UI elements
@@ -117,6 +117,7 @@ let providers = [];
 // Storage keys
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
+const CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE = 'CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
 const LAST_ACTIVE_TAB_STORAGE = 'LAST_ACTIVE_TAB';
 
@@ -294,9 +295,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCommandName = document.getElementById('modalCommandName');
     modalCommandNameError = document.getElementById('modalCommandNameError');
     modalCommandPrompt = document.getElementById('modalCommandPrompt');
+    modalCommandPromptError = document.getElementById('modalCommandPromptError');
     modalCommandModeAgent = document.getElementById('modalCommandModeAgent');
     modalCommandModeInquiry = document.getElementById('modalCommandModeInquiry');
     modalCommandScreenshotEnabled = document.getElementById('modalCommandScreenshotEnabled');
+    modalCommandShowVariableLabels = document.getElementById('modalCommandShowVariableLabels');
     modalSave = document.getElementById('modalSave');
     modalCancel = document.getElementById('modalCancel');
     customSystemPromptTextarea = document.getElementById('customSystemPrompt');
@@ -333,6 +336,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalSave.addEventListener('click', saveCommand);
     modalCommandName.addEventListener('input', () => {
         validateCommandNameInput({ showEmptyError: true });
+    });
+    modalCommandPrompt.addEventListener('input', () => {
+        validateCommandPromptInput({ showEmptyError: false });
     });
     let promptSaveTimeout;
     customSystemPromptTextarea.addEventListener('input', () => {
@@ -445,7 +451,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 載入設定的其餘代碼
     await getOrCreateEncryptionKey();
 
-    // Modal functionality
+    function validateTemplateVariables(prompt) {
+        const template = String(prompt || '');
+        const pattern = /\$\{([^}]*)\}/g;
+        const defaultsByName = new Map();
+        let match;
+        while ((match = pattern.exec(template)) !== null) {
+            const inner = match[1];
+            const colonIndex = inner.indexOf(':');
+            const rawName = colonIndex === -1 ? inner : inner.slice(0, colonIndex);
+            const name = rawName.normalize('NFC');
+            if (!name) {
+                continue;
+            }
+            if (!/^[\p{L}_][\p{L}\p{Nd}_]*$/u.test(name)) {
+                return `變數名稱「${name}」無效，只能包含字母、數字與底線，且開頭不能是數字`;
+            }
+            const hasDefault = colonIndex !== -1;
+            const defaultValue = hasDefault ? inner.slice(colonIndex + 1) : '';
+            if (defaultsByName.has(name)) {
+                const existing = defaultsByName.get(name);
+                if (hasDefault && existing.hasDefault && existing.defaultValue !== defaultValue) {
+                    return `變數「${name}」的重複預設值不一致：${existing.defaultValue} 與 ${defaultValue}`;
+                }
+                if (hasDefault && !existing.hasDefault) {
+                    defaultsByName.set(name, { hasDefault, defaultValue });
+                }
+            } else {
+                defaultsByName.set(name, { hasDefault, defaultValue });
+            }
+        }
+        return '';
+    }
+
     function openModal(command = null) {
         currentEditingCommand = command;
         const isBuiltIn = Boolean(command && command.builtin);
@@ -455,6 +493,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalCommandName.value = command.cmd;
             modalCommandName.disabled = command.builtin;
             modalCommandPrompt.value = command.prompt || '';
+            modalCommandShowVariableLabels.checked = Boolean(command.showVariableLabels);
 
             if (!isBuiltIn) {
                 const mode = normalizeCustomCommandMode(command.mode);
@@ -469,6 +508,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalCommandName.value = '';
             modalCommandName.disabled = false;
             modalCommandPrompt.value = '';
+            modalCommandShowVariableLabels.checked = false;
             setCustomCommandMode(DEFAULT_CUSTOM_COMMAND_MODE);
             modalCommandScreenshotEnabled.checked = false;
         }
@@ -476,6 +516,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         toggleModalCommandModeInputs(!isBuiltIn);
 
         clearCommandNameValidation();
+        clearCommandPromptValidation();
         commandModal.style.display = 'block';
         if (!modalCommandName.disabled) {
             modalCommandName.focus();
@@ -488,6 +529,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         commandModal.style.display = 'none';
         currentEditingCommand = null;
         clearCommandNameValidation();
+        clearCommandPromptValidation();
     }
 
     // Validate command name
@@ -556,19 +598,59 @@ document.addEventListener('DOMContentLoaded', async () => {
         return setCommandNameValidationError(message);
     }
 
+    function clearCommandPromptValidation() {
+        modalCommandPrompt.classList.remove('input-error');
+        modalCommandPrompt.removeAttribute('aria-invalid');
+        modalCommandPromptError.textContent = '';
+    }
+
+    function setCommandPromptValidationError(message) {
+        if (message) {
+            modalCommandPrompt.classList.add('input-error');
+            modalCommandPrompt.setAttribute('aria-invalid', 'true');
+            modalCommandPromptError.textContent = message;
+            return false;
+        }
+
+        clearCommandPromptValidation();
+        return true;
+    }
+
+    function getCommandPromptValidationMessage(prompt, { showEmptyError = true } = {}) {
+        if (!prompt) {
+            const isSummaryBuiltin = currentEditingCommand
+                && currentEditingCommand.builtin
+                && currentEditingCommand.cmd === '/summary';
+            if (isSummaryBuiltin || !showEmptyError) {
+                return '';
+            }
+            return '請輸入提示內容';
+        }
+
+        return validateTemplateVariables(prompt);
+    }
+
+    function validateCommandPromptInput(options = {}) {
+        const prompt = modalCommandPrompt.value.trim();
+        const message = getCommandPromptValidationMessage(prompt, {
+            showEmptyError: options.showEmptyError !== false
+        });
+        return setCommandPromptValidationError(message);
+    }
+
     // Save command from modal
     function saveCommand() {
         const name = modalCommandName.value.trim();
         const prompt = modalCommandPrompt.value.trim();
         const mode = getCustomCommandMode();
         const screenshotEnabled = Boolean(modalCommandScreenshotEnabled && modalCommandScreenshotEnabled.checked);
+        const showVariableLabels = Boolean(modalCommandShowVariableLabels && modalCommandShowVariableLabels.checked);
 
         if (!validateCommandNameInput({ showEmptyError: true })) {
             return;
         }
 
-        if (!prompt) {
-            showStatus('請輸入提示內容', 'error');
+        if (!validateCommandPromptInput({ showEmptyError: true })) {
             return;
         }
 
@@ -578,8 +660,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Special handling for built-in commands
                 if (currentEditingCommand.cmd === '/summary') {
                     // Save custom summary prompt
-                    chrome.storage.local.set({ [CUSTOM_SUMMARY_PROMPT_STORAGE]: prompt });
+                    chrome.storage.local.set({
+                        [CUSTOM_SUMMARY_PROMPT_STORAGE]: prompt,
+                        [CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE]: showVariableLabels
+                    });
                     currentEditingCommand.prompt = prompt;
+                    currentEditingCommand.showVariableLabels = showVariableLabels;
                 }
             } else {
                 // Editing custom command
@@ -589,7 +675,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         cmd: name,
                         prompt,
                         mode,
-                        screenshotEnabled
+                        screenshotEnabled,
+                        showVariableLabels
                     };
                 }
             }
@@ -599,7 +686,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 cmd: name,
                 prompt,
                 mode,
-                screenshotEnabled
+                screenshotEnabled,
+                showVariableLabels
             });
         }
 
@@ -711,7 +799,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             cmd: cmd,
             prompt: String(command.prompt || ''),
             mode: normalizeCustomCommandMode(command.mode),
-            screenshotEnabled: command.screenshotEnabled === true
+            screenshotEnabled: command.screenshotEnabled === true,
+            showVariableLabels: command.showVariableLabels === true
         };
     }
 
@@ -825,7 +914,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     chrome.storage.local.get([
         'PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL',
-        'CUSTOM_SUMMARY_PROMPT', CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
+        CUSTOM_SUMMARY_PROMPT_STORAGE, CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE,
+        CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
         LAST_ACTIVE_TAB_STORAGE
     ], async (result) => {
         let activeProviderId = result.ACTIVE_PROVIDER_ID || '';
@@ -847,12 +937,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         customCommands = normalizeCustomCommands(result[CUSTOM_COMMANDS_STORAGE]);
 
         // Load custom summary prompt for built-in /summary command
-        const customSummaryPrompt = result.CUSTOM_SUMMARY_PROMPT;
-        if (customSummaryPrompt) {
-            const summaryCommand = BUILT_IN_COMMANDS.find(cmd => cmd.cmd === '/summary');
-            if (summaryCommand) {
+        const summaryCommand = BUILT_IN_COMMANDS.find(cmd => cmd.cmd === '/summary');
+        if (summaryCommand) {
+            const customSummaryPrompt = result[CUSTOM_SUMMARY_PROMPT_STORAGE];
+            if (customSummaryPrompt) {
                 summaryCommand.prompt = customSummaryPrompt;
             }
+            summaryCommand.showVariableLabels = result[CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE] === true;
         }
 
         renderCommands();

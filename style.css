@@ -1028,6 +1028,81 @@
   color: #666666;
   opacity: 1;
 }
+#gemini-qna-input-wrapper {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  isolation: isolate;
+}
+#gemini-qna-input-wrapper > #gemini-qna-input {
+  width: 100%;
+}
+#gemini-qna-snippet-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  color: var(--askpage-ink);
+  visibility: hidden;
+  z-index: 0;
+}
+#gemini-qna-input-wrapper.askpage-snippet-active #gemini-qna-snippet-overlay {
+  visibility: visible;
+}
+#gemini-qna-input-wrapper.askpage-snippet-active {
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(17, 31, 49, 0.88), rgba(8, 17, 30, 0.88));
+}
+#gemini-qna-input-wrapper.askpage-snippet-active #gemini-qna-input {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: transparent !important;
+  caret-color: var(--askpage-cyan) !important;
+  position: relative;
+  z-index: 1;
+}
+#gemini-qna-input-wrapper.askpage-snippet-active #gemini-qna-input::selection {
+  color: var(--askpage-ink);
+  background: #515351;
+}
+#gemini-qna-snippet-overlay .askpage-snippet-active-var {
+  color: var(--askpage-ink);
+  background-color: #515351;
+  border-radius: 3px;
+}
+#gemini-qna-snippet-overlay .askpage-snippet-var {
+  color: var(--askpage-ink);
+  background-color: #42484c;
+  border-radius: 3px;
+}
+#gemini-qna-snippet-overlay .askpage-snippet-hint {
+  color: #868a91;
+  background-color: #2a2c30;
+  border-radius: 3px;
+}
+#gemini-qna-snippet-overlay .askpage-snippet-active-hint {
+  color: var(--askpage-ink);
+  background-color: #515351;
+}
+#gemini-qna-snippet-overlay .askpage-snippet-var.askpage-snippet-placeholder {
+  color: var(--askpage-placeholder-text);
+  background-color: var(--askpage-placeholder-bg);
+  outline: 1px dashed var(--askpage-placeholder-border);
+  outline-offset: -1px;
+  border-radius: 3px;
+}
+#gemini-qna-snippet-overlay .askpage-snippet-active-var.askpage-snippet-placeholder {
+  color: var(--askpage-placeholder-text-active);
+  background-color: var(--askpage-placeholder-bg-active);
+  outline: 1px solid var(--askpage-placeholder-border-active);
+  outline-offset: -1px;
+  border-radius: 3px;
+}
 #gemini-qna-btn {
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   padding: 8px 14px;
@@ -1061,6 +1136,13 @@
   --askpage-green: #35d07f;
   --askpage-shadow: 0 30px 90px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(150, 185, 226, 0.14);
   --askpage-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  /* Snippet 佔位文字（未填值時顯示的欄位名稱提示）專用色票，候選／活動兩種狀態皆以底色與外框區分，不只依賴文字色 */
+  --askpage-placeholder-text: #a9d4ff;
+  --askpage-placeholder-text-active: var(--askpage-ink);
+  --askpage-placeholder-bg: rgba(22, 135, 255, 0.16);
+  --askpage-placeholder-bg-active: rgba(117, 216, 255, 0.28);
+  --askpage-placeholder-border: rgba(149, 197, 255, 0.55);
+  --askpage-placeholder-border-active: var(--askpage-cyan);
   color: var(--askpage-ink);
   font-family: var(--askpage-font);
 }
