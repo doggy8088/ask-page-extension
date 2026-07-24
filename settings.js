@@ -95,7 +95,7 @@ async function getOrCreateEncryptionKey() {
 // DOM elements - 將在 DOMContentLoaded 中初始化
 let resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
-let modalCommandModeAgent, modalCommandModeInquiry, modalCommandScreenshotEnabled, modalCommandShowVariableLabels;
+let modalCommandModeAgent, modalCommandModeInquiry, modalCommandModeUnspecified, modalCommandScreenshotEnabled, modalCommandShowVariableLabels;
 let modalSave, modalCancel, modalCommandNameError, modalCommandPromptError;
 let customSystemPromptTextarea, customSystemPromptCount;
 
@@ -123,7 +123,8 @@ const LAST_ACTIVE_TAB_STORAGE = 'LAST_ACTIVE_TAB';
 
 const CUSTOM_COMMAND_MODE_AGENT = 'agent';
 const CUSTOM_COMMAND_MODE_INQUIRY = 'inquiry';
-const DEFAULT_CUSTOM_COMMAND_MODE = CUSTOM_COMMAND_MODE_AGENT;
+const CUSTOM_COMMAND_MODE_UNSPECIFIED = 'unspecified';
+const DEFAULT_CUSTOM_COMMAND_MODE = CUSTOM_COMMAND_MODE_UNSPECIFIED;
 const CUSTOM_COMMAND_PREVIEW_LENGTH = 50;
 
 // Built-in commands that cannot be deleted or modified
@@ -298,6 +299,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCommandPromptError = document.getElementById('modalCommandPromptError');
     modalCommandModeAgent = document.getElementById('modalCommandModeAgent');
     modalCommandModeInquiry = document.getElementById('modalCommandModeInquiry');
+    modalCommandModeUnspecified = document.getElementById('modalCommandModeUnspecified');
     modalCommandScreenshotEnabled = document.getElementById('modalCommandScreenshotEnabled');
     modalCommandShowVariableLabels = document.getElementById('modalCommandShowVariableLabels');
     modalSave = document.getElementById('modalSave');
@@ -782,7 +784,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function normalizeCustomCommandMode(mode) {
-        return mode === CUSTOM_COMMAND_MODE_INQUIRY ? CUSTOM_COMMAND_MODE_INQUIRY : DEFAULT_CUSTOM_COMMAND_MODE;
+        if (mode === CUSTOM_COMMAND_MODE_INQUIRY || mode === CUSTOM_COMMAND_MODE_AGENT || mode === CUSTOM_COMMAND_MODE_UNSPECIFIED) {
+            return mode;
+        }
+
+        return DEFAULT_CUSTOM_COMMAND_MODE;
     }
 
     function normalizeCustomCommand(command) {
@@ -818,6 +824,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (modalCommandModeInquiry && modalCommandModeInquiry.checked) {
             return CUSTOM_COMMAND_MODE_INQUIRY;
         }
+        if (modalCommandModeUnspecified && modalCommandModeUnspecified.checked) {
+            return CUSTOM_COMMAND_MODE_UNSPECIFIED;
+        }
 
         return DEFAULT_CUSTOM_COMMAND_MODE;
     }
@@ -830,6 +839,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (modalCommandModeInquiry) {
             modalCommandModeInquiry.checked = normalizedMode === CUSTOM_COMMAND_MODE_INQUIRY;
+        }
+        if (modalCommandModeUnspecified) {
+            modalCommandModeUnspecified.checked = normalizedMode === CUSTOM_COMMAND_MODE_UNSPECIFIED;
         }
     }
 

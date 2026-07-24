@@ -683,6 +683,10 @@ const PROMPT_HISTORY_STORAGE = 'ASKPAGE_PROMPT_HISTORY';
 // New storage keys for multi-provider support
 const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
+const CUSTOM_COMMAND_MODE_AGENT = 'agent';
+const CUSTOM_COMMAND_MODE_INQUIRY = 'inquiry';
+const CUSTOM_COMMAND_MODE_UNSPECIFIED = 'unspecified';
+const CUSTOM_COMMAND_MODE_DEFAULT = CUSTOM_COMMAND_MODE_UNSPECIFIED;
 
 // Storage keys for custom slash command prompts
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
@@ -5188,12 +5192,15 @@ async function createDialog() {
     }
 
     function normalizeCustomCommandMode(mode) {
-        return mode === 'inquiry' ? 'inquiry' : 'agent';
+        if (mode === CUSTOM_COMMAND_MODE_INQUIRY || mode === CUSTOM_COMMAND_MODE_AGENT || mode === CUSTOM_COMMAND_MODE_UNSPECIFIED) {
+            return mode;
+        }
+
+        return CUSTOM_COMMAND_MODE_DEFAULT;
     }
 
     async function applyCustomCommandExecutionMode(customCommand) {
         const targetMode = normalizeCustomCommandMode(customCommand.mode);
-        const targetAgentMode = targetMode === 'agent';
         const targetScreenshotEnabled = customCommand.screenshotEnabled === true;
 
         const [currentAgentMode, currentScreenshotEnabled] = await Promise.all([
@@ -5202,7 +5209,8 @@ async function createDialog() {
         ]);
 
         const updates = [];
-        if (currentAgentMode !== targetAgentMode) {
+        if (targetMode !== CUSTOM_COMMAND_MODE_UNSPECIFIED && currentAgentMode !== (targetMode === CUSTOM_COMMAND_MODE_AGENT)) {
+            const targetAgentMode = targetMode === CUSTOM_COMMAND_MODE_AGENT;
             updates.push(setHtmlModeEnabled(targetAgentMode));
         }
         if (currentScreenshotEnabled !== targetScreenshotEnabled) {
