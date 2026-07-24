@@ -934,11 +934,26 @@ function resolveSnippetUndoStep(undoStack, origin) {
     return { type: 'none' };
 }
 
-function getSnippetExecutionReady(state) {
-    if (!state || !state.executionReady) {
+function createDeferredCustomCommandExecution(customCommand, applyExecutionMode, incrementUsage) {
+    if (!customCommand || customCommand.cmd === '/summary') {
         return null;
     }
-    return state.executionReady;
+    return function executeCustomCommand() {
+        return Promise.all([
+            applyExecutionMode({
+                mode: customCommand.mode,
+                screenshotEnabled: customCommand.screenshotEnabled
+            }),
+            incrementUsage(customCommand.cmd)
+        ]);
+    };
+}
+
+function getSnippetExecution(state) {
+    if (!state || typeof state.executeCustomCommand !== 'function') {
+        return null;
+    }
+    return state.executeCustomCommand;
 }
 
 // API key masking for console output
@@ -5279,15 +5294,15 @@ async function createDialog() {
 
     async function handleAsk() {
         hideIntelliBox();
-        const snippetExecutionReady = getSnippetExecutionReady(snippetState);
+        const executeSnippetCommand = getSnippetExecution(snippetState);
         finalizeSnippetInput();
-        if (snippetExecutionReady) {
-            await snippetExecutionReady;
-        }
         let question = input.value.trim();
         let displayedQuestion = question;
         const inputImageDataUrls = normalizeInputImageDataUrls(inputContextImageDataUrls);
         if (!question) { return; }
+        if (executeSnippetCommand) {
+            await executeSnippetCommand();
+        }
         resumeActiveMessagesAutoScroll(messagesEl);
 
         if (question === '/clear') {
@@ -5439,13 +5454,11 @@ async function createDialog() {
         if (!variables.length) {
             return;
         }
-        let executionReady = null;
-        if (item.cmd !== '/summary') {
-            executionReady = Promise.all([
-                applyCustomCommandExecutionMode({ mode: item.mode, screenshotEnabled: item.screenshotEnabled }),
-                incrementCustomCommandUsage(item.cmd)
-            ]);
-        }
+        const executeCustomCommand = createDeferredCustomCommandExecution(
+            item,
+            applyCustomCommandExecutionMode,
+            incrementCustomCommandUsage
+        );
 
         const values = {};
         variables.forEach((v) => {
@@ -5462,7 +5475,7 @@ async function createDialog() {
             redoStack: [],
             showVariableLabels: item.showVariableLabels === true,
             origin: origin ?? null,
-            executionReady
+            executeCustomCommand
         };
         inputWrapper.classList.add('askpage-snippet-active');
         renderSnippet();
