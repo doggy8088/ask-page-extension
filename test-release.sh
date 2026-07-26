@@ -45,9 +45,15 @@ zip -r "$PACKAGE_NAME" \
   content.js \
   popup.html \
   popup.js \
+  settings.html \
+  settings.js \
+  codepen.html \
+  codepen.js \
+  i18n.js \
   style.css \
   icons/ \
   lib/ \
+  _locales/ \
   -x "*.git*" "*.DS_Store*" "*node_modules*" "*.backup*"
 
 # 檢查套件

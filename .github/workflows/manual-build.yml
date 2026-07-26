@@ -40,7 +40,7 @@ jobs:
         echo "檢查檔案完整性..."
 
         # 檢查基本檔案
-        FILES=("manifest.json" "background.js" "content.js" "popup.html" "popup.js" "style.css")
+        FILES=("manifest.json" "background.js" "content.js" "popup.html" "popup.js" "settings.html" "settings.js" "codepen.html" "codepen.js" "i18n.js" "style.css" "_locales/en/messages.json" "_locales/zh_TW/messages.json")
         for file in "${FILES[@]}"; do
           if [ ! -f "$file" ]; then
             echo "❌ 缺少檔案: $file"
@@ -82,9 +82,13 @@ jobs:
           popup.js \
           settings.html \
           settings.js \
+          codepen.html \
+          codepen.js \
+          i18n.js \
           style.css \
           icons/ \
           lib/ \
+          _locales/ \
           -x "*.git*" "*.DS_Store*" "*node_modules*"
 
         # 檢查套件大小
