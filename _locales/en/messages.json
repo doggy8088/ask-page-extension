@@ -1,0 +1,14 @@
+{
+    "extensionName": {
+        "message": "AskPage"
+    },
+    "extensionDescription": {
+        "message": "Ask questions about the current page with Gemini, OpenAI, Azure OpenAI, or OpenAI-compatible APIs."
+    },
+    "commandToggleDialog": {
+        "message": "Open the AskPage dialog"
+    },
+    "commandSwitchProvider": {
+        "message": "Switch AI provider"
+    }
+}

@@ -283,10 +283,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     statusDiv = document.getElementById('status');
     appVersionSpan = document.getElementById('appVersion');
 
-    // Display version
+    // Display footer and version
     const manifest = chrome.runtime.getManifest();
+    const footerPrefix = document.getElementById('footerPrefix');
+    const footerSuffix = document.getElementById('footerSuffix');
+    const translateText = window.AskPageI18n?.translateText || ((value) => value);
+    const isEnglish = window.AskPageI18n?.isEnglish === true;
+    if (footerPrefix) {
+        footerPrefix.textContent = `${translateText('© 2026 本工具由')} `;
+    }
+    if (footerSuffix) {
+        footerSuffix.textContent = `${isEnglish ? '' : ' '}${translateText('設計、開發與維護 v')}`;
+    }
     if (appVersionSpan) {
-        appVersionSpan.textContent = manifest.version;
+        appVersionSpan.textContent = isEnglish
+            ? `${manifest.version})`
+            : manifest.version;
     }
 
     commandsList = document.getElementById('commandsList');
@@ -1045,13 +1057,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             let details = '';
             if (p.type === 'azure') {
-                details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;">端點: ${p.azureEndpoint || ''}</div>`;
+                details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;"><span>端點</span>: ${p.azureEndpoint || ''}</div>`;
             } else if (p.type === 'ollama') {
-                details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;">端點: ${p.ollamaEndpoint || 'http://localhost:11434/v1'}</div>`;
+                details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;"><span>端點</span>: ${p.ollamaEndpoint || 'http://localhost:11434/v1'}</div>`;
             } else if (p.type === 'ollama-cloud') {
-                details = '<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;">端點: https://ollama.com/v1</div>';
+                details = '<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;"><span>端點</span>: https://ollama.com/v1</div>';
             } else if (p.type === 'openai-compatible') {
-                details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;">端點: ${p.openaiCompatibleEndpoint || ''}</div>`;
+                details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;"><span>端點</span>: ${p.openaiCompatibleEndpoint || ''}</div>`;
             }
 
             div.innerHTML = `

@@ -1,3 +1,4 @@
+/* global AskPageI18n */
 'use strict';
 
 // Log content script loading
@@ -3415,7 +3416,9 @@ function buildSystemPrompt({
             ? 'For non-trivial form filling, inspect the form fields first before mutating them.'
             : '',
         'Please format your answer using Markdown when appropriate.',
-        'As a default, provide responses in zh-tw unless specified otherwise.',
+        typeof AskPageI18n !== 'undefined' && AskPageI18n.isEnglish
+            ? 'As a default, provide responses in English unless specified otherwise.'
+            : 'As a default, provide responses in zh-tw unless specified otherwise.',
         'Do not provide any additional explanations or disclaimers unless explicitly asked.',
         'No prefix or suffix is needed for the response.'
     ].filter(Boolean).join(' ');
@@ -3769,10 +3772,16 @@ async function createDialog() {
     providerDisplayName.id = 'provider-display-name';
     providerDisplayName.className = 'askpage-provider-name';
     providerDisplayName.textContent = '頁問';
-    const providerDisplayModel = document.createElement('span');
+    const providerDisplayModel = document.createElement('button');
     providerDisplayModel.id = 'provider-display-model';
     providerDisplayModel.className = 'askpage-provider-model';
+    providerDisplayModel.type = 'button';
+    providerDisplayModel.title = '切換 AI 提供者與模型';
+    providerDisplayModel.setAttribute('aria-label', '切換 AI 提供者與模型');
     providerDisplayModel.textContent = '載入中';
+    providerDisplayModel.addEventListener('click', async () => {
+        await switchProvider();
+    });
 
     const providerActions = document.createElement('div');
     providerActions.className = 'askpage-header-actions';
@@ -3848,39 +3857,8 @@ async function createDialog() {
         applyModeToggleButtonState(htmlModeBtn, modeToggleConfigs.html, agentModeEnabled);
     }
 
-    const switchProviderBtn = document.createElement('button');
-    const switchProviderIcon = document.createElement('span');
-    const switchProviderText = document.createElement('span');
     const optionsBtn = document.createElement('button');
     const optionsBtnIcon = document.createElement('span');
-    switchProviderBtn.type = 'button';
-    switchProviderBtn.title = 'AI 提供者';
-    switchProviderBtn.setAttribute('aria-label', 'AI 提供者');
-    switchProviderBtn.className = 'askpage-toolbar-btn askpage-toolbar-btn-switch-provider';
-    switchProviderBtn.style.cssText = `
-        ${modeToggleButtonBaseStyle}
-        color: #e8f6ff;
-        background: linear-gradient(180deg, rgba(18, 92, 184, 0.78), rgba(10, 50, 105, 0.78));
-        border-color: rgba(88, 172, 255, 0.68);
-        box-shadow: 0 0 16px rgba(0, 112, 255, 0.16);
-    `;
-    switchProviderIcon.setAttribute('aria-hidden', 'true');
-    switchProviderIcon.textContent = '⇄';
-    switchProviderIcon.style.cssText = `
-        ${modeToggleIconBaseStyle}
-        font-size: 14px;
-        font-weight: 700;
-        font-family: 'Segoe UI Symbol', 'Apple Symbols', sans-serif;
-        transform: translateY(-0.5px);
-    `;
-    switchProviderText.textContent = 'AI 提供者';
-    switchProviderText.style.cssText = modeToggleTextBaseStyle;
-    switchProviderBtn.appendChild(switchProviderIcon);
-    switchProviderBtn.appendChild(switchProviderText);
-    switchProviderBtn.addEventListener('click', async () => {
-        await switchProvider();
-    });
-
     optionsBtn.type = 'button';
     optionsBtn.title = '開啟選項';
     optionsBtn.setAttribute('aria-label', '開啟選項');
@@ -3912,7 +3890,6 @@ async function createDialog() {
 
     providerActions.appendChild(screenshotModeBtn);
     providerActions.appendChild(htmlModeBtn);
-    providerActions.appendChild(switchProviderBtn);
     providerActions.appendChild(optionsBtn);
     providerDisplay.appendChild(providerBrandMark);
     providerDisplay.appendChild(providerDisplayName);
@@ -4074,6 +4051,13 @@ async function createDialog() {
     shadowRoot.appendChild(styleElement);
     shadowRoot.appendChild(overlay);
     getDialogHostMountParent().appendChild(host);
+    if (typeof AskPageI18n !== 'undefined') {
+        try {
+            AskPageI18n.observe(shadowRoot);
+        } catch (error) {
+            console.error('[AskPage] Failed to translate dialog UI:', error);
+        }
+    }
     activeDialogState = {
         host,
         shadowRoot,

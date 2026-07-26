@@ -157,6 +157,18 @@
   font-size: 11px;
   font-weight: 600;
   line-height: 1.2;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+.askpage-provider-model:hover {
+  border-color: rgba(96, 181, 255, 0.84);
+  background: rgba(18, 74, 135, 0.58);
+  color: #d9efff;
+  box-shadow: 0 0 16px rgba(30, 136, 229, 0.2);
+}
+.askpage-provider-model:focus-visible {
+  outline: 2px solid rgba(96, 181, 255, 0.92);
+  outline-offset: 2px;
 }
 .askpage-header-actions {
   box-sizing: border-box;
