@@ -591,6 +591,26 @@
   line-height: 1.6;
   box-sizing: border-box;
 }
+#gemini-qna-messages .gemini-msg-assistant .katex {
+  color: inherit;
+  font-size: 1.08em;
+}
+#gemini-qna-messages .gemini-msg-assistant .katex-display {
+  max-width: 100%;
+  margin: 12px 0;
+  padding: 4px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+}
+#gemini-qna-messages .gemini-msg-assistant .katex-display > .katex {
+  min-width: max-content;
+}
+#gemini-qna-messages .gemini-msg-assistant .katex-error {
+  color: #ff8a80;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  overflow-wrap: anywhere;
+}
 #gemini-qna-messages .gemini-msg-assistant table {
   display: table;
   width: 100%;

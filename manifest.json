@@ -37,6 +37,8 @@
         "lib/highlight.min.js",
         "lib/marked.min.js",
         "lib/purify.min.js",
+        "lib/katex/katex.min.js",
+        "lib/katex/auto-render.min.js",
         "i18n.js",
         "content.js"
       ]
@@ -68,7 +70,9 @@
         "icons/icon48.png",
         "icons/icon128.png",
         "lib/marked.min.js",
-        "lib/purify.min.js"
+        "lib/purify.min.js",
+        "lib/katex/katex.min.css",
+        "lib/katex/fonts/*.woff2"
       ],
       "matches": [
         "<all_urls>"

@@ -74,6 +74,13 @@ const DIALOG_HOST_ID = 'askpage-dialog-host';
 const DIALOG_OVERLAY_ID = 'gemini-qna-overlay';
 const DIALOG_MESSAGES_ID = 'gemini-qna-messages';
 const DIALOG_STYLESHEET_PATH = 'style.css';
+const KATEX_STYLESHEET_PATH = 'lib/katex/katex.min.css';
+const LATEX_MARKDOWN_DELIMITER_REPLACEMENTS = [
+    { delimiter: '\\(', placeholder: '\uE000ASKPAGELATEXLEFTPAREN\uE001' },
+    { delimiter: '\\)', placeholder: '\uE000ASKPAGELATEXRIGHTPAREN\uE001' },
+    { delimiter: '\\[', placeholder: '\uE000ASKPAGELATEXLEFTBRACKET\uE001' },
+    { delimiter: '\\]', placeholder: '\uE000ASKPAGELATEXRIGHTBRACKET\uE001' }
+];
 const SCREEN_ANNOTATION_OVERLAY_ID = 'askpage-screen-annotation-overlay';
 const AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS = 100;
 const AUTO_SCROLL_ANIMATION_DURATION_MS = 240;
@@ -2163,18 +2170,79 @@ function openCodePenPrefill(htmlText) {
 
 function renderMarkdown(md) {
     const processedMarkdown = postProcessAssistantMarkdown(md);
+    const latexProtectedMarkdown = protectLatexDelimitersForMarkdown(processedMarkdown);
     try {
-        const rawHtml = marked.parse(processedMarkdown, {
+        const rawHtml = marked.parse(latexProtectedMarkdown, {
             gfm: true,
             breaks: true,
             renderer: createSafeMarkdownRenderer()
         });
         // Safely sanitize HTML if DOMPurify is available
-        return DOMPurify ? DOMPurify.sanitize(rawHtml) : rawHtml;
+        const sanitizedHtml = DOMPurify ? DOMPurify.sanitize(rawHtml) : rawHtml;
+        return restoreLatexDelimitersAfterMarkdown(sanitizedHtml);
     } catch (err) {
         // Fallback to plain text if marked.js fails
         return processedMarkdown.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
     }
+}
+
+function protectLatexDelimitersForMarkdown(markdown) {
+    return LATEX_MARKDOWN_DELIMITER_REPLACEMENTS.reduce(
+        (result, replacement) => result.split(replacement.delimiter).join(replacement.placeholder),
+        String(markdown ?? '')
+    );
+}
+
+function restoreLatexDelimitersAfterMarkdown(html) {
+    return LATEX_MARKDOWN_DELIMITER_REPLACEMENTS.reduce(
+        (result, replacement) => result.split(replacement.placeholder).join(replacement.delimiter),
+        String(html ?? '')
+    );
+}
+
+function escapeUnescapedLatexDollarSigns(latex) {
+    const source = String(latex ?? '');
+    let result = '';
+
+    for (let index = 0; index < source.length; index++) {
+        const character = source[index];
+        if (character !== '$') {
+            result += character;
+            continue;
+        }
+
+        let precedingBackslashes = 0;
+        for (let previousIndex = index - 1; previousIndex >= 0 && source[previousIndex] === '\\'; previousIndex--) {
+            precedingBackslashes++;
+        }
+
+        result += precedingBackslashes % 2 === 0 ? '\\$' : '$';
+    }
+
+    return result;
+}
+
+function renderLatexInElement(element) {
+    if (!element || typeof renderMathInElement !== 'function') {
+        return;
+    }
+
+    renderMathInElement(element, {
+        delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\begin{equation}', right: '\\end{equation}', display: true },
+            { left: '\\begin{align}', right: '\\end{align}', display: true },
+            { left: '\\begin{alignat}', right: '\\end{alignat}', display: true },
+            { left: '\\begin{gather}', right: '\\end{gather}', display: true },
+            { left: '\\begin{CD}', right: '\\end{CD}', display: true },
+            { left: '\\[', right: '\\]', display: true }
+        ],
+        ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 'option'],
+        throwOnError: false,
+        trust: false,
+        preProcess: escapeUnescapedLatexDollarSigns
+    });
 }
 
 function sanitizeHtml(html) {
@@ -3744,6 +3812,9 @@ async function createDialog() {
     host.id = DIALOG_HOST_ID;
     applyDialogHostIsolationStyles(host);
     const shadowRoot = host.attachShadow({ mode: 'open' });
+    const katexStylesheet = document.createElement('link');
+    katexStylesheet.rel = 'stylesheet';
+    katexStylesheet.href = chrome.runtime.getURL(KATEX_STYLESHEET_PATH);
     const styleElement = document.createElement('style');
     styleElement.textContent = dialogStylesText;
     const overlay = document.createElement('div');
@@ -4048,6 +4119,7 @@ async function createDialog() {
     overlay.appendChild(dialog);
     overlay.appendChild(intelliBox);
 
+    shadowRoot.appendChild(katexStylesheet);
     shadowRoot.appendChild(styleElement);
     shadowRoot.appendChild(overlay);
     getDialogHostMountParent().appendChild(host);
@@ -6042,6 +6114,9 @@ async function createDialog() {
             delete element.dataset.askpageRawHtmlResponse;
         }
         element.innerHTML = options.renderedHtml || renderMarkdown(displayText);
+        if (!options.renderedHtml) {
+            renderLatexInElement(element);
+        }
         enhanceCodeBlocks(element);
         bindInteractiveCommandElements(element);
 

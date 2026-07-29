@@ -16,7 +16,8 @@ module.exports = {
     // 外部函式庫
     marked: 'readonly',
     DOMPurify: 'readonly',
-    hljs: 'readonly'
+    hljs: 'readonly',
+    renderMathInElement: 'readonly'
   },
   rules: {
     // 程式碼風格
