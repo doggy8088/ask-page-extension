@@ -55,6 +55,7 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     getAssistantStoredText,
     isRawHtmlAssistantResponse,
     mergeApiTokenUsageSummary,
+    normalizePairedStrongMarkersInMarkdown,
     renderMarkdown,
     shouldCollapseTextPreview
 };`, sandbox, {
@@ -75,6 +76,7 @@ const {
     getAssistantStoredText,
     isRawHtmlAssistantResponse,
     mergeApiTokenUsageSummary,
+    normalizePairedStrongMarkersInMarkdown,
     renderMarkdown,
     shouldCollapseTextPreview
 } = sandbox.__askPageTestExports;
@@ -111,6 +113,47 @@ const renderedSingleLineHtml = renderMarkdown('```html\n<div>copy me exactly</di
 assert.match(
     renderedSingleLineHtml,
     /&lt;div&gt;copy me exactly&lt;\/div&gt;<\/code><\/pre>\n$/
+);
+
+const strongBoundaryMarkdown = '根據頁面中的計價資訊，**gpt-transcribe** 的費用是以**音訊長度（每分鐘）**計算：';
+const normalizedStrongBoundaryMarkdown = normalizePairedStrongMarkersInMarkdown(strongBoundaryMarkdown);
+const renderedStrongBoundaryMarkdown = renderMarkdown(strongBoundaryMarkdown);
+
+assert.strictEqual(
+    normalizedStrongBoundaryMarkdown,
+    '根據頁面中的計價資訊，<strong>gpt-transcribe</strong> 的費用是以<strong>音訊長度（每分鐘）</strong>計算：'
+);
+assert.match(renderedStrongBoundaryMarkdown, /<strong>gpt-transcribe<\/strong>/);
+assert.match(renderedStrongBoundaryMarkdown, /以<strong>音訊長度（每分鐘）<\/strong>計算/);
+assert.doesNotMatch(renderedStrongBoundaryMarkdown, /\*\*/);
+
+assert.strictEqual(
+    normalizePairedStrongMarkersInMarkdown('A**包含，標點。**B**第二組（半形）**C'),
+    'A<strong>包含，標點。</strong>B<strong>第二組（半形）</strong>C'
+);
+assert.strictEqual(
+    normalizePairedStrongMarkersInMarkdown('單一標記 ** 不修改'),
+    '單一標記 ** 不修改'
+);
+assert.strictEqual(
+    normalizePairedStrongMarkersInMarkdown('奇數標記 **一**二** 不修改'),
+    '奇數標記 **一**二** 不修改'
+);
+assert.strictEqual(
+    normalizePairedStrongMarkersInMarkdown('行內程式碼 `**code**` 與 **粗體**'),
+    '行內程式碼 `**code**` 與 <strong>粗體</strong>'
+);
+assert.strictEqual(
+    normalizePairedStrongMarkersInMarkdown('跳脫標記 \\**不轉換\\** 與 **粗體**'),
+    '跳脫標記 \\**不轉換\\** 與 <strong>粗體</strong>'
+);
+assert.strictEqual(
+    normalizePairedStrongMarkersInMarkdown('保留 ***粗斜體*** 與 **粗體**'),
+    '保留 ***粗斜體*** 與 <strong>粗體</strong>'
+);
+assert.strictEqual(
+    normalizePairedStrongMarkersInMarkdown('```md\n**程式碼**\n```\n**一般文字**'),
+    '```md\n**程式碼**\n```\n<strong>一般文字</strong>'
 );
 
 assert.strictEqual(isRawHtmlAssistantResponse(`\n  ${fullHtml}`), true);

@@ -2169,7 +2169,7 @@ function openCodePenPrefill(htmlText) {
 }
 
 function renderMarkdown(md) {
-    const processedMarkdown = postProcessAssistantMarkdown(md);
+    const processedMarkdown = normalizePairedStrongMarkersInMarkdown(postProcessAssistantMarkdown(md));
     const latexProtectedMarkdown = protectLatexDelimitersForMarkdown(processedMarkdown);
     try {
         const rawHtml = marked.parse(latexProtectedMarkdown, {
@@ -2184,6 +2184,106 @@ function renderMarkdown(md) {
         // Fallback to plain text if marked.js fails
         return processedMarkdown.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
     }
+}
+
+function isMarkdownCharacterEscaped(text, index) {
+    let precedingBackslashes = 0;
+
+    for (let previousIndex = index - 1; previousIndex >= 0 && text[previousIndex] === '\\'; previousIndex--) {
+        precedingBackslashes++;
+    }
+
+    return precedingBackslashes % 2 === 1;
+}
+
+function getCharacterRunLength(text, startIndex, character) {
+    let endIndex = startIndex;
+
+    while (endIndex < text.length && text[endIndex] === character) {
+        endIndex++;
+    }
+
+    return endIndex - startIndex;
+}
+
+function getConvertibleStrongMarkerIndexes(line) {
+    const markerIndexes = [];
+    let inlineCodeDelimiterLength = 0;
+
+    for (let index = 0; index < line.length;) {
+        if (line[index] === '`' && !isMarkdownCharacterEscaped(line, index)) {
+            const backtickRunLength = getCharacterRunLength(line, index, '`');
+            if (inlineCodeDelimiterLength === 0) {
+                inlineCodeDelimiterLength = backtickRunLength;
+            } else if (backtickRunLength === inlineCodeDelimiterLength) {
+                inlineCodeDelimiterLength = 0;
+            }
+            index += backtickRunLength;
+            continue;
+        }
+
+        const isExactStrongMarker = inlineCodeDelimiterLength === 0
+            && line.startsWith('**', index)
+            && line[index - 1] !== '*'
+            && line[index + 2] !== '*'
+            && !isMarkdownCharacterEscaped(line, index);
+
+        if (isExactStrongMarker) {
+            markerIndexes.push(index);
+            index += 2;
+            continue;
+        }
+
+        index++;
+    }
+
+    return markerIndexes;
+}
+
+function normalizePairedStrongMarkersInLine(line) {
+    const markerIndexes = getConvertibleStrongMarkerIndexes(line);
+    if (markerIndexes.length < 2 || markerIndexes.length % 2 !== 0) {
+        return line;
+    }
+
+    let result = '';
+    let sourceIndex = 0;
+
+    markerIndexes.forEach((markerIndex, markerOrder) => {
+        result += line.slice(sourceIndex, markerIndex);
+        result += markerOrder % 2 === 0 ? '<strong>' : '</strong>';
+        sourceIndex = markerIndex + 2;
+    });
+
+    return result + line.slice(sourceIndex);
+}
+
+function normalizePairedStrongMarkersInMarkdown(markdown) {
+    const text = String(markdown ?? '');
+    let isInsideFence = false;
+    let fenceMarker = '';
+    let fenceLength = 0;
+
+    return text.split('\n').map((line) => {
+        const fenceMatch = line.match(/^\s*(```+|~~~+)/);
+        if (fenceMatch) {
+            const currentFence = fenceMatch[1];
+            const currentFenceMarker = currentFence[0];
+            if (!isInsideFence) {
+                isInsideFence = true;
+                fenceMarker = currentFenceMarker;
+                fenceLength = currentFence.length;
+            } else if (currentFenceMarker === fenceMarker && currentFence.length >= fenceLength) {
+                isInsideFence = false;
+                fenceMarker = '';
+                fenceLength = 0;
+            }
+
+            return line;
+        }
+
+        return isInsideFence ? line : normalizePairedStrongMarkersInLine(line);
+    }).join('\n');
 }
 
 function protectLatexDelimitersForMarkdown(markdown) {
