@@ -18,7 +18,6 @@
 
 主要功能：
 
-* 支援 Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama、Ollama Cloud 與 OpenAI 相容端點。
 * 可設定多個 AI 提供者與模型，並在對話框中切換目前使用的模型。
 * 支援自訂斜線命令、頁面摘要、對話紀錄與 Markdown 回應顯示。
 * 提供詢問模式與代理模式；代理模式可依您的指示讀取或操作目前頁面的 DOM。
@@ -32,7 +31,6 @@ AskPage lets you ask questions about the page you are viewing without leaving it
 
 Key features:
 
-* Supports Gemini, OpenAI, Azure OpenAI, Anthropic, DeepSeek, OpenRouter, Groq, Mistral, Ollama, Ollama Cloud, and OpenAI-compatible endpoints.
 * Configure multiple AI providers and models, then switch the active model from the dialog.
 * Includes custom slash commands, page summaries, conversation history, and Markdown responses.
 * Offers inquiry mode and agent mode. In agent mode, the extension can inspect or interact with the current page's DOM when you instruct it to do so.

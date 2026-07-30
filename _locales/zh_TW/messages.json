@@ -3,7 +3,7 @@
         "message": "頁問 AskPage"
     },
     "extensionDescription": {
-        "message": "使用 Gemini、OpenAI、Azure OpenAI 或 OpenAI 相容 API 詢問目前頁面的問題"
+        "message": "以您設定的 AI API 為基礎，針對目前頁面提出問題並取得回答"
     },
     "commandToggleDialog": {
         "message": "開啟頁問對話框"
