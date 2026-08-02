@@ -167,8 +167,8 @@ const PREDEFINED_MODELS = {
         'claude-haiku-4-5'
     ],
     deepseek: [
-        'deepseek-chat',
-        'deepseek-reasoner'
+        'deepseek-v4-flash',
+        'deepseek-v4-pro'
     ],
     openrouter: [
         'openai/gpt-5.6-sol-pro',

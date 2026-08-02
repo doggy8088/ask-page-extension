@@ -1072,6 +1072,10 @@ function normalizeModelIdentifier(model = '') {
 // Gemini: https://ai.google.dev/gemini-api/docs/generate-content/thinking
 // Gemma 4 on Gemini API: https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api
 // OpenAI: https://developers.openai.com/api/docs/guides/reasoning
+// Azure OpenAI: https://learn.microsoft.com/azure/foundry/openai/how-to/reasoning
+// Anthropic: https://platform.claude.com/docs/en/about-claude/models/extended-thinking-models
+// OpenRouter: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+// DeepSeek: https://api-docs.deepseek.com/guides/thinking_mode
 // Ollama: https://docs.ollama.com/api/openai-compatibility
 // Ollama max effort: https://github.com/ollama/ollama/pull/15787
 // DeepSeek V4 modes: https://ollama.com/library/deepseek-v4-flash:cloud
@@ -1140,7 +1144,9 @@ const GEMINI_REASONING_CAPABILITIES = {
 
 const GEMMA_4_REASONING_CAPABILITY = {
     kind: 'level',
-    options: ['minimal', 'high'],
+    options: ['none', 'high'],
+    valueAliases: { minimal: 'none' },
+    requestValueMap: { none: 'minimal' },
     defaultValue: 'high'
 };
 
@@ -1169,9 +1175,65 @@ Object.values(OPENAI_REASONING_CAPABILITIES).forEach((capability) => {
     capability.kind = 'level';
 });
 
+const ANTHROPIC_REASONING_CAPABILITIES = {
+    'claude-opus-4-7': {
+        kind: 'level',
+        thinkingMode: 'adaptive',
+        options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+        defaultValue: 'none'
+    },
+    'claude-sonnet-4-6': {
+        kind: 'level',
+        thinkingMode: 'adaptive',
+        options: ['none', 'low', 'medium', 'high', 'max'],
+        defaultValue: 'none'
+    },
+    'claude-haiku-4-5': {
+        kind: 'budget',
+        thinkingMode: 'manual',
+        minBudget: 1024,
+        maxBudget: 32768,
+        allowOff: true,
+        allowDynamic: false,
+        defaultValue: 0
+    }
+};
+
+const AZURE_REASONING_MODEL_IDS = new Set([
+    'gpt-5.6',
+    'gpt-5.5',
+    'gpt-5.4',
+    'gpt-5.2',
+    'gpt-5.1'
+]);
+
+const DEEPSEEK_REASONING_CAPABILITIES = {
+    'deepseek-v4-flash': {
+        kind: 'level',
+        options: ['none', 'low', 'high', 'max'],
+        defaultValue: 'high'
+    },
+    'deepseek-v4-pro': {
+        kind: 'level',
+        options: ['none', 'high', 'max'],
+        defaultValue: 'high'
+    }
+};
+
+const OPENROUTER_REASONING_CAPABILITIES = {
+    'openai/gpt-5.6-sol-pro': { kind: 'level', options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
+    'openai/gpt-5.6-sol': { kind: 'level', options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
+    'openai/gpt-5.6-terra-pro': { kind: 'level', options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
+    'openai/gpt-5.6-terra': { kind: 'level', options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
+    'openai/gpt-5.6-luna-pro': { kind: 'level', options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
+    'openai/gpt-5.6-luna': { kind: 'level', options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
+    'tencent/hy3-preview': { kind: 'level', options: ['none', 'low', 'high'], defaultValue: 'high' },
+    'x-ai/grok-4.3': { kind: 'level', options: ['none', 'low', 'medium', 'high'], defaultValue: 'low' }
+};
+
 const OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY = {
     kind: 'level',
-    options: ['high', 'max'],
+    options: ['none', 'high', 'max'],
     defaultValue: 'high'
 };
 
@@ -1206,6 +1268,18 @@ function getReasoningCapability(providerType = '', model = '') {
     if (providerType === 'openai') {
         return OPENAI_REASONING_CAPABILITIES[normalizedModel] || null;
     }
+    if (providerType === 'azure' && AZURE_REASONING_MODEL_IDS.has(normalizedModel)) {
+        return OPENAI_REASONING_CAPABILITIES[normalizedModel] || null;
+    }
+    if (providerType === 'anthropic') {
+        return ANTHROPIC_REASONING_CAPABILITIES[normalizedModel] || null;
+    }
+    if (providerType === 'deepseek') {
+        return DEEPSEEK_REASONING_CAPABILITIES[normalizedModel] || null;
+    }
+    if (providerType === 'openrouter') {
+        return OPENROUTER_REASONING_CAPABILITIES[normalizedModel] || null;
+    }
     if (providerType === 'ollama-cloud' && normalizedModel.startsWith('deepseek-v4-')) {
         return OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY;
     }
@@ -1218,7 +1292,8 @@ function normalizeReasoningValue(capability, value) {
     }
 
     if (capability.kind === 'level') {
-        return capability.options.includes(value) ? value : capability.defaultValue;
+        const normalizedLevel = capability.valueAliases?.[value] || value;
+        return capability.options.includes(normalizedLevel) ? normalizedLevel : capability.defaultValue;
     }
 
     const numericValue = Number(value);
@@ -1328,11 +1403,54 @@ function buildGeminiThinkingConfig(model = '', reasoningValue = null, includeTho
         thinkingConfig.includeThoughts = true;
     }
     if (capability.kind === 'level') {
-        thinkingConfig.thinkingLevel = value;
+        thinkingConfig.thinkingLevel = capability.requestValueMap?.[value] || value;
     } else {
         thinkingConfig.thinkingBudget = value;
     }
     return thinkingConfig;
+}
+
+function buildAnthropicThinkingConfig(model = '', reasoningValue = null) {
+    const capability = getReasoningCapability('anthropic', model);
+    if (!capability) {
+        return null;
+    }
+
+    const value = normalizeReasoningValue(capability, reasoningValue);
+    if (value === 'none' || value === 0) {
+        return { thinking: { type: 'disabled' } };
+    }
+
+    if (capability.thinkingMode === 'adaptive') {
+        return {
+            thinking: { type: 'adaptive' },
+            output_config: { effort: value }
+        };
+    }
+
+    return {
+        thinking: {
+            type: 'enabled',
+            budget_tokens: value
+        }
+    };
+}
+
+function getAnthropicMaxOutputTokens(model = '', reasoningValue = null) {
+    const baseOutputTokens = 4096;
+    const capability = getReasoningCapability('anthropic', model);
+    if (!capability) {
+        return baseOutputTokens;
+    }
+
+    const value = normalizeReasoningValue(capability, reasoningValue);
+    if (capability.kind === 'budget' && Number(value) > 0) {
+        return Math.min(65536, Number(value) + baseOutputTokens);
+    }
+    if (capability.thinkingMode === 'adaptive' && value !== 'none') {
+        return 16384;
+    }
+    return baseOutputTokens;
 }
 
 function applyOpenAIReasoningEffort(requestBody, reasoningEffort, useResponsesApi) {
@@ -1348,6 +1466,21 @@ function applyOpenAIReasoningEffort(requestBody, reasoningEffort, useResponsesAp
     } else {
         requestBody.reasoning_effort = reasoningEffort;
     }
+    return requestBody;
+}
+
+function applyDeepSeekReasoningConfig(requestBody, reasoningEffort) {
+    if (!reasoningEffort) {
+        return requestBody;
+    }
+
+    if (reasoningEffort === 'none') {
+        requestBody.thinking = { type: 'disabled' };
+        return requestBody;
+    }
+
+    requestBody.thinking = { type: 'enabled' };
+    requestBody.reasoning_effort = reasoningEffort;
     return requestBody;
 }
 
@@ -10612,6 +10745,7 @@ async function createDialog() {
         const deployment = activeConfig?.azureDeployment || '';
         const apiVersion = activeConfig?.azureApiVersion || '2024-10-21';
         const providerLabel = getProviderDisplayName(activeConfig);
+        const reasoningEffort = await getActiveReasoningValue(activeConfig);
 
         if (!encryptedApiKey) {
             appendErrorMessageAndStore(`請點擊擴充功能圖示設定您的 ${providerLabel} API Key。`);
@@ -10645,12 +10779,12 @@ async function createDialog() {
         }, agentModeEnabled);
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
-        const isGpt5Model = isGpt5FamilyModel(deployment);
         const isReasoning = isReasoningModel(deployment);
+        const effectiveReasoningEffort = reasoningEffort || (isReasoning ? 'medium' : '');
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(deployment);
         const useResponsesApi = shouldUseResponsesApi(deployment);
         const azureApiVersionForRequest = useResponsesApi ? getAzureResponsesApiVersion(apiVersion) : apiVersion;
-        console.log('[AskPage] Azure OpenAI max output tokens:', maxOutputTokens, 'deployment:', deployment, 'responses_api:', useResponsesApi, 'reasoning_effort:', isGpt5Model ? 'medium' : 'default');
+        console.log('[AskPage] Azure OpenAI max output tokens:', maxOutputTokens, 'deployment:', deployment, 'responses_api:', useResponsesApi, 'reasoning_effort:', effectiveReasoningEffort || 'default');
         const azureEndpoint = endpoint.trim().replace(/\/$/, '');
         const apiUrl = useResponsesApi
             ? `${azureEndpoint}/openai/v1/responses?api-version=${azureApiVersionForRequest}`
@@ -10671,7 +10805,7 @@ async function createDialog() {
                             model: deployment,
                             maxOutputTokens,
                             useTools,
-                            reasoningEffort: isGpt5Model ? 'medium' : ''
+                            reasoningEffort: effectiveReasoningEffort
                         });
                     }
 
@@ -10686,8 +10820,8 @@ async function createDialog() {
                         requestBody.max_tokens = maxOutputTokens;
                     }
 
-                    if (isReasoning) {
-                        requestBody.reasoning_effort = 'medium';
+                    if (effectiveReasoningEffort) {
+                        requestBody.reasoning_effort = effectiveReasoningEffort;
                     }
 
                     if (useTools) {
@@ -10870,7 +11004,11 @@ async function createDialog() {
                         requestBody.tools = getOpenAIToolDefinitions();
                     }
 
-                    applyOpenAIReasoningEffort(requestBody, reasoningEffort, false);
+                    if (providerType === 'deepseek') {
+                        applyDeepSeekReasoningConfig(requestBody, reasoningEffort);
+                    } else {
+                        applyOpenAIReasoningEffort(requestBody, reasoningEffort, false);
+                    }
 
                     return requestBody;
                 },
@@ -11053,6 +11191,7 @@ async function createDialog() {
         const encryptedApiKey = activeConfig?.apiKey || '';
         const selectedModel = activeConfig?.activeModel || 'claude-3-5-sonnet-latest';
         const providerLabel = getProviderDisplayName(activeConfig);
+        const reasoningValue = await getActiveReasoningValue(activeConfig);
 
         if (!encryptedApiKey) {
             appendErrorMessageAndStore(`請點擊擴充功能圖示設定您的 ${providerLabel} API Key。`);
@@ -11077,8 +11216,8 @@ async function createDialog() {
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
 
-        const maxOutputTokens = 4096;
-        console.log('[AskPage] Anthropic max output tokens:', maxOutputTokens, 'model:', selectedModel);
+        const maxOutputTokens = getAnthropicMaxOutputTokens(selectedModel, reasoningValue);
+        console.log('[AskPage] Anthropic max output tokens:', maxOutputTokens, 'model:', selectedModel, 'reasoning:', reasoningValue ?? 'default');
 
         const allMessages = buildTextProviderMessages(pageConversationContext);
         const systemMessage = allMessages.find(msg => msg.role === 'system');
@@ -11094,6 +11233,11 @@ async function createDialog() {
 
             if (systemPrompt) {
                 requestBody.system = systemPrompt;
+            }
+
+            const anthropicThinkingConfig = buildAnthropicThinkingConfig(selectedModel, reasoningValue);
+            if (anthropicThinkingConfig) {
+                Object.assign(requestBody, anthropicThinkingConfig);
             }
 
             applyPromptCacheRequestOptions(requestBody, {

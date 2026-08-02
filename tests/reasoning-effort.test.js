@@ -7,6 +7,7 @@ const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
 const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
+const settingsScript = fs.readFileSync(path.join(rootDir, 'settings.js'), 'utf8');
 const styleSheet = fs.readFileSync(path.join(rootDir, 'style.css'), 'utf8');
 
 const sandbox = {
@@ -48,6 +49,10 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     GEMINI_REASONING_CAPABILITIES,
     GEMMA_4_REASONING_CAPABILITY,
     OPENAI_REASONING_CAPABILITIES,
+    ANTHROPIC_REASONING_CAPABILITIES,
+    AZURE_REASONING_MODEL_IDS,
+    DEEPSEEK_REASONING_CAPABILITIES,
+    OPENROUTER_REASONING_CAPABILITIES,
     OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY,
     pendingReasoningValues,
     getReasoningCapability,
@@ -56,7 +61,10 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     getReasoningSliderConfig,
     getReasoningValueFromSlider,
     buildGeminiThinkingConfig,
-    applyOpenAIReasoningEffort
+    buildAnthropicThinkingConfig,
+    getAnthropicMaxOutputTokens,
+    applyOpenAIReasoningEffort,
+    applyDeepSeekReasoningConfig
 };`, sandbox, {
     filename: 'content.js'
 });
@@ -65,6 +73,10 @@ const {
     GEMINI_REASONING_CAPABILITIES,
     GEMMA_4_REASONING_CAPABILITY,
     OPENAI_REASONING_CAPABILITIES,
+    ANTHROPIC_REASONING_CAPABILITIES,
+    AZURE_REASONING_MODEL_IDS,
+    DEEPSEEK_REASONING_CAPABILITIES,
+    OPENROUTER_REASONING_CAPABILITIES,
     OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY,
     pendingReasoningValues,
     getReasoningCapability,
@@ -73,7 +85,10 @@ const {
     getReasoningSliderConfig,
     getReasoningValueFromSlider,
     buildGeminiThinkingConfig,
-    applyOpenAIReasoningEffort
+    buildAnthropicThinkingConfig,
+    getAnthropicMaxOutputTokens,
+    applyOpenAIReasoningEffort,
+    applyDeepSeekReasoningConfig
 } = sandbox.__askPageTestExports;
 
 function capabilityOptions(providerType, model) {
@@ -127,18 +142,18 @@ assert.strictEqual(
     'high'
 );
 
-// Gemma 4 on the Gemini API exposes minimal (off) and high (on) through thinkingLevel.
-assert.deepStrictEqual(Array.from(GEMMA_4_REASONING_CAPABILITY.options), ['minimal', 'high']);
+// Gemma 4 exposes an explicit UI-level Off option that maps to the API's minimal value.
+assert.deepStrictEqual(Array.from(GEMMA_4_REASONING_CAPABILITY.options), ['none', 'high']);
 assert.strictEqual(GEMMA_4_REASONING_CAPABILITY.defaultValue, 'high');
-assert.deepStrictEqual(capabilityOptions('gemini', 'gemma-4-31b-it'), ['minimal', 'high']);
-assert.deepStrictEqual(capabilityOptions('gemini', 'gemma-4-26b-a4b-it'), ['minimal', 'high']);
-assert.deepStrictEqual(capabilityOptions('gemini', 'gemma-4-31b-it-2026-08-02'), ['minimal', 'high']);
+assert.deepStrictEqual(capabilityOptions('gemini', 'gemma-4-31b-it'), ['none', 'high']);
+assert.deepStrictEqual(capabilityOptions('gemini', 'gemma-4-26b-a4b-it'), ['none', 'high']);
+assert.deepStrictEqual(capabilityOptions('gemini', 'gemma-4-31b-it-2026-08-02'), ['none', 'high']);
 assert.strictEqual(getReasoningCapability('gemini', 'gemma-4'), null);
 assert.strictEqual(getReasoningCapability('gemini', 'gemini-4-flash'), null);
 assert.strictEqual(getReasoningCapability('openrouter', 'google/gemma-4-31b-it'), null);
 assert.strictEqual(
-    normalizeReasoningValue(getReasoningCapability('gemini', 'gemma-4-31b-it'), 'medium'),
-    'high'
+    normalizeReasoningValue(getReasoningCapability('gemini', 'gemma-4-31b-it'), 'minimal'),
+    'none'
 );
 
 // Gemini 2.5 keeps the exact GenerateContent thinking-budget ranges and special modes.
@@ -188,12 +203,69 @@ assert.strictEqual(
     'medium'
 );
 
-// Ollama Cloud DeepSeek V4 models expose only the provider's verified High and Max modes.
-assert.deepStrictEqual(Array.from(OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY.options), ['high', 'max']);
+// Anthropic models use adaptive effort or a manual thinking-token budget, with explicit Off.
+assert.deepStrictEqual(Array.from(Object.keys(ANTHROPIC_REASONING_CAPABILITIES)).sort(), [
+    'claude-haiku-4-5',
+    'claude-opus-4-7',
+    'claude-sonnet-4-6'
+]);
+assert.deepStrictEqual(capabilityOptions('anthropic', 'claude-opus-4-7'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+assert.deepStrictEqual(capabilityOptions('anthropic', 'claude-sonnet-4-6'), ['none', 'low', 'medium', 'high', 'max']);
+assert.strictEqual(getReasoningCapability('anthropic', 'claude-opus-4-7').defaultValue, 'none');
+const claudeHaiku45 = getReasoningCapability('anthropic', 'claude-haiku-4-5');
+assert.strictEqual(claudeHaiku45.kind, 'budget');
+assert.strictEqual(claudeHaiku45.minBudget, 1024);
+assert.strictEqual(claudeHaiku45.maxBudget, 32768);
+assert.strictEqual(claudeHaiku45.allowOff, true);
+assert.strictEqual(claudeHaiku45.allowDynamic, false);
+assert.strictEqual(claudeHaiku45.defaultValue, 0);
+
+// Azure exposes Off only for exact deployments whose model IDs support none.
+assert.deepStrictEqual(Array.from(AZURE_REASONING_MODEL_IDS).sort(), [
+    'gpt-5.1',
+    'gpt-5.2',
+    'gpt-5.4',
+    'gpt-5.5',
+    'gpt-5.6'
+]);
+assert.deepStrictEqual(capabilityOptions('azure', 'gpt-5.6'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+assert.strictEqual(getReasoningCapability('azure', 'gpt-5.4').defaultValue, 'none');
+assert.strictEqual(getReasoningCapability('azure', 'production-gpt-5.6'), null);
+
+// Current DeepSeek V4 models expose explicit non-thinking mode.
+assert.deepStrictEqual(Array.from(Object.keys(DEEPSEEK_REASONING_CAPABILITIES)).sort(), [
+    'deepseek-v4-flash',
+    'deepseek-v4-pro'
+]);
+assert.deepStrictEqual(capabilityOptions('deepseek', 'deepseek-v4-flash'), ['none', 'low', 'high', 'max']);
+assert.deepStrictEqual(capabilityOptions('deepseek', 'deepseek-v4-pro'), ['none', 'high', 'max']);
+assert.strictEqual(getReasoningCapability('deepseek', 'deepseek-chat'), null);
+assert.match(settingsScript, /deepseek:\s*\[\s*'deepseek-v4-flash',\s*'deepseek-v4-pro'\s*\]/);
+assert.doesNotMatch(settingsScript, /'deepseek-chat'|'deepseek-reasoner'/);
+
+// OpenRouter model metadata explicitly declares the effort values that include none.
+assert.deepStrictEqual(Array.from(Object.keys(OPENROUTER_REASONING_CAPABILITIES)).sort(), [
+    'openai/gpt-5.6-luna',
+    'openai/gpt-5.6-luna-pro',
+    'openai/gpt-5.6-sol',
+    'openai/gpt-5.6-sol-pro',
+    'openai/gpt-5.6-terra',
+    'openai/gpt-5.6-terra-pro',
+    'tencent/hy3-preview',
+    'x-ai/grok-4.3'
+]);
+assert.deepStrictEqual(capabilityOptions('openrouter', 'openai/gpt-5.6-sol-pro'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+assert.deepStrictEqual(capabilityOptions('openrouter', 'tencent/hy3-preview'), ['none', 'low', 'high']);
+assert.deepStrictEqual(capabilityOptions('openrouter', 'x-ai/grok-4.3'), ['none', 'low', 'medium', 'high']);
+assert.strictEqual(getReasoningCapability('openrouter', 'x-ai/grok-4.3').defaultValue, 'low');
+assert.strictEqual(getReasoningCapability('openrouter', 'deepseek/deepseek-v4-pro'), null);
+
+// Ollama Cloud DeepSeek V4 models expose explicit Off, High and Max modes.
+assert.deepStrictEqual(Array.from(OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY.options), ['none', 'high', 'max']);
 assert.strictEqual(OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY.defaultValue, 'high');
-assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-flash:0731-cloud'), ['high', 'max']);
-assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-flash'), ['high', 'max']);
-assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-pro'), ['high', 'max']);
+assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-flash:0731-cloud'), ['none', 'high', 'max']);
+assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-flash'), ['none', 'high', 'max']);
+assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-pro'), ['none', 'high', 'max']);
 assert.strictEqual(getReasoningCapability('ollama-cloud', 'deepseek-v3.1:cloud'), null);
 assert.strictEqual(getReasoningCapability('ollama', 'deepseek-v4-flash:cloud'), null);
 assert.strictEqual(
@@ -201,11 +273,12 @@ assert.strictEqual(
     'high'
 );
 
-// Undocumented models and providers that cannot guarantee OpenAI parameter compatibility stay hidden.
+// Undocumented models and providers that cannot guarantee compatible Off semantics stay hidden.
 assert.strictEqual(getReasoningCapability('openai', 'gpt-5.3'), null);
 assert.strictEqual(getReasoningCapability('openai', 'gpt-4.1'), null);
 assert.strictEqual(getReasoningCapability('azure', 'gpt-5.6-sol'), null);
-assert.strictEqual(getReasoningCapability('openrouter', 'openai/gpt-5.6-sol'), null);
+assert.strictEqual(getReasoningCapability('openrouter', 'qwen/qwen3.7-max'), null);
+assert.strictEqual(getReasoningCapability('mistral', 'mistral-small-latest'), null);
 assert.strictEqual(getReasoningCapability('openai-compatible', 'gpt-5.6-sol'), null);
 
 // Request parameters use the provider endpoint's exact field shape.
@@ -223,13 +296,37 @@ assert.deepStrictEqual(
 );
 assert.strictEqual(buildGeminiThinkingConfig('gemini-flash-lite-latest', 'medium', true), null);
 assert.deepStrictEqual(
-    JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemma-4-31b-it', 'minimal', false))),
+    JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemma-4-31b-it', 'none', false))),
     { thinkingLevel: 'minimal' }
 );
 assert.deepStrictEqual(
     JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemma-4-26b-a4b-it', null, true))),
     { includeThoughts: true, thinkingLevel: 'high' }
 );
+
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(buildAnthropicThinkingConfig('claude-opus-4-7', 'none'))),
+    { thinking: { type: 'disabled' } }
+);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(buildAnthropicThinkingConfig('claude-opus-4-7', 'xhigh'))),
+    { thinking: { type: 'adaptive' }, output_config: { effort: 'xhigh' } }
+);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(buildAnthropicThinkingConfig('claude-sonnet-4-6', 'max'))),
+    { thinking: { type: 'adaptive' }, output_config: { effort: 'max' } }
+);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(buildAnthropicThinkingConfig('claude-haiku-4-5', 0))),
+    { thinking: { type: 'disabled' } }
+);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(buildAnthropicThinkingConfig('claude-haiku-4-5', 4096))),
+    { thinking: { type: 'enabled', budget_tokens: 4096 } }
+);
+assert.strictEqual(getAnthropicMaxOutputTokens('claude-opus-4-7', 'none'), 4096);
+assert.strictEqual(getAnthropicMaxOutputTokens('claude-opus-4-7', 'medium'), 16384);
+assert.strictEqual(getAnthropicMaxOutputTokens('claude-haiku-4-5', 4096), 8192);
 
 const responsesBody = applyOpenAIReasoningEffort({ model: 'gpt-5.6-sol' }, 'xhigh', true);
 assert.deepStrictEqual(JSON.parse(JSON.stringify(responsesBody)), {
@@ -241,12 +338,37 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(chatBody)), {
     model: 'o3',
     reasoning_effort: 'high'
 });
+const openAIOffBody = applyOpenAIReasoningEffort({ model: 'gpt-5.4' }, 'none', false);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(openAIOffBody)), {
+    model: 'gpt-5.4',
+    reasoning_effort: 'none'
+});
 const ollamaCloudChatBody = applyOpenAIReasoningEffort({ model: 'deepseek-v4-flash:0731-cloud' }, 'max', false);
 assert.deepStrictEqual(JSON.parse(JSON.stringify(ollamaCloudChatBody)), {
     model: 'deepseek-v4-flash:0731-cloud',
     reasoning_effort: 'max'
 });
+const ollamaCloudOffBody = applyOpenAIReasoningEffort({ model: 'deepseek-v4-flash:0731-cloud' }, 'none', false);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(ollamaCloudOffBody)), {
+    model: 'deepseek-v4-flash:0731-cloud',
+    reasoning_effort: 'none'
+});
+const deepSeekOffBody = applyDeepSeekReasoningConfig({ model: 'deepseek-v4-flash' }, 'none');
+assert.deepStrictEqual(JSON.parse(JSON.stringify(deepSeekOffBody)), {
+    model: 'deepseek-v4-flash',
+    thinking: { type: 'disabled' }
+});
+const deepSeekMaxBody = applyDeepSeekReasoningConfig({ model: 'deepseek-v4-pro' }, 'max');
+assert.deepStrictEqual(JSON.parse(JSON.stringify(deepSeekMaxBody)), {
+    model: 'deepseek-v4-pro',
+    thinking: { type: 'enabled' },
+    reasoning_effort: 'max'
+});
 assert.match(contentScript, /applyOpenAIReasoningEffort\(requestBody, reasoningEffort, false\);/);
+assert.match(contentScript, /applyDeepSeekReasoningConfig\(requestBody, reasoningEffort\);/);
+assert.match(contentScript, /Object\.assign\(requestBody, anthropicThinkingConfig\);/);
+assert.match(contentScript, /const effectiveReasoningEffort = reasoningEffort \|\| \(isReasoning \? 'medium' : ''\);/);
+assert.match(contentScript, /reasoningEffort: effectiveReasoningEffort/);
 
 // The main dialog owns the hover/focus popover and native range input.
 assert.match(contentScript, /reasoningSlider\.type = 'range';/);
