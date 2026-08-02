@@ -8,12 +8,26 @@
 
 ### 新增 / 改進（Unreleased）
 
-- **主對話框推理強度控制**：對已確認支援的 Gemini 與 OpenAI 模型，在模型名稱下方加入滑鼠停留或鍵盤聚焦時顯示的浮動滑桿；設定依提供者與模型分別保存，送出提示前即可調整。
-- **模型專屬能力矩陣**：Gemini 3.x 依模型限制提供 `thinkingLevel` 選項，Gemini 2.5 依模型提供完整合法 `thinkingBudget` 範圍、關閉與動態模式；OpenAI 則依模型頁限定 `reasoning.effort` 選項，未明確確認支援的提供者或模型不顯示控制項。
-- **推理參數與測試覆蓋**：依 Gemini GenerateContent、OpenAI Responses API 與 Chat Completions 的格式送出對應參數，並新增能力判定、滑桿映射、請求格式及 UI 存在性的測試案例。
-- **Ollama Cloud DeepSeek V4 推理控制**：新增 `deepseek-v4-flash:0731-cloud` 預設模型選項，並讓所有 `deepseek-v4-` 開頭的 Ollama Cloud 模型提供 `high` 與 `max` 兩段推理強度，預設為 `high`。
-- **Ollama Cloud Kimi K2.7 Code 推理控制**：新增 `none`、`low`、`medium`、`high` 與 `max` 五個 `reasoning_effort` 選項，預設為 `high`。
+（目前暫無未發佈變更）
+
+## [0.39.0] - 2026-08-03
+
+### 新增 / 改進（v0.39.0）
+
+- **主對話框推理強度控制**：對已確認支援的模型，在模型名稱下方加入滑鼠停留或鍵盤聚焦時顯示的浮動滑桿；設定依提供者與模型分別保存，送出提示前即可調整。
+- **模型專屬能力矩陣**：Gemini 3.x 依模型限制提供 `thinkingLevel` 選項，Gemini 2.5 依模型提供完整合法 `thinkingBudget` 範圍、關閉與動態模式；OpenAI、Anthropic、DeepSeek 與 OpenRouter 依已確認的模型能力提供對應選項，未明確確認支援的提供者或模型不顯示控制項。
+- **推理參數與 API 相容性**：依 Gemini GenerateContent、OpenAI Responses API 與 Chat Completions、Anthropic Messages API 及 OpenAI-compatible 端點格式送出對應參數；同步新增能力判定、滑桿映射、請求格式、設定回復與 UI 存在性的測試案例及推理強度對應文件。
+- **Anthropic 推理控制**：Claude Opus 4.7 與 Sonnet 4.6 支援 adaptive thinking 的推理等級，Claude Haiku 4.5 支援手動 extended thinking Token 預算，並提供明確的關閉選項。
+- **多 Provider 預設推理強度調整**：Gemini 2.5 Pro 與 Flash 的預設推理預算分別調整為 `32768` 與 `24576`；已確認的 OpenAI reasoning models 預設為 `medium`；Anthropic Claude Opus 4.7 與 Sonnet 4.6 預設為 `high`；Ollama Cloud DeepSeek V4 預設為 `max`；個別模型已保存的設定仍優先於預設值。
+- **DeepSeek 模型更新與 Ollama Cloud 控制**：DeepSeek 提供者預設模型更新為 `deepseek-v4-flash` 與 `deepseek-v4-pro`；Ollama Cloud 新增 `deepseek-v4-flash:0731-cloud`，所有 `deepseek-v4-` 開頭模型提供 `none`、`high` 與 `max` 推理強度，預設為 `max`。
+- **Ollama Cloud GLM-5.2 推理控制**：`glm-5.2` 與 `glm-5.2:cloud` 提供 `none`、`high` 與 `max` 三段 `reasoning_effort` 選項，預設為 `high`。
+- **Ollama Cloud Kimi K2.7 Code 推理控制**：`kimi-k2.7-code` 與 `kimi-k2.7-code:cloud` 提供 `none`、`low`、`medium`、`high` 與 `max` 五個 `reasoning_effort` 選項，預設為 `high`。
 - **Gemma 4 推理控制**：所有 `gemma-4-` 開頭的 Gemini API 模型提供 `minimal` 與 `high` 兩段推理強度，預設為 `high`，並透過 `thinkingLevel` 送出設定。
+
+### 修正 / 更新（v0.39.0）
+
+- **Anthropic API 跨來源請求修正**：Anthropic Messages API 的串流與非串流請求改由 Manifest V3 Service Worker 轉送，並限制可呼叫的網域與端點；錯誤訊息會保留實際驗證失敗原因，避免將所有請求標頭問題誤報為 API Key 無效。
+- **模型切換反向操作**：按住 `Shift` 點擊主對話框的模型名稱即可切換至上一個已啟用的提供者與模型；一般點擊仍維持切換至下一個選項，既有設定資料不需遷移。
 
 ## [0.38.0] - 2026-07-30
 
