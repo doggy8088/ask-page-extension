@@ -12,6 +12,7 @@
 - **模型專屬能力矩陣**：Gemini 3.x 依模型限制提供 `thinkingLevel` 選項，Gemini 2.5 依模型提供完整合法 `thinkingBudget` 範圍、關閉與動態模式；OpenAI 則依模型頁限定 `reasoning.effort` 選項，未明確確認支援的提供者或模型不顯示控制項。
 - **推理參數與測試覆蓋**：依 Gemini GenerateContent、OpenAI Responses API 與 Chat Completions 的格式送出對應參數，並新增能力判定、滑桿映射、請求格式及 UI 存在性的測試案例。
 - **Ollama Cloud DeepSeek V4 推理控制**：新增 `deepseek-v4-flash:0731-cloud` 預設模型選項，並讓所有 `deepseek-v4-` 開頭的 Ollama Cloud 模型提供 `high` 與 `max` 兩段推理強度，預設為 `high`。
+- **Ollama Cloud Kimi K2.7 Code 推理控制**：新增 `none`、`low`、`medium`、`high` 與 `max` 五個 `reasoning_effort` 選項，預設為 `high`。
 - **Gemma 4 推理控制**：所有 `gemma-4-` 開頭的 Gemini API 模型提供 `minimal` 與 `high` 兩段推理強度，預設為 `high`，並透過 `thinkingLevel` 送出設定。
 
 ## [0.38.0] - 2026-07-30

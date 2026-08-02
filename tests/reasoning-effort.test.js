@@ -55,6 +55,7 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     OPENROUTER_REASONING_CAPABILITIES,
     OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY,
     OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY,
+    OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY,
     pendingReasoningValues,
     getReasoningCapability,
     setActiveReasoningValue,
@@ -80,6 +81,7 @@ const {
     OPENROUTER_REASONING_CAPABILITIES,
     OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY,
     OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY,
+    OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY,
     pendingReasoningValues,
     getReasoningCapability,
     setActiveReasoningValue,
@@ -289,6 +291,19 @@ assert.strictEqual(OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY.defaultValue, 'high
 assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'glm-5.2'), ['none', 'high', 'max']);
 assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'glm-5.2:cloud'), ['none', 'high', 'max']);
 assert.strictEqual(getReasoningCapability('ollama', 'glm-5.2'), null);
+
+// Ollama Cloud Kimi K2.7 Code supports all five OpenAI-compatible effort values.
+assert.deepStrictEqual(Array.from(OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY.options), [
+    'none',
+    'low',
+    'medium',
+    'high',
+    'max'
+]);
+assert.strictEqual(OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY.defaultValue, 'high');
+assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'kimi-k2.7-code'), ['none', 'low', 'medium', 'high', 'max']);
+assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'kimi-k2.7-code:cloud'), ['none', 'low', 'medium', 'high', 'max']);
+assert.strictEqual(getReasoningCapability('ollama', 'kimi-k2.7-code'), null);
 
 // Undocumented models and providers that cannot guarantee compatible Off semantics stay hidden.
 assert.strictEqual(getReasoningCapability('openai', 'gpt-5.3'), null);

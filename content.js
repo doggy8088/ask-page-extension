@@ -1115,6 +1115,7 @@ function normalizeModelIdentifier(model = '') {
 // Ollama: https://docs.ollama.com/api/openai-compatibility
 // Ollama max effort: https://github.com/ollama/ollama/pull/15787
 // DeepSeek V4 modes: https://ollama.com/library/deepseek-v4-flash:cloud
+// Kimi K2.7 Code: https://registry.ollama.com/library/kimi-k2.7-code
 // Unknown providers, aliases, and model families must not inherit these capabilities.
 const GEMINI_REASONING_CAPABILITIES = {
     'gemini-3.6-flash': {
@@ -1279,6 +1280,12 @@ const OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY = {
     defaultValue: 'high'
 };
 
+const OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY = {
+    kind: 'level',
+    options: ['none', 'low', 'medium', 'high', 'max'],
+    defaultValue: 'high'
+};
+
 const REASONING_VALUE_LABELS = {
     none: '關閉',
     minimal: '最低',
@@ -1327,6 +1334,9 @@ function getReasoningCapability(providerType = '', model = '') {
     }
     if (providerType === 'ollama-cloud' && ['glm-5.2', 'glm-5.2:cloud'].includes(normalizedModel)) {
         return OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY;
+    }
+    if (providerType === 'ollama-cloud' && ['kimi-k2.7-code', 'kimi-k2.7-code:cloud'].includes(normalizedModel)) {
+        return OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY;
     }
     return null;
 }
