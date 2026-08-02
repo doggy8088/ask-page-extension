@@ -89,9 +89,12 @@ const DIALOG_DIM_DELAY_MS = 1000;
 const COLLAPSED_PREVIEW_LINE_LIMIT = 5;
 const COLLAPSED_TEXT_PREVIEW_MIN_CHARS = 600;
 const CODEPEN_PREFILL_ENDPOINT = 'https://codepen.io/cpe/pen/define/';
-const OLLAMA_CLOUD_FETCH_PORT = 'ollama-cloud-fetch';
+// 保留既有 Ollama Cloud 通道名稱，讓舊版內容腳本可與新版背景服務工作者相容。
+const LLM_API_FETCH_PORT = 'ollama-cloud-fetch';
 const OLLAMA_CLOUD_API_ORIGIN = 'https://ollama.com';
 const OLLAMA_CLOUD_ALLOWED_ENDPOINTS = new Set(['chat/completions', 'responses']);
+const ANTHROPIC_API_ORIGIN = 'https://api.anthropic.com';
+const ANTHROPIC_ALLOWED_ENDPOINTS = new Set(['messages']);
 const DIALOG_HOST_ISOLATION_STYLES = [
     ['all', 'initial'],
     ['display', 'block'],
@@ -137,23 +140,37 @@ function getOllamaCloudEndpointFromUrl(url) {
     return endpoint;
 }
 
-function createOllamaCloudProxyError(errorData = {}) {
-    const error = new Error(errorData.message || 'Ollama Cloud Service Worker 請求失敗。');
+function getAnthropicEndpointFromUrl(url) {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.origin !== ANTHROPIC_API_ORIGIN) {
+        throw new Error('Anthropic Service Worker 不允許呼叫其他網域。');
+    }
+
+    const endpoint = parsedUrl.pathname.replace(/^\/v1\//, '').replace(/^\/+|\/+$/g, '');
+    if (!ANTHROPIC_ALLOWED_ENDPOINTS.has(endpoint)) {
+        throw new Error('Anthropic Service Worker 不允許呼叫這個 API 端點。');
+    }
+
+    return endpoint;
+}
+
+function createServiceWorkerProxyError(errorData = {}, providerLabel = 'LLM') {
+    const error = new Error(errorData.message || providerLabel + ' Service Worker 請求失敗。');
     error.name = errorData.name || 'Error';
     return error;
 }
 
-function createOllamaCloudServiceWorkerFetch(apiKey) {
+function createServiceWorkerFetch({ providerType, providerLabel, apiKey, getEndpoint }) {
     return async (url, options = {}) => {
-        const endpoint = getOllamaCloudEndpointFromUrl(url);
+        const endpoint = getEndpoint(url);
         const method = String(options.method || 'GET').toUpperCase();
         if (method !== 'POST') {
-            throw new Error('Ollama Cloud Service Worker 僅允許 POST 請求。');
+            throw new Error(providerLabel + ' Service Worker 僅允許 POST 請求。');
         }
 
         const normalizedApiKey = String(apiKey || '').trim();
         if (!normalizedApiKey) {
-            throw new Error('Ollama Cloud API Key 不可為空。');
+            throw new Error(providerLabel + ' API Key 不可為空。');
         }
 
         let requestBody;
@@ -162,11 +179,11 @@ function createOllamaCloudServiceWorkerFetch(apiKey) {
                 ? JSON.parse(options.body)
                 : options.body;
         } catch (_) {
-            throw new Error('Ollama Cloud 請求內容不是有效的 JSON。');
+            throw new Error(providerLabel + ' 請求內容不是有效的 JSON。');
         }
 
         if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) {
-            throw new Error('Ollama Cloud 請求內容格式不正確。');
+            throw new Error(providerLabel + ' 請求內容格式不正確。');
         }
 
         return new Promise((resolve, reject) => {
@@ -219,7 +236,7 @@ function createOllamaCloudServiceWorkerFetch(apiKey) {
             };
 
             try {
-                port = chrome.runtime.connect({ name: OLLAMA_CLOUD_FETCH_PORT });
+                port = chrome.runtime.connect({ name: LLM_API_FETCH_PORT });
             } catch (error) {
                 failRequest(error);
                 return;
@@ -232,13 +249,13 @@ function createOllamaCloudServiceWorkerFetch(apiKey) {
 
                 if (message.type === 'response-start') {
                     if (responseStarted) {
-                        failRequest(new Error('Ollama Cloud Service Worker 重複回傳回應資訊。'));
+                        failRequest(new Error(providerLabel + ' Service Worker 重複回傳回應資訊。'));
                         return;
                     }
 
                     const status = Number(message.status);
                     if (!Number.isInteger(status) || status < 200 || status > 599) {
-                        failRequest(new Error('Ollama Cloud Service Worker 回傳了無效的 HTTP 狀態。'));
+                        failRequest(new Error(providerLabel + ' Service Worker 回傳了無效的 HTTP 狀態。'));
                         return;
                     }
 
@@ -253,7 +270,7 @@ function createOllamaCloudServiceWorkerFetch(apiKey) {
 
                 if (message.type === 'chunk') {
                     if (!responseStarted) {
-                        failRequest(new Error('Ollama Cloud Service Worker 尚未提供回應資訊。'));
+                        failRequest(new Error(providerLabel + ' Service Worker 尚未提供回應資訊。'));
                         return;
                     }
                     if (typeof message.chunk === 'string' && message.chunk) {
@@ -264,7 +281,7 @@ function createOllamaCloudServiceWorkerFetch(apiKey) {
 
                 if (message.type === 'complete') {
                     if (!responseStarted) {
-                        failRequest(new Error('Ollama Cloud Service Worker 未提供 HTTP 回應。'));
+                        failRequest(new Error(providerLabel + ' Service Worker 未提供 HTTP 回應。'));
                         return;
                     }
                     streamFinished = true;
@@ -274,7 +291,7 @@ function createOllamaCloudServiceWorkerFetch(apiKey) {
                 }
 
                 if (message.type === 'error') {
-                    failRequest(createOllamaCloudProxyError(message.error));
+                    failRequest(createServiceWorkerProxyError(message.error, providerLabel));
                 }
             });
 
@@ -284,7 +301,7 @@ function createOllamaCloudServiceWorkerFetch(apiKey) {
                     return;
                 }
 
-                const disconnectMessage = chrome.runtime.lastError?.message || 'Ollama Cloud Service Worker 連線已中斷。';
+                const disconnectMessage = chrome.runtime.lastError?.message || providerLabel + ' Service Worker 連線已中斷。';
                 const disconnectError = new Error(disconnectMessage);
                 disconnectError.name = 'TypeError';
                 failRequest(disconnectError);
@@ -293,6 +310,7 @@ function createOllamaCloudServiceWorkerFetch(apiKey) {
             try {
                 port.postMessage({
                     type: 'request',
+                    providerType,
                     endpoint,
                     apiKey: normalizedApiKey,
                     requestBody
@@ -302,6 +320,24 @@ function createOllamaCloudServiceWorkerFetch(apiKey) {
             }
         });
     };
+}
+
+function createOllamaCloudServiceWorkerFetch(apiKey) {
+    return createServiceWorkerFetch({
+        providerType: 'ollama-cloud',
+        providerLabel: 'Ollama Cloud',
+        apiKey,
+        getEndpoint: getOllamaCloudEndpointFromUrl
+    });
+}
+
+function createAnthropicServiceWorkerFetch(apiKey) {
+    return createServiceWorkerFetch({
+        providerType: 'anthropic',
+        providerLabel: 'Anthropic',
+        apiKey,
+        getEndpoint: getAnthropicEndpointFromUrl
+    });
 }
 
 function applyDialogHostIsolationStyles(host) {
@@ -11131,6 +11167,7 @@ async function createDialog() {
         buildHttpError,
         onRetry,
         onAnswerDelta = () => {},
+        fetchImpl = fetch,
         providerLabel = 'Anthropic'
     }) {
         let answerText = '';
@@ -11151,6 +11188,7 @@ async function createDialog() {
             },
             buildHttpError,
             onRetry,
+            fetchImpl,
             onEvent: (sseEvent) => {
                 let chunk;
                 try {
@@ -11204,6 +11242,7 @@ async function createDialog() {
             return;
         }
 
+        const providerFetch = createAnthropicServiceWorkerFetch(apiKey);
         const traceReporter = createExecutionTraceReporter();
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
@@ -11254,7 +11293,11 @@ async function createDialog() {
             const buildHttpError = (response, errorBody) => {
                 const retryAfterMs = getRetryAfterMilliseconds(response);
                 if (response.status === 401) {
-                    return createHttpError(response.status, response.statusText, errorBody, `無效的 API Key，請檢查您的 ${providerLabel} API Key 設定。`, { retryAfterMs });
+                    const parsedError = parseApiErrorBody(errorBody);
+                    const authMessage = parsedError.apiMessage
+                        ? `${providerLabel} 驗證失敗：${parsedError.apiMessage}`
+                        : `無效的 API Key，請檢查您的 ${providerLabel} API Key 設定。`;
+                    return createHttpError(response.status, response.statusText, errorBody, authMessage, { retryAfterMs });
                 }
                 if (response.status === 403) {
                     return createHttpError(response.status, response.statusText, errorBody, `${providerLabel} 拒絕了這次請求，請檢查權限或模型存取設定。`, { retryAfterMs });
@@ -11288,6 +11331,7 @@ async function createDialog() {
                             streamedAnswer.append(delta);
                         }
                     },
+                    fetchImpl: providerFetch,
                     providerLabel
                 });
                 traceReporter.reportUsage(providerLabel, streamResult.usage);
@@ -11304,7 +11348,8 @@ async function createDialog() {
                     buildHttpError,
                     onRetry: (retryInfo) => handleStatusUpdate(
                         `${providerLabel} ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
-                    )
+                    ),
+                    fetchImpl: providerFetch
                 });
                 traceReporter.reportUsage(providerLabel, response.usage);
                 finalAnswer = response.content?.map(block => block.text).join('') || '';

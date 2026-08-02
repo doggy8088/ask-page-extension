@@ -48,13 +48,13 @@ assert.match(settingsScript, /headers\['Authorization'\] = `Bearer \$\{apiKey\}`
 assert.match(contentScript, /providerType === 'ollama-cloud'/);
 assert.match(contentScript, /endpoint = 'https:\/\/ollama\.com\/v1';/);
 assert.match(contentScript, /'ollama-cloud'\]\.includes\(activeConfig\.type\)/);
-assert.match(contentScript, /chrome\.runtime\.connect\(\{ name: OLLAMA_CLOUD_FETCH_PORT \}\)/);
+assert.match(contentScript, /chrome\.runtime\.connect\(\{ name: LLM_API_FETCH_PORT \}\)/);
 assert.match(contentScript, /createOllamaCloudServiceWorkerFetch\(apiKey\)/);
 assert.match(contentScript, /fetchImpl: providerFetch/);
 
 assert.match(backgroundScript, /chrome\.runtime\.onConnect\.addListener/);
 assert.match(backgroundScript, /const OLLAMA_CLOUD_API_BASE_URL = 'https:\/\/ollama\.com\/v1';/);
 assert.match(backgroundScript, /new Set\(\['chat\/completions', 'responses'\]\)/);
-assert.match(backgroundScript, /'Authorization': `Bearer \$\{apiKey\}`/);
+assert.match(backgroundScript, /'Authorization':\s*'Bearer ' \+ apiKey/);
 
 console.log('ollama-cloud-provider: ok');

@@ -404,31 +404,80 @@ async function executeMainWorldJavaScript(tabId, code) {
     return executionResults?.[0]?.result || createErrorResult('沒有取得 JavaScript 執行結果。', 'UserScriptsExecutionError');
 }
 
-const OLLAMA_CLOUD_FETCH_PORT = 'ollama-cloud-fetch';
+// 保留既有 Ollama Cloud 通道名稱，讓舊版內容腳本可與新版背景服務工作者相容。
+const LLM_API_FETCH_PORT = 'ollama-cloud-fetch';
 const OLLAMA_CLOUD_API_BASE_URL = 'https://ollama.com/v1';
 const OLLAMA_CLOUD_ALLOWED_ENDPOINTS = new Set(['chat/completions', 'responses']);
+const ANTHROPIC_API_BASE_URL = 'https://api.anthropic.com/v1';
+const ANTHROPIC_ALLOWED_ENDPOINTS = new Set(['messages']);
+const SERVICE_WORKER_PROVIDER_CONFIG = {
+    'ollama-cloud': {
+        baseUrl: OLLAMA_CLOUD_API_BASE_URL,
+        allowedEndpoints: OLLAMA_CLOUD_ALLOWED_ENDPOINTS,
+        label: 'Ollama Cloud'
+    },
+    anthropic: {
+        baseUrl: ANTHROPIC_API_BASE_URL,
+        allowedEndpoints: ANTHROPIC_ALLOWED_ENDPOINTS,
+        label: 'Anthropic'
+    }
+};
 
-function getOllamaCloudProxyRequest(message) {
+function getServiceWorkerProviderConfig(providerType) {
+    const config = SERVICE_WORKER_PROVIDER_CONFIG[providerType];
+    if (!config) {
+        throw new Error('不支援的 Service Worker 提供者。');
+    }
+    return config;
+}
+
+function getServiceWorkerProxyRequest(message, expectedProviderType = '') {
     if (!message || message.type !== 'request') {
-        throw new Error('無效的 Ollama Cloud Service Worker 請求。');
+        throw new Error('無效的 Service Worker 請求。');
     }
 
+    const providerType = String(message.providerType || expectedProviderType || '').trim();
+    if (expectedProviderType && providerType !== expectedProviderType) {
+        throw new Error('Service Worker 提供者與請求通道不一致。');
+    }
+
+    const config = getServiceWorkerProviderConfig(providerType);
     const endpoint = String(message.endpoint || '').trim();
-    if (!OLLAMA_CLOUD_ALLOWED_ENDPOINTS.has(endpoint)) {
-        throw new Error('不允許的 Ollama Cloud API 端點。');
+    if (!config.allowedEndpoints.has(endpoint)) {
+        throw new Error('不允許的 ' + config.label + ' API 端點。');
     }
 
     const apiKey = String(message.apiKey || '').trim();
     if (!apiKey) {
-        throw new Error('Ollama Cloud API Key 不可為空。');
+        throw new Error(config.label + ' API Key 不可為空。');
     }
 
     const requestBody = message.requestBody;
     if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) {
-        throw new Error('Ollama Cloud 請求內容格式不正確。');
+        throw new Error(config.label + ' 請求內容格式不正確。');
     }
 
-    return { endpoint, apiKey, requestBody };
+    return { providerType, endpoint, apiKey, requestBody };
+}
+
+function getOllamaCloudProxyRequest(message) {
+    return getServiceWorkerProxyRequest(message, 'ollama-cloud');
+}
+
+function getServiceWorkerRequestHeaders(providerType, apiKey) {
+    if (providerType === 'anthropic') {
+        return {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+        };
+    }
+
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+    };
 }
 
 function postOllamaCloudProxyMessage(port, message) {
@@ -441,7 +490,7 @@ function postOllamaCloudProxyMessage(port, message) {
 }
 
 chrome.runtime.onConnect.addListener((port) => {
-    if (port.name !== OLLAMA_CLOUD_FETCH_PORT) {
+    if (port.name !== LLM_API_FETCH_PORT) {
         return;
     }
 
@@ -461,7 +510,7 @@ chrome.runtime.onConnect.addListener((port) => {
                 type: 'error',
                 error: {
                     name: 'InvalidStateError',
-                    message: '每個 Ollama Cloud 連線只能處理一個請求。'
+                    message: '每個 Service Worker 連線只能處理一個請求。'
                 }
             });
             return;
@@ -471,13 +520,17 @@ chrome.runtime.onConnect.addListener((port) => {
 
         (async () => {
             try {
-                const { endpoint, apiKey, requestBody } = getOllamaCloudProxyRequest(message);
-                const response = await fetch(`${OLLAMA_CLOUD_API_BASE_URL}/${endpoint}`, {
+                let proxyRequest;
+                if (!message?.providerType || message.providerType === 'ollama-cloud') {
+                    proxyRequest = getOllamaCloudProxyRequest(message);
+                } else {
+                    proxyRequest = getServiceWorkerProxyRequest(message);
+                }
+                const { providerType, endpoint, apiKey, requestBody } = proxyRequest;
+                const providerConfig = getServiceWorkerProviderConfig(providerType);
+                const response = await fetch(providerConfig.baseUrl + '/' + endpoint, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
-                    },
+                    headers: getServiceWorkerRequestHeaders(providerType, apiKey),
                     body: JSON.stringify(requestBody),
                     signal: abortController.signal
                 });
@@ -537,7 +590,7 @@ chrome.runtime.onConnect.addListener((port) => {
                     type: 'error',
                     error: {
                         name: error?.name || 'Error',
-                        message: error?.message || 'Ollama Cloud Service Worker 請求失敗。'
+                        message: error?.message || 'Service Worker 請求失敗。'
                     }
                 });
             }
