@@ -1,6 +1,6 @@
 ---
 name: bump-and-release
-description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語意化版本、依既有 CHANGELOG.md 格式整理 Unreleased 內容，並準備主線發布。當使用者要求 bump major、minor 或 patch、更新 CHANGELOG.md、整理發行記錄或準備 Chrome Web Store 發布時使用；若工作區有未提交變更，必須先以完整正體中文提交訊息提交，之後才可編輯 CHANGELOG.md。
+description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語意化版本、依既有 CHANGELOG.md 格式整理 Unreleased 內容，並準備主線發布。當使用者要求 bump 版本、更新 CHANGELOG.md、整理發行記錄或準備 Chrome Web Store 發布時使用；每次執行至少 bump 一次版本，未明確指定時預設使用 patch，只有明確指定 minor 或 major 才使用對應類型；若工作區有未提交變更，必須先以完整正體中文提交訊息提交，之後才可編輯 CHANGELOG.md。
 ---
 
 # Bump And Release
@@ -8,6 +8,8 @@ description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語�
 ## 目的
 
 依 AskPage 專案目前的版本腳本與 GitHub Actions 流程，完成版本提升、變更日誌整理、品質檢查與發布提交。所有操作都必須保留可追溯的提交紀錄，不得虛構未由程式碼或提交內容支持的變更。
+
+本技能每次執行都必須至少提升一次版本號。使用者未指定 bump 類型時，預設執行 patch；只有使用者明確提到 minor 或 major 時，才執行對應的版本升級。
 
 **核心順序：先處理並提交既有未提交變更，再開始準備 CHANGELOG.md；最後才更新版本、檢查並提交發布內容。**
 
@@ -58,7 +60,14 @@ git commit -F "$commit_msg_file"
 
 ### 3. 決定版本並更新版本檔案
 
-依使用者指定選擇 patch、minor 或 major；未指定且無法從變更明確判斷時，不要猜測。使用專案既有腳本，只執行其中一個：
+本技能每次執行都必須從目前 `manifest.json` 版本實際提升一次，且只執行一次版本 bump。版本類型依以下規則決定：
+
+- 使用者明確指定 `major` 時，執行 major bump。
+- 使用者明確指定 `minor` 時，執行 minor bump。
+- 使用者未指定 bump 類型時，預設執行 patch bump。
+- 不得依變更規模自行推測 minor 或 major，也不得因目前版本已在先前提交中提升、看似符合預計目標，或 `Unreleased` 沒有條目而跳過本次 bump。
+
+使用專案既有腳本，只執行其中一個：
 
 ~~~sh
 npm run bump:patch
@@ -74,7 +83,7 @@ git diff --check
 git diff -- manifest.json package.json
 ~~~
 
-若先行提交已經包含版本變更，不要盲目再提升一次；先確認目前版本是否已經是使用者指定的目標版本，只有尚未達到目標時才執行一次 bump。
+若先行提交已經包含版本變更，仍以該提交後的目前版本作為本次執行基準，再依上述規則提升一次；不得把既有版本變更視為本次 bump 的替代品。
 
 ### 4. 準備 CHANGELOG.md
 
@@ -85,7 +94,7 @@ git diff -- manifest.json package.json
 - 保留 ## [Unreleased] 在最上方。
 - 將本次預計發布的 Unreleased 項目移到新的 ## [X.Y.Z] - YYYY-MM-DD 區段，日期使用發布當天的台灣時區日期。
 - 依實際內容使用 ### 新增 / 改進（vX.Y.Z）、### 修正 / 更新（vX.Y.Z）或既有相同風格的分類標題。
-- 若仍有未納入本次版本的內容，留在 Unreleased；若沒有內容，保留區段但不要捏造條目。
+- 若仍有未納入本次版本的內容，留在 Unreleased；若沒有內容，仍建立新的版本區段並保留空的 Unreleased，但不要捏造使用者可見條目。
 - 保留歷史版本順序、原有語氣與 Markdown 格式，不任意改寫無關的歷史記錄。
 - 每個條目以正體中文說明使用者可見行為、影響範圍與必要的相容性限制；技術名稱、模型 ID、檔案名與 API 欄位保留原文。
 
