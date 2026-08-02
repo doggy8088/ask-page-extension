@@ -49,7 +49,9 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     GEMMA_4_REASONING_CAPABILITY,
     OPENAI_REASONING_CAPABILITIES,
     OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY,
+    pendingReasoningValues,
     getReasoningCapability,
+    setActiveReasoningValue,
     normalizeReasoningValue,
     getReasoningSliderConfig,
     getReasoningValueFromSlider,
@@ -64,7 +66,9 @@ const {
     GEMMA_4_REASONING_CAPABILITY,
     OPENAI_REASONING_CAPABILITIES,
     OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY,
+    pendingReasoningValues,
     getReasoningCapability,
+    setActiveReasoningValue,
     normalizeReasoningValue,
     getReasoningSliderConfig,
     getReasoningValueFromSlider,
@@ -247,7 +251,22 @@ assert.match(contentScript, /applyOpenAIReasoningEffort\(requestBody, reasoningE
 // The main dialog owns the hover/focus popover and native range input.
 assert.match(contentScript, /reasoningSlider\.type = 'range';/);
 assert.match(contentScript, /await setActiveReasoningValue\(activeConfig, value\);/);
+assert.match(contentScript, /pendingReasoningValues\.delete\(settingKey\);/);
 assert.match(styleSheet, /\.askpage-provider-model-control\[data-reasoning-configurable="true"\]:hover \.askpage-reasoning-popover/);
 assert.match(styleSheet, /\.askpage-reasoning-slider::-webkit-slider-thumb/);
 
-console.log('reasoning-effort: ok');
+(async () => {
+    const activeConfig = {
+        id: 'ollama-cloud-test',
+        type: 'ollama-cloud',
+        activeModel: 'deepseek-v4-pro'
+    };
+    const settingKey = JSON.stringify([activeConfig.id, activeConfig.activeModel]);
+    pendingReasoningValues.set(settingKey, 'max');
+    assert.strictEqual(await setActiveReasoningValue(activeConfig, 'high'), 'high');
+    assert.strictEqual(pendingReasoningValues.has(settingKey), false);
+    console.log('reasoning-effort: ok');
+})().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+});

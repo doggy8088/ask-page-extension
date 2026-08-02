@@ -753,6 +753,9 @@ async function setActiveReasoningValue(activeConfig, value) {
         : {};
     settings[settingKey] = normalizedValue;
     await setValue(REASONING_EFFORTS_STORAGE, settings);
+    if (pendingReasoningValues.get(settingKey) === normalizedValue) {
+        pendingReasoningValues.delete(settingKey);
+    }
     return normalizedValue;
 }
 
@@ -10849,7 +10852,7 @@ async function createDialog() {
                             model: selectedModel,
                             maxOutputTokens,
                             useTools,
-                            reasoningEffort: isGpt5FamilyModel(selectedModel) ? 'medium' : ''
+                            reasoningEffort
                         });
                     }
 
