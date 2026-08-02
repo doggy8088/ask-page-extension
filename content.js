@@ -1901,7 +1901,7 @@ function getProviderDisplayName(activeConfig) {
 }
 
 // Provider switching function
-async function switchProvider() {
+async function switchProvider(step = 1) {
     const options = await getEnabledProviderModelOptions();
     if (options.length === 0) {
         console.log('[AskPage] No enabled provider models available to switch.');
@@ -1916,7 +1916,7 @@ async function switchProvider() {
         activeIndex = 0;
     }
 
-    const nextIndex = (activeIndex + 1) % options.length;
+    const nextIndex = (activeIndex + step + options.length) % options.length;
     const nextOption = options[nextIndex];
 
     console.log('[AskPage] Switching provider to:', nextOption.providerName, 'Model:', nextOption.model);
@@ -4505,8 +4505,8 @@ async function createDialog() {
     providerDisplayModel.title = '切換 AI 提供者與模型';
     providerDisplayModel.setAttribute('aria-label', '切換 AI 提供者與模型');
     providerDisplayModel.textContent = '載入中';
-    providerDisplayModel.addEventListener('click', async () => {
-        await switchProvider();
+    providerDisplayModel.addEventListener('click', async (event) => {
+        await switchProvider(event.shiftKey ? -1 : 1);
     });
     const reasoningPopover = document.createElement('div');
     reasoningPopover.id = 'askpage-reasoning-popover';
