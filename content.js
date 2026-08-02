@@ -1158,7 +1158,7 @@ const GEMINI_REASONING_CAPABILITIES = {
         maxBudget: 32768,
         allowOff: false,
         allowDynamic: true,
-        defaultValue: -1
+        defaultValue: 32768
     },
     'gemini-2.5-flash': {
         kind: 'budget',
@@ -1166,7 +1166,7 @@ const GEMINI_REASONING_CAPABILITIES = {
         maxBudget: 24576,
         allowOff: true,
         allowDynamic: true,
-        defaultValue: -1
+        defaultValue: 24576
     },
     'gemini-2.5-flash-lite': {
         kind: 'budget',
@@ -1192,13 +1192,13 @@ const OPENAI_REASONING_CAPABILITIES = {
     'gpt-5.6-terra': { options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
     'gpt-5.6-luna': { options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
     'gpt-5.5': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'medium' },
-    'gpt-5.5-pro': { options: ['medium', 'high', 'xhigh'], defaultValue: 'high' },
-    'gpt-5.4': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'none' },
-    'gpt-5.4-mini': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'none' },
-    'gpt-5.4-nano': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'none' },
+    'gpt-5.5-pro': { options: ['medium', 'high', 'xhigh'], defaultValue: 'medium' },
+    'gpt-5.4': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'medium' },
+    'gpt-5.4-mini': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'medium' },
+    'gpt-5.4-nano': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'medium' },
     'gpt-5.4-pro': { options: ['medium', 'high', 'xhigh'], defaultValue: 'medium' },
-    'gpt-5.2': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'none' },
-    'gpt-5.1': { options: ['none', 'low', 'medium', 'high'], defaultValue: 'none' },
+    'gpt-5.2': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'medium' },
+    'gpt-5.1': { options: ['none', 'low', 'medium', 'high'], defaultValue: 'medium' },
     'gpt-5': { options: ['minimal', 'low', 'medium', 'high'], defaultValue: 'medium' },
     'gpt-5-mini': { options: ['minimal', 'low', 'medium', 'high'], defaultValue: 'medium' },
     'gpt-5-nano': { options: ['minimal', 'low', 'medium', 'high'], defaultValue: 'medium' },
@@ -1216,13 +1216,13 @@ const ANTHROPIC_REASONING_CAPABILITIES = {
         kind: 'level',
         thinkingMode: 'adaptive',
         options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
-        defaultValue: 'none'
+        defaultValue: 'high'
     },
     'claude-sonnet-4-6': {
         kind: 'level',
         thinkingMode: 'adaptive',
         options: ['none', 'low', 'medium', 'high', 'max'],
-        defaultValue: 'none'
+        defaultValue: 'high'
     },
     'claude-haiku-4-5': {
         kind: 'budget',
@@ -1268,6 +1268,12 @@ const OPENROUTER_REASONING_CAPABILITIES = {
 };
 
 const OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY = {
+    kind: 'level',
+    options: ['none', 'high', 'max'],
+    defaultValue: 'max'
+};
+
+const OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY = {
     kind: 'level',
     options: ['none', 'high', 'max'],
     defaultValue: 'high'
@@ -1318,6 +1324,9 @@ function getReasoningCapability(providerType = '', model = '') {
     }
     if (providerType === 'ollama-cloud' && normalizedModel.startsWith('deepseek-v4-')) {
         return OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY;
+    }
+    if (providerType === 'ollama-cloud' && ['glm-5.2', 'glm-5.2:cloud'].includes(normalizedModel)) {
+        return OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY;
     }
     return null;
 }
