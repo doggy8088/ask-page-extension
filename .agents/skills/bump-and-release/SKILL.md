@@ -1,6 +1,6 @@
 ---
 name: bump-and-release
-description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語意化版本、依既有 CHANGELOG.md 格式整理 Unreleased 內容，並準備主線發布。當使用者要求 bump 版本、更新 CHANGELOG.md、整理發行記錄或準備 Chrome Web Store 發布時使用；每次執行至少 bump 一次版本，未明確指定時預設使用 patch，只有明確指定 minor 或 major 才使用對應類型；執行版本 bump 前必須先以 git pull --rebase 更新遠端分支並同步 Git tag；若工作區有未提交變更，必須先以完整正體中文提交訊息提交，之後才可編輯 CHANGELOG.md。
+description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語意化版本、依既有 CHANGELOG.md 格式整理 Unreleased 內容，並完成主線發布。當使用者要求 bump 版本、更新 CHANGELOG.md、整理發行記錄或準備 Chrome Web Store 發布時使用；每次執行至少 bump 一次版本，未明確指定時預設使用 patch，只有明確指定 minor 或 major 才使用對應類型；發行前必須位於 main 分支、執行版本 bump 前先以 git pull --rebase 更新遠端分支並同步 Git tag，發布提交後必須推送 main 並驗證 GitHub Actions 成功；若工作區有未提交變更，必須先以完整正體中文提交訊息提交，之後才可編輯 CHANGELOG.md。
 ---
 
 # Bump And Release
@@ -11,7 +11,9 @@ description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語�
 
 本技能每次執行都必須至少提升一次版本號。使用者未指定 bump 類型時，預設執行 patch；只有使用者明確提到 minor 或 major 時，才執行對應的版本升級。
 
-**核心順序：先處理並提交既有未提交變更，再同步遠端分支與 Git tag，接著執行版本 bump、整理 CHANGELOG.md、檢查並提交發布內容。**
+本技能只允許在 `main` 分支執行發行流程；完成發布提交後，必須直接推送 `origin/main`，並等待對應 GitHub Actions 工作流程全部成功後才能結束。
+
+**核心順序：先確認位於 main，再處理並提交既有未提交變更、同步遠端分支與 Git tag，接著執行版本 bump、整理 CHANGELOG.md、檢查並提交發布內容、推送 main，最後驗證 CI 成功。**
 
 * * *
 
@@ -23,9 +25,12 @@ description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語�
 
 ~~~sh
 git status --short --branch
+git branch --show-current
 git log -5 --oneline --decorate
 git tag --sort=-v:refname | head -20
 ~~~
+
+第一個發行閘門是目前分支必須完全等於 `main`。若 `git branch --show-current` 輸出不是 `main`，包括 detached HEAD 或輸出為空，立即終止發行流程，要求使用者先切換回 `main`；不得在此情況下修改檔案、提交、pull、同步 tag、執行 bump、推送或觸發 CI。
 
 以 manifest.json 的 version 作為主要版本來源，並確認 package.json 的 version 相同。若兩者不同、版本格式不是三段式語意化版本，或無法辨識上一版與本次變更範圍，先停止並說明問題。
 
@@ -121,7 +126,7 @@ git diff --check
 git diff -- CHANGELOG.md manifest.json package.json
 ~~~
 
-### 6. 驗證並提交發布內容
+### 6. 驗證、提交、推送並確認 CI
 
 依專案可用環境執行品質檢查：
 
@@ -147,28 +152,50 @@ git commit -F "$commit_msg_file"
 
 提交後執行 git status --short、git log -2 --oneline 與版本檢查，確保工作區乾淨且沒有意外建立版本標籤。
 
+只有在目前分支仍是 `main`、發布提交已建立、工作區乾淨、版本檔案同步、測試與 lint 通過且差異檢查通過時，才可直接推送：
+
+~~~sh
+git push origin main
+~~~
+
+推送後必須等待並驗證這次推送對應的 `.github/workflows/release.yml` GitHub Actions 工作流程。優先使用 GitHub CLI 取得 `headSha` 等於發布提交 SHA 的 run，再等待完成：
+
+~~~sh
+release_sha="$(git rev-parse HEAD)"
+run_id="$(gh run list --workflow release.yml --branch main --limit 20 --json databaseId,headSha --jq ".[] | select(.headSha == \"$release_sha\") | .databaseId" | head -n 1)"
+if [ -z "$run_id" ]; then
+    echo "找不到對應發布提交的 GitHub Actions run。"
+    exit 1
+fi
+gh run watch "$run_id" --exit-status
+gh run view "$run_id" --json headSha,status,conclusion,jobs,url
+~~~
+
+CI 驗證必須同時符合以下條件：
+
+- run 的 `headSha` 等於本次推送的發布提交 SHA。
+- run 的 `status` 為 `completed`，`conclusion` 為 `success`。
+- run 內所有 jobs 的 `conclusion` 都是 `success`，不可接受 failure、cancelled、timed_out 或未完成狀態。
+- 由於 `release.yml` 包含建立 GitHub Release、打包擴充功能與 Chrome Web Store 上傳發布步驟，只有整個 workflow 成功後，才可回報發布完成。
+
+若 `git push` 失敗、找不到對應 run、GitHub CLI 無法取得結果、CI 失敗、取消、逾時或任何 job 未成功，立即停止並回報實際 SHA、run URL 與錯誤；不得宣稱 GitHub Release 或 Chrome Web Store 發布成功。
+
 * * *
 
 ## Git 與 CWS 發布邊界
 
 **Agent 不用自己建立或推送 Git tag。** 可以唯讀查詢既有 tag 來辨識版本，但不要執行建立新 tag 的指令，例如 git tag vX.Y.Z 或 git push origin vX.Y.Z，也不要把手動建立 tag 當作完成條件。
 
-目前 .github/workflows/release.yml 會在推送到 main 時讀取 manifest.json 版本、建立對應的 GitHub Release 與 tag、打包擴充功能，並透過 Chrome Web Store API 發布到 CWS。**只要版本檔案已更新，將發布提交推送到 main 即交由 CI 自動發佈新版本到 CWS。** CWS 發布仍取決於 GitHub Actions 所需 Secrets 已設定且工作流程成功；不可在本機宣稱已上架而未檢查 CI 結果。
-
-若使用者明確要求完成發布：
-
-1. 確認目前分支是 main，發布提交已完成，版本號已更新，且工作區乾淨。
-2. 使用 git push origin main 推送，不要推送 tag。
-3. 回報 GitHub Actions 工作流程與 CWS 發布結果；若 CI 失敗，記錄實際錯誤，不要宣稱發布成功。
-
-若使用者只要求準備版本與變更日誌，完成發布提交後停止，不要自行推送遠端。
+目前 .github/workflows/release.yml 會在推送到 main 時讀取 manifest.json 版本、建立對應的 GitHub Release 與 tag、打包擴充功能，並透過 Chrome Web Store API 發布到 CWS。**只要版本 bump、變更日誌、驗證與發布提交全部完成，技能就必須執行 `git push origin main`，不再把推送視為可選步驟。** 不要建立或推送 Git tag；由 `release.yml` 在 CI 中建立對應 tag、GitHub Release、套件並發布至 Chrome Web Store。CWS 發布仍取決於 GitHub Actions 所需 Secrets 已設定且整個 workflow 成功；未完成 CI 驗證前不可結束流程或宣稱已上架。
 
 * * *
 
 ## 不可違反的檢查
 
 - **先行提交永遠在 CHANGELOG.md 整理之前。**
+- **發行流程只允許在 `main` 分支執行；其他分支必須立即終止並要求使用者切換回 `main`。**
 - **執行任何版本 bump 前，必須先成功執行 `git pull --rebase` 並同步遠端 Git tag。**
+- **發布提交完成後必須執行 `git push origin main`，並驗證對應 GitHub Actions 的所有 jobs 成功後才能結束。**
 - 不以提交數量取代變更內容審查，不建立空提交。
 - 不使用 git commit -m，不省略完整提交正文。
 - 不虛構版本條目、日期、測試結果、CWS 狀態或 Git tag。
