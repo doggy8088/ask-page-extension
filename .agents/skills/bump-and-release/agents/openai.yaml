@@ -1,0 +1,4 @@
+interface:
+  display_name: "版本更新與發布"
+  short_description: "提升語意化版本、整理 CHANGELOG 並準備主線自動發佈"
+  default_prompt: "使用 $bump-and-release 提升版本並更新 CHANGELOG。"
