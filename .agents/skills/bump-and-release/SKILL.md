@@ -1,6 +1,6 @@
 ---
 name: bump-and-release
-description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語意化版本、依既有 CHANGELOG.md 格式整理 Unreleased 內容，並準備主線發布。當使用者要求 bump 版本、更新 CHANGELOG.md、整理發行記錄或準備 Chrome Web Store 發布時使用；每次執行至少 bump 一次版本，未明確指定時預設使用 patch，只有明確指定 minor 或 major 才使用對應類型；若工作區有未提交變更，必須先以完整正體中文提交訊息提交，之後才可編輯 CHANGELOG.md。
+description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語意化版本、依既有 CHANGELOG.md 格式整理 Unreleased 內容，並準備主線發布。當使用者要求 bump 版本、更新 CHANGELOG.md、整理發行記錄或準備 Chrome Web Store 發布時使用；每次執行至少 bump 一次版本，未明確指定時預設使用 patch，只有明確指定 minor 或 major 才使用對應類型；執行版本 bump 前必須先以 git pull --rebase 更新遠端分支並同步 Git tag；若工作區有未提交變更，必須先以完整正體中文提交訊息提交，之後才可編輯 CHANGELOG.md。
 ---
 
 # Bump And Release
@@ -11,7 +11,7 @@ description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語�
 
 本技能每次執行都必須至少提升一次版本號。使用者未指定 bump 類型時，預設執行 patch；只有使用者明確提到 minor 或 major 時，才執行對應的版本升級。
 
-**核心順序：先處理並提交既有未提交變更，再開始準備 CHANGELOG.md；最後才更新版本、檢查並提交發布內容。**
+**核心順序：先處理並提交既有未提交變更，再同步遠端分支與 Git tag，接著執行版本 bump、整理 CHANGELOG.md、檢查並提交發布內容。**
 
 * * *
 
@@ -58,7 +58,23 @@ git commit -F "$commit_msg_file"
 
 若工作區原本已經乾淨，直接進入下一步，不要為了湊提交而建立空提交。
 
-### 3. 決定版本並更新版本檔案
+### 3. 先同步遠端分支與 Git tag
+
+在執行任何 `npm run bump:*` 前，必須先完成先行提交，確認工作區乾淨，並依序執行以下命令：
+
+~~~sh
+git pull --rebase
+git fetch --tags --force --prune
+~~~
+
+規則如下：
+
+- `git pull --rebase` 必須實際執行，不得以目前分支看似領先、工作區乾淨或先前查過遠端狀態取代。
+- `git fetch --tags --force --prune` 用於同步遠端 Git tag；完成後重新檢查分支狀態、版本檔案與最近版本標籤。
+- 若 `git pull --rebase`、Git tag 同步失敗，或 rebase 發生衝突，立即停止；在問題解決前不得執行版本 bump，也不得編輯 CHANGELOG.md。
+- 同步後若遠端帶入新的版本、CHANGELOG 或程式碼變更，必須以同步後內容重新判斷本次發布範圍。
+
+### 4. 決定版本並更新版本檔案
 
 本技能每次執行都必須從目前 `manifest.json` 版本實際提升一次，且只執行一次版本 bump。版本類型依以下規則決定：
 
@@ -85,7 +101,7 @@ git diff -- manifest.json package.json
 
 若先行提交已經包含版本變更，仍以該提交後的目前版本作為本次執行基準，再依上述規則提升一次；不得把既有版本變更視為本次 bump 的替代品。
 
-### 4. 準備 CHANGELOG.md
+### 5. 準備 CHANGELOG.md
 
 只有完成先行提交後，才可整理變更日誌。以實際程式碼差異、測試、文件與提交紀錄為依據，從目前的 Unreleased 內容及上一個版本標籤後的變更整理發布說明，不要只複製提交標題，也不要新增沒有證據的敘述。
 
@@ -105,7 +121,7 @@ git diff --check
 git diff -- CHANGELOG.md manifest.json package.json
 ~~~
 
-### 5. 驗證並提交發布內容
+### 6. 驗證並提交發布內容
 
 依專案可用環境執行品質檢查：
 
@@ -152,6 +168,7 @@ git commit -F "$commit_msg_file"
 ## 不可違反的檢查
 
 - **先行提交永遠在 CHANGELOG.md 整理之前。**
+- **執行任何版本 bump 前，必須先成功執行 `git pull --rebase` 並同步遠端 Git tag。**
 - 不以提交數量取代變更內容審查，不建立空提交。
 - 不使用 git commit -m，不省略完整提交正文。
 - 不虛構版本條目、日期、測試結果、CWS 狀態或 Git tag。
