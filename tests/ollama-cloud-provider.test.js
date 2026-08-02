@@ -25,6 +25,7 @@ vm.runInContext(`${settingsScript}\nglobalThis.__ollamaCloudModels = PREDEFINED_
 });
 
 const expectedModels = [
+    'deepseek-v4-flash:0731-cloud',
     'deepseek-v4-flash',
     'deepseek-v4-pro',
     'glm-5.2',
