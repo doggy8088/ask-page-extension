@@ -691,6 +691,7 @@ const PROMPT_HISTORY_STORAGE = 'ASKPAGE_PROMPT_HISTORY';
 // New storage keys for multi-provider support
 const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
+const REASONING_EFFORTS_STORAGE = 'ASKPAGE_REASONING_EFFORTS';
 const CUSTOM_COMMAND_MODE_AGENT = 'agent';
 const CUSTOM_COMMAND_MODE_INQUIRY = 'inquiry';
 const CUSTOM_COMMAND_MODE_UNSPECIFIED = 'unspecified';
@@ -702,6 +703,7 @@ const CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE = 'CUSTOM_SUMMARY_SHOW_VARIABL
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
 const CUSTOM_COMMAND_USAGE_STORAGE = 'CUSTOM_COMMAND_USAGE';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
+const pendingReasoningValues = new Map();
 
 async function getValue(key, defaultValue) {
     const result = await chrome.storage.local.get([key]);
@@ -710,6 +712,60 @@ async function getValue(key, defaultValue) {
 
 function setValue(key, value) {
     return chrome.storage.local.set({ [key]: value });
+}
+
+function getReasoningSettingKey(activeConfig) {
+    const providerId = String(activeConfig?.id || '').trim();
+    const model = normalizeModelIdentifier(activeConfig?.activeModel || '');
+    return providerId && model ? JSON.stringify([providerId, model]) : '';
+}
+
+async function getActiveReasoningValue(activeConfig) {
+    const capability = getReasoningCapability(activeConfig?.type, activeConfig?.activeModel);
+    const settingKey = getReasoningSettingKey(activeConfig);
+    if (!capability || !settingKey) {
+        return null;
+    }
+
+    if (pendingReasoningValues.has(settingKey)) {
+        return normalizeReasoningValue(capability, pendingReasoningValues.get(settingKey));
+    }
+
+    const settings = await getValue(REASONING_EFFORTS_STORAGE, {});
+    const storedValue = settings && typeof settings === 'object' && !Array.isArray(settings)
+        ? settings[settingKey]
+        : undefined;
+    return normalizeReasoningValue(capability, storedValue);
+}
+
+async function setActiveReasoningValue(activeConfig, value) {
+    const capability = getReasoningCapability(activeConfig?.type, activeConfig?.activeModel);
+    const settingKey = getReasoningSettingKey(activeConfig);
+    if (!capability || !settingKey) {
+        return null;
+    }
+
+    const normalizedValue = normalizeReasoningValue(capability, value);
+    pendingReasoningValues.set(settingKey, normalizedValue);
+    const storedSettings = await getValue(REASONING_EFFORTS_STORAGE, {});
+    const settings = storedSettings && typeof storedSettings === 'object' && !Array.isArray(storedSettings)
+        ? { ...storedSettings }
+        : {};
+    settings[settingKey] = normalizedValue;
+    await setValue(REASONING_EFFORTS_STORAGE, settings);
+    return normalizedValue;
+}
+
+function cacheActiveReasoningValue(activeConfig, value) {
+    const capability = getReasoningCapability(activeConfig?.type, activeConfig?.activeModel);
+    const settingKey = getReasoningSettingKey(activeConfig);
+    if (!capability || !settingKey) {
+        return null;
+    }
+
+    const normalizedValue = normalizeReasoningValue(capability, value);
+    pendingReasoningValues.set(settingKey, normalizedValue);
+    return normalizedValue;
 }
 
 function normalizeCommandUsageMap(value) {
@@ -1007,6 +1063,289 @@ function normalizeModelIdentifier(model = '') {
         .trim()
         .toLowerCase()
         .replace(/-\d{4}-\d{2}-\d{2}$/, '');
+}
+
+// Provider-scoped allowlists and prefixes verified against provider documentation on 2026-08-02.
+// Gemini: https://ai.google.dev/gemini-api/docs/generate-content/thinking
+// Gemma 4 on Gemini API: https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api
+// OpenAI: https://developers.openai.com/api/docs/guides/reasoning
+// Ollama: https://docs.ollama.com/api/openai-compatibility
+// Ollama max effort: https://github.com/ollama/ollama/pull/15787
+// DeepSeek V4 modes: https://ollama.com/library/deepseek-v4-flash:cloud
+// Unknown providers, aliases, and model families must not inherit these capabilities.
+const GEMINI_REASONING_CAPABILITIES = {
+    'gemini-3.6-flash': {
+        kind: 'level',
+        options: ['minimal', 'low', 'medium', 'high'],
+        defaultValue: 'medium'
+    },
+    'gemini-3.5-flash-lite': {
+        kind: 'level',
+        options: ['minimal', 'low', 'medium', 'high'],
+        defaultValue: 'minimal'
+    },
+    'gemini-3.5-flash': {
+        kind: 'level',
+        options: ['minimal', 'low', 'medium', 'high'],
+        defaultValue: 'medium'
+    },
+    'gemini-3.1-pro-preview': {
+        kind: 'level',
+        options: ['low', 'medium', 'high'],
+        defaultValue: 'high'
+    },
+    'gemini-3.1-flash-lite': {
+        kind: 'level',
+        options: ['minimal', 'low', 'medium', 'high'],
+        defaultValue: 'minimal'
+    },
+    'gemini-3-flash-preview': {
+        kind: 'level',
+        options: ['minimal', 'low', 'medium', 'high'],
+        defaultValue: 'high'
+    },
+    'gemini-3-pro-preview': {
+        kind: 'level',
+        options: ['low', 'high'],
+        defaultValue: 'high'
+    },
+    'gemini-2.5-pro': {
+        kind: 'budget',
+        minBudget: 128,
+        maxBudget: 32768,
+        allowOff: false,
+        allowDynamic: true,
+        defaultValue: -1
+    },
+    'gemini-2.5-flash': {
+        kind: 'budget',
+        minBudget: 0,
+        maxBudget: 24576,
+        allowOff: true,
+        allowDynamic: true,
+        defaultValue: -1
+    },
+    'gemini-2.5-flash-lite': {
+        kind: 'budget',
+        minBudget: 512,
+        maxBudget: 24576,
+        allowOff: true,
+        allowDynamic: true,
+        defaultValue: 0
+    }
+};
+
+const GEMMA_4_REASONING_CAPABILITY = {
+    kind: 'level',
+    options: ['minimal', 'high'],
+    defaultValue: 'high'
+};
+
+const OPENAI_REASONING_CAPABILITIES = {
+    'gpt-5.6': { options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
+    'gpt-5.6-sol': { options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
+    'gpt-5.6-terra': { options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
+    'gpt-5.6-luna': { options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
+    'gpt-5.5': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'medium' },
+    'gpt-5.5-pro': { options: ['medium', 'high', 'xhigh'], defaultValue: 'high' },
+    'gpt-5.4': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'none' },
+    'gpt-5.4-mini': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'none' },
+    'gpt-5.4-nano': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'none' },
+    'gpt-5.4-pro': { options: ['medium', 'high', 'xhigh'], defaultValue: 'medium' },
+    'gpt-5.2': { options: ['none', 'low', 'medium', 'high', 'xhigh'], defaultValue: 'none' },
+    'gpt-5.1': { options: ['none', 'low', 'medium', 'high'], defaultValue: 'none' },
+    'gpt-5': { options: ['minimal', 'low', 'medium', 'high'], defaultValue: 'medium' },
+    'gpt-5-mini': { options: ['minimal', 'low', 'medium', 'high'], defaultValue: 'medium' },
+    'gpt-5-nano': { options: ['minimal', 'low', 'medium', 'high'], defaultValue: 'medium' },
+    'o3': { options: ['low', 'medium', 'high'], defaultValue: 'medium' },
+    'o3-mini': { options: ['low', 'medium', 'high'], defaultValue: 'medium' },
+    'o4-mini': { options: ['low', 'medium', 'high'], defaultValue: 'medium' }
+};
+
+Object.values(OPENAI_REASONING_CAPABILITIES).forEach((capability) => {
+    capability.kind = 'level';
+});
+
+const OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY = {
+    kind: 'level',
+    options: ['high', 'max'],
+    defaultValue: 'high'
+};
+
+const REASONING_VALUE_LABELS = {
+    none: '關閉',
+    minimal: '最低',
+    low: '低',
+    medium: '中',
+    high: '高',
+    xhigh: '極高',
+    max: '最高'
+};
+
+const REASONING_VALUE_LABELS_EN = {
+    none: 'Off',
+    minimal: 'Minimal',
+    low: 'Low',
+    medium: 'Medium',
+    high: 'High',
+    xhigh: 'Extra high',
+    max: 'Maximum'
+};
+
+function getReasoningCapability(providerType = '', model = '') {
+    const normalizedModel = normalizeModelIdentifier(model);
+    if (providerType === 'gemini') {
+        if (normalizedModel.startsWith('gemma-4-')) {
+            return GEMMA_4_REASONING_CAPABILITY;
+        }
+        return GEMINI_REASONING_CAPABILITIES[normalizedModel] || null;
+    }
+    if (providerType === 'openai') {
+        return OPENAI_REASONING_CAPABILITIES[normalizedModel] || null;
+    }
+    if (providerType === 'ollama-cloud' && normalizedModel.startsWith('deepseek-v4-')) {
+        return OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY;
+    }
+    return null;
+}
+
+function normalizeReasoningValue(capability, value) {
+    if (!capability) {
+        return null;
+    }
+
+    if (capability.kind === 'level') {
+        return capability.options.includes(value) ? value : capability.defaultValue;
+    }
+
+    const numericValue = Number(value);
+    if (!Number.isInteger(numericValue)) {
+        return capability.defaultValue;
+    }
+    if (capability.allowDynamic && numericValue === -1) {
+        return numericValue;
+    }
+    if (capability.allowOff && numericValue === 0) {
+        return numericValue;
+    }
+    if (numericValue >= capability.minBudget && numericValue <= capability.maxBudget) {
+        return numericValue;
+    }
+    return capability.defaultValue;
+}
+
+function getReasoningSliderConfig(capability, value) {
+    const normalizedValue = normalizeReasoningValue(capability, value);
+    if (capability.kind === 'level') {
+        return {
+            min: 0,
+            max: capability.options.length - 1,
+            index: capability.options.indexOf(normalizedValue)
+        };
+    }
+
+    const regularValueCount = capability.maxBudget - capability.minBudget + 1;
+    const offOffset = capability.allowOff && capability.minBudget > 0 ? 1 : 0;
+    const lastRegularIndex = regularValueCount + offOffset - 1;
+    const maxIndex = lastRegularIndex + (capability.allowDynamic ? 1 : 0);
+    let index;
+    if (normalizedValue === -1) {
+        index = maxIndex;
+    } else if (normalizedValue === 0 && offOffset) {
+        index = 0;
+    } else {
+        index = normalizedValue - capability.minBudget + offOffset;
+    }
+
+    return {
+        min: 0,
+        max: maxIndex,
+        index
+    };
+}
+
+function getReasoningValueFromSlider(capability, sliderIndex) {
+    const sliderConfig = getReasoningSliderConfig(capability, capability.defaultValue);
+    const index = Math.min(Math.max(Number(sliderIndex), sliderConfig.min), sliderConfig.max);
+    if (capability.kind === 'level') {
+        return capability.options[index];
+    }
+
+    if (capability.allowDynamic && index === sliderConfig.max) {
+        return -1;
+    }
+    if (capability.allowOff && capability.minBudget > 0 && index === 0) {
+        return 0;
+    }
+    const offOffset = capability.allowOff && capability.minBudget > 0 ? 1 : 0;
+    return capability.minBudget + index - offOffset;
+}
+
+function getReasoningValueLabel(capability, value) {
+    const normalizedValue = normalizeReasoningValue(capability, value);
+    const isEnglish = typeof AskPageI18n !== 'undefined' && AskPageI18n.isEnglish;
+    if (capability.kind === 'level') {
+        const labels = isEnglish ? REASONING_VALUE_LABELS_EN : REASONING_VALUE_LABELS;
+        return labels[normalizedValue] || normalizedValue;
+    }
+    if (normalizedValue === -1) {
+        return isEnglish ? 'Dynamic' : '動態';
+    }
+    if (normalizedValue === 0) {
+        return isEnglish ? 'Off' : '關閉';
+    }
+    return `${normalizedValue.toLocaleString('en-US')} Token`;
+}
+
+function updateReasoningSliderPresentation(slider, valueElement, capability) {
+    if (!slider || !valueElement || !capability) {
+        return null;
+    }
+
+    const value = getReasoningValueFromSlider(capability, Number(slider.value));
+    const label = getReasoningValueLabel(capability, value);
+    const min = Number(slider.min);
+    const max = Number(slider.max);
+    const progress = max > min ? ((Number(slider.value) - min) / (max - min)) * 100 : 0;
+    slider.style.setProperty('--askpage-reasoning-progress', `${progress}%`);
+    slider.setAttribute('aria-valuetext', label);
+    valueElement.textContent = label;
+    return value;
+}
+
+function buildGeminiThinkingConfig(model = '', reasoningValue = null, includeThoughts = false) {
+    const capability = getReasoningCapability('gemini', model);
+    if (!capability) {
+        return null;
+    }
+
+    const value = normalizeReasoningValue(capability, reasoningValue);
+    const thinkingConfig = {};
+    if (includeThoughts) {
+        thinkingConfig.includeThoughts = true;
+    }
+    if (capability.kind === 'level') {
+        thinkingConfig.thinkingLevel = value;
+    } else {
+        thinkingConfig.thinkingBudget = value;
+    }
+    return thinkingConfig;
+}
+
+function applyOpenAIReasoningEffort(requestBody, reasoningEffort, useResponsesApi) {
+    if (!reasoningEffort) {
+        return requestBody;
+    }
+
+    if (useResponsesApi) {
+        requestBody.reasoning = {
+            ...(requestBody.reasoning || {}),
+            effort: reasoningEffort
+        };
+    } else {
+        requestBody.reasoning_effort = reasoningEffort;
+    }
+    return requestBody;
 }
 
 function isGpt5FamilyModel(model = '') {
@@ -1444,6 +1783,47 @@ async function updateProviderDisplay() {
     const providerDisplayModel = getActiveDialogElementById('provider-display-model');
     if (providerDisplayModel) {
         providerDisplayModel.textContent = model ? `${displayName} · ${model}` : `${displayName} · 尚未設定模型`;
+    }
+
+    const reasoningControl = getActiveDialogElementById('askpage-reasoning-control');
+    const reasoningPopover = getActiveDialogElementById('askpage-reasoning-popover');
+    const reasoningSlider = getActiveDialogElementById('askpage-reasoning-slider');
+    const reasoningValue = getActiveDialogElementById('askpage-reasoning-value');
+    const reasoningHint = getActiveDialogElementById('askpage-reasoning-hint');
+    const capability = getReasoningCapability(activeConfig?.type, model);
+
+    if (!reasoningControl || !reasoningPopover || !reasoningSlider || !reasoningValue || !reasoningHint) {
+        return;
+    }
+
+    if (!capability || !activeConfig) {
+        reasoningControl.removeAttribute('data-reasoning-configurable');
+        reasoningPopover.hidden = true;
+        if (providerDisplayModel) {
+            providerDisplayModel.title = '切換 AI 提供者與模型';
+        }
+        return;
+    }
+
+    const selectedValue = await getActiveReasoningValue(activeConfig);
+    const sliderConfig = getReasoningSliderConfig(capability, selectedValue);
+    reasoningControl.setAttribute('data-reasoning-configurable', 'true');
+    reasoningPopover.hidden = false;
+    reasoningSlider.min = String(sliderConfig.min);
+    reasoningSlider.max = String(sliderConfig.max);
+    reasoningSlider.step = '1';
+    reasoningSlider.value = String(sliderConfig.index);
+    reasoningSlider.dataset.settingKey = getReasoningSettingKey(activeConfig);
+    reasoningSlider.dataset.providerId = activeConfig.id;
+    reasoningSlider.dataset.providerType = activeConfig.type;
+    reasoningSlider.dataset.model = model;
+    reasoningSlider.setAttribute('aria-label', '推理強度');
+    reasoningHint.textContent = capability.kind === 'budget'
+        ? '滑動以調整推理 Token 預算'
+        : '滑動以調整本模型的推理強度';
+    updateReasoningSliderPresentation(reasoningSlider, reasoningValue, capability);
+    if (providerDisplayModel) {
+        providerDisplayModel.title = '切換 AI 提供者與模型；滑鼠停留可調整推理強度';
     }
 }
 
@@ -3943,6 +4323,9 @@ async function createDialog() {
     providerDisplayName.id = 'provider-display-name';
     providerDisplayName.className = 'askpage-provider-name';
     providerDisplayName.textContent = '頁問';
+    const providerModelControl = document.createElement('div');
+    providerModelControl.id = 'askpage-reasoning-control';
+    providerModelControl.className = 'askpage-provider-model-control';
     const providerDisplayModel = document.createElement('button');
     providerDisplayModel.id = 'provider-display-model';
     providerDisplayModel.className = 'askpage-provider-model';
@@ -3953,6 +4336,59 @@ async function createDialog() {
     providerDisplayModel.addEventListener('click', async () => {
         await switchProvider();
     });
+    const reasoningPopover = document.createElement('div');
+    reasoningPopover.id = 'askpage-reasoning-popover';
+    reasoningPopover.className = 'askpage-reasoning-popover';
+    reasoningPopover.hidden = true;
+    reasoningPopover.setAttribute('role', 'group');
+    reasoningPopover.setAttribute('aria-label', '推理強度');
+    reasoningPopover.setAttribute('data-askpage-nondraggable', 'true');
+    const reasoningHeader = document.createElement('div');
+    reasoningHeader.className = 'askpage-reasoning-header';
+    const reasoningLabel = document.createElement('span');
+    reasoningLabel.className = 'askpage-reasoning-label';
+    reasoningLabel.textContent = '推理強度';
+    const reasoningValue = document.createElement('span');
+    reasoningValue.id = 'askpage-reasoning-value';
+    reasoningValue.className = 'askpage-reasoning-value';
+    const reasoningSlider = document.createElement('input');
+    reasoningSlider.id = 'askpage-reasoning-slider';
+    reasoningSlider.className = 'askpage-reasoning-slider';
+    reasoningSlider.type = 'range';
+    reasoningSlider.addEventListener('input', () => {
+        const capability = getReasoningCapability(
+            reasoningSlider.dataset.providerType,
+            reasoningSlider.dataset.model
+        );
+        const value = updateReasoningSliderPresentation(reasoningSlider, reasoningValue, capability);
+        cacheActiveReasoningValue({
+            id: reasoningSlider.dataset.providerId,
+            type: reasoningSlider.dataset.providerType,
+            activeModel: reasoningSlider.dataset.model
+        }, value);
+    });
+    reasoningSlider.addEventListener('change', async () => {
+        const activeConfig = await getActiveProviderConfig();
+        if (getReasoningSettingKey(activeConfig) !== reasoningSlider.dataset.settingKey) {
+            return;
+        }
+        const capability = getReasoningCapability(activeConfig?.type, activeConfig?.activeModel);
+        if (!capability) {
+            return;
+        }
+        const value = getReasoningValueFromSlider(capability, Number(reasoningSlider.value));
+        await setActiveReasoningValue(activeConfig, value);
+    });
+    const reasoningHint = document.createElement('div');
+    reasoningHint.id = 'askpage-reasoning-hint';
+    reasoningHint.className = 'askpage-reasoning-hint';
+    reasoningHeader.appendChild(reasoningLabel);
+    reasoningHeader.appendChild(reasoningValue);
+    reasoningPopover.appendChild(reasoningHeader);
+    reasoningPopover.appendChild(reasoningSlider);
+    reasoningPopover.appendChild(reasoningHint);
+    providerModelControl.appendChild(providerDisplayModel);
+    providerModelControl.appendChild(reasoningPopover);
 
     const providerActions = document.createElement('div');
     providerActions.className = 'askpage-header-actions';
@@ -4064,7 +4500,7 @@ async function createDialog() {
     providerActions.appendChild(optionsBtn);
     providerDisplay.appendChild(providerBrandMark);
     providerDisplay.appendChild(providerDisplayName);
-    providerDisplay.appendChild(providerDisplayModel);
+    providerDisplay.appendChild(providerModelControl);
     providerInfo.appendChild(providerDisplay);
     providerHeader.appendChild(providerInfo);
     providerHeader.appendChild(providerActions);
@@ -4352,7 +4788,7 @@ async function createDialog() {
     }
 
     providerHeader.addEventListener('mousedown', (event) => {
-        if (event.button !== 0 || event.target.closest('button')) {
+        if (event.button !== 0 || event.target.closest('button, input, [data-askpage-nondraggable="true"]')) {
             return;
         }
 
@@ -8694,10 +9130,8 @@ async function createDialog() {
         }
 
         if (options.reasoningEffort) {
-            requestBody.reasoning = {
-                effort: options.reasoningEffort,
-                summary: 'concise'
-            };
+            applyOpenAIReasoningEffort(requestBody, options.reasoningEffort, true);
+            requestBody.reasoning.summary = 'concise';
         }
 
         return requestBody;
@@ -8918,26 +9352,6 @@ async function createDialog() {
             .map((part) => part?.thought === true ? '' : (typeof part?.text === 'string' ? part.text : ''))
             .join('')
             .trim();
-    }
-
-    function doesGeminiModelSupportThoughtStreaming(model = '') {
-        const normalizedModel = normalizeModelIdentifier(model);
-        return normalizedModel.startsWith('gemini-2.5') || normalizedModel.startsWith('gemini-3');
-    }
-
-    function buildGeminiThinkingConfig(model = '') {
-        const normalizedModel = normalizeModelIdentifier(model);
-        if (!doesGeminiModelSupportThoughtStreaming(normalizedModel)) {
-            return null;
-        }
-
-        const thinkingConfig = { includeThoughts: true };
-        if (normalizedModel.startsWith('gemini-3')) {
-            thinkingConfig.thinkingLevel = 'medium';
-        } else if (normalizedModel.startsWith('gemini-2.5')) {
-            thinkingConfig.thinkingBudget = -1;
-        }
-        return thinkingConfig;
     }
 
     function formatGeminiSafetyDetails(safetyRatings) {
@@ -9756,6 +10170,7 @@ async function createDialog() {
     async function runGeminiToolLoop({
         apiKey,
         selectedModel,
+        reasoningValue,
         capturedSelectedText = '',
         screenshotDataUrl = null,
         inputImageDataUrls = [],
@@ -9809,7 +10224,7 @@ async function createDialog() {
                 contents,
                 generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens }
             };
-            const thinkingConfig = enableTools ? buildGeminiThinkingConfig(selectedModel) : null;
+            const thinkingConfig = buildGeminiThinkingConfig(selectedModel, reasoningValue, enableTools);
             if (thinkingConfig) {
                 requestBody.generationConfig.thinkingConfig = thinkingConfig;
             }
@@ -9949,6 +10364,7 @@ async function createDialog() {
         const encryptedApiKey = activeConfig?.apiKey || '';
         const selectedModel = activeConfig?.activeModel || 'gemini-flash-lite-latest';
         const providerLabel = getProviderDisplayName(activeConfig);
+        const reasoningValue = await getActiveReasoningValue(activeConfig);
 
         console.log('[AskPage] Selected model:', selectedModel);
         console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
@@ -9979,6 +10395,7 @@ async function createDialog() {
             const answer = await runGeminiToolLoop({
                 apiKey,
                 selectedModel,
+                reasoningValue,
                 capturedSelectedText,
                 screenshotDataUrl,
                 inputImageDataUrls,
@@ -10020,6 +10437,7 @@ async function createDialog() {
         const encryptedApiKey = activeConfig?.apiKey || '';
         const selectedModel = activeConfig?.activeModel || 'gpt-4o-mini';
         const providerLabel = getProviderDisplayName(activeConfig);
+        const reasoningEffort = await getActiveReasoningValue(activeConfig);
 
         if (!encryptedApiKey) {
             appendErrorMessageAndStore(`請點擊擴充功能圖示設定您的 ${providerLabel} API Key。`);
@@ -10048,7 +10466,7 @@ async function createDialog() {
         const supportsTemperature = !isReasoningModel(selectedModel);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(selectedModel);
         const useResponsesApi = shouldUseResponsesApi(selectedModel);
-        console.log('[AskPage] OpenAI max output tokens:', maxOutputTokens, 'model:', selectedModel, 'responses_api:', useResponsesApi, 'reasoning_effort:', isGpt5FamilyModel(selectedModel) ? 'medium' : 'default');
+        console.log('[AskPage] OpenAI max output tokens:', maxOutputTokens, 'model:', selectedModel, 'responses_api:', useResponsesApi, 'reasoning_effort:', reasoningEffort || 'default');
 
         try {
             const answer = await runOpenAIStyleToolLoop({
@@ -10065,7 +10483,7 @@ async function createDialog() {
                             model: selectedModel,
                             maxOutputTokens,
                             useTools,
-                            reasoningEffort: isGpt5FamilyModel(selectedModel) ? 'medium' : ''
+                            reasoningEffort
                         }), {
                             providerType: 'openai',
                             agentModeEnabled,
@@ -10088,9 +10506,7 @@ async function createDialog() {
                         requestBody.max_tokens = maxOutputTokens;
                     }
 
-                    if (isGpt5FamilyModel(selectedModel)) {
-                        requestBody.reasoning_effort = 'medium';
-                    }
+                    applyOpenAIReasoningEffort(requestBody, reasoningEffort, false);
 
                     if (useTools) {
                         requestBody.tools = getOpenAIToolDefinitions();
@@ -10388,6 +10804,7 @@ async function createDialog() {
         }
 
         const selectedModel = activeConfig?.activeModel || '';
+        const reasoningEffort = await getActiveReasoningValue(activeConfig);
 
         let apiKey = '';
         if (encryptedApiKey) {
@@ -10415,7 +10832,7 @@ async function createDialog() {
             ? `${baseEndpoint}/responses`
             : (cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(selectedModel);
-        console.log(`[AskPage] ${providerLabel} max output tokens:`, maxOutputTokens, 'model:', selectedModel || '(unspecified)', 'responses_api:', useResponsesApi);
+        console.log(`[AskPage] ${providerLabel} max output tokens:`, maxOutputTokens, 'model:', selectedModel || '(unspecified)', 'responses_api:', useResponsesApi, 'reasoning_effort:', reasoningEffort || 'default');
 
         try {
             const answer = await runOpenAIStyleToolLoop({
@@ -10449,6 +10866,8 @@ async function createDialog() {
                     if (useTools) {
                         requestBody.tools = getOpenAIToolDefinitions();
                     }
+
+                    applyOpenAIReasoningEffort(requestBody, reasoningEffort, false);
 
                     return requestBody;
                 },
