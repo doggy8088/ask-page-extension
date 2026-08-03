@@ -1104,6 +1104,48 @@ function normalizeModelIdentifier(model = '') {
         .replace(/-\d{4}-\d{2}-\d{2}$/, '');
 }
 
+// 串流能力以 Provider API 的官方介面為判定基礎；任意 OpenAI Compatible 端點與未列入清單的 DeepSeek 模型不可安全推定。
+// 查證日期：2026-08-03。
+// Gemini: https://ai.google.dev/api#method:-models.streamGenerateContent
+// OpenAI: https://platform.openai.com/docs/api-reference/responses-streaming
+// Azure OpenAI: https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/content-streaming
+// Anthropic: https://platform.claude.com/docs/en/build-with-claude/streaming
+// DeepSeek: https://api-docs.deepseek.com/api/create-chat-completion
+// OpenRouter: https://openrouter.ai/docs/api/reference/streaming
+// Groq: https://console.groq.com/docs/text-chat
+// Mistral: https://docs.mistral.ai/api
+// Ollama: https://docs.ollama.com/api/openai-compatibility
+const STREAMING_PROVIDER_CAPABILITIES = {
+    gemini: { scope: 'provider' },
+    openai: { scope: 'provider' },
+    azure: { scope: 'provider' },
+    anthropic: { scope: 'provider' },
+    deepseek: {
+        models: new Set(['deepseek-v4-flash', 'deepseek-v4-pro'])
+    },
+    openrouter: { scope: 'provider' },
+    groq: { scope: 'provider' },
+    mistral: { scope: 'provider' },
+    ollama: { scope: 'provider' },
+    'ollama-cloud': { scope: 'provider' }
+};
+
+function isStreamingSupported(providerType = '', model = '') {
+    const normalizedProviderType = String(providerType || '').trim().toLowerCase();
+    const normalizedModel = normalizeModelIdentifier(model);
+    const capability = STREAMING_PROVIDER_CAPABILITIES[normalizedProviderType];
+
+    if (!capability || !normalizedModel) {
+        return false;
+    }
+
+    if (capability.models) {
+        return capability.models.has(normalizedModel);
+    }
+
+    return capability.scope === 'provider';
+}
+
 // Provider-scoped allowlists and prefixes verified against provider documentation on 2026-08-02.
 // Gemini: https://ai.google.dev/gemini-api/docs/generate-content/thinking
 // Gemma 4 on Gemini API: https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api
@@ -10369,6 +10411,7 @@ async function createDialog() {
         screenshotDataUrl = null,
         inputImageDataUrls = [],
         enableTools = true,
+        streamingEnabled = false,
         onStatusUpdate = () => {},
         onTrace = () => {},
         onAnswerDelta = () => {},
@@ -10451,7 +10494,7 @@ async function createDialog() {
                 round,
                 `${providerLabel} ${retryInfo.shortReason}，將在 ${formatRetryDelay(retryInfo.delayMs)} 後重試（${retryInfo.retryCount}/${retryInfo.maxRetries}）...`
             ));
-            const responseData = enableTools
+            const responseData = streamingEnabled
                 ? await fetchGeminiStream({
                     apiKey,
                     selectedModel,
@@ -10581,9 +10624,11 @@ async function createDialog() {
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
         const agentModeEnabled = await getAgentModeEnabled();
+        const streamingEnabled = isStreamingSupported('gemini', selectedModel);
         const hasInputImages = normalizeInputImageDataUrls(inputImageDataUrls).length > 0;
         handleStatusUpdate((screenshotDataUrl || hasInputImages) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
-        const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
+        const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
+        console.log('[AskPage] Gemini streaming enabled:', streamingEnabled, 'model:', selectedModel);
 
         try {
             const answer = await runGeminiToolLoop({
@@ -10594,6 +10639,7 @@ async function createDialog() {
                 screenshotDataUrl,
                 inputImageDataUrls,
                 enableTools: agentModeEnabled,
+                streamingEnabled,
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
                 onAnswerDelta: streamedAnswer ? (delta) => streamedAnswer.append(delta) : () => {},
@@ -10655,12 +10701,13 @@ async function createDialog() {
         }, agentModeEnabled);
         const promptCacheKey = agentModeEnabled ? '' : getInquiryPromptCacheKey();
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
-        const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
+        const streamingEnabled = isStreamingSupported('openai', selectedModel);
+        const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const usesMaxCompletionTokens = isReasoningModel(selectedModel);
         const supportsTemperature = !isReasoningModel(selectedModel);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(selectedModel);
         const useResponsesApi = shouldUseResponsesApi(selectedModel);
-        console.log('[AskPage] OpenAI max output tokens:', maxOutputTokens, 'model:', selectedModel, 'responses_api:', useResponsesApi, 'reasoning_effort:', reasoningEffort || 'default');
+        console.log('[AskPage] OpenAI max output tokens:', maxOutputTokens, 'model:', selectedModel, 'responses_api:', useResponsesApi, 'reasoning_effort:', reasoningEffort || 'default', 'streaming:', streamingEnabled);
 
         try {
             const answer = await runOpenAIStyleToolLoop({
@@ -10736,7 +10783,7 @@ async function createDialog() {
                         }
                         return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
                     };
-                    if (agentModeEnabled) {
+                    if (streamingEnabled) {
                         const streamOptions = {
                             providerLabel,
                             url: useResponsesApi ? 'https://api.openai.com/v1/responses' : 'https://api.openai.com/v1/chat/completions',
@@ -10767,7 +10814,7 @@ async function createDialog() {
                 },
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
-                onAnswerDelta: agentModeEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
+                onAnswerDelta: streamingEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
                 onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta })
             });
 
@@ -10836,13 +10883,14 @@ async function createDialog() {
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
-        const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
+        const streamingEnabled = isStreamingSupported('azure', deployment);
+        const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const isReasoning = Boolean(getReasoningCapability('azure', deployment));
         const effectiveReasoningEffort = reasoningEffort || (isReasoning ? 'medium' : '');
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(deployment);
         const useResponsesApi = shouldUseResponsesApi(deployment);
         const azureApiVersionForRequest = useResponsesApi ? getAzureResponsesApiVersion(apiVersion) : apiVersion;
-        console.log('[AskPage] Azure OpenAI max output tokens:', maxOutputTokens, 'deployment:', deployment, 'responses_api:', useResponsesApi, 'reasoning_effort:', effectiveReasoningEffort || 'default');
+        console.log('[AskPage] Azure OpenAI max output tokens:', maxOutputTokens, 'deployment:', deployment, 'responses_api:', useResponsesApi, 'reasoning_effort:', effectiveReasoningEffort || 'default', 'streaming:', streamingEnabled);
         const azureEndpoint = endpoint.trim().replace(/\/$/, '');
         const apiUrl = useResponsesApi
             ? `${azureEndpoint}/openai/v1/responses?api-version=${azureApiVersionForRequest}`
@@ -10912,7 +10960,7 @@ async function createDialog() {
                         }
                         return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
                     };
-                    if (agentModeEnabled) {
+                    if (streamingEnabled) {
                         const streamOptions = {
                             providerLabel,
                             url: apiUrl,
@@ -10943,7 +10991,7 @@ async function createDialog() {
                 },
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
-                onAnswerDelta: agentModeEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
+                onAnswerDelta: streamingEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
                 onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta })
             });
 
@@ -11019,7 +11067,8 @@ async function createDialog() {
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
-        const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
+        const streamingEnabled = isStreamingSupported(providerType, selectedModel);
+        const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const cleanEndpoint = endpoint.replace(/\/$/, '');
         const useResponsesApi = shouldUseResponsesApi(selectedModel);
         const baseEndpoint = cleanEndpoint.replace(/\/(chat\/completions|responses)$/, '');
@@ -11027,7 +11076,7 @@ async function createDialog() {
             ? `${baseEndpoint}/responses`
             : (cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(selectedModel);
-        console.log(`[AskPage] ${providerLabel} max output tokens:`, maxOutputTokens, 'model:', selectedModel || '(unspecified)', 'responses_api:', useResponsesApi, 'reasoning_effort:', reasoningEffort || 'default');
+        console.log(`[AskPage] ${providerLabel} max output tokens:`, maxOutputTokens, 'model:', selectedModel || '(unspecified)', 'responses_api:', useResponsesApi, 'reasoning_effort:', reasoningEffort || 'default', 'streaming:', streamingEnabled);
 
         try {
             const answer = await runOpenAIStyleToolLoop({
@@ -11085,7 +11134,7 @@ async function createDialog() {
                         undefined,
                         { retryAfterMs: getRetryAfterMilliseconds(response) }
                     );
-                    if (agentModeEnabled) {
+                    if (streamingEnabled) {
                         const streamOptions = {
                             providerLabel: providerLabel,
                             url,
@@ -11119,7 +11168,7 @@ async function createDialog() {
                 allowToolFallback: !isGpt56FamilyModel(selectedModel),
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
-                onAnswerDelta: agentModeEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
+                onAnswerDelta: streamingEnabled ? (delta) => streamedAnswer.append(delta) : () => {},
                 onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta })
             });
 
@@ -11275,10 +11324,11 @@ async function createDialog() {
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
-        const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
+        const streamingEnabled = isStreamingSupported('anthropic', selectedModel);
+        const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
 
         const maxOutputTokens = getAnthropicMaxOutputTokens(selectedModel, reasoningValue);
-        console.log('[AskPage] Anthropic max output tokens:', maxOutputTokens, 'model:', selectedModel, 'reasoning:', reasoningValue ?? 'default');
+        console.log('[AskPage] Anthropic max output tokens:', maxOutputTokens, 'model:', selectedModel, 'reasoning:', reasoningValue ?? 'default', 'streaming:', streamingEnabled);
 
         const allMessages = buildTextProviderMessages(pageConversationContext);
         const systemMessage = allMessages.find(msg => msg.role === 'system');
@@ -11339,7 +11389,7 @@ async function createDialog() {
             const url = 'https://api.anthropic.com/v1/messages';
             let finalAnswer = '';
 
-            if (agentModeEnabled) {
+            if (streamingEnabled) {
                 const streamResult = await fetchAnthropicStream({
                     url,
                     requestBody,
@@ -11357,7 +11407,9 @@ async function createDialog() {
                     providerLabel
                 });
                 traceReporter.reportUsage(providerLabel, streamResult.usage);
-                finalAnswer = `⚠️ **目前 ${providerLabel} 提供者未完整支援 agent 模式下的 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n${streamResult.answer}`;
+                finalAnswer = agentModeEnabled
+                    ? `⚠️ **目前 ${providerLabel} 提供者未完整支援 agent 模式下的 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n${streamResult.answer}`
+                    : streamResult.answer;
             } else {
                 const response = await fetchJsonWithRetry({
                     providerLabel,

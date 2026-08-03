@@ -10,7 +10,7 @@
 - 💬 **多輪對話脈絡延續** - 追問時會自動帶入前文，切換不同 AI Provider 也能延續同一段對話
 - 🛠️ **單頁面 Tool Calling** - 模型可直接讀取頁面標題、選取範圍、表單欄位，並可填表、點擊元素、替換部分 DOM、執行 JavaScript
 - 🧭 **豐富頁面 metadata 讀取** - 代理模式可抓取 title、URL、SEO metadata、OpenGraph、Twitter Card、canonical/alternate links、JSON-LD 與頁面統計作為上下文
-- 🌊 **代理模式串流回應** - 代理模式會即時顯示可取得的 reasoning / thinking 文字與回答內容，減少等待空白感
+- 🌊 **依 Provider 支援的串流回應** - 詢問模式與代理模式都會即時顯示可取得的 reasoning / thinking 文字與回答內容，減少等待空白感
 - 📸 **截圖模式與畫面標注** - 啟用後每次送出都會即時擷取目前可視範圍，也可先標注 DOM 元素或手繪線條，讓模型更精準理解目標區域
 - 🖼️ **手動附圖上下文** - 在代理模式下，可直接貼上或拖曳最多 4 張圖片到提問框，縮圖會顯示在輸入框上方，支援 hover 放大與點擊開新頁籤看原圖
 - 🔐 **加密安全儲存** - API 金鑰使用 AES-256-GCM 加密保護
@@ -86,7 +86,9 @@
 > [!NOTE]
 > AskPage 會在多步驟工具調用期間即時顯示目前輪次、模型選擇的工具名稱，以及正在執行的工具，不再只顯示 `...thinking...`。變更型工具會直接執行，若失敗則錯誤會回傳給模型繼續處理。
 >
-> 啟用代理模式時，AskPage 也會依 Provider 使用對應的串流 API，即時顯示可取得的 reasoning / thinking 文字與最後回答內容；若模型或端點不提供思考文字，仍會串流顯示一般回答。
+> AskPage 會先依 Provider 與模型的已確認能力選擇串流 API。Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral 與 Ollama 的已支援模型在詢問模式與代理模式都會即時顯示可取得的 reasoning / thinking 文字與最後回答內容；若模型或端點不提供思考文字，仍會串流顯示一般回答。任意 OpenAI Compatible 端點因無法安全推定串流能力，會保留非串流請求。
+>
+> 完整的 Provider 判定範圍、API 端點、模型清單與限制請參閱[目前串流回應邏輯與 Provider 支援狀態](<docs/目前串流回應邏輯與 Provider 支援狀態.md>)。
 >
 > 串流輸出期間，對話框會預設跟著最新的 thinking / answer 內容自動捲動到底部；如果您手動捲動對話內容，自動捲動會暫停，直到下一次送出提示才恢復。
 >
