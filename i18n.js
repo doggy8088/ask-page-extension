@@ -273,8 +273,6 @@
             .replace(/^請點擊擴充功能圖示設定您的 (.+) Deployment Name。$/, 'Click the extension icon to configure your $1 deployment name.')
             .replace(/^請點擊擴充功能圖示設定您的 AI 提供者。$/, 'Click the extension icon to configure an AI provider.')
             .replace(/^無法解密 (.+) API Key，請重新設定。$/, 'Unable to decrypt the $1 API key. Configure it again.')
-            .replace(/^正在整理圖片與頁面上下文\.\.\.$/, 'Preparing image and page context...')
-            .replace(/^正在整理頁面上下文\.\.\.$/, 'Preparing page context...')
             .replace(/^API 請求頻率過高，請稍後再試。$/, 'Too many API requests. Please try again later.')
             .replace(/^找不到指定的部署，請檢查您的 Endpoint 和 Deployment Name 設定。$/, 'The specified deployment was not found. Check the endpoint and deployment name.')
             .replace(/^工具呼叫輪數已達上限，已中止以避免無限循環。$/, 'The tool-call round limit was reached. Execution stopped to prevent an infinite loop.')

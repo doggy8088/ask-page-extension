@@ -7216,14 +7216,6 @@ async function createDialog() {
         const baseStatus = roundMatch ? roundMatch[3] : trimmedStatus;
         const withRoundBadge = (text) => `${roundBadge}${text}`;
 
-        if (baseStatus.includes('正在擷取畫面與整理頁面上下文')) {
-            return withRoundBadge('我先擷取目前畫面，再整理頁面上下文。');
-        }
-
-        if (baseStatus.includes('正在整理頁面上下文')) {
-            return withRoundBadge('我先整理一下頁面上下文。');
-        }
-
         if (baseStatus.includes('規劃任務')) {
             return withRoundBadge('正在分析需求與頁面狀態。');
         }
@@ -10625,8 +10617,6 @@ async function createDialog() {
 
         const agentModeEnabled = await getAgentModeEnabled();
         const streamingEnabled = isStreamingSupported('gemini', selectedModel);
-        const hasInputImages = normalizeInputImageDataUrls(inputImageDataUrls).length > 0;
-        handleStatusUpdate((screenshotDataUrl || hasInputImages) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         console.log('[AskPage] Gemini streaming enabled:', streamingEnabled, 'model:', selectedModel);
 
@@ -10700,7 +10690,6 @@ async function createDialog() {
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
         const promptCacheKey = agentModeEnabled ? '' : getInquiryPromptCacheKey();
-        handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const streamingEnabled = isStreamingSupported('openai', selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const usesMaxCompletionTokens = isReasoningModel(selectedModel);
@@ -10882,7 +10871,6 @@ async function createDialog() {
             includeScreenshot: Boolean(screenshotDataUrl),
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
-        handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const streamingEnabled = isStreamingSupported('azure', deployment);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const isReasoning = Boolean(getReasoningCapability('azure', deployment));
@@ -11066,7 +11054,6 @@ async function createDialog() {
             includeScreenshot: Boolean(screenshotDataUrl),
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
-        handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const streamingEnabled = isStreamingSupported(providerType, selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const cleanEndpoint = endpoint.replace(/\/$/, '');
@@ -11323,7 +11310,6 @@ async function createDialog() {
             includeScreenshot: Boolean(screenshotDataUrl),
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
-        handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const streamingEnabled = isStreamingSupported('anthropic', selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
 
