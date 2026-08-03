@@ -243,6 +243,7 @@ assert.deepStrictEqual(Array.from(AZURE_REASONING_MODEL_IDS).sort(), [
 assert.deepStrictEqual(capabilityOptions('azure', 'gpt-5.6'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
 assert.strictEqual(getReasoningCapability('azure', 'gpt-5.4').defaultValue, 'medium');
 assert.strictEqual(getReasoningCapability('azure', 'production-gpt-5.6'), null);
+assert.strictEqual(getReasoningCapability('azure', 'gpt-5.4-2026-08-02'), null);
 
 // Current DeepSeek V4 models expose explicit non-thinking mode.
 assert.deepStrictEqual(Array.from(Object.keys(DEEPSEEK_REASONING_CAPABILITIES)).sort(), [
@@ -404,6 +405,7 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(deepSeekMaxBody)), {
 assert.match(contentScript, /applyOpenAIReasoningEffort\(requestBody, reasoningEffort, false\);/);
 assert.match(contentScript, /applyDeepSeekReasoningConfig\(requestBody, reasoningEffort\);/);
 assert.match(contentScript, /Object\.assign\(requestBody, anthropicThinkingConfig\);/);
+assert.match(contentScript, /const isReasoning = Boolean\(getReasoningCapability\('azure', deployment\)\);/);
 assert.match(contentScript, /const effectiveReasoningEffort = reasoningEffort \|\| \(isReasoning \? 'medium' : ''\);/);
 assert.match(contentScript, /reasoningEffort: effectiveReasoningEffort/);
 

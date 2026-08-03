@@ -1317,8 +1317,11 @@ function getReasoningCapability(providerType = '', model = '') {
     if (providerType === 'openai') {
         return OPENAI_REASONING_CAPABILITIES[normalizedModel] || null;
     }
-    if (providerType === 'azure' && AZURE_REASONING_MODEL_IDS.has(normalizedModel)) {
-        return OPENAI_REASONING_CAPABILITIES[normalizedModel] || null;
+    if (providerType === 'azure') {
+        const azureModelName = String(model || '').trim().toLowerCase();
+        return AZURE_REASONING_MODEL_IDS.has(azureModelName)
+            ? OPENAI_REASONING_CAPABILITIES[azureModelName] || null
+            : null;
     }
     if (providerType === 'anthropic') {
         return ANTHROPIC_REASONING_CAPABILITIES[normalizedModel] || null;
@@ -10834,7 +10837,7 @@ async function createDialog() {
         }, agentModeEnabled);
         handleStatusUpdate((screenshotDataUrl || normalizedInputImages.length) ? '正在整理圖片與頁面上下文...' : '正在整理頁面上下文...');
         const streamedAnswer = agentModeEnabled ? createStreamingAssistantMessageRenderer() : null;
-        const isReasoning = isReasoningModel(deployment);
+        const isReasoning = Boolean(getReasoningCapability('azure', deployment));
         const effectiveReasoningEffort = reasoningEffort || (isReasoning ? 'medium' : '');
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(deployment);
         const useResponsesApi = shouldUseResponsesApi(deployment);
