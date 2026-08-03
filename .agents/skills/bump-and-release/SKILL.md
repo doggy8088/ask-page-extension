@@ -1,19 +1,19 @@
 ---
 name: bump-and-release
-description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語意化版本、依既有 CHANGELOG.md 格式整理 Unreleased 內容，並完成主線發布。當使用者要求 bump 版本、更新 CHANGELOG.md、整理發行記錄或準備 Chrome Web Store 發布時使用；每次執行至少 bump 一次版本，未明確指定時預設使用 patch，只有明確指定 minor 或 major 才使用對應類型；發行前必須位於 main 分支、執行版本 bump 前先以 git pull --rebase 更新遠端分支並同步 Git tag，發布提交後必須推送 main 並驗證 GitHub Actions 成功；若工作區有未提交變更，必須先以完整正體中文提交訊息提交，之後才可編輯 CHANGELOG.md。
+description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語意化版本、依既有 CHANGELOG.md 格式整理 Unreleased 內容，並完成主線發布。當使用者要求 bump 版本、更新 CHANGELOG.md、整理發行記錄或準備 Chrome Web Store 發布時使用；每次執行至少 bump 一次版本，未明確指定時預設使用 patch，只有明確指定 minor 或 major 才使用對應類型；發行前必須位於 main 分支、執行版本 bump 前先以 git pull --rebase 更新遠端分支並同步 Git tag，發布提交後必須推送 main、驗證 GitHub Actions 成功，並以該版本 CHANGELOG 更新 GitHub Release notes；若工作區有未提交變更，必須先以完整正體中文提交訊息提交，之後才可編輯 CHANGELOG.md。
 ---
 
 # Bump And Release
 
 ## 目的
 
-依 AskPage 專案目前的版本腳本與 GitHub Actions 流程，完成版本提升、變更日誌整理、品質檢查與發布提交。所有操作都必須保留可追溯的提交紀錄，不得虛構未由程式碼或提交內容支持的變更。
+依 AskPage 專案目前的版本腳本與 GitHub Actions 流程，完成版本提升、變更日誌整理、品質檢查、發布提交與 GitHub Release notes 更新。所有操作都必須保留可追溯的提交紀錄，不得虛構未由程式碼或提交內容支持的變更。
 
 本技能每次執行都必須至少提升一次版本號。使用者未指定 bump 類型時，預設執行 patch；只有使用者明確提到 minor 或 major 時，才執行對應的版本升級。
 
-本技能只允許在 `main` 分支執行發行流程；完成發布提交後，必須直接推送 `origin/main`，並等待對應 GitHub Actions 工作流程全部成功後才能結束。
+本技能只允許在 `main` 分支執行發行流程；完成發布提交後，必須直接推送 `origin/main`，並等待對應 GitHub Actions 工作流程全部成功，再以該版本的 `CHANGELOG.md` 區段更新並驗證 GitHub Release notes 後才能結束。
 
-**核心順序：先確認位於 main，再處理並提交既有未提交變更、同步遠端分支與 Git tag，接著執行版本 bump、整理 CHANGELOG.md、檢查並提交發布內容、推送 main，最後驗證 CI 成功。**
+**核心順序：先確認位於 main，再處理並提交既有未提交變更、同步遠端分支與 Git tag，接著執行版本 bump、整理 CHANGELOG.md、檢查並提交發布內容、推送 main，最後驗證 CI 成功，再以 CHANGELOG 更新並驗證 GitHub Release notes。**
 
 * * *
 
@@ -178,7 +178,43 @@ CI 驗證必須同時符合以下條件：
 - run 內所有 jobs 的 `conclusion` 都是 `success`，不可接受 failure、cancelled、timed_out 或未完成狀態。
 - 由於 `release.yml` 包含建立 GitHub Release、打包擴充功能與 Chrome Web Store 上傳發布步驟，只有整個 workflow 成功後，才可回報發布完成。
 
-若 `git push` 失敗、找不到對應 run、GitHub CLI 無法取得結果、CI 失敗、取消、逾時或任何 job 未成功，立即停止並回報實際 SHA、run URL 與錯誤；不得宣稱 GitHub Release 或 Chrome Web Store 發布成功。
+若 `git push` 失敗、找不到對應 run、GitHub CLI 無法取得結果、CI 失敗、取消、逾時、任何 job 未成功，或後續 Release notes 更新與驗證失敗，立即停止並回報實際 SHA、run URL 與錯誤；不得宣稱 GitHub Release 或 Chrome Web Store 發布成功。
+
+### 7. 以 CHANGELOG 更新 GitHub Release notes
+
+GitHub Actions workflow 成功後，確認本次發布的 GitHub Release 已由 `.github/workflows/release.yml` 建立。即使 Release 已經有預設內容或 commit log 產生的 notes，也必須將其更新為 `CHANGELOG.md` 中對應版本的完整區段；不得使用 commit log、`--generate-notes` 或其他自動產生內容取代 CHANGELOG。
+
+依 `manifest.json` 的版本擷取從 `## [X.Y.Z] - YYYY-MM-DD` 開始、到下一個 `## [` 之前的完整 Markdown 區段，包含版本標題、分類標題與所有條目。確認擷取結果確實對應本次版本後，以 UTF-8 暫存檔更新既有 Release：
+
+~~~sh
+release_version="$(node -p "require('./manifest.json').version")"
+release_tag="v${release_version}"
+release_notes_file="$(mktemp -t codex-release-notes)"
+awk -v heading="## [${release_version}] - " '
+    index($0, heading) == 1 { found = 1 }
+    found && /^## \[/ && index($0, heading) != 1 { exit }
+    found { print }
+' CHANGELOG.md > "$release_notes_file"
+
+if [ ! -s "$release_notes_file" ] || ! grep -Fq "## [${release_version}] - " "$release_notes_file"; then
+    echo "找不到對應版本的 CHANGELOG 區段。"
+    exit 1
+fi
+
+release_tag_check="$(gh release view "$release_tag" --json tagName --jq .tagName)"
+if [ "$release_tag_check" != "$release_tag" ]; then
+    echo "GitHub Release tag 與本次版本不一致。"
+    exit 1
+fi
+
+gh release edit "$release_tag" --notes-file "$release_notes_file"
+
+verified_notes_file="$(mktemp -t codex-release-notes-verified)"
+gh release view "$release_tag" --json body --jq .body > "$verified_notes_file"
+diff -u "$release_notes_file" "$verified_notes_file"
+~~~
+
+`diff -u` 必須成功，確認 GitHub Release body 與 `CHANGELOG.md` 的本次版本區段一致；完成後刪除兩個暫存檔。若 `gh release view`、`gh release edit` 或內容比對失敗，立即停止並回報 Release tag、run URL 與實際錯誤，不得宣稱 Release notes 已完成。
 
 * * *
 
@@ -186,7 +222,7 @@ CI 驗證必須同時符合以下條件：
 
 **Agent 不用自己建立或推送 Git tag。** 可以唯讀查詢既有 tag 來辨識版本，但不要執行建立新 tag 的指令，例如 git tag vX.Y.Z 或 git push origin vX.Y.Z，也不要把手動建立 tag 當作完成條件。
 
-目前 .github/workflows/release.yml 會在推送到 main 時讀取 manifest.json 版本、建立對應的 GitHub Release 與 tag、打包擴充功能，並透過 Chrome Web Store API 發布到 CWS。**只要版本 bump、變更日誌、驗證與發布提交全部完成，技能就必須執行 `git push origin main`，不再把推送視為可選步驟。** 不要建立或推送 Git tag；由 `release.yml` 在 CI 中建立對應 tag、GitHub Release、套件並發布至 Chrome Web Store。CWS 發布仍取決於 GitHub Actions 所需 Secrets 已設定且整個 workflow 成功；未完成 CI 驗證前不可結束流程或宣稱已上架。
+目前 .github/workflows/release.yml 會在推送到 main 時讀取 manifest.json 版本、建立對應的 GitHub Release 與 tag、打包擴充功能，並透過 Chrome Web Store API 發布到 CWS。**只要版本 bump、變更日誌、驗證與發布提交全部完成，技能就必須執行 `git push origin main`，不再把推送視為可選步驟。** 不要建立或推送 Git tag；由 `release.yml` 在 CI 中建立對應 tag、GitHub Release、套件並發布至 Chrome Web Store。CI 成功後，Agent 必須以該版本 `CHANGELOG.md` 區段覆寫 GitHub Release notes，並以 `gh release view` 與內容差異檢查驗證；不得保留只由 commit log 或自動產生的 Release notes。CWS 發布與 Release notes 更新仍取決於 GitHub Actions、GitHub CLI 及所需 Secrets 均正常；未完成 CI 與 Release notes 驗證前不可結束流程或宣稱已上架。
 
 * * *
 
@@ -196,8 +232,10 @@ CI 驗證必須同時符合以下條件：
 - **發行流程只允許在 `main` 分支執行；其他分支必須立即終止並要求使用者切換回 `main`。**
 - **執行任何版本 bump 前，必須先成功執行 `git pull --rebase` 並同步遠端 Git tag。**
 - **發布提交完成後必須執行 `git push origin main`，並驗證對應 GitHub Actions 的所有 jobs 成功後才能結束。**
+- **GitHub Actions 成功建立 Release 後，必須使用本次版本 `CHANGELOG.md` 的完整區段更新 GitHub Release notes，並以 `gh release view` 與 `diff -u` 驗證內容一致。**
 - 不以提交數量取代變更內容審查，不建立空提交。
 - 不使用 git commit -m，不省略完整提交正文。
 - 不虛構版本條目、日期、測試結果、CWS 狀態或 Git tag。
+- 不以 commit log、`--generate-notes` 或其他自動產生內容取代 `CHANGELOG.md` 的 Release notes。
 - 不修改與本次版本無關的程式碼、歷史變更日誌或發布工作流程。
-- 發現版本不同步、未追蹤檔案範圍不明、測試失敗或 CI 狀態不明時，停止在可驗證的狀態並清楚報告。
+- 發現版本不同步、未追蹤檔案範圍不明、測試失敗、CI 狀態不明或 Release notes 更新與驗證失敗時，停止在可驗證的狀態並清楚報告。
