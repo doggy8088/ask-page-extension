@@ -2,6 +2,7 @@
     'use strict';
 
     const isEnglish = chrome.i18n.getUILanguage().toLowerCase().startsWith('en');
+    const TRANSLATION_EXCLUDED_SELECTOR = 'script, style, pre, code';
     const translations = {
         '頁問: 偏好設定': 'AskPage: Preferences',
         '頁問: 設定已移轉': 'AskPage: Settings migrated',
@@ -233,9 +234,13 @@
             return value;
         }
 
+        const normalizedValue = value.trim();
+        if (!normalizedValue) {
+            return value;
+        }
+
         const leadingWhitespace = value.match(/^\s*/)[0];
         const trailingWhitespace = value.match(/\s*$/)[0];
-        const normalizedValue = value.trim();
         if (translations[normalizedValue]) {
             return `${leadingWhitespace}${translations[normalizedValue]}${trailingWhitespace}`;
         }
@@ -280,8 +285,13 @@
         return `${leadingWhitespace}${translatedValue}${trailingWhitespace}`;
     }
 
+    function isTranslationExcludedNode(node) {
+        const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+        return Boolean(element?.closest?.(TRANSLATION_EXCLUDED_SELECTOR));
+    }
+
     function translateElement(element) {
-        if (!isEnglish || !element || element.nodeType !== Node.ELEMENT_NODE) {
+        if (!isEnglish || !element || element.nodeType !== Node.ELEMENT_NODE || isTranslationExcludedNode(element)) {
             return;
         }
 
@@ -297,7 +307,7 @@
     }
 
     function translateTree(root) {
-        if (!isEnglish || !root) {
+        if (!isEnglish || !root || isTranslationExcludedNode(root)) {
             return;
         }
 
@@ -305,7 +315,7 @@
         const textNodes = [];
         while (walker.nextNode()) {
             const node = walker.currentNode;
-            if (!['SCRIPT', 'STYLE'].includes(node.parentElement?.tagName)) {
+            if (!isTranslationExcludedNode(node)) {
                 textNodes.push(node);
             }
         }
@@ -333,7 +343,7 @@
                 }
                 mutation.addedNodes.forEach((node) => {
                     if (node.nodeType === Node.TEXT_NODE) {
-                        if (!['SCRIPT', 'STYLE'].includes(node.parentElement?.tagName)) {
+                        if (!isTranslationExcludedNode(node)) {
                             node.nodeValue = translateText(node.nodeValue);
                         }
                     } else if (node.nodeType === Node.ELEMENT_NODE) {
