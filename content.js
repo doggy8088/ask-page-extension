@@ -1278,13 +1278,7 @@ const ANTHROPIC_REASONING_CAPABILITIES = {
     }
 };
 
-const AZURE_REASONING_MODEL_IDS = new Set([
-    'gpt-5.6',
-    'gpt-5.5',
-    'gpt-5.4',
-    'gpt-5.2',
-    'gpt-5.1'
-]);
+const AZURE_REASONING_MODEL_IDS = new Set(Object.keys(OPENAI_REASONING_CAPABILITIES));
 
 const DEEPSEEK_REASONING_CAPABILITIES = {
     'deepseek-v4-flash': {
@@ -1348,6 +1342,25 @@ const REASONING_VALUE_LABELS_EN = {
     max: 'Maximum'
 };
 
+function getAzureOpenAIModelName(deployment = '') {
+    const normalizedDeployment = normalizeModelIdentifier(deployment);
+    if (!normalizedDeployment) {
+        return null;
+    }
+
+    return Array.from(AZURE_REASONING_MODEL_IDS)
+        .sort((firstModel, secondModel) => secondModel.length - firstModel.length)
+        .find((modelName) => {
+            const normalizedModel = normalizeModelIdentifier(modelName);
+            if (!normalizedDeployment.startsWith(normalizedModel)) {
+                return false;
+            }
+
+            const suffix = normalizedDeployment.slice(normalizedModel.length);
+            return !suffix || suffix.startsWith('-');
+        }) || null;
+}
+
 function getReasoningCapability(providerType = '', model = '') {
     const normalizedModel = normalizeModelIdentifier(model);
     if (providerType === 'gemini') {
@@ -1360,8 +1373,8 @@ function getReasoningCapability(providerType = '', model = '') {
         return OPENAI_REASONING_CAPABILITIES[normalizedModel] || null;
     }
     if (providerType === 'azure') {
-        const azureModelName = String(model || '').trim().toLowerCase();
-        return AZURE_REASONING_MODEL_IDS.has(azureModelName)
+        const azureModelName = getAzureOpenAIModelName(model);
+        return azureModelName
             ? OPENAI_REASONING_CAPABILITIES[azureModelName] || null
             : null;
     }

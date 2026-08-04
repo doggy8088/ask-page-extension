@@ -232,18 +232,19 @@ Object.entries(ANTHROPIC_REASONING_CAPABILITIES).forEach(([model, capability]) =
     assert.strictEqual(capability.defaultValue, expectedDefault, `${model} has the wrong default`);
 });
 
-// Azure exposes Off only for exact deployments whose model IDs support none.
-assert.deepStrictEqual(Array.from(AZURE_REASONING_MODEL_IDS).sort(), [
-    'gpt-5.1',
-    'gpt-5.2',
-    'gpt-5.4',
-    'gpt-5.5',
-    'gpt-5.6'
-]);
+// Azure resolves the longest OpenAI model prefix in a deployment name.
+assert.deepStrictEqual(
+    Array.from(AZURE_REASONING_MODEL_IDS).sort(),
+    Array.from(Object.keys(OPENAI_REASONING_CAPABILITIES)).sort()
+);
 assert.deepStrictEqual(capabilityOptions('azure', 'gpt-5.6'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+assert.deepStrictEqual(capabilityOptions('azure', 'gpt-5.6-luna'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+assert.deepStrictEqual(capabilityOptions('azure', 'gpt-5.6-luna-production'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+assert.deepStrictEqual(capabilityOptions('azure', 'gpt-5.5-pro-production'), ['medium', 'high', 'xhigh']);
 assert.strictEqual(getReasoningCapability('azure', 'gpt-5.4').defaultValue, 'medium');
+assert.strictEqual(getReasoningCapability('azure', 'gpt-5.4-2026-08-02').defaultValue, 'medium');
 assert.strictEqual(getReasoningCapability('azure', 'production-gpt-5.6'), null);
-assert.strictEqual(getReasoningCapability('azure', 'gpt-5.4-2026-08-02'), null);
+assert.strictEqual(getReasoningCapability('azure', 'gpt-5.6luna'), null);
 
 // Current DeepSeek V4 models expose explicit non-thinking mode.
 assert.deepStrictEqual(Array.from(Object.keys(DEEPSEEK_REASONING_CAPABILITIES)).sort(), [
@@ -309,7 +310,7 @@ assert.strictEqual(getReasoningCapability('ollama', 'kimi-k2.7-code'), null);
 // Undocumented models and providers that cannot guarantee compatible Off semantics stay hidden.
 assert.strictEqual(getReasoningCapability('openai', 'gpt-5.3'), null);
 assert.strictEqual(getReasoningCapability('openai', 'gpt-4.1'), null);
-assert.strictEqual(getReasoningCapability('azure', 'gpt-5.6-sol'), null);
+assert.deepStrictEqual(capabilityOptions('azure', 'gpt-5.6-sol'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
 assert.strictEqual(getReasoningCapability('openrouter', 'qwen/qwen3.7-max'), null);
 assert.strictEqual(getReasoningCapability('mistral', 'mistral-small-latest'), null);
 assert.strictEqual(getReasoningCapability('openai-compatible', 'gpt-5.6-sol'), null);
