@@ -1526,7 +1526,7 @@
 
 .askpage-usage-primary-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.92fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
 }
@@ -1574,6 +1574,10 @@
   color: #5fc8ff;
   font-size: 13px;
   font-weight: 900;
+}
+
+.askpage-usage-section-title strong {
+  white-space: nowrap;
 }
 
 .askpage-usage-card p {
