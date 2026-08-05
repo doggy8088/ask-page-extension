@@ -42,14 +42,16 @@ sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     getProviderTypeLabel,
-    getProviderDisplayName
+    getProviderDisplayName,
+    getProviderDialogDisplayName
 };`, sandbox, {
     filename: 'content.js'
 });
 
 const {
     getProviderTypeLabel,
-    getProviderDisplayName
+    getProviderDisplayName,
+    getProviderDialogDisplayName
 } = sandbox.__askPageTestExports;
 
 // getProviderTypeLabel: maps every known type to its display label.
@@ -116,5 +118,20 @@ assert.strictEqual(getProviderDisplayName({ type: 'openai-compatible', name: '  
 assert.strictEqual(getProviderDisplayName(null), 'OpenAI-compatible endpoint');
 assert.strictEqual(getProviderDisplayName(undefined), 'OpenAI-compatible endpoint');
 assert.strictEqual(getProviderDisplayName({}), 'OpenAI-compatible endpoint');
+
+// Main dialog: prefer the custom name without prefixing the provider type.
+assert.strictEqual(
+    getProviderDialogDisplayName({ type: 'gemini', name: 'GOOGLE' }),
+    'GOOGLE'
+);
+assert.strictEqual(
+    getProviderDialogDisplayName({ type: 'openai-compatible', name: 'CLI Proxy API' }),
+    'CLI Proxy API'
+);
+
+// Main dialog: missing custom names fall back to the localized provider type.
+assert.strictEqual(getProviderDialogDisplayName({ type: 'gemini', name: '' }), 'Google Gemini');
+assert.strictEqual(getProviderDialogDisplayName({ type: 'openai' }), 'OpenAI');
+assert.strictEqual(getProviderDialogDisplayName(null), 'OpenAI-compatible endpoint');
 
 console.log('provider-display-name: ok');

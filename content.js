@@ -1978,6 +1978,13 @@ function getProviderDisplayName(activeConfig) {
     return `${typeLabel} (${customName})`;
 }
 
+// Build the compact provider name shown in the main dialog. Prefer the user's
+// custom name and fall back to the localized provider type label.
+function getProviderDialogDisplayName(activeConfig) {
+    const customName = String(activeConfig?.name || '').trim();
+    return customName || getProviderTypeLabel(activeConfig?.type);
+}
+
 // Provider switching function
 async function switchProvider(step = 1) {
     const options = await getEnabledProviderModelOptions();
@@ -2013,11 +2020,11 @@ async function updateProviderDisplay() {
     const activeConfig = await getActiveProviderConfig();
     const questionInput = getActiveDialogElementById('gemini-qna-input');
 
-    let displayName = getProviderDisplayName(null);
+    let displayName = getProviderDialogDisplayName(null);
     let model = 'gemini-flash-lite-latest';
 
     if (activeConfig) {
-        displayName = getProviderDisplayName(activeConfig);
+        displayName = getProviderDialogDisplayName(activeConfig);
         model = activeConfig.activeModel;
     }
 
