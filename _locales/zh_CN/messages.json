@@ -142,7 +142,7 @@
     "commandScreenshot": { "message": "切换截图功能状态" },
     "commandAgent": { "message": "切换询问 / 代理模式（代理模式会使用页面 HTML 和工具调用）" },
     "summaryPrompt": { "message": "请总结这篇文章，并以 Markdown 格式输出，内容包含“标题”、“重点摘要”、“总结”" },
-    "systemPromptLanguageInstruction": { "message": "默认使用中国大陆通用的简体中文回答，除非用户另有指定。" },
+    "systemPromptLanguageInstruction": { "message": "请以偏好设置指定的中国大陆简体中文作为主要回答语言；仅当用户在当前提问中明确要求使用其他语言时，才改用该语言。" },
     "resetSettingsConfirm": { "message": "确定要重置所有设置吗？\n\n这会清除 AI 提供商、API Key、斜杠命令、提问历史和所有其他设置。" },
     "importSettingsConfirm": { "message": "确定要导入此设置文件吗？这将覆盖您当前的设置。" },
     "invalidVariableName": { "message": "变量名“$name$”无效，只能包含字母、数字和下划线，且开头不能是数字", "placeholders": { "name": { "content": "$1" } } },

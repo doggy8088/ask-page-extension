@@ -142,7 +142,7 @@
     "commandScreenshot": { "message": "スクリーンショットモードを切り替え" },
     "commandAgent": { "message": "通常モードとエージェントモードを切り替え（エージェントモードではページ HTML とツールを使用）" },
     "summaryPrompt": { "message": "この記事を Markdown 形式で要約し、「タイトル」「要点」「まとめ」を含めてください。" },
-    "systemPromptLanguageInstruction": { "message": "ユーザーから別の指定がない限り、デフォルトでは日本語で回答してください。" },
+    "systemPromptLanguageInstruction": { "message": "言語設定で指定された日本語を主な回答言語として使用してください。ユーザーが現在の質問で別の言語を明示的に指定した場合に限り、その言語に切り替えてください。" },
     "resetSettingsConfirm": { "message": "すべての設定をリセットしますか？\n\nAI プロバイダー、API キー、スラッシュコマンド、質問履歴などが削除されます。" },
     "importSettingsConfirm": { "message": "この設定ファイルをインポートしますか？現在の設定は上書きされます。" },
     "invalidVariableName": { "message": "変数名「$name$」は無効です。英字、数字、アンダースコアのみ使用でき、数字で始めることはできません。", "placeholders": { "name": { "content": "$1" } } },

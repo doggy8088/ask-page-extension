@@ -142,7 +142,7 @@
     "commandScreenshot": { "message": "切換截圖功能狀態" },
     "commandAgent": { "message": "切換詢問 / 代理模式（代理模式會使用頁面 HTML 與工具調用）" },
     "summaryPrompt": { "message": "請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」" },
-    "systemPromptLanguageInstruction": { "message": "預設請使用台灣使用的繁體中文回答，除非使用者另有指定。" },
+    "systemPromptLanguageInstruction": { "message": "請以偏好設定所指定的台灣繁體中文作為主要回答語言；僅當使用者在目前提問中明確要求其他語言時，才改用該語言。" },
     "resetSettingsConfirm": { "message": "確定要重置所有設定嗎？\n\n這會清除 AI 提供者、API Key、斜線命令、提問歷史與所有其他設定。" },
     "importSettingsConfirm": { "message": "確定要匯入此設定檔嗎？這將會覆蓋您目前的設定。" },
     "invalidVariableName": { "message": "變數名稱「$name$」無效，只能包含字母、數字與底線，且開頭不能是數字", "placeholders": { "name": { "content": "$1" } } },

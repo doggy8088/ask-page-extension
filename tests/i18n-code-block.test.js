@@ -13,6 +13,13 @@ const catalogs = Object.fromEntries(
         JSON.parse(fs.readFileSync(path.join(rootDir, '_locales', locale, 'messages.json'), 'utf8'))
     ])
 );
+const expectedSystemPromptLanguageInstructions = {
+    zh_TW: '請以偏好設定所指定的台灣繁體中文作為主要回答語言；僅當使用者在目前提問中明確要求其他語言時，才改用該語言。',
+    en: 'Use English, as specified in the language preference, as the primary response language. Switch to another language only when the user explicitly requests it in the current prompt.',
+    zh_CN: '请以偏好设置指定的中国大陆简体中文作为主要回答语言；仅当用户在当前提问中明确要求使用其他语言时，才改用该语言。',
+    ja: '言語設定で指定された日本語を主な回答言語として使用してください。ユーザーが現在の質問で別の言語を明示的に指定した場合に限り、その言語に切り替えてください。',
+    ko: '환경설정에서 지정한 한국어를 주요 응답 언어로 사용하세요. 사용자가 현재 요청에서 다른 언어를 명시적으로 요구한 경우에만 해당 언어로 전환하세요.'
+};
 catalogs.en.testPositional = { message: '$1 / $2 / $9' };
 catalogs.en.testDoubleBraces = { message: '{{name}}' };
 catalogs.zh_TW.testFallback = { message: 'Fallback text' };
@@ -132,6 +139,8 @@ vm.runInContext(i18nScript, sandbox, { filename: 'i18n.js' });
     assert.strictEqual(i18n.locale, 'en');
     assert.strictEqual(i18n.direction, 'ltr');
     assert.strictEqual(i18n.t('systemPromptLanguageInstruction'), catalogs.en.systemPromptLanguageInstruction.message);
+    assert.strictEqual(i18n.t('screenshotDisabledTitle'), 'Screenshot: Off');
+    assert.strictEqual(i18n.t('agentEnabledTitle'), 'Agent: On');
     assert.strictEqual(i18n.t('characterCount', { count: 7 }), '7 characters');
     assert.strictEqual(i18n.t('modeToggleAria', { label: 'Mode', current: 'inquiry', next: 'agent' }), 'Mode: currently inquiry; click to switch to agent');
     assert.strictEqual(i18n.t('testPositional', ['one', 'two', '', '', '', '', '', '', 'nine']), 'one / two / nine');
@@ -196,7 +205,7 @@ vm.runInContext(i18nScript, sandbox, { filename: 'i18n.js' });
 
     for (const locale of ['zh_TW', 'en', 'zh_CN', 'ja', 'ko']) {
         await i18n.setLocalePreference(locale);
-        assert.strictEqual(i18n.getSystemPromptLanguageInstruction(), catalogs[locale].systemPromptLanguageInstruction.message);
+        assert.strictEqual(i18n.getSystemPromptLanguageInstruction(), expectedSystemPromptLanguageInstructions[locale]);
     }
 
     storageChangedListener({ ASKPAGE_UI_LOCALE: { oldValue: 'ko', newValue: 'en' } }, 'local');
