@@ -19,7 +19,7 @@
 主要功能：
 
 * 可設定多個 AI 提供者與模型，並在對話框中切換目前使用的模型。
-* 支援自訂斜線命令、頁面摘要、對話紀錄與 Markdown 回應顯示。
+* 支援自訂技能、頁面摘要、對話紀錄與 Markdown 回應顯示。
 * 提供詢問模式與代理模式；代理模式可依您的指示讀取或操作目前頁面的 DOM。
 * 可將最多四張圖片或目前畫面截圖加入單次提問的上下文。
 
@@ -32,7 +32,7 @@ AskPage lets you ask questions about the page you are viewing without leaving it
 Key features:
 
 * Configure multiple AI providers and models, then switch the active model from the dialog.
-* Includes custom slash commands, page summaries, conversation history, and Markdown responses.
+* Includes custom skills, page summaries, conversation history, and Markdown responses.
 * Offers inquiry mode and agent mode. In agent mode, the extension can inspect or interact with the current page's DOM when you instruct it to do so.
 * Add up to four images or a screenshot of the current page as context for a question.
 
@@ -53,7 +53,7 @@ Privacy and data use: AskPage stores API keys and settings in Chrome local stora
 
 | 權限 | 理由 |
 | --- | --- |
-| `storage` | 將 AI 提供者設定、加密後的 API 金鑰、使用者自訂命令、系統提示與對話相關設定儲存在使用者的 Chrome 本機儲存空間。 |
+| `storage` | 將 AI 提供者設定、加密後的 API 金鑰、使用者自訂技能、系統提示與對話相關設定儲存在使用者的 Chrome 本機儲存空間。 |
 | `activeTab` | 在使用者啟動頁問時讀取目前分頁內容、選取文字或截圖，並在該分頁顯示對話框。 |
 | `userScripts` | 僅在使用者使用代理模式要求操作目前頁面時，於網頁主世界執行該使用者要求的 JavaScript。 |
 | `*://*/*` | 讓內容指令碼可在使用者開啟的網頁顯示頁問對話框，並取得使用者問題所需的頁面內容與選取文字。 |
