@@ -7,7 +7,7 @@ const path = require('path');
 const rootDir = path.resolve(__dirname, '..');
 const localeExpectations = {
     zh_TW: {
-        customSlashCommands: '技能',
+        customSlashCommands: '技能管理',
         slashCommandManagement: '技能管理',
         slashCommandManagementDescription: '管理內建與自訂技能',
         addCustomSlashCommand: '新增技能',
@@ -16,7 +16,7 @@ const localeExpectations = {
         commandName: '技能名稱'
     },
     en: {
-        customSlashCommands: 'Skills',
+        customSlashCommands: 'Skill management',
         slashCommandManagement: 'Skill management',
         slashCommandManagementDescription: 'Manage built-in and custom skills.',
         addCustomSlashCommand: 'Add skill',
@@ -25,7 +25,7 @@ const localeExpectations = {
         commandName: 'Skill name'
     },
     zh_CN: {
-        customSlashCommands: '技能',
+        customSlashCommands: '技能管理',
         slashCommandManagement: '技能管理',
         slashCommandManagementDescription: '管理内置和自定义技能',
         addCustomSlashCommand: '添加技能',
@@ -34,7 +34,7 @@ const localeExpectations = {
         commandName: '技能名称'
     },
     ja: {
-        customSlashCommands: 'スキル',
+        customSlashCommands: 'スキル管理',
         slashCommandManagement: 'スキル管理',
         slashCommandManagementDescription: '組み込みスキルとカスタムスキルを管理します',
         addCustomSlashCommand: 'スキルを追加',
@@ -43,7 +43,7 @@ const localeExpectations = {
         commandName: 'スキル名'
     },
     ko: {
-        customSlashCommands: '스킬',
+        customSlashCommands: '스킬 관리',
         slashCommandManagement: '스킬 관리',
         slashCommandManagementDescription: '기본 제공 스킬과 사용자 지정 스킬을 관리합니다',
         addCustomSlashCommand: '스킬 추가',
@@ -83,7 +83,7 @@ for (const [locale, expectations] of Object.entries(localeExpectations)) {
 const settingsHtml = fs.readFileSync(path.join(rootDir, 'settings.html'), 'utf8')
     .replace(/<!--[^]*?-->/g, '')
     .replace(/\/\*[^]*?\*\//g, '');
-assert.match(settingsHtml, /data-i18n="customSlashCommands">技能</);
+assert.match(settingsHtml, /data-i18n="customSlashCommands">技能管理</);
 assert.match(settingsHtml, /data-i18n="addCustomSlashCommand">新增技能</);
 assert.doesNotMatch(settingsHtml, /斜線命令|自訂命令|內建命令|命令名稱/u);
 

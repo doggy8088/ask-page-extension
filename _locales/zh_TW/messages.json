@@ -19,7 +19,7 @@
     "exportSettings": { "message": "匯出" },
     "importSettings": { "message": "匯入" },
     "aiProviders": { "message": "AI 提供者" },
-    "customSlashCommands": { "message": "技能" },
+    "customSlashCommands": { "message": "技能管理" },
     "adjustSystemPrompt": { "message": "調整系統提示" },
     "aiProviderSettings": { "message": "AI 提供者設定" },
     "aiProviderSettingsDescription": { "message": "設定多個不同的 AI 提供者，並啟用一至多個模型，點擊模型名稱可切換為目前使用模型" },

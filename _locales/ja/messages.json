@@ -19,7 +19,7 @@
     "exportSettings": { "message": "エクスポート" },
     "importSettings": { "message": "インポート" },
     "aiProviders": { "message": "AI プロバイダー" },
-    "customSlashCommands": { "message": "スキル" },
+    "customSlashCommands": { "message": "スキル管理" },
     "adjustSystemPrompt": { "message": "システムプロンプトを調整" },
     "aiProviderSettings": { "message": "AI プロバイダー設定" },
     "aiProviderSettingsDescription": { "message": "複数の AI プロバイダーを設定し、1 つ以上のモデルを有効にします。モデル名を選択すると使用中のモデルを切り替えられます。" },

@@ -19,7 +19,7 @@
     "exportSettings": { "message": "Export" },
     "importSettings": { "message": "Import" },
     "aiProviders": { "message": "AI providers" },
-    "customSlashCommands": { "message": "Skills" },
+    "customSlashCommands": { "message": "Skill management" },
     "adjustSystemPrompt": { "message": "Customize system prompt" },
     "aiProviderSettings": { "message": "AI provider settings" },
     "aiProviderSettingsDescription": { "message": "Configure multiple AI providers and enable one or more models. Select a model name to make it active." },

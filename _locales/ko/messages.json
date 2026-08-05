@@ -19,7 +19,7 @@
     "exportSettings": { "message": "내보내기" },
     "importSettings": { "message": "가져오기" },
     "aiProviders": { "message": "AI 제공자" },
-    "customSlashCommands": { "message": "스킬" },
+    "customSlashCommands": { "message": "스킬 관리" },
     "adjustSystemPrompt": { "message": "시스템 프롬프트 조정" },
     "aiProviderSettings": { "message": "AI 제공자 설정" },
     "aiProviderSettingsDescription": { "message": "여러 AI 제공자를 설정하고 하나 이상의 모델을 활성화합니다. 모델 이름을 선택하면 현재 사용할 모델로 전환됩니다." },
