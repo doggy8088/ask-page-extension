@@ -91,11 +91,15 @@ const DIALOG_OVERLAY_ID = 'gemini-qna-overlay';
 const DIALOG_MESSAGES_ID = 'gemini-qna-messages';
 const DIALOG_STYLESHEET_PATH = 'style.css';
 const KATEX_STYLESHEET_PATH = 'lib/katex/katex.min.css';
-const LATEX_MARKDOWN_DELIMITER_REPLACEMENTS = [
-    { delimiter: '\\(', placeholder: '\uE000ASKPAGELATEXLEFTPAREN\uE001' },
-    { delimiter: '\\)', placeholder: '\uE000ASKPAGELATEXRIGHTPAREN\uE001' },
-    { delimiter: '\\[', placeholder: '\uE000ASKPAGELATEXLEFTBRACKET\uE001' },
-    { delimiter: '\\]', placeholder: '\uE000ASKPAGELATEXRIGHTBRACKET\uE001' }
+const LATEX_RENDER_DELIMITERS = [
+    { left: '$$', right: '$$', display: true },
+    { left: '\\(', right: '\\)', display: false },
+    { left: '\\begin{equation}', right: '\\end{equation}', display: true },
+    { left: '\\begin{align}', right: '\\end{align}', display: true },
+    { left: '\\begin{alignat}', right: '\\end{alignat}', display: true },
+    { left: '\\begin{gather}', right: '\\end{gather}', display: true },
+    { left: '\\begin{CD}', right: '\\end{CD}', display: true },
+    { left: '\\[', right: '\\]', display: true }
 ];
 const SCREEN_ANNOTATION_OVERLAY_ID = 'askpage-screen-annotation-overlay';
 const AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS = 100;
@@ -2807,20 +2811,22 @@ function openCodePenPrefill(htmlText) {
 }
 
 function renderMarkdown(md) {
-    const processedMarkdown = normalizePairedStrongMarkersInMarkdown(postProcessAssistantMarkdown(md));
-    const latexProtectedMarkdown = protectLatexDelimitersForMarkdown(processedMarkdown);
+    const processedMarkdown = postProcessAssistantMarkdown(md);
+    const latexProtection = protectLatexExpressionsForMarkdown(processedMarkdown);
+    const normalizedMarkdown = normalizePairedStrongMarkersInMarkdown(latexProtection.markdown);
     try {
-        const rawHtml = marked.parse(latexProtectedMarkdown, {
+        const rawHtml = marked.parse(normalizedMarkdown, {
             gfm: true,
             breaks: true,
             renderer: createSafeMarkdownRenderer()
         });
         // Safely sanitize HTML if DOMPurify is available
         const sanitizedHtml = DOMPurify ? DOMPurify.sanitize(rawHtml) : rawHtml;
-        return restoreLatexDelimitersAfterMarkdown(sanitizedHtml);
+        return restoreLatexExpressionsAfterMarkdown(sanitizedHtml, latexProtection);
     } catch (err) {
         // Fallback to plain text if marked.js fails
-        return processedMarkdown.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+        const escapedMarkdown = escapeHtml(normalizedMarkdown).replace(/\n/g, '<br>');
+        return restoreLatexExpressionsAfterMarkdown(escapedMarkdown, latexProtection);
     }
 }
 
@@ -2924,16 +2930,116 @@ function normalizePairedStrongMarkersInMarkdown(markdown) {
     }).join('\n');
 }
 
-function protectLatexDelimitersForMarkdown(markdown) {
-    return LATEX_MARKDOWN_DELIMITER_REPLACEMENTS.reduce(
-        (result, replacement) => result.split(replacement.delimiter).join(replacement.placeholder),
-        String(markdown ?? '')
-    );
+function findLatexClosingDelimiter(source, startIndex, delimiter) {
+    let closingIndex = source.indexOf(delimiter, startIndex);
+
+    while (closingIndex >= 0 && isMarkdownCharacterEscaped(source, closingIndex)) {
+        closingIndex = source.indexOf(delimiter, closingIndex + delimiter.length);
+    }
+
+    return closingIndex;
 }
 
-function restoreLatexDelimitersAfterMarkdown(html) {
-    return LATEX_MARKDOWN_DELIMITER_REPLACEMENTS.reduce(
-        (result, replacement) => result.split(replacement.placeholder).join(replacement.delimiter),
+function createLatexPlaceholderPrefix(source) {
+    let prefix = '\uE000ASKPAGELATEX';
+
+    while (source.includes(prefix)) {
+        prefix += '_';
+    }
+
+    return `${prefix}\uE001`;
+}
+
+function protectLatexExpressionsForMarkdown(markdown) {
+    const source = String(markdown ?? '');
+    const expressions = [];
+    const placeholderPrefix = createLatexPlaceholderPrefix(source);
+    let result = '';
+    let index = 0;
+    let fenceMarker = '';
+    let fenceLength = 0;
+    let inlineCodeDelimiterLength = 0;
+
+    while (index < source.length) {
+        const isLineStart = index === 0 || source[index - 1] === '\n';
+
+        if (isLineStart && inlineCodeDelimiterLength === 0) {
+            const lineEndIndex = source.indexOf('\n', index);
+            const lineEnd = lineEndIndex >= 0 ? lineEndIndex + 1 : source.length;
+            const line = source.slice(index, lineEndIndex >= 0 ? lineEndIndex : source.length);
+            const fenceMatch = line.match(/^\s*(```+|~~~+)/);
+
+            if (fenceMarker) {
+                result += source.slice(index, lineEnd);
+                if (fenceMatch && fenceMatch[1][0] === fenceMarker && fenceMatch[1].length >= fenceLength) {
+                    fenceMarker = '';
+                    fenceLength = 0;
+                }
+                index = lineEnd;
+                continue;
+            }
+
+            if (fenceMatch) {
+                fenceMarker = fenceMatch[1][0];
+                fenceLength = fenceMatch[1].length;
+                result += source.slice(index, lineEnd);
+                index = lineEnd;
+                continue;
+            }
+        }
+
+        if (source[index] === '`' && !isMarkdownCharacterEscaped(source, index)) {
+            const backtickRunLength = getCharacterRunLength(source, index, '`');
+            if (inlineCodeDelimiterLength === 0) {
+                inlineCodeDelimiterLength = backtickRunLength;
+            } else if (backtickRunLength === inlineCodeDelimiterLength) {
+                inlineCodeDelimiterLength = 0;
+            }
+            result += source.slice(index, index + backtickRunLength);
+            index += backtickRunLength;
+            continue;
+        }
+
+        if (inlineCodeDelimiterLength === 0) {
+            const openingDelimiter = LATEX_RENDER_DELIMITERS.find(
+                delimiter => source.startsWith(delimiter.left, index)
+                    && !isMarkdownCharacterEscaped(source, index)
+            );
+
+            if (openingDelimiter) {
+                const expressionEndIndex = findLatexClosingDelimiter(
+                    source,
+                    index + openingDelimiter.left.length,
+                    openingDelimiter.right
+                );
+
+                if (expressionEndIndex >= 0) {
+                    const expressionEnd = expressionEndIndex + openingDelimiter.right.length;
+                    const placeholder = `${placeholderPrefix}${expressions.length}\uE002`;
+                    expressions.push({
+                        placeholder,
+                        value: source.slice(index, expressionEnd)
+                    });
+                    result += placeholder;
+                    index = expressionEnd;
+                    continue;
+                }
+            }
+        }
+
+        result += source[index];
+        index++;
+    }
+
+    return {
+        markdown: result,
+        expressions
+    };
+}
+
+function restoreLatexExpressionsAfterMarkdown(html, latexProtection) {
+    return latexProtection.expressions.reduce(
+        (result, expression) => result.split(expression.placeholder).join(escapeHtml(expression.value)),
         String(html ?? '')
     );
 }
@@ -2966,16 +3072,7 @@ function renderLatexInElement(element) {
     }
 
     renderMathInElement(element, {
-        delimiters: [
-            { left: '$$', right: '$$', display: true },
-            { left: '\\(', right: '\\)', display: false },
-            { left: '\\begin{equation}', right: '\\end{equation}', display: true },
-            { left: '\\begin{align}', right: '\\end{align}', display: true },
-            { left: '\\begin{alignat}', right: '\\end{alignat}', display: true },
-            { left: '\\begin{gather}', right: '\\end{gather}', display: true },
-            { left: '\\begin{CD}', right: '\\end{CD}', display: true },
-            { left: '\\[', right: '\\]', display: true }
-        ],
+        delimiters: LATEX_RENDER_DELIMITERS,
         ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 'option'],
         throwOnError: false,
         trust: false,

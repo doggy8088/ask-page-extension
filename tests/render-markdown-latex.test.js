@@ -76,6 +76,75 @@ assert.match(
     /<pre><code class="language-latex">\\\(x\^2\\\)<\/code><\/pre>/
 );
 
+const reportedMultilineFormula = String.raw`$$
+\oint_{\mathcal{C}} \frac{f(z)}{(z - z_0)^{n+1}} \, dz = \frac{2\pi i}{n!} f^{(n)}(z_0) \quad \text{where } f(z) = \sum_{k=0}^{\infty} \frac{a_k}{\Gamma(k + \alpha)} \int_{0}^{\infty} t^{k + \alpha - 1} e^{-tz} \, dt
+$$`;
+const renderedMultilineFormula = renderMarkdown(reportedMultilineFormula);
+const renderedReportedFormula = katex.renderToString(reportedMultilineFormula.slice(2, -2), {
+    displayMode: true,
+    throwOnError: false,
+    trust: false
+});
+
+assert.doesNotMatch(renderedMultilineFormula, /\$\$<br>/);
+assert.doesNotMatch(renderedMultilineFormula, /<br>\$\$/);
+assert.match(renderedMultilineFormula, /\\, dz/);
+assert.match(renderedMultilineFormula, /\\, dt/);
+assert.match(renderedMultilineFormula, /\$\$\n\\oint/);
+assert.match(renderedMultilineFormula, /dt\n\$\$/);
+assert.match(renderedReportedFormula, /class="katex"/);
+assert.doesNotMatch(renderedReportedFormula, /class="katex-error"/);
+
+assert.strictEqual(
+    renderMarkdown('before\n\\[\nx^2 + y^2\n\\]\nafter'),
+    '<p>before<br>\\[\nx^2 + y^2\n\\]<br>after</p>\n'
+);
+
+[
+    ['equation', 'x = 1'],
+    ['align', 'x &= 1 \\\\ y &= 2'],
+    ['alignat', 'x &={} y'],
+    ['gather', 'x = 1 \\\\ y = 2'],
+    ['CD', 'A @>f>> B']
+].forEach(([environment, formula]) => {
+    const renderedEnvironment = renderMarkdown(
+        `\\begin{${environment}}\n${formula}\n\\end{${environment}}`
+    );
+    assert.doesNotMatch(renderedEnvironment, /<br>/);
+    assert.match(renderedEnvironment, new RegExp(`\\\\begin\\{${environment}\\}\\n`));
+    assert.match(renderedEnvironment, new RegExp(`\\n\\\\end\\{${environment}\\}`));
+});
+
+assert.match(renderMarkdown('`$$\\frac{1}{2}$$`'), /<code>\$\$\\frac\{1\}\{2\}\$\$<\/code>/);
+assert.match(renderMarkdown('價格 $0.0045\n下一行'), /價格 \$0\.0045<br>下一行/);
+assert.match(renderMarkdown('$$\nunclosed'), /\$\$<br>unclosed/);
+const renderedUnsafeFormula = renderMarkdown('$$\n\\text{<img src=x onerror=alert(1)>}\n$$');
+assert.match(renderedUnsafeFormula, /\\text\{&lt;img src=x onerror=alert\(1\)&gt;\}/);
+assert.doesNotMatch(renderedUnsafeFormula, /<img\b/);
+
+const fallbackSandbox = {
+    console,
+    marked: {
+        parse() {
+            throw new Error('forced Markdown parser failure');
+        }
+    },
+    DOMPurify: sandbox.DOMPurify,
+    renderMathInElement() {},
+    chrome: sandbox.chrome,
+    document: sandbox.document,
+    window: sandbox.window
+};
+fallbackSandbox.globalThis = fallbackSandbox;
+vm.createContext(fallbackSandbox);
+vm.runInContext(`${contentScript}\nglobalThis.__askPageFallbackRenderMarkdown = renderMarkdown;`, fallbackSandbox, {
+    filename: 'content.js'
+});
+assert.strictEqual(
+    fallbackSandbox.__askPageFallbackRenderMarkdown('before\n$$\nx^2\n$$\nafter'),
+    'before<br>$$\nx^2\n$$<br>after'
+);
+
 const targetElement = {};
 renderLatexInElement(targetElement);
 
