@@ -129,6 +129,16 @@ assert.strictEqual(translateText(' '), ' ');
 assert.strictEqual(translateText('\n  '), '\n  ');
 assert.strictEqual(translateText(translateText('\n  ')), '\n  ');
 
+[
+    ['⏳ [1/10] 正在分析需求與頁面狀態。', '⏳ [1/10] Analyzing the request and page state.'],
+    ['⏳ [1/10] 這個端點不支援 tool calling，我改用一般文字模式繼續。', '⏳ [1/10] This endpoint does not support tool calling. Continuing in plain-text mode.'],
+    ['⏳ [1/10] 這次回應在輸出上限前就被截斷了，我會放寬輸出額度再試一次。', '⏳ [1/10] The response was truncated before reaching the output limit. Retrying with a higher output limit.'],
+    ['⏳ [1/10] 這次沒有拿到可顯示內容，我再試一次。', '⏳ [1/10] No displayable content was received. Retrying.'],
+    ['⏳ [1/10] 服務暫時不穩定，我會稍候自動重試。', '⏳ [1/10] The service is temporarily unstable. Retrying shortly.']
+].forEach(([source, expected]) => {
+    assert.strictEqual(translateText(source), expected);
+});
+
 const root = new FakeElement('div');
 const normalElement = new FakeElement('div', root);
 const codeElement = new FakeElement('code', root);
