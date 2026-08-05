@@ -64,15 +64,28 @@ class FakeMutationObserver {
 
 FakeMutationObserver.instances = [];
 
+const hostDocumentElement = new FakeElement('html');
+hostDocumentElement.setAttribute('lang', 'fr');
+hostDocumentElement.setAttribute('dir', 'rtl');
+const hostLocalizedElement = new FakeElement('section', hostDocumentElement);
+hostLocalizedElement.setAttribute('data-i18n', 'brandTitle');
+hostLocalizedElement.setAttribute('data-i18n-aria-label', 'reportConditionsAria');
+hostLocalizedElement.setAttribute('aria-label', 'Host report conditions');
+hostLocalizedElement.textContent = 'Host report title';
 const document = {
     nodeType: 9,
-    documentElement: new FakeElement('html'),
+    documentElement: hostDocumentElement,
+    descendants: [hostLocalizedElement],
     readyState: 'complete',
-    addEventListener() {}
+    addEventListener() {},
+    querySelectorAll() {
+        return this.descendants;
+    }
 };
 
 let storage = { ASKPAGE_UI_LOCALE: 'auto' };
 let storageChangedListener = null;
+const warnings = [];
 const sandbox = {
     chrome: {
         i18n: {
@@ -122,7 +135,9 @@ const sandbox = {
         };
     },
     console: {
-        warn() {},
+        warn(...args) {
+            warnings.push(args.map(String).join(' '));
+        },
         error() {}
     }
 };
@@ -155,6 +170,13 @@ vm.runInContext(i18nScript, sandbox, { filename: 'i18n.js' });
     assert.strictEqual(i18n.resolveAutomaticLocale('ja-JP'), 'ja');
     assert.strictEqual(i18n.resolveAutomaticLocale('ko-KR'), 'ko');
     assert.strictEqual(i18n.resolveAutomaticLocale('fr-FR'), 'zh_TW');
+    assert.strictEqual(hostLocalizedElement.textContent, 'Host report title');
+    assert.strictEqual(hostLocalizedElement.getAttribute('aria-label'), 'Host report conditions');
+    assert.strictEqual(hostLocalizedElement.dataset.askpageI18nValue, undefined);
+    assert.strictEqual(hostDocumentElement.getAttribute('lang'), 'fr');
+    assert.strictEqual(hostDocumentElement.getAttribute('dir'), 'rtl');
+    assert.strictEqual(warnings.some((warning) => warning.includes('brandTitle')), false);
+    assert.strictEqual(warnings.some((warning) => warning.includes('reportConditionsAria')), false);
 
     const root = new FakeElement('section');
     const marked = new FakeElement('span', root);
@@ -214,6 +236,9 @@ vm.runInContext(i18nScript, sandbox, { filename: 'i18n.js' });
     assert.strictEqual(i18n.locale, 'en');
     assert.strictEqual(marked.textContent, 'Cancel');
     assert.strictEqual(shadowMarked.textContent, 'Save');
+    assert.strictEqual(hostLocalizedElement.textContent, 'Host report title');
+    assert.strictEqual(hostDocumentElement.getAttribute('lang'), 'fr');
+    assert.strictEqual(hostDocumentElement.getAttribute('dir'), 'rtl');
 
     const observer = FakeMutationObserver.instances.at(-1);
     const added = new FakeElement('span', root);

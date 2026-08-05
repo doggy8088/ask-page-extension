@@ -419,13 +419,4 @@
     }
 
     globalThis.AskPageI18n = api;
-
-    if (typeof document !== 'undefined') {
-        const observeDocument = () => observe(document);
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', observeDocument, { once: true });
-        } else {
-            observeDocument();
-        }
-    }
 })();
