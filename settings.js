@@ -448,6 +448,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (confirm('確定要匯入此設定檔嗎？這將會覆蓋您目前的設定。')) {
                     chrome.storage.local.set(settings, () => {
                         showStatus('設定匯入成功！正在重新載入...', 'success');
+                        chrome.runtime.sendMessage({ action: 'reload-options-source-tab' }).catch((error) => {
+                            console.warn('Failed to reload the source webpage after import:', error);
+                        });
                         setTimeout(() => {
                             window.location.reload();
                         }, 1500);

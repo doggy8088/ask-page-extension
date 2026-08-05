@@ -16,6 +16,50 @@ function logSendMessageError(prefix, error) {
     }
 }
 
+const OPTIONS_SOURCE_TAB_STORAGE = 'OPTIONS_SOURCE_TAB';
+
+async function rememberOptionsSourceTab(tab) {
+    if (!tab || typeof tab.id !== 'number') {
+        return;
+    }
+
+    try {
+        await chrome.storage.session.set({
+            [OPTIONS_SOURCE_TAB_STORAGE]: { id: tab.id }
+        });
+    } catch (error) {
+        console.warn('[AskPage] Failed to remember options source tab:', error);
+    }
+}
+
+async function reloadOptionsSourceTab() {
+    const result = await chrome.storage.session.get([OPTIONS_SOURCE_TAB_STORAGE]);
+    const sourceTab = result[OPTIONS_SOURCE_TAB_STORAGE];
+    if (!sourceTab || typeof sourceTab.id !== 'number') {
+        return { success: false, reason: 'source-tab-not-found' };
+    }
+
+    let tab;
+    try {
+        tab = await chrome.tabs.get(sourceTab.id);
+    } catch (error) {
+        console.warn('[AskPage] Failed to find options source tab:', error);
+        return { success: false, reason: 'source-tab-not-found' };
+    }
+
+    if (!/^https?:\/\//i.test(tab.url || '')) {
+        return { success: false, reason: 'source-tab-not-reloadable' };
+    }
+
+    try {
+        await chrome.tabs.reload(sourceTab.id);
+        return { success: true };
+    } catch (error) {
+        console.warn('[AskPage] Failed to reload options source tab:', error);
+        return { success: false, reason: 'source-tab-reload-failed' };
+    }
+}
+
 // Listens for the command to toggle the dialog
 chrome.commands.onCommand.addListener((command, tab) => {
     console.log('[AskPage] ===== COMMAND RECEIVED =====');
@@ -108,7 +152,7 @@ chrome.action.onClicked.addListener((tab) => {
     chrome.storage.local.get(['SETTINGS_OPENED'], (result) => {
         if (!result.SETTINGS_OPENED) {
             // 第一次使用，開啟設定頁
-            chrome.runtime.openOptionsPage().then(() => {
+            rememberOptionsSourceTab(tab).then(() => chrome.runtime.openOptionsPage()).then(() => {
                 console.log('[AskPage] First use: opened Options page');
             }).catch((error) => {
                 console.error('[AskPage] Failed to open Options page:', error);
@@ -685,8 +729,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    if (request.action === 'reload-options-source-tab') {
+        reloadOptionsSourceTab().then((result) => {
+            sendResponse(result);
+        }).catch((error) => {
+            console.error('[AskPage] Failed to reload options source tab:', error);
+            sendResponse({ success: false, reason: 'source-tab-reload-failed' });
+        });
+
+        return true;
+    }
+
     if (request.action === 'open-options-page') {
-        chrome.runtime.openOptionsPage().then(() => {
+        rememberOptionsSourceTab(sender.tab).then(() => chrome.runtime.openOptionsPage()).then(() => {
             sendResponse({ success: true });
         }).catch((error) => {
             console.error('[AskPage] Failed to open Options page:', error);
