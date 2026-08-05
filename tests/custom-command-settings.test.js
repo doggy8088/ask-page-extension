@@ -7,6 +7,7 @@ const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
 const settingsScript = fs.readFileSync(path.join(rootDir, 'settings.js'), 'utf8');
+const zhTwCatalog = JSON.parse(fs.readFileSync(path.join(rootDir, '_locales/zh_TW/messages.json'), 'utf8'));
 
 function extractFunctionSource(source, functionName, nextFunctionName) {
     const start = source.indexOf(`function ${functionName}(`);
@@ -18,10 +19,22 @@ function extractFunctionSource(source, functionName, nextFunctionName) {
 }
 
 const sandbox = {};
+sandbox.window = {
+    AskPageI18n: {
+        t(key, substitutions) {
+            const message = zhTwCatalog[key]?.message || key;
+            return message.replace(/\$([A-Za-z][A-Za-z0-9_]*)\$/g, (match, name) => {
+                const value = substitutions?.[name];
+                return value === undefined || value === null ? match : String(value);
+            });
+        }
+    }
+};
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(
-    `${extractFunctionSource(settingsScript, 'validateTemplateVariables', 'openModal')}
+    `${extractFunctionSource(settingsScript, 't', 'escapeHtml')}
+${extractFunctionSource(settingsScript, 'validateTemplateVariables', 'openModal')}
 globalThis.__askPageSettingsTestExports = { validateTemplateVariables };`,
     sandbox,
     { filename: 'settings.js' }

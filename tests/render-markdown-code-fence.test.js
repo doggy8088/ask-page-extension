@@ -7,11 +7,22 @@ const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
 const marked = require(path.join(rootDir, 'lib', 'marked.min.js'));
+const zhTwMessages = require(path.join(rootDir, '_locales', 'zh_TW', 'messages.json'));
 const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
+
+function localizeMessage(key, substitutions = {}) {
+    const message = zhTwMessages[key]?.message || key;
+    return message.replace(/\$([A-Za-z_][A-Za-z0-9_]*)\$/g, (match, name) => (
+        Object.prototype.hasOwnProperty.call(substitutions, name) ? String(substitutions[name]) : match
+    ));
+}
 
 const sandbox = {
     console,
     marked,
+    AskPageI18n: {
+        t: localizeMessage
+    },
     DOMPurify: {
         sanitize(html) {
             return html;

@@ -1,11 +1,13 @@
 (async () => {
     try {
+        await window.AskPageI18n?.ready;
+        window.AskPageI18n?.observe(document);
         const result = await chrome.storage.local.get(['askpage_codepen_data']);
         const data = result.askpage_codepen_data;
 
         if (!data) {
-            document.querySelector('h1').textContent = '找不到程式碼資料';
-            document.querySelector('p').textContent = '請關閉此分頁並重新嘗試。';
+            document.querySelector('h1').textContent = window.AskPageI18n?.t('codepenMissingData') || '';
+            document.querySelector('p').textContent = window.AskPageI18n?.t('closeAndRetry') || '';
             return;
         }
 
@@ -34,7 +36,7 @@
         form.submit();
     } catch (error) {
         console.error('[AskPage] Failed to prefill CodePen:', error);
-        document.querySelector('h1').textContent = '開啟 CodePen 失敗';
-        document.querySelector('p').textContent = error.message || '未知錯誤，請重試。';
+        document.querySelector('h1').textContent = window.AskPageI18n?.t('codepenOpenFailed') || '';
+        document.querySelector('p').textContent = error.message || window.AskPageI18n?.t('unknownErrorRetry') || '';
     }
 })();

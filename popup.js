@@ -1,4 +1,6 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await window.AskPageI18n?.ready;
+    window.AskPageI18n?.observe(document);
     const openSettingsBtn = document.getElementById('open-settings');
 
     const openOptions = () => {

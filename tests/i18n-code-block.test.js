@@ -7,6 +7,16 @@ const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
 const i18nScript = fs.readFileSync(path.join(rootDir, 'i18n.js'), 'utf8');
+const catalogs = Object.fromEntries(
+    ['zh_TW', 'en', 'zh_CN', 'ja', 'ko'].map((locale) => [
+        locale,
+        JSON.parse(fs.readFileSync(path.join(rootDir, '_locales', locale, 'messages.json'), 'utf8'))
+    ])
+);
+catalogs.en.testPositional = { message: '$1 / $2 / $9' };
+catalogs.en.testDoubleBraces = { message: '{{name}}' };
+catalogs.zh_TW.testFallback = { message: 'Fallback text' };
+delete catalogs.ja.testFallback;
 
 class FakeElement {
     constructor(tagName, parentElement = null) {
@@ -15,25 +25,8 @@ class FakeElement {
         this.parentElement = parentElement;
         this.attributes = new Map();
         this.descendants = [];
-        this.textNodes = [];
-    }
-
-    closest(selector) {
-        const tagNames = selector.split(',').map((value) => value.trim().toUpperCase());
-        let element = this;
-
-        while (element) {
-            if (tagNames.includes(element.tagName)) {
-                return element;
-            }
-            element = element.parentElement;
-        }
-
-        return null;
-    }
-
-    hasAttribute(name) {
-        return this.attributes.has(name);
+        this.dataset = Object.create(null);
+        this.textContent = '';
     }
 
     getAttribute(name) {
@@ -41,19 +34,15 @@ class FakeElement {
     }
 
     setAttribute(name, value) {
-        this.attributes.set(name, value);
+        this.attributes.set(name, String(value));
+        if (name.startsWith('data-')) {
+            const key = name.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+            this.dataset[key] = String(value);
+        }
     }
 
     querySelectorAll() {
         return this.descendants;
-    }
-}
-
-class FakeTextNode {
-    constructor(nodeValue, parentElement) {
-        this.nodeType = 3;
-        this.nodeValue = nodeValue;
-        this.parentElement = parentElement;
     }
 }
 
@@ -69,109 +58,162 @@ class FakeMutationObserver {
 FakeMutationObserver.instances = [];
 
 const document = {
+    nodeType: 9,
+    documentElement: new FakeElement('html'),
     readyState: 'complete',
-    createTreeWalker(root) {
-        const textNodes = root.textNodes || [];
-        let index = -1;
-
-        return {
-            currentNode: null,
-            nextNode() {
-                index += 1;
-                this.currentNode = textNodes[index] || null;
-                return Boolean(this.currentNode);
-            }
-        };
-    },
     addEventListener() {}
 };
 
+let storage = { ASKPAGE_UI_LOCALE: 'auto' };
+let storageChangedListener = null;
 const sandbox = {
     chrome: {
         i18n: {
             getUILanguage() {
                 return 'en-US';
             }
+        },
+        runtime: {
+            getURL(resourcePath) {
+                return resourcePath;
+            }
+        },
+        storage: {
+            local: {
+                async get(keys) {
+                    if (!keys) {
+                        return { ...storage };
+                    }
+                    return Object.fromEntries(keys.map((key) => [key, storage[key]]));
+                },
+                async set(values) {
+                    const changes = {};
+                    Object.entries(values).forEach(([key, value]) => {
+                        changes[key] = { oldValue: storage[key], newValue: value };
+                        storage[key] = value;
+                    });
+                    storageChangedListener?.(changes, 'local');
+                }
+            },
+            onChanged: {
+                addListener(listener) {
+                    storageChangedListener = listener;
+                }
+            }
         }
     },
     document,
-    location: {
-        protocol: 'https:'
-    },
     MutationObserver: FakeMutationObserver,
-    Node: {
-        ELEMENT_NODE: 1,
-        TEXT_NODE: 3
+    fetch: async (resourcePath) => {
+        const locale = String(resourcePath).split('/')[1];
+        return {
+            ok: Boolean(catalogs[locale]),
+            status: catalogs[locale] ? 200 : 404,
+            async json() {
+                return catalogs[locale];
+            }
+        };
     },
-    NodeFilter: {
-        SHOW_TEXT: 4
-    },
-    window: {
-        alert() {},
-        confirm() {},
-        prompt() {}
+    console: {
+        warn() {},
+        error() {}
     }
 };
 
 sandbox.globalThis = sandbox;
-
 vm.createContext(sandbox);
-vm.runInContext(i18nScript, sandbox, {
-    filename: 'i18n.js'
+vm.runInContext(i18nScript, sandbox, { filename: 'i18n.js' });
+
+(async () => {
+    const i18n = sandbox.AskPageI18n;
+    await i18n.ready;
+
+    assert.deepStrictEqual(Array.from(i18n.SUPPORTED_LOCALES), ['zh_TW', 'en', 'zh_CN', 'ja', 'ko']);
+    assert.strictEqual(i18n.locale, 'en');
+    assert.strictEqual(i18n.direction, 'ltr');
+    assert.strictEqual(i18n.t('systemPromptLanguageInstruction'), catalogs.en.systemPromptLanguageInstruction.message);
+    assert.strictEqual(i18n.t('characterCount', { count: 7 }), '7 characters');
+    assert.strictEqual(i18n.t('modeToggleAria', { label: 'Mode', current: 'inquiry', next: 'agent' }), 'Mode: currently inquiry; click to switch to agent');
+    assert.strictEqual(i18n.t('testPositional', ['one', 'two', '', '', '', '', '', '', 'nine']), 'one / two / nine');
+    assert.strictEqual(i18n.t('testDoubleBraces', { name: 'AskPage' }), 'AskPage');
+    assert.strictEqual(i18n.resolveAutomaticLocale('en-US'), 'en');
+    assert.strictEqual(i18n.resolveAutomaticLocale('zh-CN'), 'zh_CN');
+    assert.strictEqual(i18n.resolveAutomaticLocale('zh-SG'), 'zh_CN');
+    assert.strictEqual(i18n.resolveAutomaticLocale('zh-Hans-HK'), 'zh_CN');
+    assert.strictEqual(i18n.resolveAutomaticLocale('zh-TW'), 'zh_TW');
+    assert.strictEqual(i18n.resolveAutomaticLocale('zh-HK'), 'zh_TW');
+    assert.strictEqual(i18n.resolveAutomaticLocale('zh-Hant-MO'), 'zh_TW');
+    assert.strictEqual(i18n.resolveAutomaticLocale('ja-JP'), 'ja');
+    assert.strictEqual(i18n.resolveAutomaticLocale('ko-KR'), 'ko');
+    assert.strictEqual(i18n.resolveAutomaticLocale('fr-FR'), 'zh_TW');
+
+    const root = new FakeElement('section');
+    const marked = new FakeElement('span', root);
+    marked.setAttribute('data-i18n', 'cancel');
+    const placeholder = new FakeElement('input', root);
+    placeholder.setAttribute('data-i18n-placeholder', 'commandNamePlaceholder');
+    const title = new FakeElement('button', root);
+    title.setAttribute('data-i18n-title', 'openPreferences');
+    const untouched = new FakeElement('code', root);
+    untouched.textContent = '取消';
+    root.descendants = [marked, placeholder, title, untouched];
+    i18n.observe(root);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.strictEqual(marked.textContent, 'Cancel');
+    assert.strictEqual(placeholder.getAttribute('placeholder'), 'For example: /help');
+    assert.strictEqual(title.getAttribute('title'), 'Open preferences');
+    assert.strictEqual(untouched.textContent, '取消');
+    assert.strictEqual(root.getAttribute('lang'), 'en');
+    assert.strictEqual(root.getAttribute('dir'), 'ltr');
+
+    const shadowHost = new FakeElement('div');
+    const shadowMarked = new FakeElement('span');
+    shadowMarked.setAttribute('data-i18n', 'save');
+    const shadowRoot = {
+        nodeType: 11,
+        host: shadowHost,
+        descendants: [shadowMarked],
+        querySelectorAll() {
+            return this.descendants;
+        }
+    };
+    i18n.observe(shadowRoot);
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.strictEqual(shadowMarked.textContent, 'Save');
+    assert.strictEqual(shadowHost.getAttribute('lang'), 'en');
+    assert.strictEqual(shadowHost.getAttribute('dir'), 'ltr');
+
+    await i18n.setLocalePreference('ja');
+    assert.strictEqual(i18n.locale, 'ja');
+    assert.strictEqual(marked.textContent, 'キャンセル');
+    assert.strictEqual(shadowMarked.textContent, '保存');
+    assert.strictEqual(i18n.t('testFallback'), 'Fallback text');
+    assert.strictEqual(root.getAttribute('lang'), 'ja');
+    assert.strictEqual(storage.ASKPAGE_UI_LOCALE, 'ja');
+
+    for (const locale of ['zh_TW', 'en', 'zh_CN', 'ja', 'ko']) {
+        await i18n.setLocalePreference(locale);
+        assert.strictEqual(i18n.getSystemPromptLanguageInstruction(), catalogs[locale].systemPromptLanguageInstruction.message);
+    }
+
+    storageChangedListener({ ASKPAGE_UI_LOCALE: { oldValue: 'ko', newValue: 'en' } }, 'local');
+    await i18n.ready;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.strictEqual(i18n.locale, 'en');
+    assert.strictEqual(marked.textContent, 'Cancel');
+    assert.strictEqual(shadowMarked.textContent, 'Save');
+
+    const observer = FakeMutationObserver.instances.at(-1);
+    const added = new FakeElement('span', root);
+    added.setAttribute('data-i18n', 'save');
+    observer.callback([{ type: 'childList', addedNodes: [added] }]);
+    assert.strictEqual(added.textContent, 'Save');
+
+    console.log('i18n-code-block: ok');
+})().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
 });
-
-const { observe, translateText } = sandbox.window.AskPageI18n;
-
-assert.strictEqual(translateText('取消'), 'Cancel');
-assert.strictEqual(translateText(' \n取消\n '), ' \nCancel\n ');
-assert.strictEqual(translateText(''), '');
-assert.strictEqual(translateText(' '), ' ');
-assert.strictEqual(translateText('\n  '), '\n  ');
-assert.strictEqual(translateText(translateText('\n  ')), '\n  ');
-
-[
-    ['⏳ [1/10] 正在分析需求與頁面狀態。', '⏳ [1/10] Analyzing the request and page state.'],
-    ['⏳ [1/10] 這個端點不支援 tool calling，我改用一般文字模式繼續。', '⏳ [1/10] This endpoint does not support tool calling. Continuing in plain-text mode.'],
-    ['⏳ [1/10] 這次回應在輸出上限前就被截斷了，我會放寬輸出額度再試一次。', '⏳ [1/10] The response was truncated before reaching the output limit. Retrying with a higher output limit.'],
-    ['⏳ [1/10] 這次沒有拿到可顯示內容，我再試一次。', '⏳ [1/10] No displayable content was received. Retrying.'],
-    ['⏳ [1/10] 服務暫時不穩定，我會稍候自動重試。', '⏳ [1/10] The service is temporarily unstable. Retrying shortly.']
-].forEach(([source, expected]) => {
-    assert.strictEqual(translateText(source), expected);
-});
-
-const root = new FakeElement('div');
-const normalElement = new FakeElement('div', root);
-const codeElement = new FakeElement('code', root);
-const highlightedSpan = new FakeElement('span', codeElement);
-const normalText = new FakeTextNode('取消', normalElement);
-const whitespaceText = new FakeTextNode('\n  ', normalElement);
-const codeText = new FakeTextNode('取消\n  ', highlightedSpan);
-
-normalElement.setAttribute('title', '取消');
-codeElement.setAttribute('title', '取消');
-root.textNodes = [normalText, whitespaceText, codeText];
-root.descendants = [normalElement, codeElement, highlightedSpan];
-
-observe(root);
-
-assert.strictEqual(normalText.nodeValue, 'Cancel');
-assert.strictEqual(whitespaceText.nodeValue, '\n  ');
-assert.strictEqual(codeText.nodeValue, '取消\n  ');
-assert.strictEqual(normalElement.getAttribute('title'), 'Cancel');
-assert.strictEqual(codeElement.getAttribute('title'), '取消');
-
-const observer = FakeMutationObserver.instances[0];
-const addedNormalText = new FakeTextNode('取消', normalElement);
-const addedCodeSpan = new FakeElement('span', codeElement);
-const addedCodeText = new FakeTextNode('取消\n  ', addedCodeSpan);
-
-addedCodeSpan.textNodes = [addedCodeText];
-observer.callback([{
-    type: 'childList',
-    addedNodes: [addedNormalText, addedCodeSpan]
-}]);
-
-assert.strictEqual(addedNormalText.nodeValue, 'Cancel');
-assert.strictEqual(addedCodeText.nodeValue, '取消\n  ');
-
-console.log('i18n-code-block: ok');

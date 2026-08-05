@@ -30,6 +30,6 @@ assert.match(backgroundScript, /'anthropic-version': '2023-06-01'/);
 assert.match(backgroundScript, /'anthropic-dangerous-direct-browser-access': 'true'/);
 assert.match(backgroundScript, /providerConfig\.baseUrl \+ '\/' \+ endpoint/);
 assert.match(anthropicSection, /const parsedError = parseApiErrorBody\(errorBody\);/);
-assert.match(anthropicSection, /\$\{providerLabel\} 驗證失敗：\$\{parsedError\.apiMessage\}/);
+assert.match(anthropicSection, /getLocalizedText\('providerAuthenticationFailed',\s*\{[\s\S]*?provider: providerLabel,[\s\S]*?error: parsedError\.apiMessage/);
 
 console.log('anthropic-service-worker-provider: ok');

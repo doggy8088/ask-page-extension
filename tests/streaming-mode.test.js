@@ -117,6 +117,7 @@ assert.match(geminiLoopSection, /const responseData = streamingEnabled\s*\n\s*\?
 });
 
 assert.match(contentScript, /onAnswerDelta: streamingEnabled \? \(delta\) => streamedAnswer\.append\(delta\)/);
-assert.match(contentScript, /finalAnswer = agentModeEnabled\s*\n\s*\? `⚠️/);
+assert.match(contentScript, /finalAnswer = agentModeEnabled\s*\n\s*\? getLocalizedText\('agentToolFallbackMessage'/);
+assert.match(contentScript, /const finalAnswer = answer\.fallbackUsed\s*\n\s*\? getLocalizedText\('endpointToolFallbackMessage'/);
 
 console.log('streaming-mode: ok');

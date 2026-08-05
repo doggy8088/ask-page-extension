@@ -38,7 +38,7 @@ const actualModels = Array.from(sandbox.__ollamaCloudModels);
 assert.deepStrictEqual(actualModels, expectedModels);
 assert.strictEqual(new Set(actualModels).size, actualModels.length);
 
-assert.match(settingsHtml, /<option value="ollama-cloud">Ollama Cloud<\/option>/);
+assert.match(settingsHtml, /<option value="ollama-cloud"[^>]*data-i18n="providerOllamaCloud"[^>]*>Ollama Cloud<\/option>/);
 assert.match(settingsHtml, /id="modalOllamaCloudApiKey"/);
 assert.match(settingsHtml, /id="modalOllamaCloudModelsList"/);
 assert.match(settingsHtml, /data-provider-type="ollama-cloud" data-action="fetch-models"/);
