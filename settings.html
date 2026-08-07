@@ -731,6 +731,10 @@
           <span class="icon">📝</span>
           <span data-i18n="adjustSystemPrompt">調整系統提示</span>
         </button>
+        <button class="tab-btn" data-tab="general">
+          <span class="icon">✨</span>
+          <span data-i18n="generalSettingsTab">一般設定</span>
+        </button>
       </div>
 
       <!-- Tab Content -->
@@ -796,6 +800,27 @@
               <textarea id="customSystemPrompt" data-i18n-placeholder="additionalPromptPlaceholder" placeholder="請輸入要附加到系統提示最後面的內容..." spellcheck="false" style="min-height: 168px;"></textarea>
               <small style="color: var(--text-secondary);" data-i18n="additionalPromptSaveDescription">儲存後，所有 AI 提供者都會在送出請求時套用這段追加提示詞。</small>
               <small id="customSystemPromptCount" style="color: var(--text-secondary);" data-i18n="characterCount" data-i18n-substitutions='{"count":0}'>0 字元</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- General Settings Tab -->
+        <div id="general-tab" class="tab-pane">
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">
+                <span class="icon">✨</span>
+                <span data-i18n="interfaceIndicatorsTitle">介面提示效果</span>
+              </h2>
+              <p class="card-description" data-i18n="interfaceIndicatorsDescription">調整 AskPage 對話框以外，在網頁上顯示的視覺提示效果。</p>
+            </div>
+
+            <div class="form-group">
+              <label for="agentGlowEffectEnabled">
+                <input type="checkbox" id="agentGlowEffectEnabled" checked />
+                <span data-i18n="enableAgentGlowEffect">代理模式執行時顯示網頁背光效果</span>
+              </label>
+              <small style="color: var(--text-secondary);" data-i18n="enableAgentGlowEffectHelp">啟用後，從送出問題到代理模式回覆完成前，網頁四周會顯示琥珀色背光動畫，提示 AskPage 正在頁面上工作。</small>
             </div>
           </div>
         </div>

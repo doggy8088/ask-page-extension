@@ -102,6 +102,10 @@ const LATEX_RENDER_DELIMITERS = [
     { left: '\\[', right: '\\]', display: true }
 ];
 const SCREEN_ANNOTATION_OVERLAY_ID = 'askpage-screen-annotation-overlay';
+const AGENT_GLOW_OVERLAY_ID = 'askpage-agent-glow-overlay';
+const AGENT_GLOW_STYLE_ELEMENT_ID = 'askpage-agent-glow-styles';
+const AGENT_GLOW_VISIBLE_CLASS = 'askpage-agent-glow-visible';
+const AGENT_GLOW_FADE_DURATION_MS = 400;
 const AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS = 100;
 const AUTO_SCROLL_ANIMATION_DURATION_MS = 240;
 const ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX = 90;
@@ -755,6 +759,7 @@ const PROMPT_HISTORY_STORAGE = 'ASKPAGE_PROMPT_HISTORY';
 // New storage keys for multi-provider support
 const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
+const AGENT_GLOW_EFFECT_ENABLED_STORAGE = 'AGENT_GLOW_EFFECT_ENABLED';
 const REASONING_EFFORTS_STORAGE = 'ASKPAGE_REASONING_EFFORTS';
 const CUSTOM_COMMAND_MODE_AGENT = 'agent';
 const CUSTOM_COMMAND_MODE_INQUIRY = 'inquiry';
@@ -2127,6 +2132,110 @@ async function getAgentModeEnabled() {
 
 async function toggleAgentModeEnabled() {
     return await toggleHtmlModeEnabled();
+}
+
+// 代理模式執行中的網頁背光效果
+// 注意：這裡刻意不使用 getValue()，因為 getValue() 以 `result[key] || defaultValue`
+// 判斷預設值，若 defaultValue 為 true，使用者關閉後存入 false 會被 `false || true`
+// 錯誤地又算回 true。此設定預設開啟、使用者可關閉，因此改用 `!== false` 判斷。
+async function getAgentGlowEffectEnabled() {
+    const result = await chrome.storage.local.get([AGENT_GLOW_EFFECT_ENABLED_STORAGE]);
+    return result[AGENT_GLOW_EFFECT_ENABLED_STORAGE] !== false;
+}
+
+function ensureAgentGlowStylesInjected() {
+    if (document.getElementById(AGENT_GLOW_STYLE_ELEMENT_ID)) {
+        return;
+    }
+
+    const styleElement = document.createElement('style');
+    styleElement.id = AGENT_GLOW_STYLE_ELEMENT_ID;
+    styleElement.textContent = `
+        #${AGENT_GLOW_OVERLAY_ID} {
+            position: fixed;
+            inset: 0;
+            z-index: 2147483646;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.35s ease;
+            box-shadow:
+                inset 0 0 18px 2px rgba(255, 145, 41, 0.45),
+                inset 0 0 46px 10px rgba(234, 125, 42, 0.28),
+                inset 0 0 90px 26px rgba(188, 74, 24, 0.14);
+            animation: askpageAgentGlowPulse 2.2s ease-in-out infinite;
+        }
+        #${AGENT_GLOW_OVERLAY_ID}.${AGENT_GLOW_VISIBLE_CLASS} {
+            opacity: 1;
+        }
+        @keyframes askpageAgentGlowPulse {
+            0%, 100% {
+                box-shadow:
+                    inset 0 0 18px 2px rgba(255, 145, 41, 0.45),
+                    inset 0 0 46px 10px rgba(234, 125, 42, 0.28),
+                    inset 0 0 90px 26px rgba(188, 74, 24, 0.14);
+            }
+            50% {
+                box-shadow:
+                    inset 0 0 26px 4px rgba(255, 166, 77, 0.7),
+                    inset 0 0 60px 14px rgba(234, 125, 42, 0.42),
+                    inset 0 0 110px 32px rgba(188, 74, 24, 0.22);
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #${AGENT_GLOW_OVERLAY_ID} {
+                animation: none;
+                transition: opacity 0.2s ease;
+            }
+        }
+    `;
+    document.documentElement.appendChild(styleElement);
+}
+
+let agentGlowActiveCount = 0;
+let agentGlowHideTimeoutId = null;
+
+function showAgentGlowEffect() {
+    agentGlowActiveCount += 1;
+    if (agentGlowActiveCount > 1) {
+        return;
+    }
+
+    ensureAgentGlowStylesInjected();
+
+    if (agentGlowHideTimeoutId) {
+        clearTimeout(agentGlowHideTimeoutId);
+        agentGlowHideTimeoutId = null;
+    }
+
+    let overlay = document.getElementById(AGENT_GLOW_OVERLAY_ID);
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = AGENT_GLOW_OVERLAY_ID;
+        overlay.setAttribute('aria-hidden', 'true');
+        document.documentElement.appendChild(overlay);
+    }
+
+    requestAnimationFrame(() => {
+        overlay.classList.add(AGENT_GLOW_VISIBLE_CLASS);
+    });
+}
+
+function hideAgentGlowEffect() {
+    agentGlowActiveCount = Math.max(0, agentGlowActiveCount - 1);
+    if (agentGlowActiveCount > 0) {
+        return;
+    }
+
+    const overlay = document.getElementById(AGENT_GLOW_OVERLAY_ID);
+    if (!overlay) {
+        return;
+    }
+
+    overlay.classList.remove(AGENT_GLOW_VISIBLE_CLASS);
+    agentGlowHideTimeoutId = setTimeout(() => {
+        overlay.remove();
+        agentGlowHideTimeoutId = null;
+    }, AGENT_GLOW_FADE_DURATION_MS);
 }
 
 /* --------------------------------------------------
@@ -11935,16 +12044,32 @@ async function createDialog() {
 
         console.log('[AskPage] Using active provider type:', activeConfig.type);
 
-        if (activeConfig.type === 'openai') {
-            await askOpenAI(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
-        } else if (activeConfig.type === 'azure') {
-            await askAzureOpenAI(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
-        } else if (activeConfig.type === 'anthropic') {
-            await askAnthropic(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
-        } else if (['openai-compatible', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama', 'ollama-cloud'].includes(activeConfig.type)) {
-            await askOpenAICompatible(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
-        } else {
-            await askGemini(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+        const [agentModeEnabled, agentGlowEffectEnabled] = await Promise.all([
+            getAgentModeEnabled(),
+            getAgentGlowEffectEnabled()
+        ]);
+        const shouldShowAgentGlow = agentModeEnabled && agentGlowEffectEnabled;
+
+        if (shouldShowAgentGlow) {
+            showAgentGlowEffect();
+        }
+
+        try {
+            if (activeConfig.type === 'openai') {
+                await askOpenAI(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+            } else if (activeConfig.type === 'azure') {
+                await askAzureOpenAI(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+            } else if (activeConfig.type === 'anthropic') {
+                await askAnthropic(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+            } else if (['openai-compatible', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama', 'ollama-cloud'].includes(activeConfig.type)) {
+                await askOpenAICompatible(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+            } else {
+                await askGemini(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+            }
+        } finally {
+            if (shouldShowAgentGlow) {
+                hideAgentGlowEffect();
+            }
         }
     }
 }

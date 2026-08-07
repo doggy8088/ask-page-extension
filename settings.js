@@ -163,6 +163,7 @@ let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, mod
 let modalCommandModeAgent, modalCommandModeInquiry, modalCommandModeUnspecified, modalCommandScreenshotEnabled, modalCommandShowVariableLabels;
 let modalSave, modalCancel, modalCommandNameError, modalCommandPromptError;
 let customSystemPromptTextarea, customSystemPromptCount;
+let agentGlowEffectEnabledCheckbox;
 
 // Multi-provider UI elements
 let providersList, addProviderBtn, providerModal, providerModalTitle, modalProviderName, modalProviderType;
@@ -187,6 +188,7 @@ const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE = 'CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
 const LAST_ACTIVE_TAB_STORAGE = 'LAST_ACTIVE_TAB';
+const AGENT_GLOW_EFFECT_ENABLED_STORAGE = 'AGENT_GLOW_EFFECT_ENABLED';
 
 const CUSTOM_COMMAND_MODE_AGENT = 'agent';
 const CUSTOM_COMMAND_MODE_INQUIRY = 'inquiry';
@@ -390,6 +392,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCancel = document.getElementById('modalCancel');
     customSystemPromptTextarea = document.getElementById('customSystemPrompt');
     customSystemPromptCount = document.getElementById('customSystemPromptCount');
+    agentGlowEffectEnabledCheckbox = document.getElementById('agentGlowEffectEnabled');
 
     if (localePreferenceSelect) {
         localePreferenceSelect.value = window.AskPageI18n?.preference || 'auto';
@@ -467,6 +470,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             showLocalizedStatus('settingsAutoSaved', undefined, 'success');
         }, 500);
     });
+
+    if (agentGlowEffectEnabledCheckbox) {
+        agentGlowEffectEnabledCheckbox.addEventListener('change', async () => {
+            await chrome.storage.local.set({ [AGENT_GLOW_EFFECT_ENABLED_STORAGE]: agentGlowEffectEnabledCheckbox.checked });
+            showLocalizedStatus('settingsAutoSaved', undefined, 'success');
+        });
+    }
 
     // Provider modal listeners
     addProviderBtn.addEventListener('click', () => openProviderModal());
@@ -1067,7 +1077,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         'PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL',
         CUSTOM_SUMMARY_PROMPT_STORAGE, CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE,
         CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
-        LAST_ACTIVE_TAB_STORAGE
+        LAST_ACTIVE_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE
     ], async (result) => {
         activeProviderId = result.ACTIVE_PROVIDER_ID || '';
         activeModel = result.ACTIVE_MODEL || '';
@@ -1101,6 +1111,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         customSystemPromptTextarea.value = result[CUSTOM_SYSTEM_PROMPT_STORAGE] || '';
         updateCustomSystemPromptCount();
+
+        if (agentGlowEffectEnabledCheckbox) {
+            agentGlowEffectEnabledCheckbox.checked = result[AGENT_GLOW_EFFECT_ENABLED_STORAGE] !== false;
+        }
 
         // Restore active tab
         const lastActiveTab = result[LAST_ACTIVE_TAB_STORAGE];
