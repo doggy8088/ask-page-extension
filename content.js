@@ -8714,10 +8714,44 @@ async function createDialog() {
     }
 
     function dispatchFieldEvents(element) {
+        if (!element) {return;}
+
+        // 1. 模擬使用者 Focus 欄位，使其成為 activeElement
+        try {
+            if (typeof element.focus === 'function') {
+                element.focus();
+            }
+        } catch (e) {
+            console.warn('[AskPage] Failed to call native focus():', e);
+        }
         element.dispatchEvent(new Event('focus', { bubbles: true }));
-        element.dispatchEvent(new Event('input', { bubbles: true }));
+
+        // 2. 模擬使用者鍵盤輸入/狀態改變，發送高保真事件
+        // 使用 InputEvent 模擬，使現代前端框架（React、Vue 等）能正確辨識與更新內部狀態
+        try {
+            const inputEvent = new InputEvent('input', {
+                bubbles: true,
+                cancelable: true,
+                inputType: 'insertText',
+                data: element.value || ''
+            });
+            element.dispatchEvent(inputEvent);
+        } catch (e) {
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        // 3. 模擬值改變 (change) 事件
         element.dispatchEvent(new Event('change', { bubbles: true }));
+
+        // 4. 模擬使用者離開焦點 (blur)
         element.dispatchEvent(new Event('blur', { bubbles: true }));
+        try {
+            if (typeof element.blur === 'function') {
+                element.blur();
+            }
+        } catch (e) {
+            console.warn('[AskPage] Failed to call native blur():', e);
+        }
     }
 
     function coerceBooleanValue(value, defaultValue = false) {
@@ -9373,29 +9407,29 @@ async function createDialog() {
             },
             {
                 name: 'fill_form_fields',
-                description: '根據 selector 或欄位名稱模糊比對填寫表單。支援文字輸入、下拉選單、核取方塊與 radio button。',
+                description: '當需要對網頁上的表單欄位進行輸入、填寫、選擇或勾選時，模型必須優先調用此工具。此工具會自動尋找合適欄位，並以極高保真度模擬真實使用者操作（包含自動聚焦、派發原生事件與 input/change/blur 事件），相較於 run_js 更為安全且不易出錯。僅在調用此工具失敗，或需要執行非標準表單操作時，才考慮使用 run_js。',
                 parameters: {
                     type: 'object',
                     properties: {
                         fields: {
                             type: 'array',
-                            description: '要填寫的欄位清單。',
+                            description: '要填寫的表單欄位與對應的值清單。強烈建議在調用此工具前，先以 inspect_form_fields 讀取目前表單可用的欄位清單與 CSS Selector。',
                             items: {
                                 type: 'object',
                                 properties: {
-                                    selector: { type: 'string', description: '直接指定欄位 CSS selector。' },
-                                    field: { type: 'string', description: '欄位名稱或模糊搜尋文字。' },
-                                    label: { type: 'string', description: '欄位標籤文字。' },
-                                    name: { type: 'string', description: '欄位 name。' },
-                                    id: { type: 'string', description: '欄位 id。' },
-                                    placeholder: { type: 'string', description: '欄位 placeholder。' },
-                                    value: { type: 'string', description: '要寫入的值，文字欄位直接使用；select/radio 可同時拿來當選項 key 或 value。' },
-                                    text: { type: 'string', description: '要寫入的顯示文字或選項文字。' },
-                                    checked: { type: 'boolean', description: 'checkbox 要設定的狀態。' },
-                                    optionText: { type: 'string', description: 'select/radio 要選取的選項文字。' },
-                                    optionValue: { type: 'string', description: 'select/radio 要選取的選項 value。' },
-                                    valueKey: { type: 'string', description: 'select/radio 的 key 或 value。' },
-                                    valueText: { type: 'string', description: 'select/radio 的顯示文字。' }
+                                    selector: { type: 'string', description: '（強烈推薦提供）精準定位此欄位的 CSS Selector。' },
+                                    field: { type: 'string', description: '欄位名稱、Label 標籤、Placeholder、或 ID 的模糊比對關鍵字。' },
+                                    label: { type: 'string', description: '欄位的標籤文字（Label text），用於模糊比對。' },
+                                    name: { type: 'string', description: '欄位的 name 屬性。' },
+                                    id: { type: 'string', description: '欄位的 id 屬性。' },
+                                    placeholder: { type: 'string', description: '欄位的 placeholder 屬性。' },
+                                    value: { type: 'string', description: '要輸入或設定的值（適用於文字欄位、下拉選單、單選框、密碼等）。' },
+                                    text: { type: 'string', description: '要輸入的顯示文字，或選取下拉選單時的選項顯示文字。' },
+                                    checked: { type: 'boolean', description: '適用於 checkbox 核取方塊，設定是否勾選（true 為勾選，false 為取消勾選）。' },
+                                    optionText: { type: 'string', description: '下拉選單（select）或單選框（radio）要選取的選項顯示文字。' },
+                                    optionValue: { type: 'string', description: '下拉選單（select）或單選框（radio）要選取的選項實質 value 值。' },
+                                    valueKey: { type: 'string', description: '下拉選單的選項比對鍵。' },
+                                    valueText: { type: 'string', description: '下拉選單的選項比對顯示文字。' }
                                 }
                             }
                         }
@@ -9592,15 +9626,28 @@ async function createDialog() {
 
                 const successResults = fieldResults.filter((result) => result.success);
                 const failureResults = fieldResults.filter((result) => !result.success);
+                const overallSuccess = failureResults.length === 0;
+
+                let summaryMessage = '';
+                if (overallSuccess) {
+                    summaryMessage = `已成功填寫所有 ${successResults.length} 個欄位。`;
+                } else {
+                    summaryMessage = `表單填寫未完全成功！成功填寫 ${successResults.length} 個欄位，有 ${failureResults.length} 個欄位填寫失敗。\n\n` +
+                        '失敗詳細原因：\n' +
+                        failureResults.map((r, i) => `  ${i + 1}. ${r.message}`).join('\n') + '\n\n' +
+                        '[重新規劃提示] 填寫失敗通常是因為對應的欄位不可見、被禁用，或是因為複雜的自訂組件。若部分或全部欄位填寫失敗，建議您改用 \'run_js\' 工具，直接在網頁上執行通用 JavaScript（例如使用 document.querySelector(\'...\').click()、修改其 value、或是派發自訂框架事件）來進行強制填入或繞過限制。';
+                }
+
                 return {
                     id,
                     name,
                     result: createToolResult(
-                        successResults.length > 0,
-                        `已成功填寫 ${successResults.length} 個欄位${failureResults.length ? `，失敗 ${failureResults.length} 個` : ''}。`,
+                        overallSuccess,
+                        summaryMessage,
                         {
                             total: fieldResults.length,
-                            applied: fieldResults
+                            applied: fieldResults,
+                            hasFailure: !overallSuccess
                         },
                         failureResults.map((result) => result.message),
                         successResults.map((result) => ({
