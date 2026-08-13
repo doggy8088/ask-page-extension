@@ -49,6 +49,7 @@ function getSystemPromptLanguageInstruction() {
     return '';
 }
 const GEMINI_MODEL_MAX_OUTPUT_TOKENS = {
+    'gemini-3.7-flash': 65536,
     'gemini-3.6-flash': 65536,
     'gemini-3.5-flash-lite': 65536,
     'gemma-4-31b-it': 65536,
@@ -1193,6 +1194,11 @@ function isStreamingSupported(providerType = '', model = '') {
 // Kimi K2.7 Code: https://registry.ollama.com/library/kimi-k2.7-code
 // Unknown providers, aliases, and model families must not inherit these capabilities.
 const GEMINI_REASONING_CAPABILITIES = {
+    'gemini-3.7-flash': {
+        kind: 'level',
+        options: ['minimal', 'low', 'medium', 'high'],
+        defaultValue: 'medium'
+    },
     'gemini-3.6-flash': {
         kind: 'level',
         options: ['minimal', 'low', 'medium', 'high'],
