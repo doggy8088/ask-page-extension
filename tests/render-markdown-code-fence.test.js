@@ -61,7 +61,9 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     extractHtmlDocumentTitle,
     formatApiTokenUsageSummary,
     getResponsesApiOutputTextFromResponse,
+    getResponsesApiOutputTextFromResponse,
     splitHtmlForCodePen,
+    enhanceCodeBlocks,
     getAssistantDisplayMarkdown,
     getAssistantStoredText,
     isRawHtmlAssistantResponse,
@@ -83,6 +85,7 @@ const {
     formatApiTokenUsageSummary,
     getResponsesApiOutputTextFromResponse,
     splitHtmlForCodePen,
+    enhanceCodeBlocks,
     getAssistantDisplayMarkdown,
     getAssistantStoredText,
     isRawHtmlAssistantResponse,
@@ -372,5 +375,159 @@ assert.strictEqual(getResponsesApiOutputTextFromResponse({
         arguments: '{"code":"document.title"}'
     }]
 }), '');
+
+function createTestDOMContainer(codeText) {
+    const container = {
+        dataset: {},
+        children: [],
+        appendChild(child) {
+            child.parentElement = this;
+            this.children.push(child);
+            return child;
+        },
+        querySelectorAll(selector) {
+            const results = [];
+            const search = (node) => {
+                if (selector === 'pre > code') {
+                    if (node.tagName === 'PRE') {
+                        for (const child of node.children) {
+                            if (child.tagName === 'CODE') results.push(child);
+                        }
+                    }
+                } else if (selector.startsWith('.')) {
+                    const cls = selector.slice(1);
+                    if (node.classList && node.classList.contains(cls)) results.push(node);
+                }
+                if (node.children) {
+                    for (const child of node.children) search(child);
+                }
+            };
+            search(this);
+            return results;
+        }
+    };
+
+    const parentWrapper = {
+        tagName: 'DIV',
+        dataset: {},
+        children: [],
+        parentElement: container,
+        appendChild(child) {
+            child.parentElement = this;
+            this.children.push(child);
+            return child;
+        },
+        insertBefore(newChild, refChild) {
+            newChild.parentElement = this;
+            const index = this.children.indexOf(refChild);
+            if (index >= 0) {
+                this.children.splice(index, 0, newChild);
+            } else {
+                this.children.push(newChild);
+            }
+            return newChild;
+        }
+    };
+
+    const preElement = {
+        tagName: 'PRE',
+        dataset: {},
+        children: [],
+        parentElement: parentWrapper,
+        appendChild(child) {
+            child.parentElement = this;
+            this.children.push(child);
+            return child;
+        },
+        addEventListener() {}
+    };
+
+    const codeElement = {
+        tagName: 'CODE',
+        dataset: {},
+        classList: {
+            _classes: new Set(['language-html']),
+            add(c) { this._classes.add(c); },
+            contains(c) { return this._classes.has(c); },
+            [Symbol.iterator]() { return this._classes.values(); }
+        },
+        textContent: codeText,
+        parentElement: preElement,
+        children: [],
+        appendChild(child) {
+            child.parentElement = this;
+            this.children.push(child);
+            return child;
+        }
+    };
+
+    preElement.appendChild(codeElement);
+    parentWrapper.appendChild(preElement);
+    container.children.push(parentWrapper);
+
+    return container;
+}
+
+const originalCreateElement = sandbox.document.createElement;
+sandbox.document.createElement = function(tagName) {
+    const el = {
+        tagName: tagName.toUpperCase(),
+        children: [],
+        classList: {
+            _classes: new Set(),
+            add(...args) { args.forEach((c) => this._classes.add(c)); },
+            contains(c) { return this._classes.has(c); },
+            [Symbol.iterator]() { return this._classes.values(); }
+        },
+        get className() {
+            return Array.from(this.classList._classes).join(' ');
+        },
+        set className(val) {
+            this.classList._classes.clear();
+            if (val) val.split(/\s+/).forEach((c) => this.classList._classes.add(c));
+        },
+        dataset: {},
+        style: {},
+        textContent: '',
+        parentElement: null,
+        appendChild(child) {
+            if (child) {
+                child.parentElement = this;
+                this.children.push(child);
+            }
+            return child;
+        },
+        addEventListener() {},
+        setAttribute(k, v) { this[k] = v; },
+        getAttribute(k) { return this[k]; }
+    };
+    return el;
+};
+
+// Test 1: Markdown code block starting with <!DOCTYPE html>
+const doctypeContainer = createTestDOMContainer('<!DOCTYPE html>\n<html><body>Hi</body></html>');
+enhanceCodeBlocks(doctypeContainer);
+const doctypeButtons = doctypeContainer.querySelectorAll('.askpage-code-block-codepen');
+assert.strictEqual(doctypeButtons.length, 1);
+
+// Test 2: Markdown code block starting with <tag> (no DOCTYPE)
+const tagContainer = createTestDOMContainer('<div class="card">\n  <h2>Title</h2>\n</div>');
+enhanceCodeBlocks(tagContainer);
+const tagButtons = tagContainer.querySelectorAll('.askpage-code-block-codepen');
+assert.strictEqual(tagButtons.length, 1);
+
+// Test 3: Markdown code block starting with <tag/> (self-closing tag)
+const selfClosingContainer = createTestDOMContainer('<img src="test.jpg" alt="test"/>');
+enhanceCodeBlocks(selfClosingContainer);
+const selfClosingButtons = selfClosingContainer.querySelectorAll('.askpage-code-block-codepen');
+assert.strictEqual(selfClosingButtons.length, 1);
+
+// Test 4: Non-HTML code block (e.g. JavaScript)
+const jsContainer = createTestDOMContainer('const message = "hello";\nconsole.log(message);');
+enhanceCodeBlocks(jsContainer);
+const jsButtons = jsContainer.querySelectorAll('.askpage-code-block-codepen');
+assert.strictEqual(jsButtons.length, 0);
+
+sandbox.document.createElement = originalCreateElement;
 
 console.log('render-markdown-code-fence: ok');

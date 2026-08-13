@@ -3790,7 +3790,8 @@ function enhanceCodeBlocks(container) {
             await copyTextWithFeedback(copyButton, codeText);
         });
 
-        if (isRawHtmlResponse) {
+        const isHtmlCodeBlock = isRawHtmlAssistantResponse(codeText);
+        if (isRawHtmlResponse || isHtmlCodeBlock) {
             const codePenButton = createCodeBlockActionButton('askpage-code-block-codepen', 'CodePen', getLocalizedText('openCodePen'));
             const defaultCodePenLabel = codePenButton.textContent;
             codePenButton.addEventListener('click', (event) => {

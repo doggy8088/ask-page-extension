@@ -8,13 +8,13 @@
 
 ## 一、目前使用者看到的入口
 
-CodePen 按鈕只會出現在「被判斷為純 HTML 回應」的程式碼區塊上。
+CodePen 按鈕會出現在「整篇被判斷為純 HTML 回覆」或「Markdown 中符合 HTML 結構（如 ` ```html ... ``` `）的程式碼區塊」上。
 
 相關流程在 `content.js`：
 
-1. AI 回應若去除頭尾空白後是 `<!doctype ...>` 或 HTML tag，會被視為 raw HTML assistant response。
+1. AI 回應若去除頭尾空白後是 `<!doctype ...>` 或 HTML tag（`<tag>`、`<tag/>`），會被視為 raw HTML assistant response。
 2. 畫面上會把整份 HTML 包成 Markdown `html` code fence 顯示，避免瀏覽器把內容解析成真正標籤。
-3. `enhanceCodeBlocks()` 處理 code block 時，如果目前訊息是 raw HTML response，就加入 `CodePen` 按鈕。
+3. `enhanceCodeBlocks()` 處理 code block 時，若目前訊息為 raw HTML response，或該程式碼區塊去除頭尾空白後以 `<!doctype ...>`、`<tag>` 或 `<tag/>` 開頭（包含在 Markdown 程式碼包裹語法中的 HTML 程式碼），就會加入 `CodePen` 按鈕。
 4. 使用者點擊 `CodePen` 後，會呼叫 `openCodePenPrefill(codeText)`。
 
 這個設計讓使用者仍可用 code block 的複製按鈕精確複製原始 HTML，同時多一個送到 CodePen 的入口。
@@ -65,7 +65,7 @@ form.submit();
 
 - 偵測 raw HTML assistant response。
 - 把 raw HTML 顯示成 Markdown code fence。
-- 在 raw HTML code block 加上 `CodePen` 按鈕。
+- 在 raw HTML code block 及符合 HTML 結構（以 `<!doctype ...>`、`<tag>` 或 `<tag/>` 開頭）的 Markdown 程式碼區塊上加上 `CodePen` 按鈕。
 - 把完整 HTML 拆成 CodePen payload。
 - 把 payload 暫存到 `chrome.storage.local`。
 - 傳送 `open-codepen` 訊息給 background service worker。
@@ -249,7 +249,7 @@ codepen.js
 
 ### 1. 為什麼 CodePen 按鈕不是每個 code block 都出現？
 
-目前只針對 raw HTML assistant response 顯示。一般 Markdown 回答中的普通 code block 不會顯示，避免把非完整 HTML 的片段錯送到 CodePen。
+CodePen 按鈕只會出現在整篇純 HTML 回應，或是 Markdown 內容中符合 HTML 結構的程式碼區塊上（無論是否包含 `<!DOCTYPE ...>`，只要內容去除頭尾空白後以 `<!DOCTYPE ...>`、`<tag>` 或 `<tag/>` 開頭）。若程式碼區塊為一般程式語言（如 JavaScript、Python、CSS 等）或普通純文字，則不會顯示 CodePen 按鈕，避免將非 HTML 內容錯送到 CodePen。
 
 ### 2. 為什麼不直接在目前頁面開 HTML 預覽？
 
