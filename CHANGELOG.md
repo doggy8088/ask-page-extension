@@ -10,6 +10,13 @@
 
 （目前暫無未發佈變更）
 
+## [0.42.3] - 2026-08-14
+
+### 新增 / 改進（v0.42.3）
+
+- **新增 gemini-3.7-flash 模型**：Gemini 模型清單新增 `gemini-3.7-flash`，並置於選項最前方；支援串流回應、推理強度控制（`minimal`／`low`／`medium`／`high`，預設 `medium`）與 65536 最大輸出 Token，同時更新 README 與推理強度對應表文件。
+- **CodePen 按鈕支援 Markdown 內嵌 HTML 區塊**：程式碼區塊內容去除頭尾空白後以 `<!doctype ...>`、`<tag>` 或 `<tag/>` 開頭時，也會顯示 CodePen 按鈕，讓使用者可直接將 Markdown 中的 HTML 片段送到 CodePen 預覽；一般程式語言或純文字程式碼區塊仍不會顯示按鈕，避免將非 HTML 內容錯送到 CodePen。
+
 ## [0.42.2] - 2026-08-11
 
 ### 新增 / 改進（v0.42.2）
