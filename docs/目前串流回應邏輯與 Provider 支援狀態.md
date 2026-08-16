@@ -1,6 +1,6 @@
 # 目前串流回應邏輯與 Provider 支援狀態
 
-> 查證日期：2026-08-03
+> 查證日期：2026-08-15
 >
 > 實作位置：`content.js`
 
@@ -8,11 +8,12 @@
 
 **詢問模式現在會對已查證支援串流的 Provider 預設使用串流回應。** 串流能力不再由 `agentModeEnabled` 決定；該旗標只負責判定是否使用頁面工具、代理模式上下文與工具呼叫。
 
-本次盤點的固定模型清單共有 57 個模型，分布如下：
+本次盤點的固定模型清單共有 64 個模型，分布如下：
 
 | Provider | 固定模型數 | 詢問模式預設傳輸 | 判定方式 |
 | --- | ---: | --- | --- |
 | Gemini | 11 | 串流 | Provider API 已查證，使用 `streamGenerateContent` |
+| Vertex AI Express Mode | 7 | 串流 | Provider API 已查證，使用 API Key 與 `streamGenerateContent` |
 | OpenAI | 10 | 串流 | Provider API 已查證，依模型使用 Chat Completions 或 Responses API |
 | Azure OpenAI | 動態 Deployment | 串流 | Azure API 已查證，依 Deployment 使用 Chat Completions 或 Responses API |
 | Anthropic | 3 | 串流 | Provider API 已查證，使用 Messages API SSE |
@@ -24,7 +25,7 @@
 | Ollama Cloud | 7 | 串流 | Ollama Cloud OpenAI 相容端點已查證支援串流 |
 | OpenAI Compatible | 動態模型 | 非串流 | Endpoint 與模型由使用者自訂，無法安全推定 |
 
-固定模型的數量計算為 11 + 10 + 3 + 2 + 16 + 3 + 5 + 7，合計 57 個。Gemini 的串流不是在 JSON body 加入 `stream: true`，而是改用 `:streamGenerateContent` 端點，因此不能只用搜尋 `stream: true` 的方式盤點所有串流請求。
+固定模型的數量計算為 11 + 7 + 10 + 3 + 2 + 16 + 3 + 5 + 7，合計 64 個。Gemini 與 Vertex AI 的串流不是在 JSON body 加入 `stream: true`，而是改用 `:streamGenerateContent` 端點，因此不能只用搜尋 `stream: true` 的方式盤點所有串流請求。
 
 * * *
 
@@ -35,6 +36,7 @@
 | Provider | 官方串流方式 | 查證結果 |
 | --- | --- | --- |
 | Gemini | `models.streamGenerateContent` 以 SSE 傳送增量回應 | 已確認支援 |
+| Vertex AI Express Mode | `publishers/google/models/{model}:streamGenerateContent` 搭配 API Key | 已確認支援 |
 | OpenAI | Responses API 使用 `stream: true` 傳送 SSE；Chat Completions 也提供串流欄位 | 已確認支援 |
 | Azure OpenAI | Chat Completions 與 Responses API 都提供串流回應 | 已確認支援 |
 | Anthropic | Messages API 使用 `stream: true` 傳送 SSE 事件 | 已確認支援 |
@@ -47,6 +49,7 @@
 官方參考文件：
 
 - [Gemini GenerateContent API](https://ai.google.dev/api)
+- [Vertex AI Express Mode](https://cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/overview)
 - [OpenAI Responses API streaming](https://platform.openai.com/docs/api-reference/responses-streaming)
 - [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat)
 - [Azure OpenAI content streaming](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/content-streaming)
@@ -74,7 +77,7 @@
 
 這個設計區分兩種情況：
 
-- **Provider 層已確認**：OpenAI、Azure OpenAI、Anthropic、OpenRouter、Groq、Mistral、Ollama 與 Gemini 的官方端點本身提供串流介面。模型名稱仍必須是該端點實際可用的模型或 Deployment。
+- **Provider 層已確認**：OpenAI、Azure OpenAI、Anthropic、OpenRouter、Groq、Mistral、Ollama、Gemini 與 Vertex AI Express Mode 的官方端點本身提供串流介面。模型名稱仍必須是該端點實際可用的模型或 Deployment。
 - **模型名稱已確認**：DeepSeek 目前只對文件與設定中確認的 `deepseek-v4-flash`、`deepseek-v4-pro` 開啟串流；其他自訂名稱不會因為同一個 Provider 就被推定支援。
 
 因此，**API 文件確認 Provider 支援串流，不等於每個自訂 Deployment、反向代理或模型別名都保證能成功串流。** 若 Azure Deployment 或 Ollama 模型本身不存在，請求仍會由 API 回傳錯誤；這不是串流判定可以取代的模型可用性檢查。
@@ -109,6 +112,8 @@
 - 非串流：`fetchJsonWithRetry()`，呼叫 `models/{model}:generateContent`。
 
 `enableTools` 仍只控制是否加入頁面工具與工具呼叫流程，不再決定 Gemini 是否使用串流。這使詢問模式也能從第一個文字增量開始更新回答區塊。
+
+Vertex AI Express Mode 共用相同的 Gemini request／response 格式與工具迴圈，但改用 `https://aiplatform.googleapis.com/v1/publishers/google/models/{model}` 基底路徑，並以使用者設定的 API Key 驗證。
 
 ### 3. OpenAI、Azure OpenAI 與 OpenAI 相容 Provider
 

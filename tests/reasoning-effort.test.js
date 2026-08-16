@@ -136,6 +136,7 @@ assert.deepStrictEqual(Array.from(Object.keys(OPENAI_REASONING_CAPABILITIES)).so
 
 // Gemini 3.x exposes only the thinking levels documented for each exact model.
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.6-flash'), ['minimal', 'low', 'medium', 'high']);
+assert.deepStrictEqual(capabilityOptions('vertex-ai', 'gemini-3.6-flash'), ['minimal', 'low', 'medium', 'high']);
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.5-flash-lite'), ['minimal', 'low', 'medium', 'high']);
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.1-pro-preview'), ['low', 'medium', 'high']);
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3-pro-preview'), ['low', 'high']);

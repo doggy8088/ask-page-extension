@@ -8,7 +8,7 @@
 
 ### 新增 / 改進（Unreleased）
 
-（目前暫無未發佈變更）
+- **Google Vertex AI Express Mode 提供者**：偏好設定可新增獨立的 Vertex AI 提供者、加密保存 API Key、複選 Gemini 3 系列模型或手動加入自訂模型，並透過 `aiplatform.googleapis.com/v1/publishers/google` 的 `generateContent`／`streamGenerateContent` 端點回答。
 
 ## [0.42.2] - 2026-08-11
 

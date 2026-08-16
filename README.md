@@ -1,10 +1,10 @@
 # AskPage (頁問) 擴充功能
 
-使用 Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama 或 OpenAI Compatible API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
+使用 Gemini、Vertex AI、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama 或 OpenAI Compatible API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
 
 ## ✨ 功能特色
 
-- 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama Local、Ollama Cloud 與 OpenAI Compatible，可自由切換
+- 🤖 **多 AI 提供者支援** - 整合 Google Gemini、Google Vertex AI、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama Local、Ollama Cloud 與 OpenAI Compatible，可自由切換
 - **Gemini Google Search Grounding** - Gemini 詢問模式預設啟用 Google Search；Gemini 3 代理模式可同時使用網路搜尋與頁面工具
 - **完整詢問上下文** - 詢問模式會建立近似無障礙樹並固定第一問的頁面快照，完整保留後續文字、圖片與多輪對話
 - 💬 **多輪對話脈絡延續** - 追問時會自動帶入前文，切換不同 AI Provider 也能延續同一段對話
@@ -146,7 +146,7 @@
 ### 第一次使用
 
 1. 點擊擴充功能圖示（第一次使用時會先開啟設定頁面完成設定）
-2. 在「AI 提供者」頁籤中選擇您偏好的 AI 提供者（包含 Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama Local、Ollama Cloud 與 OpenAI Compatible）
+2. 在「AI 提供者」頁籤中選擇您偏好的 AI 提供者（包含 Gemini、Vertex AI、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama Local、Ollama Cloud 與 OpenAI Compatible）
 3. 輸入對應的 API Key 和相關設定
 4. 選擇想要使用的模型或部署
 5. 點擊「儲存設定」
@@ -167,6 +167,12 @@
 1. 前往 [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. 建立新的 API Key
 3. 複製 API Key 並貼到擴充功能設定中
+
+#### Vertex AI API Key（Express Mode）
+
+1. 前往 [Vertex AI Express Mode](https://console.cloud.google.com/express-mode)
+2. 在 Google Cloud 的「API 和服務 > 憑證」中取得 API Key
+3. 在提供者類型選擇「Google Vertex AI」，貼上 API Key，並勾選 Gemini 3 模型或手動輸入模型名稱
 
 #### OpenAI API Key
 
@@ -357,6 +363,7 @@ MIT License - 詳見 [LICENSE](LICENSE) 檔案
 - [marked.js](https://marked.js.org/) - Markdown 解析
 - [DOMPurify](https://github.com/cure53/DOMPurify) - HTML 清理
 - [Google Gemini API](https://ai.google.dev/) - AI 服務
+- [Google Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/overview) - AI 服務
 - [OpenAI API](https://platform.openai.com/) - AI 服務
 - [Azure OpenAI Service](https://azure.microsoft.com/products/ai-services/openai-service) - AI 服務
 

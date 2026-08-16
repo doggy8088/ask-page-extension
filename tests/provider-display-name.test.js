@@ -56,6 +56,7 @@ const {
 
 // getProviderTypeLabel: maps every known type to its display label.
 assert.strictEqual(getProviderTypeLabel('gemini'), 'Google Gemini');
+assert.strictEqual(getProviderTypeLabel('vertex-ai'), 'Google Vertex AI');
 assert.strictEqual(getProviderTypeLabel('openai'), 'OpenAI');
 assert.strictEqual(getProviderTypeLabel('azure'), 'Azure OpenAI');
 assert.strictEqual(getProviderTypeLabel('anthropic'), 'Anthropic Claude');
@@ -78,6 +79,10 @@ assert.strictEqual(
 assert.strictEqual(
     getProviderDisplayName({ type: 'gemini', name: '我的 Gemini 帳號' }),
     'Google Gemini (我的 Gemini 帳號)'
+);
+assert.strictEqual(
+    getProviderDisplayName({ type: 'vertex-ai', name: '工作用 Vertex' }),
+    'Google Vertex AI (工作用 Vertex)'
 );
 assert.strictEqual(
     getProviderDisplayName({ type: 'ollama-cloud', name: 'My Ollama' }),

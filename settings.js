@@ -115,6 +115,7 @@ function escapeHtml(value) {
 
 const PROVIDER_LABEL_KEYS = Object.freeze({
     gemini: 'providerGemini',
+    'vertex-ai': 'providerVertexAI',
     openai: 'providerOpenAI',
     azure: 'providerAzure',
     anthropic: 'providerAnthropic',
@@ -128,6 +129,7 @@ const PROVIDER_LABEL_KEYS = Object.freeze({
 });
 const PROVIDER_DEFAULT_NAMES = Object.freeze({
     gemini: 'Google Gemini',
+    'vertex-ai': 'Google Vertex AI',
     openai: 'OpenAI',
     azure: 'Azure OpenAI',
     anthropic: 'Anthropic Claude',
@@ -168,14 +170,14 @@ let agentGlowEffectEnabledCheckbox;
 // Multi-provider UI elements
 let providersList, addProviderBtn, providerModal, providerModalTitle, modalProviderName, modalProviderType;
 let modalProviderCancel, modalProviderSave, modalProviderTest, modalProviderTestResult;
-let modalGeminiFields, modalOpenaiFields, modalAzureFields, modalOpenaiCompatibleFields;
+let modalGeminiFields, modalVertexAiFields, modalOpenaiFields, modalAzureFields, modalOpenaiCompatibleFields;
 let modalAnthropicFields, modalDeepseekFields, modalOpenrouterFields, modalGroqFields, modalMistralFields, modalOllamaFields, modalOllamaCloudFields;
-let modalGeminiApiKey, modalOpenaiApiKey, modalAzureApiKey, modalAzureEndpoint, modalAzureDeployment, modalAzureApiVersion;
+let modalGeminiApiKey, modalVertexAiApiKey, modalOpenaiApiKey, modalAzureApiKey, modalAzureEndpoint, modalAzureDeployment, modalAzureApiVersion;
 let modalOpenaiCompatibleEndpoint, modalOpenaiCompatibleApiKey, modalOpenaiCompatibleModel;
 let modalOpenaiCompatibleModelInputGroup, modalOpenaiCompatibleModelsListGroup, modalOpenaiCompatibleModelsList;
 let modalAnthropicApiKey, modalDeepseekApiKey, modalOpenrouterApiKey, modalGroqApiKey, modalMistralApiKey, modalOllamaCloudApiKey;
 let modalOllamaEndpoint, modalOllamaModel;
-let modalGeminiModelsList, modalOpenaiModelsList;
+let modalGeminiModelsList, modalVertexAiModelsList, modalOpenaiModelsList;
 let modalAnthropicModelsList, modalDeepseekModelsList, modalOpenrouterModelsList, modalGroqModelsList, modalMistralModelsList, modalOllamaCloudModelsList;
 let currentEditingProvider = null;
 let providers = [];
@@ -217,6 +219,15 @@ const PREDEFINED_MODELS = {
         'gemini-flash-lite-latest',
         'gemma-4-31b-it',
         'gemma-4-26b-a4b-it'
+    ],
+    'vertex-ai': [
+        'gemini-3.6-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.5-flash',
+        'gemini-3.1-pro-preview',
+        'gemini-3.1-flash-lite',
+        'gemini-3-pro-preview',
+        'gemini-3-flash-preview'
     ],
     openai: [
         'gpt-5.6-sol',
@@ -306,6 +317,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalProviderTestResult = document.getElementById('modalProviderTestResult');
 
     modalGeminiFields = document.getElementById('modal-gemini-fields');
+    modalVertexAiFields = document.getElementById('modal-vertex-ai-fields');
     modalOpenaiFields = document.getElementById('modal-openai-fields');
     modalAzureFields = document.getElementById('modal-azure-fields');
     modalOpenaiCompatibleFields = document.getElementById('modal-openai-compatible-fields');
@@ -318,6 +330,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalOllamaCloudFields = document.getElementById('modal-ollama-cloud-fields');
 
     modalGeminiApiKey = document.getElementById('modalGeminiApiKey');
+    modalVertexAiApiKey = document.getElementById('modalVertexAiApiKey');
     modalOpenaiApiKey = document.getElementById('modalOpenaiApiKey');
     modalAzureApiKey = document.getElementById('modalAzureApiKey');
     modalAzureEndpoint = document.getElementById('modalAzureEndpoint');
@@ -342,6 +355,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalOllamaModel = document.getElementById('modalOllamaModel');
 
     modalGeminiModelsList = document.getElementById('modalGeminiModelsList');
+    modalVertexAiModelsList = document.getElementById('modalVertexAiModelsList');
     modalOpenaiModelsList = document.getElementById('modalOpenaiModelsList');
     modalAnthropicModelsList = document.getElementById('modalAnthropicModelsList');
     modalDeepseekModelsList = document.getElementById('modalDeepseekModelsList');
@@ -1151,6 +1165,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (p.type === 'gemini') {
                 borderColor = '#4285F4';
                 typeLabel = t('providerGemini');
+            } else if (p.type === 'vertex-ai') {
+                borderColor = '#34a853';
+                typeLabel = t('providerVertexAI');
             } else if (p.type === 'openai') {
                 borderColor = '#10a37f';
                 typeLabel = t('providerOpenAI');
@@ -1185,7 +1202,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             div.style.borderLeft = `4px solid ${borderColor}`;
 
             let modelsHtml = '';
-            if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
+            if (['gemini', 'vertex-ai', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
                 const models = p.models || [];
                 modelsHtml = models.map(m => {
                     const isActive = (p.id === activeProviderId && m === activeModel);
@@ -1207,6 +1224,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;"><span>${escapeHtml(t('endpoint'))}</span>: ${escapeHtml(p.ollamaEndpoint || 'http://localhost:11434/v1')}</div>`;
             } else if (p.type === 'ollama-cloud') {
                 details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;"><span>${escapeHtml(t('endpoint'))}</span>: https://ollama.com/v1</div>`;
+            } else if (p.type === 'vertex-ai') {
+                details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;"><span>${escapeHtml(t('endpoint'))}</span>: https://aiplatform.googleapis.com/v1/publishers/google</div>`;
             } else if (p.type === 'openai-compatible') {
                 details = `<div style="font-size: 12px; opacity: 0.7; margin-top: 4px;"><span>${escapeHtml(t('endpoint'))}</span>: ${escapeHtml(p.openaiCompatibleEndpoint || '')}</div>`;
             }
@@ -1251,6 +1270,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalProviderName.value = '';
         modalProviderType.value = 'gemini';
         modalGeminiApiKey.value = '';
+        modalVertexAiApiKey.value = '';
         modalOpenaiApiKey.value = '';
         modalAzureApiKey.value = '';
         modalAzureEndpoint.value = '';
@@ -1271,6 +1291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Uncheck checkboxes
         modalGeminiModelsList.innerHTML = '';
+        modalVertexAiModelsList.innerHTML = '';
         modalOpenaiModelsList.innerHTML = '';
         modalAnthropicModelsList.innerHTML = '';
         modalDeepseekModelsList.innerHTML = '';
@@ -1305,6 +1326,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (provider.type === 'gemini') {
                 modalGeminiApiKey.value = decryptedKey;
                 renderModalModelsList(modalGeminiModelsList, combinedModels, configuredModels);
+            } else if (provider.type === 'vertex-ai') {
+                modalVertexAiApiKey.value = decryptedKey;
+                renderModalModelsList(modalVertexAiModelsList, combinedModels, configuredModels);
             } else if (provider.type === 'openai') {
                 modalOpenaiApiKey.value = decryptedKey;
                 renderModalModelsList(modalOpenaiModelsList, combinedModels, configuredModels);
@@ -1357,6 +1381,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const geminiModels = [...(PREDEFINED_MODELS['gemini'] || [])];
             renderModalModelsList(modalGeminiModelsList, geminiModels, [geminiModels[0]]);
 
+            // Set Vertex AI defaults
+            const vertexAiModels = [...(PREDEFINED_MODELS['vertex-ai'] || [])];
+            renderModalModelsList(modalVertexAiModelsList, vertexAiModels, [vertexAiModels[0]]);
+
             // Set OpenAI defaults
             const openaiModels = [...(PREDEFINED_MODELS['openai'] || [])];
             renderModalModelsList(modalOpenaiModelsList, openaiModels, [openaiModels[0]]);
@@ -1393,6 +1421,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateModalFieldsVisibility() {
         const type = modalProviderType.value;
         modalGeminiFields.style.display = type === 'gemini' ? 'block' : 'none';
+        modalVertexAiFields.style.display = type === 'vertex-ai' ? 'block' : 'none';
         modalOpenaiFields.style.display = type === 'openai' ? 'block' : 'none';
         modalAzureFields.style.display = type === 'azure' ? 'block' : 'none';
         modalAnthropicFields.style.display = type === 'anthropic' ? 'block' : 'none';
@@ -1441,6 +1470,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             const selectedModels = [];
             modalGeminiModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                selectedModels.push(cb.value);
+            });
+            if (selectedModels.length === 0) {
+                alert(t('providerModelRequired', { provider: getProviderTypeLabel(type) }));
+                return;
+            }
+            providerData.models = selectedModels;
+        } else if (type === 'vertex-ai') {
+            apiKeyRaw = modalVertexAiApiKey.value.trim();
+            if (!apiKeyRaw) {
+                alert(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
+                return;
+            }
+            const selectedModels = [];
+            modalVertexAiModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
                 selectedModels.push(cb.value);
             });
             if (selectedModels.length === 0) {
@@ -1691,6 +1735,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+            } else if (type === 'vertex-ai') {
+                const apiKey = modalVertexAiApiKey.value.trim();
+                const selectedModel = modalVertexAiModelsList.querySelector('input[type="checkbox"]:checked')?.value;
+                if (!apiKey) {
+                    throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
+                }
+                if (!selectedModel) {
+                    throw new Error(t('providerModelRequired', { provider: getProviderTypeLabel(type) }));
+                }
+                url = `https://aiplatform.googleapis.com/v1/publishers/google/models/${selectedModel}:generateContent?key=${apiKey}`;
+                method = 'POST';
+                headers['Content-Type'] = 'application/json';
+                body = JSON.stringify({
+                    contents: [{ role: 'user', parts: [{ text: 'Ping' }] }],
+                    generationConfig: { maxOutputTokens: 16 }
+                });
             } else if (type === 'openai') {
                 const apiKey = modalOpenaiApiKey.value.trim();
                 if (!apiKey) {
@@ -2248,6 +2308,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function getModelListContainer(providerType) {
         if (providerType === 'gemini') {return modalGeminiModelsList;}
+        if (providerType === 'vertex-ai') {return modalVertexAiModelsList;}
         if (providerType === 'openai') {return modalOpenaiModelsList;}
         if (providerType === 'anthropic') {return modalAnthropicModelsList;}
         if (providerType === 'deepseek') {return modalDeepseekModelsList;}

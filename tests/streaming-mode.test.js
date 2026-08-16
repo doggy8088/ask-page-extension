@@ -65,11 +65,13 @@ assert.deepStrictEqual(Object.keys(STREAMING_PROVIDER_CAPABILITIES).sort(), [
     'ollama',
     'ollama-cloud',
     'openai',
-    'openrouter'
+    'openrouter',
+    'vertex-ai'
 ]);
 
 [
     ['gemini', 'gemini-3.6-flash'],
+    ['vertex-ai', 'gemini-3.6-flash'],
     ['openai', 'gpt-5.6-sol'],
     ['azure', 'production-gpt-5.6'],
     ['anthropic', 'claude-sonnet-4-6'],

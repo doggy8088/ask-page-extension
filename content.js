@@ -119,6 +119,8 @@ const OLLAMA_CLOUD_API_ORIGIN = 'https://ollama.com';
 const OLLAMA_CLOUD_ALLOWED_ENDPOINTS = new Set(['chat/completions', 'responses']);
 const ANTHROPIC_API_ORIGIN = 'https://api.anthropic.com';
 const ANTHROPIC_ALLOWED_ENDPOINTS = new Set(['messages']);
+const GEMINI_API_MODELS_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const VERTEX_AI_API_MODELS_BASE_URL = 'https://aiplatform.googleapis.com/v1/publishers/google/models';
 const DIALOG_HOST_ISOLATION_STYLES = [
     ['all', 'initial'],
     ['display', 'block'],
@@ -134,6 +136,14 @@ const DIALOG_HOST_ISOLATION_STYLES = [
 
 function doesGeminiModelSupportCombinedTools(model = '') {
     return normalizeModelIdentifier(model).startsWith('gemini-3');
+}
+
+function buildGeminiApiUrl(providerType, model, method, apiKey, useSse = false) {
+    const baseUrl = providerType === 'vertex-ai'
+        ? VERTEX_AI_API_MODELS_BASE_URL
+        : GEMINI_API_MODELS_BASE_URL;
+    const query = `${useSse ? 'alt=sse&' : ''}key=${encodeURIComponent(apiKey)}`;
+    return `${baseUrl}/${model}:${method}?${query}`;
 }
 
 function buildGeminiRequestTools(additionalTools = [], includeGoogleSearch = true) {
@@ -1150,6 +1160,7 @@ function normalizeModelIdentifier(model = '') {
 // Ollama: https://docs.ollama.com/api/openai-compatibility
 const STREAMING_PROVIDER_CAPABILITIES = {
     gemini: { scope: 'provider' },
+    'vertex-ai': { scope: 'provider' },
     openai: { scope: 'provider' },
     azure: { scope: 'provider' },
     anthropic: { scope: 'provider' },
@@ -1376,7 +1387,7 @@ function getAzureOpenAIModelName(deployment = '') {
 
 function getReasoningCapability(providerType = '', model = '') {
     const normalizedModel = normalizeModelIdentifier(model);
-    if (providerType === 'gemini') {
+    if (['gemini', 'vertex-ai'].includes(providerType)) {
         if (normalizedModel.startsWith('gemma-4-')) {
             return GEMMA_4_REASONING_CAPABILITY;
         }
@@ -1862,7 +1873,7 @@ async function getEnabledProviderModelOptions() {
 
     const options = [];
     for (const p of providers) {
-        if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
+        if (['gemini', 'vertex-ai', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
             const models = p.models || [];
             if (models.length > 0) {
                 for (const model of models) {
@@ -1870,13 +1881,14 @@ async function getEnabledProviderModelOptions() {
                         providerId: p.id,
                         providerName: p.name || (
                             p.type === 'gemini' ? 'Gemini' :
-                                p.type === 'openai' ? 'OpenAI' :
-                                    p.type === 'anthropic' ? 'Anthropic' :
-                                        p.type === 'deepseek' ? 'DeepSeek' :
-                                            p.type === 'openrouter' ? 'OpenRouter' :
-                                                p.type === 'groq' ? 'Groq' :
-                                                    p.type === 'mistral' ? 'Mistral AI' :
-                                                        p.type === 'ollama-cloud' ? 'Ollama Cloud' : 'OpenAI Compatible'
+                                p.type === 'vertex-ai' ? 'Vertex AI' :
+                                    p.type === 'openai' ? 'OpenAI' :
+                                        p.type === 'anthropic' ? 'Anthropic' :
+                                            p.type === 'deepseek' ? 'DeepSeek' :
+                                                p.type === 'openrouter' ? 'OpenRouter' :
+                                                    p.type === 'groq' ? 'Groq' :
+                                                        p.type === 'mistral' ? 'Mistral AI' :
+                                                            p.type === 'ollama-cloud' ? 'Ollama Cloud' : 'OpenAI Compatible'
                         ),
                         type: p.type,
                         model: model
@@ -1939,6 +1951,7 @@ async function getActiveProviderConfig() {
 // Map a provider type to its localized display label.
 const PROVIDER_LABEL_KEYS = Object.freeze({
     gemini: 'providerGemini',
+    'vertex-ai': 'providerVertexAI',
     openai: 'providerOpenAI',
     azure: 'providerAzure',
     anthropic: 'providerAnthropic',
@@ -1961,6 +1974,7 @@ function getProviderTypeLabel(providerType) {
 // redundant labels like "Gemini (Google Gemini)".
 const PROVIDER_DEFAULT_NAMES = {
     'gemini': 'Google Gemini',
+    'vertex-ai': 'Google Vertex AI',
     'openai': 'OpenAI',
     'azure': 'Azure OpenAI',
     'anthropic': 'Anthropic Claude',
@@ -10801,6 +10815,7 @@ async function createDialog() {
 
     async function fetchGeminiStream({
         apiKey,
+        providerType = 'gemini',
         selectedModel,
         requestBody,
         buildHttpError,
@@ -10815,7 +10830,7 @@ async function createDialog() {
 
         await fetchSseWithRetry({
             providerLabel,
-            url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?alt=sse&key=${apiKey}`,
+            url: buildGeminiApiUrl(providerType, selectedModel, 'streamGenerateContent', apiKey, true),
             options: {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -10993,6 +11008,7 @@ async function createDialog() {
 
     async function runGeminiToolLoop({
         apiKey,
+        providerType = 'gemini',
         selectedModel,
         reasoningValue,
         capturedSelectedText = '',
@@ -11091,6 +11107,7 @@ async function createDialog() {
             const responseData = streamingEnabled
                 ? await fetchGeminiStream({
                     apiKey,
+                    providerType,
                     selectedModel,
                     requestBody,
                     buildHttpError: buildGeminiHttpError,
@@ -11101,7 +11118,7 @@ async function createDialog() {
                 })
                 : await fetchJsonWithRetry({
                     providerLabel,
-                    url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
+                    url: buildGeminiApiUrl(providerType, selectedModel, 'generateContent', apiKey),
                     options: {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -11202,6 +11219,7 @@ async function createDialog() {
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
 
         const activeConfig = await getActiveProviderConfig();
+        const providerType = activeConfig?.type === 'vertex-ai' ? 'vertex-ai' : 'gemini';
         const encryptedApiKey = activeConfig?.apiKey || '';
         const selectedModel = activeConfig?.activeModel || 'gemini-flash-lite-latest';
         const providerLabel = getProviderDisplayName(activeConfig);
@@ -11228,13 +11246,14 @@ async function createDialog() {
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
         const agentModeEnabled = await getAgentModeEnabled();
-        const streamingEnabled = isStreamingSupported('gemini', selectedModel);
+        const streamingEnabled = isStreamingSupported(providerType, selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         console.log('[AskPage] Gemini streaming enabled:', streamingEnabled, 'model:', selectedModel);
 
         try {
             const answer = await runGeminiToolLoop({
                 apiKey,
+                providerType,
                 selectedModel,
                 reasoningValue,
                 capturedSelectedText,
