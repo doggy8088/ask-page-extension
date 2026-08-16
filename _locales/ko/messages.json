@@ -37,6 +37,8 @@
     "interfaceIndicatorsDescription": { "message": "AskPage 대화상자 외에 페이지에 표시되는 시각적 신호를 조정합니다." },
     "enableAgentGlowEffect": { "message": "에이전트 모드 실행 중 페이지 발광 효과 표시" },
     "enableAgentGlowEffectHelp": { "message": "활성화하면 에이전트 모드에서 질문을 보낸 후 답변이 완료될 때까지 페이지 가장자리에 호박색 발광 애니메이션이 표시되어 AskPage가 작업 중임을 알려줍니다." },
+    "enableGeminiGoogleSearch": { "message": "Gemini Google Search 사용" },
+    "enableGeminiGoogleSearchHelp": { "message": "활성화하면 Gemini가 Google Search grounding을 사용할 수 있습니다. 비활성화하면 요청에 google_search 도구가 포함되지 않습니다." },
     "footerPrefix": { "message": "© 2026 설계·개발·유지 관리:" },
     "footerLink": { "message": "Will 保哥 기술 교류 센터" },
     "footerVersion": { "message": " v$version$", "placeholders": { "version": { "content": "$1" } } },

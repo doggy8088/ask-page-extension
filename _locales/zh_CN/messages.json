@@ -37,6 +37,8 @@
     "interfaceIndicatorsDescription": { "message": "调整 AskPage 对话框以外，在网页上显示的视觉提示效果。" },
     "enableAgentGlowEffect": { "message": "代理模式执行时显示网页背光效果" },
     "enableAgentGlowEffectHelp": { "message": "启用后，从发送问题到代理模式回复完成前，网页四周会显示琥珀色背光动画，提示 AskPage 正在页面上工作。" },
+    "enableGeminiGoogleSearch": { "message": "启用 Gemini Google Search" },
+    "enableGeminiGoogleSearchHelp": { "message": "启用后，Gemini 可使用 Google Search grounding；关闭后不会在请求中加入 google_search 工具。" },
     "footerPrefix": { "message": "© 2026 本工具由" },
     "footerLink": { "message": "Will 保哥的技术交流中心" },
     "footerVersion": { "message": "设计、开发与维护 v$version$", "placeholders": { "version": { "content": "$1" } } },

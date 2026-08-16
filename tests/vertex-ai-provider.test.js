@@ -60,6 +60,7 @@ assert.match(settingsHtml, /<option value="vertex-ai"[^>]*data-i18n="providerVer
 assert.match(settingsHtml, /id="modalVertexAiApiKey"[^>]*type="password"/);
 assert.match(settingsHtml, /data-provider-type="vertex-ai" data-action="add-custom-model"/);
 assert.match(settingsHtml, /id="modalVertexAiModelsList"/);
+assert.match(settingsHtml, /id="geminiGoogleSearchEnabled"/);
 
 assert.match(settingsScript, /'vertex-ai': \[[\s\S]*?'gemini-3\.6-flash'/);
 assert.match(settingsScript, /modalVertexAiModelsList\.querySelectorAll\('input\[type="checkbox"\]:checked'\)/);
@@ -69,5 +70,7 @@ assert.match(settingsScript, /aiplatform\.googleapis\.com\/v1\/publishers\/googl
 assert.match(contentScript, /const providerType = activeConfig\?\.type === 'vertex-ai' \? 'vertex-ai' : 'gemini';/);
 assert.match(contentScript, /buildGeminiApiUrl\(providerType, selectedModel, 'streamGenerateContent', apiKey, true\)/);
 assert.match(contentScript, /buildGeminiApiUrl\(providerType, selectedModel, 'generateContent', apiKey\)/);
+assert.match(contentScript, /GEMINI_GOOGLE_SEARCH_ENABLED_STORAGE/);
+assert.match(contentScript, /googleSearchEnabled/);
 
 console.log('vertex-ai-provider: ok');

@@ -770,6 +770,7 @@ const PROMPT_HISTORY_STORAGE = 'ASKPAGE_PROMPT_HISTORY';
 const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
 const AGENT_GLOW_EFFECT_ENABLED_STORAGE = 'AGENT_GLOW_EFFECT_ENABLED';
+const GEMINI_GOOGLE_SEARCH_ENABLED_STORAGE = 'GEMINI_GOOGLE_SEARCH_ENABLED';
 const REASONING_EFFORTS_STORAGE = 'ASKPAGE_REASONING_EFFORTS';
 const CUSTOM_COMMAND_MODE_AGENT = 'agent';
 const CUSTOM_COMMAND_MODE_INQUIRY = 'inquiry';
@@ -2155,6 +2156,11 @@ async function toggleAgentModeEnabled() {
 async function getAgentGlowEffectEnabled() {
     const result = await chrome.storage.local.get([AGENT_GLOW_EFFECT_ENABLED_STORAGE]);
     return result[AGENT_GLOW_EFFECT_ENABLED_STORAGE] !== false;
+}
+
+async function getGeminiGoogleSearchEnabled() {
+    const result = await chrome.storage.local.get([GEMINI_GOOGLE_SEARCH_ENABLED_STORAGE]);
+    return result[GEMINI_GOOGLE_SEARCH_ENABLED_STORAGE] !== false;
 }
 
 function ensureAgentGlowStylesInjected() {
@@ -9752,7 +9758,7 @@ async function createDialog() {
         }));
     }
 
-    function getGeminiToolDefinitions(model = '', includePageTools = false) {
+    function getGeminiToolDefinitions(model = '', includePageTools = false, includeGoogleSearch = true) {
         const pageTools = includePageTools
             ? [{
                 functionDeclarations: getToolDefinitions().map((tool) => ({
@@ -9762,8 +9768,8 @@ async function createDialog() {
                 }))
             }]
             : [];
-        const includeGoogleSearch = !includePageTools || doesGeminiModelSupportCombinedTools(model);
-        return buildGeminiRequestTools(pageTools, includeGoogleSearch);
+        const modelSupportsCombinedTools = !includePageTools || doesGeminiModelSupportCombinedTools(model);
+        return buildGeminiRequestTools(pageTools, includeGoogleSearch && modelSupportsCombinedTools);
     }
 
     function parseToolArguments(rawArguments) {
@@ -11015,6 +11021,7 @@ async function createDialog() {
         screenshotDataUrl = null,
         inputImageDataUrls = [],
         enableTools = true,
+        googleSearchEnabled = true,
         streamingEnabled = false,
         onStatusUpdate = () => {},
         onTrace = () => {},
@@ -11069,7 +11076,7 @@ async function createDialog() {
             if (thinkingConfig) {
                 requestBody.generationConfig.thinkingConfig = thinkingConfig;
             }
-            requestBody.tools = getGeminiToolDefinitions(selectedModel, enableTools);
+            requestBody.tools = getGeminiToolDefinitions(selectedModel, enableTools, googleSearchEnabled);
             const toolConfig = buildGeminiToolConfig(selectedModel, enableTools);
             if (toolConfig) {
                 requestBody.toolConfig = toolConfig;
@@ -11246,6 +11253,7 @@ async function createDialog() {
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
         const agentModeEnabled = await getAgentModeEnabled();
+        const googleSearchEnabled = await getGeminiGoogleSearchEnabled();
         const streamingEnabled = isStreamingSupported(providerType, selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         console.log('[AskPage] Gemini streaming enabled:', streamingEnabled, 'model:', selectedModel);
@@ -11260,6 +11268,7 @@ async function createDialog() {
                 screenshotDataUrl,
                 inputImageDataUrls,
                 enableTools: agentModeEnabled,
+                googleSearchEnabled,
                 streamingEnabled,
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),

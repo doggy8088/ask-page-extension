@@ -158,6 +158,8 @@ function getProviderDisplayName(provider) {
         : providerName;
 }
 
+const GEMINI_GOOGLE_SEARCH_ENABLED_STORAGE = 'GEMINI_GOOGLE_SEARCH_ENABLED';
+
 // DOM elements - 將在 DOMContentLoaded 中初始化
 let resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
 let localePreferenceSelect;
@@ -165,7 +167,7 @@ let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, mod
 let modalCommandModeAgent, modalCommandModeInquiry, modalCommandModeUnspecified, modalCommandScreenshotEnabled, modalCommandShowVariableLabels;
 let modalSave, modalCancel, modalCommandNameError, modalCommandPromptError;
 let customSystemPromptTextarea, customSystemPromptCount;
-let agentGlowEffectEnabledCheckbox;
+let agentGlowEffectEnabledCheckbox, geminiGoogleSearchEnabledCheckbox;
 
 // Multi-provider UI elements
 let providersList, addProviderBtn, providerModal, providerModalTitle, modalProviderName, modalProviderType;
@@ -407,6 +409,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     customSystemPromptTextarea = document.getElementById('customSystemPrompt');
     customSystemPromptCount = document.getElementById('customSystemPromptCount');
     agentGlowEffectEnabledCheckbox = document.getElementById('agentGlowEffectEnabled');
+    geminiGoogleSearchEnabledCheckbox = document.getElementById('geminiGoogleSearchEnabled');
 
     if (localePreferenceSelect) {
         localePreferenceSelect.value = window.AskPageI18n?.preference || 'auto';
@@ -488,6 +491,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (agentGlowEffectEnabledCheckbox) {
         agentGlowEffectEnabledCheckbox.addEventListener('change', async () => {
             await chrome.storage.local.set({ [AGENT_GLOW_EFFECT_ENABLED_STORAGE]: agentGlowEffectEnabledCheckbox.checked });
+            showLocalizedStatus('settingsAutoSaved', undefined, 'success');
+        });
+    }
+
+    if (geminiGoogleSearchEnabledCheckbox) {
+        geminiGoogleSearchEnabledCheckbox.addEventListener('change', async () => {
+            await chrome.storage.local.set({ [GEMINI_GOOGLE_SEARCH_ENABLED_STORAGE]: geminiGoogleSearchEnabledCheckbox.checked });
             showLocalizedStatus('settingsAutoSaved', undefined, 'success');
         });
     }
@@ -1091,7 +1101,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         'PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL',
         CUSTOM_SUMMARY_PROMPT_STORAGE, CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE,
         CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
-        LAST_ACTIVE_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE
+        LAST_ACTIVE_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE,
+        GEMINI_GOOGLE_SEARCH_ENABLED_STORAGE
     ], async (result) => {
         activeProviderId = result.ACTIVE_PROVIDER_ID || '';
         activeModel = result.ACTIVE_MODEL || '';
@@ -1128,6 +1139,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (agentGlowEffectEnabledCheckbox) {
             agentGlowEffectEnabledCheckbox.checked = result[AGENT_GLOW_EFFECT_ENABLED_STORAGE] !== false;
+        }
+        if (geminiGoogleSearchEnabledCheckbox) {
+            geminiGoogleSearchEnabledCheckbox.checked = result[GEMINI_GOOGLE_SEARCH_ENABLED_STORAGE] !== false;
         }
 
         // Restore active tab

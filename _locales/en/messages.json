@@ -37,6 +37,8 @@
     "interfaceIndicatorsDescription": { "message": "Adjust the visual cues AskPage shows on the page itself, outside the dialog." },
     "enableAgentGlowEffect": { "message": "Show a page glow while Agent Mode is running" },
     "enableAgentGlowEffectHelp": { "message": "When enabled, an amber glow animates around the edges of the page from when you send a message in Agent Mode until the reply finishes, so you can tell AskPage is actively working." },
+    "enableGeminiGoogleSearch": { "message": "Enable Gemini Google Search" },
+    "enableGeminiGoogleSearchHelp": { "message": "When enabled, Gemini can use Google Search grounding. When disabled, the google_search tool is omitted from requests." },
     "footerPrefix": { "message": "© 2026 This tool is designed, developed, and maintained by" },
     "footerLink": { "message": "Will's technology community" },
     "footerVersion": { "message": " v$version$", "placeholders": { "version": { "content": "$1" } } },

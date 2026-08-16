@@ -37,6 +37,8 @@
     "interfaceIndicatorsDescription": { "message": "AskPage ダイアログ以外でページ上に表示される視覚的な合図を調整します。" },
     "enableAgentGlowEffect": { "message": "エージェントモード実行中にページの光彩効果を表示" },
     "enableAgentGlowEffectHelp": { "message": "有効にすると、エージェントモードで質問を送信してから回答が完了するまでの間、ページの周囲にアンバー色の光彩アニメーションが表示され、AskPage が作業中であることを示します。" },
+    "enableGeminiGoogleSearch": { "message": "Gemini Google Search を有効にする" },
+    "enableGeminiGoogleSearchHelp": { "message": "有効にすると Gemini が Google Search grounding を使用できます。無効にすると google_search ツールはリクエストに追加されません。" },
     "footerPrefix": { "message": "© 2026 このツールの設計・開発・保守：" },
     "footerLink": { "message": "Will 保哥の技術交流センター" },
     "footerVersion": { "message": " v$version$", "placeholders": { "version": { "content": "$1" } } },
