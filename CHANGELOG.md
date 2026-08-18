@@ -8,6 +8,12 @@
 
 ### 新增 / 改進（Unreleased）
 
+（目前暫無未發佈變更）
+
+## [0.42.4] - 2026-08-19
+
+### 修正 / 更新（v0.42.4）
+
 - **Gemini Google Search Grounding 改為可選啟用**：新增「啟用 Grounding with Google Search 工具」設定（每個 Gemini 提供者獨立，預設關閉），修正 Free-tier 用戶因強制啟用 Google Search 工具而觸發 429 配額錯誤的問題（[issue #21](https://github.com/doggy8088/ask-page-extension/issues/21)）。勾選時會顯示行內警示，提醒 Google AI Studio 免費方案不支援此設定。
 
 ## [0.42.3] - 2026-08-14
