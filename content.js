@@ -9745,7 +9745,7 @@ async function createDialog() {
         }));
     }
 
-    function getGeminiToolDefinitions(model = '', includePageTools = false) {
+    function getGeminiToolDefinitions(model = '', includePageTools = false, googleSearchEnabled = false) {
         const pageTools = includePageTools
             ? [{
                 functionDeclarations: getToolDefinitions().map((tool) => ({
@@ -9755,7 +9755,7 @@ async function createDialog() {
                 }))
             }]
             : [];
-        const includeGoogleSearch = !includePageTools || doesGeminiModelSupportCombinedTools(model);
+        const includeGoogleSearch = googleSearchEnabled && (!includePageTools || doesGeminiModelSupportCombinedTools(model));
         return buildGeminiRequestTools(pageTools, includeGoogleSearch);
     }
 
@@ -11006,6 +11006,7 @@ async function createDialog() {
         screenshotDataUrl = null,
         inputImageDataUrls = [],
         enableTools = true,
+        googleSearchEnabled = false,
         streamingEnabled = false,
         onStatusUpdate = () => {},
         onTrace = () => {},
@@ -11060,7 +11061,7 @@ async function createDialog() {
             if (thinkingConfig) {
                 requestBody.generationConfig.thinkingConfig = thinkingConfig;
             }
-            requestBody.tools = getGeminiToolDefinitions(selectedModel, enableTools);
+            requestBody.tools = getGeminiToolDefinitions(selectedModel, enableTools, googleSearchEnabled);
             const toolConfig = buildGeminiToolConfig(selectedModel, enableTools);
             if (toolConfig) {
                 requestBody.toolConfig = toolConfig;
@@ -11248,6 +11249,7 @@ async function createDialog() {
                 screenshotDataUrl,
                 inputImageDataUrls,
                 enableTools: agentModeEnabled,
+                googleSearchEnabled: !!activeConfig?.googleSearchEnabled,
                 streamingEnabled,
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),

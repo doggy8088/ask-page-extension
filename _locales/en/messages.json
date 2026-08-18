@@ -74,6 +74,8 @@
     "providerCustomName": { "message": "Custom provider name" },
     "providerCustomNamePlaceholder": { "message": "For example: My Gemini account" },
     "enabledModels": { "message": "Enabled models (select one or more)" },
+    "geminiGoogleSearchEnabled": { "message": "Enable Grounding with Google Search tool" },
+    "geminiGoogleSearchEnabledWarning": { "message": "⚠ Google AI Studio Free-tier does not support this setting; enabling it will trigger a 429 quota error. Only paid plans can use this feature." },
     "apiKeyOptional": { "message": "API key (optional)" },
     "leaveBlankIfNotRequired": { "message": "Leave blank if not required" },
     "modelName": { "message": "Model name" },

@@ -176,6 +176,7 @@ let modalOpenaiCompatibleModelInputGroup, modalOpenaiCompatibleModelsListGroup, 
 let modalAnthropicApiKey, modalDeepseekApiKey, modalOpenrouterApiKey, modalGroqApiKey, modalMistralApiKey, modalOllamaCloudApiKey;
 let modalOllamaEndpoint, modalOllamaModel;
 let modalGeminiModelsList, modalOpenaiModelsList;
+let modalGeminiGoogleSearch, modalGeminiGoogleSearchWarning;
 let modalAnthropicModelsList, modalDeepseekModelsList, modalOpenrouterModelsList, modalGroqModelsList, modalMistralModelsList, modalOllamaCloudModelsList;
 let currentEditingProvider = null;
 let providers = [];
@@ -343,6 +344,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalOllamaModel = document.getElementById('modalOllamaModel');
 
     modalGeminiModelsList = document.getElementById('modalGeminiModelsList');
+    modalGeminiGoogleSearch = document.getElementById('modalGeminiGoogleSearch');
+    modalGeminiGoogleSearchWarning = document.getElementById('modalGeminiGoogleSearchWarning');
     modalOpenaiModelsList = document.getElementById('modalOpenaiModelsList');
     modalAnthropicModelsList = document.getElementById('modalAnthropicModelsList');
     modalDeepseekModelsList = document.getElementById('modalDeepseekModelsList');
@@ -487,6 +490,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     modalProviderSave.addEventListener('click', saveProvider);
     modalProviderTest.addEventListener('click', testProviderConnection);
+    modalGeminiGoogleSearch.addEventListener('change', () => {
+        modalGeminiGoogleSearchWarning.hidden = !modalGeminiGoogleSearch.checked;
+    });
 
     // Model actions event listeners (fetch models, manually input models, etc.)
     document.querySelectorAll('.btn-action-models').forEach(btn => {
@@ -1252,6 +1258,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalProviderName.value = '';
         modalProviderType.value = 'gemini';
         modalGeminiApiKey.value = '';
+        modalGeminiGoogleSearch.checked = false;
+        modalGeminiGoogleSearchWarning.hidden = true;
         modalOpenaiApiKey.value = '';
         modalAzureApiKey.value = '';
         modalAzureEndpoint.value = '';
@@ -1306,6 +1314,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (provider.type === 'gemini') {
                 modalGeminiApiKey.value = decryptedKey;
                 renderModalModelsList(modalGeminiModelsList, combinedModels, configuredModels);
+                modalGeminiGoogleSearch.checked = !!provider.googleSearchEnabled;
+                modalGeminiGoogleSearchWarning.hidden = !modalGeminiGoogleSearch.checked;
             } else if (provider.type === 'openai') {
                 modalOpenaiApiKey.value = decryptedKey;
                 renderModalModelsList(modalOpenaiModelsList, combinedModels, configuredModels);
@@ -1449,6 +1459,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
             providerData.models = selectedModels;
+            providerData.googleSearchEnabled = modalGeminiGoogleSearch.checked;
         } else if (type === 'openai') {
             apiKeyRaw = modalOpenaiApiKey.value.trim();
             if (!apiKeyRaw) {

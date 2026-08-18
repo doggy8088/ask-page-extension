@@ -74,6 +74,8 @@
     "providerCustomName": { "message": "提供商自定义名称" },
     "providerCustomNamePlaceholder": { "message": "例如：我的 Gemini 账号" },
     "enabledModels": { "message": "启用模型（可多选，至少选择一个）" },
+    "geminiGoogleSearchEnabled": { "message": "启用 Grounding with Google Search 工具" },
+    "geminiGoogleSearchEnabledWarning": { "message": "⚠ Google AI Studio 免费方案（Free-tier）不支持此设定，启用后会触发 429 配额错误。仅付费方案可使用此功能。" },
     "apiKeyOptional": { "message": "API Key（可选）" },
     "leaveBlankIfNotRequired": { "message": "不需要时可留空" },
     "modelName": { "message": "模型名称" },
