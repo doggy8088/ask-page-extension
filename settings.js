@@ -115,6 +115,7 @@ function escapeHtml(value) {
 
 const PROVIDER_LABEL_KEYS = Object.freeze({
     gemini: 'providerGemini',
+    vertex: 'providerVertex',
     openai: 'providerOpenAI',
     azure: 'providerAzure',
     anthropic: 'providerAnthropic',
@@ -128,6 +129,7 @@ const PROVIDER_LABEL_KEYS = Object.freeze({
 });
 const PROVIDER_DEFAULT_NAMES = Object.freeze({
     gemini: 'Google Gemini',
+    vertex: 'Gemini Enterprise',
     openai: 'OpenAI',
     azure: 'Azure OpenAI',
     anthropic: 'Anthropic Claude',
