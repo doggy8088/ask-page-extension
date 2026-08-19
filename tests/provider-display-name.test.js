@@ -70,51 +70,39 @@ assert.strictEqual(getProviderTypeLabel('openai-compatible'), 'OpenAI-compatible
 assert.strictEqual(getProviderTypeLabel('unknown-type'), 'OpenAI-compatible endpoint');
 assert.strictEqual(getProviderTypeLabel(undefined), 'OpenAI-compatible endpoint');
 
-// getProviderDisplayName: custom name differs from type label -> `typeLabel (customName)`.
+// getProviderDisplayName: appends model name when present: `${providerDisplayName} (${model})`.
 assert.strictEqual(
-    getProviderDisplayName({ type: 'openai-compatible', name: 'CLI Proxy API' }),
-    'OpenAI-compatible endpoint (CLI Proxy API)'
+    getProviderDisplayName({ type: 'gemini', name: 'Google' }, 'gemini-3.7-flash'),
+    'Google (gemini-3.7-flash)'
 );
 assert.strictEqual(
-    getProviderDisplayName({ type: 'gemini', name: '我的 Gemini 帳號' }),
-    'Google Gemini (我的 Gemini 帳號)'
+    getProviderDisplayName({ type: 'gemini', name: 'Google Gemini' }, 'gemini-2.5-flash-lite'),
+    'Google Gemini (gemini-2.5-flash-lite)'
 );
 assert.strictEqual(
-    getProviderDisplayName({ type: 'ollama-cloud', name: 'My Ollama' }),
-    'Ollama Cloud (My Ollama)'
-);
-
-// Custom name equals the type label -> only the type label is shown.
-assert.strictEqual(
-    getProviderDisplayName({ type: 'ollama-cloud', name: 'Ollama Cloud' }),
-    'Ollama Cloud'
+    getProviderDisplayName({ type: 'openai-compatible', name: 'CLI Proxy API', activeModel: 'deepseek-r1' }),
+    'CLI Proxy API (deepseek-r1)'
 );
 assert.strictEqual(
-    getProviderDisplayName({ type: 'deepseek', name: 'DeepSeek' }),
-    'DeepSeek'
-);
-
-// Custom name equals the built-in default name -> only the type label is shown,
-// avoiding redundant labels like "Gemini (Google Gemini)".
-assert.strictEqual(
-    getProviderDisplayName({ type: 'gemini', name: 'Google Gemini' }),
-    'Google Gemini'
+    getProviderDisplayName({ type: 'gemini', name: '我的 Gemini 帳號' }, 'gemini-2.5-flash'),
+    '我的 Gemini 帳號 (gemini-2.5-flash)'
 );
 assert.strictEqual(
-    getProviderDisplayName({ type: 'anthropic', name: 'Anthropic Claude' }),
-    'Anthropic Claude'
+    getProviderDisplayName({ type: 'gemini', name: '' }, 'gemini-3.7-flash'),
+    'Google Gemini (gemini-3.7-flash)'
 );
 assert.strictEqual(
-    getProviderDisplayName({ type: 'ollama', name: 'Ollama (Local)' }),
-    'Ollama (Local)'
+    getProviderDisplayName({ type: 'anthropic', name: '' }, 'claude-3-7-sonnet'),
+    'Anthropic Claude (claude-3-7-sonnet)'
 );
 
-// Empty or missing custom name -> only the type label is shown.
+// Without model name, only the provider display name is returned.
+assert.strictEqual(getProviderDisplayName({ type: 'gemini', name: 'Google' }), 'Google');
 assert.strictEqual(getProviderDisplayName({ type: 'gemini', name: '' }), 'Google Gemini');
 assert.strictEqual(getProviderDisplayName({ type: 'gemini' }), 'Google Gemini');
 assert.strictEqual(getProviderDisplayName({ type: 'openai-compatible', name: '   ' }), 'OpenAI-compatible endpoint');
 
-// Missing config -> falls back to the OpenAI Compatible label.
+// Missing config -> falls back to the OpenAI-compatible endpoint label.
 assert.strictEqual(getProviderDisplayName(null), 'OpenAI-compatible endpoint');
 assert.strictEqual(getProviderDisplayName(undefined), 'OpenAI-compatible endpoint');
 assert.strictEqual(getProviderDisplayName({}), 'OpenAI-compatible endpoint');

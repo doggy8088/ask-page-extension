@@ -1961,36 +1961,16 @@ function getProviderTypeLabel(providerType) {
     return getLocalizedText(PROVIDER_LABEL_KEYS[providerType] || 'providerOpenAICompatible');
 }
 
-// Default provider names assigned by settings when the user leaves the
-// custom-name field empty. These differ from the type label for a few types,
-// so getProviderDisplayName treats them as "no custom name" to avoid showing
-// redundant labels like "Gemini (Google Gemini)".
-const PROVIDER_DEFAULT_NAMES = {
-    'gemini': 'Google Gemini',
-    'openai': 'OpenAI',
-    'azure': 'Azure OpenAI',
-    'anthropic': 'Anthropic Claude',
-    'deepseek': 'DeepSeek',
-    'openrouter': 'OpenRouter',
-    'groq': 'Groq',
-    'mistral': 'Mistral AI',
-    'ollama': 'Ollama (Local)',
-    'ollama-cloud': 'Ollama Cloud',
-    'openai-compatible': 'OpenAI Compatible'
-};
-
-// Build the display name for error messages. Returns `${typeLabel} (${customName})`
-// when the provider has a custom name that differs from its type label (and from the
-// built-in default name), otherwise just the type label. This lets users tell apart
-// multiple providers of the same type without showing redundant labels.
-function getProviderDisplayName(activeConfig) {
-    const type = activeConfig?.type;
-    const typeLabel = getProviderTypeLabel(type);
-    const customName = String(activeConfig?.name || '').trim();
-    if (!customName || customName === typeLabel || customName === PROVIDER_DEFAULT_NAMES[type]) {
-        return typeLabel;
+// Build the display name for provider operations and messages. Prefer the user's custom name
+// (falling back to the localized provider type label), and append the model name in
+// parentheses when provided (e.g. "Google (gemini-3.7-flash)").
+function getProviderDisplayName(activeConfig, model = activeConfig?.activeModel) {
+    const providerName = getProviderDialogDisplayName(activeConfig);
+    const modelName = String(model || '').trim();
+    if (modelName) {
+        return `${providerName} (${modelName})`;
     }
-    return `${typeLabel} (${customName})`;
+    return providerName;
 }
 
 // Build the compact provider name shown in the main dialog. Prefer the user's
@@ -8164,8 +8144,9 @@ async function createDialog() {
         console[level](`[AskPage] ${message}${detailText}`);
     }
 
-    function shouldSuppressStreamingRetryDiagnostic(providerLabel, analysis, error) {
-        return String(providerLabel || '').startsWith(getProviderTypeLabel('gemini'))
+    function shouldSuppressStreamingRetryDiagnostic(providerLabel, analysis, error, url = '') {
+        return (String(url).includes('generativelanguage.googleapis.com')
+            || String(providerLabel || '').startsWith(getProviderTypeLabel('gemini')))
             && analysis?.reasonCode === 'network-error'
             && error?.name === 'TypeError'
             && String(error?.message || '').toLowerCase() === 'failed to fetch';
@@ -8503,7 +8484,7 @@ async function createDialog() {
                 if (!receivedEvent && analysis.shouldRetry && retryCount < MAX_LLM_API_SERVICE_RETRIES) {
                     const nextRetryCount = retryCount + 1;
                     const delayMs = getRetryDelayMilliseconds(retryCount, error?.retryAfterMs);
-                    if (!shouldSuppressStreamingRetryDiagnostic(providerLabel, analysis, error)) {
+                    if (!shouldSuppressStreamingRetryDiagnostic(providerLabel, analysis, error, url)) {
                         logDiagnostic('warn', `${providerLabel} streaming API request failed and will retry.`, {
                             provider: providerLabel,
                             retry: nextRetryCount,
