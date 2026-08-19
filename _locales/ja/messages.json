@@ -1,447 +1,2265 @@
 {
-    "extensionName": { "message": "頁問 AskPage" },
-    "extensionLogoAlt": { "message": "AskPage のロゴ" },
-    "extensionDescription": { "message": "設定した AI API を使って現在のページについて質問できます" },
-    "commandToggleDialog": { "message": "AskPage ダイアログを開く" },
-    "commandSwitchProvider": { "message": "AI プロバイダーを切り替え" },
-    "settingsMigrationTitle": { "message": "AskPage：設定を移行しました" },
-    "settingsMigrationDescription": { "message": "設定が複数モデルに対応しました。まもなく完全な設定ページへ移動します..." },
-    "codepenTitle": { "message": "CodePen - AskPage を開いています" },
-    "codepenDescription": { "message": "CodePen 用コードを準備中..." },
-    "codepenOpeningDescription": { "message": "まもなく新しいウィンドウでエディターを開きます" },
-    "codepenMissingData": { "message": "コードデータが見つかりません" },
-    "closeAndRetry": { "message": "このタブを閉じて、もう一度お試しください。" },
-    "codepenOpenFailed": { "message": "CodePen を開けませんでした" },
-    "unknownErrorRetry": { "message": "不明なエラーが発生しました。もう一度お試しください。" },
-    "preferencesTitle": { "message": "AskPage：設定" },
-    "preferencesDescription": { "message": "AI プロバイダー、スキル、システムプロンプトを設定します" },
-    "resetSettings": { "message": "設定をリセット" },
-    "exportSettings": { "message": "エクスポート" },
-    "importSettings": { "message": "インポート" },
-    "aiProviders": { "message": "AI プロバイダー" },
-    "customSlashCommands": { "message": "スキル管理" },
-    "adjustSystemPrompt": { "message": "システムプロンプトを調整" },
-    "aiProviderSettings": { "message": "AI プロバイダー設定" },
-    "aiProviderSettingsDescription": { "message": "複数の AI プロバイダーを設定し、1 つ以上のモデルを有効にします。モデル名を選択すると使用中のモデルを切り替えられます。" },
-    "addAiProvider": { "message": "AI プロバイダーを追加" },
-    "slashCommandManagement": { "message": "スキル管理" },
-    "slashCommandManagementDescription": { "message": "組み込みスキルとカスタムスキルを管理します" },
-    "addCustomSlashCommand": { "message": "スキルを追加" },
-    "systemPromptDescription": { "message": "この内容は組み込みシステムプロンプトの末尾に追加されます。空欄の場合は追加しません。組み込みシステムプロンプトは上書きされません。" },
-    "additionalPrompt": { "message": "追加プロンプト" },
-    "additionalPromptPlaceholder": { "message": "システムプロンプトに追加する内容を入力..." },
-    "additionalPromptSaveDescription": { "message": "保存後、すべての AI プロバイダーがリクエストにこの追加プロンプトを適用します。" },
-    "characterCount": { "message": "$count$ 文字", "placeholders": { "count": { "content": "$1" } } },
-    "generalSettingsTab": { "message": "一般設定" },
-    "interfaceIndicatorsTitle": { "message": "インターフェース表示効果" },
-    "interfaceIndicatorsDescription": { "message": "AskPage ダイアログ以外でページ上に表示される視覚的な合図を調整します。" },
-    "enableAgentGlowEffect": { "message": "エージェントモード実行中にページの光彩効果を表示" },
-    "enableAgentGlowEffectHelp": { "message": "有効にすると、エージェントモードで質問を送信してから回答が完了するまでの間、ページの周囲にアンバー色の光彩アニメーションが表示され、AskPage が作業中であることを示します。" },
-    "footerPrefix": { "message": "© 2026 このツールの設計・開発・保守：" },
-    "footerLink": { "message": "Will 保哥の技術交流センター" },
-    "footerVersion": { "message": " v$version$", "placeholders": { "version": { "content": "$1" } } },
-    "localeLabel": { "message": "インターフェース言語" },
-    "localeAuto": { "message": "自動" },
-    "localeZhTW": { "message": "繁體中文" },
-    "localeEn": { "message": "English" },
-    "localeZhCN": { "message": "简体中文" },
-    "localeJa": { "message": "日本語" },
-    "localeKo": { "message": "한국어" },
-    "editSlashCommand": { "message": "スキルを編集" },
-    "editBuiltInCommand": { "message": "組み込みスキルを編集" },
-    "editCustomCommand": { "message": "スキルを編集" },
-    "addCustomCommand": { "message": "スキルを追加" },
-    "commandName": { "message": "スキル名" },
-    "commandNamePlaceholder": { "message": "例：/help" },
-    "commandNameHelp": { "message": "スキル名は / で始め、英字、数字、アンダースコア、ハイフンのみ使用できます。" },
-    "promptContent": { "message": "プロンプト内容" },
-    "promptContentPlaceholder": { "message": "このスキルの実行時に AI へ送信するプロンプトを入力します。${variableName} で入力欄を作成できます。例：Hi, I'm ${name} from ${country:TW}." },
-    "promptContentHelp": { "message": "プロンプト内で ${variableName} を使うと入力欄を作成できます。スキル実行後に順番に入力します。${variableName:defaultValue} で初期値を設定できます。同名の変数は同期されます。" },
-    "showVariableLabels": { "message": "プロンプト展開時に変数名を表示" },
-    "showVariableLabelsHelp": { "message": "オフの場合、未入力の変数はプレースホルダーとして表示され、入力すると消えます。オンの場合は「変数名：」ラベルを表示し続けます。" },
-    "mode": { "message": "モード" },
-    "modeUnspecified": { "message": "指定なし" },
-    "modeAgent": { "message": "エージェント" },
-    "modeInquiry": { "message": "通常" },
-    "modeHelp": { "message": "スキル実行時にモードを自動で切り替えます。「指定なし」では現在のモードを変更しません。" },
-    "enableScreenshotMode": { "message": "スクリーンショットモードを有効化" },
-    "enableScreenshotModeHelp": { "message": "スキル実行時にスクリーンショットモードを自動で適用します。" },
-    "cancel": { "message": "キャンセル" },
-    "save": { "message": "保存" },
-    "addProviderTitle": { "message": "AI プロバイダーを追加" },
-    "editProviderTitle": { "message": "AI プロバイダーを編集" },
-    "providerType": { "message": "プロバイダーの種類" },
-    "providerCustomName": { "message": "プロバイダーのカスタム名" },
-    "providerCustomNamePlaceholder": { "message": "例：自分の Gemini アカウント" },
-    "enabledModels": { "message": "有効なモデル（1 つ以上選択）" },
-    "geminiGoogleSearchEnabled": { "message": "Grounding with Google Search ツールを有効にする" },
-    "geminiGoogleSearchEnabledWarning": { "message": "⚠ Google AI Studio の無料枠ではこの設定はサポートされておらず、有効にすると 429 クォータエラーが発生します。Tier 1 以上の有料プランでのみ利用できます。" },
-    "apiKeyOptional": { "message": "API Key（任意）" },
-    "leaveBlankIfNotRequired": { "message": "不要な場合は空欄" },
-    "modelName": { "message": "モデル名" },
-    "loadAllModels": { "message": "利用可能なモデルをすべて読み込む" },
-    "enterModelManually": { "message": "モデル名を手動入力" },
-    "loadEndpointModels": { "message": "エンドポイントのモデルを読み込む" },
-    "loadLocalModels": { "message": "ローカルモデルを読み込む" },
-    "loadLatestCloudModels": { "message": "最新のクラウドモデルを読み込む" },
-    "curatedCloudModels": { "message": "厳選した Ollama Cloud モデル ID を内蔵しています。最新の一覧も読み込めます。" },
-    "testConnection": { "message": "接続をテスト" },
-    "ollamaCloudKeyHelp": { "message": "Ollama API Keys で" },
-    "createKeySuffix": { "message": "キーを作成できます。" },
-    "ollamaApiKeysLink": { "message": "Ollama API Keys" },
-    "openAiCompatibleEndpoint": { "message": "OpenAI 互換エンドポイント" },
-    "geminiApiKeyPlaceholder": { "message": "Gemini API Key を入力" },
-    "openaiApiKeyPlaceholder": { "message": "OpenAI API Key を入力" },
-    "azureApiKeyPlaceholder": { "message": "Azure OpenAI API Key を入力" },
-    "azureEndpointPlaceholder": { "message": "例：https://your-resource.openai.azure.com" },
-    "azureDeploymentPlaceholder": { "message": "例：gpt-4o-mini" },
-    "anthropicApiKeyPlaceholder": { "message": "Anthropic API Key を入力" },
-    "deepseekApiKeyPlaceholder": { "message": "DeepSeek API Key を入力" },
-    "openrouterApiKeyPlaceholder": { "message": "OpenRouter API Key を入力" },
-    "groqApiKeyPlaceholder": { "message": "Groq API Key を入力" },
-    "mistralApiKeyPlaceholder": { "message": "Mistral API Key を入力" },
-    "ollamaCloudApiKeyPlaceholder": { "message": "Ollama API Key を入力" },
-    "openAiEndpointPlaceholder": { "message": "例：http://localhost:11434/v1" },
-    "openAiCompatibleModelPlaceholder": { "message": "例：llama3, mistral" },
-    "ollamaEndpointPlaceholder": { "message": "例：http://localhost:11434/v1" },
-    "ollamaModelPlaceholder": { "message": "例：llama3.3, deepseek-r1" },
-    "providerEndpoint": { "message": "エンドポイント" },
-    "apiKey": { "message": "API Key" },
-    "apiEndpoint": { "message": "API Endpoint" },
-    "deploymentName": { "message": "Deployment Name" },
-    "apiVersion": { "message": "API Version" },
-    "loading": { "message": "読み込み中" },
-    "askPage": { "message": "頁問" },
-    "dragTitleBar": { "message": "タイトルバーをドラッグしてダイアログを移動" },
-    "openPreferences": { "message": "設定を開く" },
-    "inputPlaceholder": { "message": "質問を入力して Enter。最大 4 枚の画像を貼り付けまたはドラッグしてコンテキストに追加できます" },
-    "imageContextTitle": { "message": "画像コンテキスト（Ctrl+V またはドラッグで参考画像を追加）" },
-    "imageContextMeta": { "message": "PNG / JPG / WebP などに対応。1 ファイルの上限は 10MB" },
-    "uploadImage": { "message": "画像をアップロード" },
-    "uploadImageTitle": { "message": "画像を選択して今回の質問のコンテキストに追加" },
-    "annotateScreen": { "message": "画面を注釈" },
-    "annotateScreenTitle": { "message": "ダイアログを一時的に隠し、画面を選択または注釈して画像コンテキストに追加" },
-    "ask": { "message": "質問" },
-    "reasoningEffort": { "message": "推論の強度" },
-    "switchProviderModel": { "message": "AI プロバイダーとモデルを切り替え" },
-    "noModelConfigured": { "message": "モデル未設定" },
-    "builtin": { "message": "組み込み" },
-    "edit": { "message": "編集" },
-    "delete": { "message": "削除" },
-    "endpoint": { "message": "エンドポイント" },
-    "noProviders": { "message": "AI プロバイダーがまだ追加されていません。下の「AI プロバイダーを追加」をクリックしてください。" },
-    "addProviderPrompt": { "message": "AI プロバイダーを追加" },
-    "connectionTestSucceeded": { "message": "🟢 接続テストに成功しました" },
-    "testing": { "message": "⏳ テスト中..." },
-    "processing": { "message": "⏳ 処理中..." },
-    "settingsAutoSaved": { "message": "システムプロンプトを自動保存しました。" },
-    "settingsReset": { "message": "設定をリセットしました。" },
-    "settingsExported": { "message": "設定をエクスポートしました。" },
-    "settingsImported": { "message": "設定をインポートしました。再読み込み中..." },
-    "importInvalid": { "message": "インポートに失敗しました：ファイル形式が正しくありません" },
-    "commandSaved": { "message": "スキルを保存しました" },
-    "builtInCommandCannotDelete": { "message": "組み込みスキルは削除できません" },
-    "commandDeleted": { "message": "スキルを削除しました" },
-    "providerSaved": { "message": "プロバイダーを保存しました" },
-    "providerDeleted": { "message": "プロバイダーを削除しました" },
-    "commandClearHistory": { "message": "質問履歴を消去" },
-    "commandSummaryPage": { "message": "このページを要約" },
-    "commandScreenshot": { "message": "スクリーンショットモードを切り替え" },
-    "commandAgent": { "message": "通常モードとエージェントモードを切り替え（エージェントモードではページ HTML とツールを使用）" },
-    "summaryPrompt": { "message": "この記事を Markdown 形式で要約し、「タイトル」「要点」「まとめ」を含めてください。" },
-    "systemPromptLanguageInstruction": { "message": "言語設定で指定された日本語を主な回答言語として使用してください。ユーザーが現在の質問で別の言語を明示的に指定した場合に限り、その言語に切り替えてください。" },
-    "resetSettingsConfirm": { "message": "すべての設定をリセットしますか？\n\nAI プロバイダー、API キー、スキル、質問履歴などが削除されます。" },
-    "importSettingsConfirm": { "message": "この設定ファイルをインポートしますか？現在の設定は上書きされます。" },
-    "invalidVariableName": { "message": "変数名「$name$」は無効です。英字、数字、アンダースコアのみ使用でき、数字で始めることはできません。", "placeholders": { "name": { "content": "$1" } } },
-    "inconsistentVariableDefault": { "message": "変数「$name$」の重複するデフォルト値が一致しません：$first$ と $second$", "placeholders": { "name": { "content": "$1" }, "first": { "content": "$2" }, "second": { "content": "$3" } } },
-    "commandNameRequired": { "message": "スキル名を入力してください" },
-    "commandNameInvalid": { "message": "スキル名は / で始まり、英字、数字、アンダースコア、ハイフンのみ使用できます。" },
-    "commandNameBuiltinDuplicate": { "message": "組み込みスキルと同じ名前は使用できません。" },
-    "commandNameCustomDuplicate": { "message": "そのスキル名は既存のカスタムスキルで使用されています。" },
-    "promptContentRequired": { "message": "プロンプト内容を入力してください" },
-    "deleteCommandConfirm": { "message": "スキル $command$ を削除しますか？", "placeholders": { "command": { "content": "$1" } } },
-    "providerGemini": { "message": "Google Gemini" },
-    "providerOpenAI": { "message": "OpenAI" },
-    "providerAzure": { "message": "Azure OpenAI" },
-    "providerAnthropic": { "message": "Anthropic Claude" },
-    "providerDeepSeek": { "message": "DeepSeek" },
-    "providerOpenRouter": { "message": "OpenRouter" },
-    "providerGroq": { "message": "Groq" },
-    "providerMistral": { "message": "Mistral AI" },
-    "providerOllamaLocal": { "message": "Ollama（ローカル）" },
-    "providerOllamaCloud": { "message": "Ollama Cloud" },
-    "providerOpenAICompatible": { "message": "OpenAI 互換エンドポイント" },
-    "modelUnspecified": { "message": "モデル未指定" },
-    "providerApiKeyRequired": { "message": "$provider$ API Key を入力してください", "placeholders": { "provider": { "content": "$1" } } },
-    "providerModelRequired": { "message": "$provider$ のモデルを 1 つ以上選択してください", "placeholders": { "provider": { "content": "$1" } } },
-    "azureFieldsRequired": { "message": "Azure OpenAI の API Key、Endpoint、Deployment Name を入力してください" },
-    "apiEndpointRequired": { "message": "API Endpoint を入力してください" },
-    "modelSelectionRequired": { "message": "モデルを 1 つ以上選択してください" },
-    "modelNameRequired": { "message": "モデル名を入力してください" },
-    "ollamaFieldsRequired": { "message": "Ollama API Endpoint とモデル名を入力してください" },
-    "ollamaModelRequired": { "message": "Ollama のモデル名を入力してください" },
-    "unknownProviderType": { "message": "不明なプロバイダー種別です" },
-    "connectionTestFailed": { "message": "🔴 接続に失敗しました：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "deleteProviderConfirm": { "message": "プロバイダー「$provider$」を削除しますか？", "placeholders": { "provider": { "content": "$1" } } },
-    "activeModelChanged": { "message": "使用モデルを $model$ に切り替えました", "placeholders": { "model": { "content": "$1" } } },
-    "modelActionFailed": { "message": "操作に失敗しました：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "apiResponseError": { "message": "API 応答エラー：$status$ $error$", "placeholders": { "status": { "content": "$1" }, "error": { "content": "$2" } } },
-    "noModelsFound": { "message": "使用可能なモデル名が見つかりません" },
-    "customModelNamePrompt": { "message": "手動で追加するモデル名を入力してください：" },
-    "customModelAdded": { "message": "モデル $model$ を追加して選択しました", "placeholders": { "model": { "content": "$1" } } },
-    "ollamaConnectionFailed": { "message": "Ollama サービスに接続できませんでした" },
-    "loadedModelsPrompt": { "message": "次のモデル名を読み込みました。選択するモデル名をコピーするか入力してください：" },
-    "modelSelected": { "message": "モデル $model$ を選択しました", "placeholders": { "model": { "content": "$1" } } },
-    "modelsLoaded": { "message": "$count$ 個のモデルを読み込みました", "placeholders": { "count": { "content": "$1" } } },
-    "screenshotMode": { "message": "スクリーンショットモード" },
-    "screenshot": { "message": "スクリーンショット" },
-    "screenshotEnabledState": { "message": "スクリーンショットあり" },
-    "screenshotDisabledState": { "message": "スクリーンショットなし" },
-    "modeSwitch": { "message": "モード切替" },
-    "agentEnabledState": { "message": "エージェントモード" },
-    "inquiryEnabledState": { "message": "質問モード" },
-    "modeToggleAria": { "message": "$label$：現在は$current$。クリックして$next$に切り替え", "placeholders": { "label": { "content": "$1" }, "current": { "content": "$2" }, "next": { "content": "$3" } } },
-    "reasoningDynamic": { "message": "動的" },
-    "reasoningOff": { "message": "オフ" },
-    "reasoningMinimal": { "message": "最低" },
-    "reasoningLow": { "message": "低" },
-    "reasoningMedium": { "message": "中" },
-    "reasoningHigh": { "message": "高" },
-    "reasoningExtraHigh": { "message": "非常に高い" },
-    "reasoningMaximum": { "message": "最大" },
-    "reasoningToken": { "message": "$count$ Token", "placeholders": { "count": { "content": "$1" } } },
-    "inputUsingProvider": { "message": "$provider$（$model$）で回答します（$hint$）", "placeholders": { "provider": { "content": "$1" }, "model": { "content": "$2" }, "hint": { "content": "$3" } } },
-    "shiftEnterHint": { "message": "Shift+Enter で改行" },
-    "reasoningBudgetHint": { "message": "スライダーで推論 Token 予算を調整" },
-    "reasoningLevelHint": { "message": "スライダーでこのモデルの推論強度を調整" },
-    "switchProviderModelWithReasoning": { "message": "AI プロバイダーとモデルを切り替え。ホバーで推論強度を調整" },
-    "openOptionsFailedMessage": { "message": "❌ **オプションを開けませんでした**\n\n後でもう一度お試しください。" },
-    "submitQuestion": { "message": "質問を送信" },
-    "disableScreenshot": { "message": "スクリーンショットを無効化" },
-    "enableScreenshot": { "message": "スクリーンショットを有効化" },
-    "switchToInquiryMode": { "message": "質問モードに切り替え（内容に関する回答のみ）" },
-    "switchToAgentMode": { "message": "エージェントモードに切り替え（ツール呼び出しを許可）" },
-    "customCommand": { "message": "カスタムスキル" },
-    "statusPlanning": { "message": "リクエストとページの状態を分析しています。" },
-    "statusToolCallingFallback": { "message": "このエンドポイントはツール呼び出しに対応していないため、テキストモードで続行します。" },
-    "statusOutputLimitRetry": { "message": "出力上限付近で回答が切り捨てられました。出力上限を増やして再試行します。" },
-    "statusEmptyResponseRetry": { "message": "表示できる内容がありませんでした。もう一度試します。" },
-    "statusServiceRetry": { "message": "サービスが一時的に不安定です。まもなく再試行します。" },
-    "httpError": { "message": "HTTP $status$ $statusText$", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" } } },
-    "agentEnabledDescription": { "message": "複数ステップのツール呼び出しで現在のページを分析・操作できます。" },
-    "agentEnabledTitle": { "message": "エージェント：有効" },
-    "agentModeBriefEnabled": { "message": "🤖 **エージェントモードを有効にしました**" },
-    "agentModeDetailedEnabled": { "message": "✅ **エージェントモードを有効にしました**\n\nエージェントモードに切り替えました。ページ HTML とツール呼び出しを使って現在のページを分析・操作できます。この設定は再読み込み後も保持されます。" },
-    "agentModeNoticeEnabled": { "message": "🤖 **エージェントモードは有効です**\n複数ステップのツール呼び出しで現在のページを分析・操作します。" },
-    "agentModeRequiredForImages": { "message": "画像コンテキストを手動で追加するには、エージェントモードに切り替えてください。" },
-    "annotationAdded": { "message": "注釈付きスクリーンショットを追加しました。送信時に再キャプチャは行いません。" },
-    "annotationCancelled": { "message": "注釈がキャンセルされたか、注釈付きスクリーンショットを取得できませんでした。" },
-    "annotationEmpty": { "message": "追加できる注釈付きスクリーンショットを取得できませんでした。" },
-    "annotationStarted": { "message": "注釈モードを開始しました：ページ要素をクリックするか、左ボタンを押したまま描画してください。" },
-    "builtInCommandCopyText": { "message": "**組み込みスキル：**\n- /clear - 履歴を消去（Ctrl+L も可）\n- /summary - ページを要約" },
-    "clearHistoryShortcut": { "message": "履歴を消去（Ctrl+L）" },
-    "clipboardNoImage": { "message": "クリップボードに使用できる画像がありません。" },
-    "customCommandTemplateVariablesError": { "message": "❌ **スキル $command$ のプロンプトに ${変数} が含まれています。スキル名を入力してから Tab で展開し、入力してください。**", "placeholders": { "command": { "content": "$1" } } },
-    "customCommandsCopyHeading": { "message": "スキル：" },
-    "dropNoImage": { "message": "ドロップした内容に使用できる画像がありません。" },
-    "imageDropFailed": { "message": "画像を追加できませんでした：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "imagePasteFailed": { "message": "画像を貼り付けられませんでした：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "imageUploadFailed": { "message": "画像をアップロードできませんでした：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "imagesAdded": { "message": "$count$ 枚の画像を追加しました。モデルに送信できます。", "placeholders": { "count": { "content": "$1" } } },
-    "imagesAlreadyAdded": { "message": "これらの画像は現在の質問にすでに追加されています。" },
-    "inquiryEnabledDescription": { "message": "ページ内容に基づいて回答し、ページツールは呼び出しません。" },
-    "inquiryEnabledTitle": { "message": "質問：有効" },
-    "inquiryModeBriefEnabled": { "message": "💬 **質問モードを有効にしました**" },
-    "inquiryModeDetailedEnabled": { "message": "💬 **質問モードを有効にしました**\n\n質問モードに切り替えました。ページ内容に基づいて回答し、ページツールは呼び出しません。手動で追加した画像コンテキストも無効になります。この設定は再読み込み後も保持されます。" },
-    "inquiryModeNoticeEnabled": { "message": "💬 **質問モードは有効です**\nページ内容に基づいて回答し、ページツールは呼び出しません。" },
-    "maxImagesAdded": { "message": "追加できる画像は最大 $max$ 枚です。先頭の $count$ 枚を追加しました。", "placeholders": { "max": { "content": "$1" }, "count": { "content": "$2" } } },
-    "maxImagesAllowed": { "message": "追加できる画像は最大 $max$ 枚です。", "placeholders": { "max": { "content": "$1" } } },
-    "noImageDetected": { "message": "追加できる画像が見つかりませんでした。" },
-    "noImageFiles": { "message": "追加できる画像ファイルがありません。" },
-    "openCustomCommands": { "message": "環境設定を開いてすべてのスキルを表示" },
-    "screenshotDisabledDescription": { "message": "ページのテキストのみを分析し、スクリーンショットは自動添付しません。" },
-    "screenshotDisabledDetailed": { "message": "⭕ **スクリーンショット機能を無効にしました**\n\nスクリーンショットを自動取得しなくなります。質問ではテキストのみを使用します。この設定は再読み込み後も保持されます。" },
-    "screenshotDisabledTitle": { "message": "スクリーンショット：無効" },
-    "screenshotEnabledDescription": { "message": "質問時に現在のビューポートのスクリーンショットを自動添付します。" },
-    "screenshotEnabledDetailed": { "message": "✨ **スクリーンショット機能を有効にしました！** 質問の分析にスクリーンショットを含めます。この設定は再読み込み後も保持されます。" },
-    "screenshotEnabledTitle": { "message": "スクリーンショット：有効" },
-    "screenshotModeBriefDisabled": { "message": "⭕ **スクリーンショットモードを無効にしました**" },
-    "screenshotModeBriefEnabled": { "message": "📸 **スクリーンショットモードを有効にしました**" },
-    "screenshotModeNoticeDisabled": { "message": "📝 **スクリーンショットモードは無効です**\nAskPage は現在のページテキストのみを分析します。" },
-    "screenshotModeNoticeEnabled": { "message": "📸 **スクリーンショットモードは有効です**\n現在のビューポートのスクリーンショットを補助コンテキストとして自動添付します。" },
-    "screenshotRequiredForAnnotation": { "message": "現在の画面に注釈を付けるには、スクリーンショット機能を有効にしてください。" },
-    "screenshotTestFailed": { "message": "❌ **スクリーンショットテストに失敗しました**\n\n機能は有効ですがキャプチャに失敗しました。ブラウザーの権限設定を確認してください。" },
-    "screenshotTestStarting": { "message": "✅ **スクリーンショット機能を有効にしました**\n\n🔄 キャプチャをテストしています..." },
-    "screenshotTestSucceeded": { "message": "📸 **スクリーンショットテストに成功しました！**\n\n**スクリーンショット情報：**\n- 📏 画像サイズ：$imageSize$ KB\n- 🔗 形式：PNG (Base64)\n- 📊 データ長：$dataLength$ 文字\n- 🎯 Base64 データ長：$base64Length$ 文字\n\n**取得したスクリーンショットのプレビュー：**", "placeholders": { "imagesize": { "content": "$1" }, "datalength": { "content": "$2" }, "base64length": { "content": "$3" } } },
-    "selectImageFile": { "message": "使用できる画像ファイルを選択してください。" },
-    "selectedTextCopyText": { "message": "🎯 **選択テキストを検出**（$count$ 文字）\n\n選択テキストを主な対象として質問できます。\n\n**選択内容：**\n$text$$mode$\n\n💡 $commands$", "placeholders": { "count": { "content": "$1" }, "text": { "content": "$2" }, "mode": { "content": "$3" }, "commands": { "content": "$4" } } },
-    "selectedTextDetected": { "message": "選択テキストを検出" },
-    "selectedTextIntro": { "message": "選択テキストを主な対象として分析します。$count$ 文字", "placeholders": { "count": { "content": "$1" } } },
-    "summaryTemplateVariablesError": { "message": "❌ **/summary のプロンプトに ${変数} が含まれています。/summary 入力後に Tab で展開して入力してください。**" },
-    "unknownCommandError": { "message": "❌ **不明なスキル：$command$**\n\n使用できるスキル：\n$commands$\n\n環境設定でスキルを追加することもできます。", "placeholders": { "command": { "content": "$1" }, "commands": { "content": "$2" } } },
-    "usageIntro": { "message": "現在のページについて直接質問するか、先にテキストを選択してください。" },
-    "usageTip": { "message": "使い方" },
-    "usageTipCopyText": { "message": "💡 **使い方：**\n\nこのページについて直接質問するか、ページのテキストを選択してから質問できます。$mode$\n\n$commands$", "placeholders": { "mode": { "content": "$1" }, "commands": { "content": "$2" } } },
-    "imageContextTitleWithAnnotation": { "message": "画像コンテキスト（アップロード、貼り付け、ドロップ、画面への注釈）" },
-    "imageContextMetaWithCount": { "message": "PNG / JPG / WebP など、1 ファイル 10 MB まで · $count$/$max$", "placeholders": { "count": { "content": "$1" }, "max": { "content": "$2" } } },
-    "openFullImage": { "message": "クリックして $index$ 枚目の画像全体を開く", "placeholders": { "index": { "content": "$1" } } },
-    "imagePreviewTitle": { "message": "画像プレビュー $index$ - AskPage", "placeholders": { "index": { "content": "$1" } } },
-    "imagePreviewHeading": { "message": "画像プレビュー $index$", "placeholders": { "index": { "content": "$1" } } },
-    "questionImageAlt": { "message": "AskPage の質問画像 $index$", "placeholders": { "index": { "content": "$1" } } },
-    "removeImage": { "message": "$index$ 枚目の画像を削除", "placeholders": { "index": { "content": "$1" } } },
-    "screenshotPreviewTitle": { "message": "スクリーンショットプレビュー - AskPage" },
-    "screenshotPreviewHeading": { "message": "スクリーンショットプレビュー" },
-    "screenshotPreviewAlt": { "message": "AskPage スクリーンショットプレビュー" },
-    "openFullScreenshot": { "message": "クリックしてスクリーンショット全体を開く" },
-    "openQuestionScreenshot": { "message": "質問時のスクリーンショット全体を開く" },
-    "questionScreenshotAlt": { "message": "質問時の画面スクリーンショット" },
-    "viewOriginalSize": { "message": "クリックして元のサイズを表示" },
-    "screenshotInfo": { "message": "📊 サイズ：$width$×$height$ | ファイルサイズ：$size$ KB", "placeholders": { "width": { "content": "$1" }, "height": { "content": "$2" }, "size": { "content": "$3" } } },
-    "copyScreenshotBase64": { "message": "スクリーンショットの Base64 データをコピー" },
-    "copyToClipboard": { "message": "クリップボードにコピー" },
-    "userMessagePrefix": { "message": "あなた" },
-    "screenAnnotationMode": { "message": "AskPage 画面注釈モード" },
-    "screenAnnotationInstructions": { "message": "マウスを動かして DOM 要素を囲み、クリックして選択します。左ボタンを押したまま描画すると DOM は選択されません。" },
-    "collapse": { "message": "折りたたむ" },
-    "expand": { "message": "展開" },
-    "collapseCode": { "message": "コードを折りたたむ" },
-    "expandCode": { "message": "コード全体を展開" },
-    "copyCode": { "message": "コードをコピー" },
-    "openCodePen": { "message": "CodePen で開く" },
-    "codePenOpened": { "message": "開きました" },
-    "codePenFailed": { "message": "失敗" },
-    "expandAll": { "message": "すべて展開" },
-    "imagePreviewSize": { "message": "画像サイズ：約 $size$ KB", "placeholders": { "size": { "content": "$1" } } },
-    "serviceWorkerDomainNotAllowed": { "message": "$provider$ Service Worker は他のドメインを呼び出せません。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerEndpointNotAllowed": { "message": "$provider$ Service Worker はこの API エンドポイントを呼び出せません。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerRequestFailed": { "message": "$provider$ Service Worker のリクエストに失敗しました。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerPostOnly": { "message": "$provider$ Service Worker では POST リクエストのみ使用できます。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerApiKeyRequired": { "message": "$provider$ API Key を空にすることはできません。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerInvalidJson": { "message": "$provider$ のリクエスト本文は有効な JSON ではありません。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerInvalidRequest": { "message": "$provider$ のリクエスト本文の形式が正しくありません。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerDuplicateResponse": { "message": "$provider$ Service Worker がレスポンス情報を重複して返しました。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerInvalidHttpStatus": { "message": "$provider$ Service Worker が無効な HTTP ステータスを返しました。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerNoResponseInfo": { "message": "$provider$ Service Worker からレスポンス情報がまだ返されていません。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerNoHttpResponse": { "message": "$provider$ Service Worker から HTTP レスポンスが返されませんでした。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerDisconnected": { "message": "$provider$ Service Worker との接続が中断されました。", "placeholders": { "provider": { "content": "$1" } } },
-    "imageFileTooLarge": { "message": "画像ファイルが 10MB の上限を超えています。" },
-    "invalidImageFile": { "message": "ファイルの内容が有効な画像ではありません。" },
-    "imageReadFailed": { "message": "画像の内容を読み取れません。" },
-    "droppedImageFetchFailed": { "message": "ドロップした画像を読み取れません（$status$ $statusText$）。", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" } } },
-    "droppedContentNotImage": { "message": "ドロップした内容は画像ではありません。" },
-    "codeLanguagePlainText": { "message": "プレーンテキスト" },
-    "codeLanguage": { "message": "コード" },
-    "autoDetectedLanguage": { "message": "自動判定：$language$", "placeholders": { "language": { "content": "$1" } } },
-    "retryDelaySeconds": { "message": "$seconds$ 秒", "placeholders": { "seconds": { "content": "$1" } } },
-    "retryExhausted": { "message": "$message$ は $count$ 回再試行しても失敗しました。", "placeholders": { "message": { "content": "$1" }, "count": { "content": "$2" } } },
-    "statusPlanningWithProvider": { "message": "$provider$ にタスクの計画を依頼しています…", "placeholders": { "provider": { "content": "$1" } } },
-    "statusAnsweringWithProvider": { "message": "$provider$ にページの分析と回答を依頼しています…", "placeholders": { "provider": { "content": "$1" } } },
-    "statusRetrying": { "message": "$provider$ は $reason$。$delay$ 後に再試行します（$retryCount$/$maxRetries$）…", "placeholders": { "provider": { "content": "$1" }, "reason": { "content": "$2" }, "delay": { "content": "$3" }, "retrycount": { "content": "$4" }, "maxretries": { "content": "$5" } } },
-    "statusToolCallingFallbackDetailed": { "message": "$provider$ はツール呼び出しに対応していないため、通常のテキストモードで続行します…", "placeholders": { "provider": { "content": "$1" } } },
-    "statusEmptyResponseOutputLimitRetry": { "message": "$provider$ から内容が返らず、出力上限に達した可能性があるため、上限を増やして再試行します…", "placeholders": { "provider": { "content": "$1" } } },
-    "statusEmptyResponseRetryDetailed": { "message": "$provider$ から内容が返らないため、自動的に再試行します…", "placeholders": { "provider": { "content": "$1" } } },
-    "statusGeminiOutputLimitRetry": { "message": "$provider$ から内容が返らず、出力上限に達した可能性があるため、モデルの最大出力上限で再試行します…", "placeholders": { "provider": { "content": "$1" } } },
-    "statusToolSelected": { "message": "$provider$ がツール $tools$ を選択しました。実行を準備しています…", "placeholders": { "provider": { "content": "$1" }, "tools": { "content": "$2" } } },
-    "statusToolExecuting": { "message": "ツール $tool$ を実行しています（$index$/$total$）…", "placeholders": { "tool": { "content": "$1" }, "index": { "content": "$2" }, "total": { "content": "$3" } } },
-    "statusToolResults": { "message": "ツール $tools$ を実行しました。結果を $provider$ に返しています…", "placeholders": { "tools": { "content": "$1" }, "provider": { "content": "$2" } } },
-    "toolCallLimitExceeded": { "message": "ツール呼び出し回数の上限に達したため、無限ループを防ぐ目的で実行を中止しました。" },
-    "invalidProviderApiKey": { "message": "$provider$ API Key が無効です。$provider$ API Key の設定を確認してください。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerRequestForbidden": { "message": "$provider$ がリクエストを拒否しました。API 権限またはモデルのアクセス設定を確認してください。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerModelNotFound": { "message": "指定した $provider$ モデルが見つかりません。モデル設定を確認してください。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerRateLimited": { "message": "$provider$ が混雑しているか、リクエスト頻度が高すぎます。後でもう一度お試しください。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerUnavailable": { "message": "$provider$ は一時的に利用できません。後でもう一度お試しください。", "placeholders": { "provider": { "content": "$1" } } },
-    "httpStatusDetails": { "message": "（HTTP $status$$statusText$）", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" } } },
-    "retryReasonTimeout": { "message": "リクエストがタイムアウトしました" },
-    "retryReasonNetwork": { "message": "ネットワーク接続エラー" },
-    "retryReasonResponseFormat": { "message": "レスポンス形式エラー" },
-    "retryReasonContextWindow": { "message": "コンテキストウィンドウ超過" },
-    "retryReasonUnauthorized": { "message": "認証に失敗しました" },
-    "retryReasonForbidden": { "message": "権限がありません" },
-    "retryReasonResourceNotFound": { "message": "リソースが見つかりません" },
-    "retryReasonInvalidRequest": { "message": "リクエスト形式エラー" },
-    "retryReasonQuota": { "message": "クォータを使い切りました" },
-    "retryReasonRateLimit": { "message": "サービスが混雑しているか、リクエストが多すぎます" },
-    "retryReasonServiceError": { "message": "一時的なサービスエラー" },
-    "retryReasonRequestFailed": { "message": "リクエストに失敗しました" },
-    "retryReasonUnknown": { "message": "不明なエラー" },
-    "requestTimeoutMessage": { "message": "$provider$ がタイムアウトしました。サービスが混雑しているか、ネットワークが不安定な可能性があります。", "placeholders": { "provider": { "content": "$1" } } },
-    "networkErrorMessage": { "message": "$provider$ サービスに接続できません。ネットワークが不安定か、サービスが応答していない可能性があります。", "placeholders": { "provider": { "content": "$1" } } },
-    "invalidResponseMessage": { "message": "$provider$ から解析できないデータが返されました。サービスが一時的に利用できない可能性があります。", "placeholders": { "provider": { "content": "$1" } } },
-    "contextWindowExceeded": { "message": "$provider$ から、ページスナップショットと会話全体がモデルのコンテキストウィンドウを超えたと報告されました$statusSuffix。/clear を実行して新しい会話を開始してください。AskPage は既存の会話を自動的に削除または切り詰めません。$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "errorMessageLabel": { "message": "エラーメッセージ" },
-    "providerResourceNotFound": { "message": "指定した $provider$ のモデル、エンドポイント、デプロイ設定が見つかりません。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerInvalidRequest": { "message": "$provider$ がリクエストを拒否しました。パラメーター形式が正しくない可能性があります。$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerQuotaExceeded": { "message": "$provider$ のクォータまたは使用量の上限に達しました$statusSuffix。コンテキストウィンドウまたは TPM（tokens per minute）の上限が原因の可能性があります。モデルを変更するか、入力を減らすために通常モードを使用してください。エラーメッセージ：$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerRateLimitedWithDetails": { "message": "$provider$ が混雑しているか、リクエスト頻度が高すぎます$statusSuffix。$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerServiceError": { "message": "$provider$ で一時的なサービスエラーが発生しました$statusSuffix。$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerUnknownError": { "message": "$provider$ API の呼び出しに失敗しました。原因は不明です。", "placeholders": { "provider": { "content": "$1" } } },
-    "streamingUnsupported": { "message": "このブラウザーはストリーミングレスポンスの読み取りに対応していません。" },
-    "openaiRefusal": { "message": "$provider$ がリクエストを拒否しました：$refusal$", "placeholders": { "provider": { "content": "$1" }, "refusal": { "content": "$2" } } },
-    "openaiOutputLimit": { "message": "$provider$ の出力長上限に達しました。質問の範囲を狭めてもう一度お試しください。", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiContentFiltered": { "message": "$provider$ はコンテンツフィルタリングによりテキストを返しませんでした。質問を調整してもう一度お試しください。", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiToolCallNoText": { "message": "$provider$ からツール呼び出しの状態は返されましたが、表示できるテキストがありません。", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiFunctionCallNoText": { "message": "$provider$ から関数呼び出しの状態は返されましたが、表示できるテキストがありません。", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiNonDisplayableStop": { "message": "$provider$ の応答は完了しましたが、表示できるテキストがありません。もう一度お試しいただくか、質問の範囲を狭めてください。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerNoCandidates": { "message": "$provider$ から候補が返されませんでした。モデルがまだ回答を生成していない可能性があります。後でもう一度お試しください。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerNonDisplayableResult": { "message": "$provider$ から表示できるテキストを含まない結果が返されました。もう一度お試しいただくか、質問の範囲を狭めてください。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptSafety": { "message": "$provider$ は安全性の制限によりこのリクエストを処理しませんでした$details$。質問を調整してもう一度お試しください。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiPromptBlocklist": { "message": "$provider$ はリクエストにブロックされた語句が含まれているため処理しませんでした。質問を調整してもう一度お試しください。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptProhibited": { "message": "$provider$ はこのリクエストを禁止コンテンツと判定したため、回答を返しませんでした。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptImageSafety": { "message": "$provider$ は画像が安全性の制限に該当したため、回答を返しませんでした。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptOther": { "message": "$provider$ はこのリクエストを処理しませんでした。後でもう一度お試しください。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiOutputLimit": { "message": "$provider$ の出力長上限に達しました$details$。質問の範囲を狭めてもう一度お試しください。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiSafety": { "message": "$provider$ は安全性の制限によりテキストを返しませんでした$details$。質問を調整してもう一度お試しください。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiRecitation": { "message": "$provider$ は引用に関する制限によりテキストを返しませんでした$details$。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiLanguage": { "message": "$provider$ は言語に関する制限によりテキストを返しませんでした$details$。繁体字中国語または英語でお試しください。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiBlocklist": { "message": "$provider$ は応答がブロックされた語句の制限に該当したため、テキストを返しませんでした。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiProhibited": { "message": "$provider$ は応答が禁止コンテンツの制限に該当したため、テキストを返しませんでした。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiSensitiveInfo": { "message": "$provider$ は応答に機密性の高い個人情報が含まれる可能性があるため、テキストを返しませんでした。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiMalformedToolCall": { "message": "$provider$ から不正な形式のツール呼び出しが返されました$details$。もう一度お試しください。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiOther": { "message": "$provider$ は表示できるテキストを生成しませんでした$details$。後でもう一度お試しください。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiNoCandidates": { "message": "$provider$ から候補が返されませんでした。リクエストがブロックされたか、モデルが回答を生成していない可能性があります。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiNonDisplayableResult": { "message": "$provider$ から表示できるテキストを含まない結果が返されました$details$。もう一度お試しいただくか、質問の範囲を狭めてください。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "invalidStreamingData": { "message": "$provider$ から解析できないストリーミングデータが返されました：$data$", "placeholders": { "provider": { "content": "$1" }, "data": { "content": "$2" } } },
-    "streamingApiError": { "message": "ストリーミング API エラー：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "httpFallbackError": { "message": "HTTP $status$ $statusText$：$error$", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" }, "error": { "content": "$3" } } },
-    "errorPrefix": { "message": "エラー：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "providerApiKeyMissing": { "message": "拡張機能のアイコンをクリックして $provider$ API Key を設定してください。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerApiKeyDecryptFailed": { "message": "$provider$ API Key を復号できません。もう一度設定してください。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerEndpointMissing": { "message": "拡張機能のアイコンをクリックして $provider$ Endpoint を設定してください。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerDeploymentMissing": { "message": "拡張機能のアイコンをクリックして $provider$ Deployment Name を設定してください。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerMissing": { "message": "拡張機能のアイコンをクリックして AI プロバイダーを設定してください。" },
-    "providerDeploymentNotFound": { "message": "指定したデプロイが見つかりません。Endpoint と Deployment Name の設定を確認してください。" },
-    "providerAuthenticationFailed": { "message": "$provider$ の認証に失敗しました：$error$", "placeholders": { "provider": { "content": "$1" }, "error": { "content": "$2" } } },
-    "gptToolCompatibility": { "message": "GPT-5.6 で function tools を使用する場合は Responses API が必要です。Chat Completions は使用できません。" },
-    "unknownTool": { "message": "不明なツール" },
-    "toolListMore": { "message": "$names$ など $count$ 個のツール", "placeholders": { "names": { "content": "$1" }, "count": { "content": "$2" } } },
-    "success": { "message": "成功" },
-    "failure": { "message": "失敗" },
-    "toolExecutionSingle": { "message": "$tools$ ツールを実行しました：$result$", "placeholders": { "tools": { "content": "$1" }, "result": { "content": "$2" } } },
-    "toolExecutionAllSuccess": { "message": "$tools$ ツールを実行しました。すべて成功しました", "placeholders": { "tools": { "content": "$1" } } },
-    "toolExecutionAllFailure": { "message": "$tools$ ツールを実行しました。すべて失敗しました", "placeholders": { "tools": { "content": "$1" } } },
-    "toolExecutionMixed": { "message": "$tools$ ツールを実行しました。成功 $successCount$ 件、失敗 $failureCount$ 件", "placeholders": { "tools": { "content": "$1" }, "successcount": { "content": "$2" }, "failurecount": { "content": "$3" } } },
-    "usageDetails": { "message": "（$details$）", "placeholders": { "details": { "content": "$1" } } },
-    "usageListSeparator": { "message": "、" },
-    "usageLine": { "message": "- $label$：$value$$suffix$", "placeholders": { "label": { "content": "$1" }, "value": { "content": "$2" }, "suffix": { "content": "$3" } } },
-    "usageInput": { "message": "入力" },
-    "usageOutput": { "message": "出力" },
-    "usageToolInput": { "message": "ツール入力" },
-    "usageTotal": { "message": "合計" },
-    "usageCache": { "message": "キャッシュ $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageCacheWrite": { "message": "キャッシュ書き込み $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageReasoning": { "message": "推論 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageAcceptedPrediction": { "message": "受け入れた予測 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageRejectedPrediction": { "message": "拒否した予測 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageSummary": { "message": "Token 使用量の概要：\n$lines$", "placeholders": { "lines": { "content": "$1" } } },
-    "toolCallInProgress": { "message": "🛠️ $tool$ を実行しています", "placeholders": { "tool": { "content": "$1" } } },
-    "toolResultFailure": { "message": "（失敗）" },
-    "toolResultSummary": { "message": "\n\n結果の概要：$message$", "placeholders": { "message": { "content": "$1" } } },
-    "toolResultMessageSuffix": { "message": "：$message$", "placeholders": { "message": { "content": "$1" } } },
-    "toolResultReceived": { "message": "📥 $tool$ が結果を返しました$status$$message$", "placeholders": { "tool": { "content": "$1" }, "status": { "content": "$2" }, "message": { "content": "$3" } } },
-    "toolResultTraceText": { "message": "📥 **$tool$** が結果を返しました$status$。$summary$\n\n$payload$", "placeholders": { "tool": { "content": "$1" }, "status": { "content": "$2" }, "summary": { "content": "$3" }, "payload": { "content": "$4" } } },
-    "executionDuration": { "message": "所要時間：$duration$", "placeholders": { "duration": { "content": "$1" } } },
-    "agentExecutionCompleted": { "message": "AskPage は $count$ ステップを実行して完了しました。$duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
-    "agentExecutionStopped": { "message": "AskPage は $count$ ステップで停止しました。$duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
-    "endpointToolFallbackMessage": { "message": "⚠️ **この $provider$ エンドポイントは tool calling を完全にはサポートしていません**\n\n自動的に通常のテキストモードへ切り替えたため、今回のリクエストではページの DOM やフォームを直接操作できません。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
-    "agentToolFallbackMessage": { "message": "⚠️ **$provider$ プロバイダーは agent モードでの tool calling を完全にはサポートしていません**\n\n自動的に通常のテキストモードへ切り替えたため、今回のリクエストではページの DOM やフォームを直接操作できません。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } }
+    "extensionName": {
+        "message": "頁問 AskPage"
+    },
+    "extensionLogoAlt": {
+        "message": "AskPage のロゴ"
+    },
+    "extensionDescription": {
+        "message": "設定した AI API を使って現在のページについて質問できます"
+    },
+    "commandToggleDialog": {
+        "message": "AskPage ダイアログを開く"
+    },
+    "commandSwitchProvider": {
+        "message": "AI プロバイダーを切り替え"
+    },
+    "settingsMigrationTitle": {
+        "message": "AskPage：設定を移行しました"
+    },
+    "settingsMigrationDescription": {
+        "message": "設定が複数モデルに対応しました。まもなく完全な設定ページへ移動します..."
+    },
+    "codepenTitle": {
+        "message": "CodePen - AskPage を開いています"
+    },
+    "codepenDescription": {
+        "message": "CodePen 用コードを準備中..."
+    },
+    "codepenOpeningDescription": {
+        "message": "まもなく新しいウィンドウでエディターを開きます"
+    },
+    "codepenMissingData": {
+        "message": "コードデータが見つかりません"
+    },
+    "closeAndRetry": {
+        "message": "このタブを閉じて、もう一度お試しください。"
+    },
+    "codepenOpenFailed": {
+        "message": "CodePen を開けませんでした"
+    },
+    "unknownErrorRetry": {
+        "message": "不明なエラーが発生しました。もう一度お試しください。"
+    },
+    "preferencesTitle": {
+        "message": "AskPage：設定"
+    },
+    "preferencesDescription": {
+        "message": "AI プロバイダー、スキル、システムプロンプトを設定します"
+    },
+    "resetSettings": {
+        "message": "設定をリセット"
+    },
+    "exportSettings": {
+        "message": "エクスポート"
+    },
+    "importSettings": {
+        "message": "インポート"
+    },
+    "aiProviders": {
+        "message": "AI プロバイダー"
+    },
+    "customSlashCommands": {
+        "message": "スキル管理"
+    },
+    "adjustSystemPrompt": {
+        "message": "システムプロンプトを調整"
+    },
+    "aiProviderSettings": {
+        "message": "AI プロバイダー設定"
+    },
+    "aiProviderSettingsDescription": {
+        "message": "複数の AI プロバイダーを設定し、1 つ以上のモデルを有効にします。モデル名を選択すると使用中のモデルを切り替えられます。"
+    },
+    "addAiProvider": {
+        "message": "AI プロバイダーを追加"
+    },
+    "slashCommandManagement": {
+        "message": "スキル管理"
+    },
+    "slashCommandManagementDescription": {
+        "message": "組み込みスキルとカスタムスキルを管理します"
+    },
+    "addCustomSlashCommand": {
+        "message": "スキルを追加"
+    },
+    "systemPromptDescription": {
+        "message": "この内容は組み込みシステムプロンプトの末尾に追加されます。空欄の場合は追加しません。組み込みシステムプロンプトは上書きされません。"
+    },
+    "additionalPrompt": {
+        "message": "追加プロンプト"
+    },
+    "additionalPromptPlaceholder": {
+        "message": "システムプロンプトに追加する内容を入力..."
+    },
+    "additionalPromptSaveDescription": {
+        "message": "保存後、すべての AI プロバイダーがリクエストにこの追加プロンプトを適用します。"
+    },
+    "characterCount": {
+        "message": "$count$ 文字",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "generalSettingsTab": {
+        "message": "一般設定"
+    },
+    "interfaceIndicatorsTitle": {
+        "message": "インターフェース表示効果"
+    },
+    "interfaceIndicatorsDescription": {
+        "message": "AskPage ダイアログ以外でページ上に表示される視覚的な合図を調整します。"
+    },
+    "enableAgentGlowEffect": {
+        "message": "エージェントモード実行中にページの光彩効果を表示"
+    },
+    "enableAgentGlowEffectHelp": {
+        "message": "有効にすると、エージェントモードで質問を送信してから回答が完了するまでの間、ページの周囲にアンバー色の光彩アニメーションが表示され、AskPage が作業中であることを示します。"
+    },
+    "footerPrefix": {
+        "message": "© 2026 このツールの設計・開発・保守："
+    },
+    "footerLink": {
+        "message": "Will 保哥の技術交流センター"
+    },
+    "footerVersion": {
+        "message": " v$version$",
+        "placeholders": {
+            "version": {
+                "content": "$1"
+            }
+        }
+    },
+    "localeLabel": {
+        "message": "インターフェース言語"
+    },
+    "localeAuto": {
+        "message": "自動"
+    },
+    "localeZhTW": {
+        "message": "繁體中文"
+    },
+    "localeEn": {
+        "message": "English"
+    },
+    "localeZhCN": {
+        "message": "简体中文"
+    },
+    "localeJa": {
+        "message": "日本語"
+    },
+    "localeKo": {
+        "message": "한국어"
+    },
+    "editSlashCommand": {
+        "message": "スキルを編集"
+    },
+    "editBuiltInCommand": {
+        "message": "組み込みスキルを編集"
+    },
+    "editCustomCommand": {
+        "message": "スキルを編集"
+    },
+    "addCustomCommand": {
+        "message": "スキルを追加"
+    },
+    "commandName": {
+        "message": "スキル名"
+    },
+    "commandNamePlaceholder": {
+        "message": "例：/help"
+    },
+    "commandNameHelp": {
+        "message": "スキル名は / で始め、英字、数字、アンダースコア、ハイフンのみ使用できます。"
+    },
+    "promptContent": {
+        "message": "プロンプト内容"
+    },
+    "promptContentPlaceholder": {
+        "message": "このスキルの実行時に AI へ送信するプロンプトを入力します。${variableName} で入力欄を作成できます。例：Hi, I'm ${name} from ${country:TW}."
+    },
+    "promptContentHelp": {
+        "message": "プロンプト内で ${variableName} を使うと入力欄を作成できます。スキル実行後に順番に入力します。${variableName:defaultValue} で初期値を設定できます。同名の変数は同期されます。"
+    },
+    "showVariableLabels": {
+        "message": "プロンプト展開時に変数名を表示"
+    },
+    "showVariableLabelsHelp": {
+        "message": "オフの場合、未入力の変数はプレースホルダーとして表示され、入力すると消えます。オンの場合は「変数名：」ラベルを表示し続けます。"
+    },
+    "mode": {
+        "message": "モード"
+    },
+    "modeUnspecified": {
+        "message": "指定なし"
+    },
+    "modeAgent": {
+        "message": "エージェント"
+    },
+    "modeInquiry": {
+        "message": "通常"
+    },
+    "modeHelp": {
+        "message": "スキル実行時にモードを自動で切り替えます。「指定なし」では現在のモードを変更しません。"
+    },
+    "enableScreenshotMode": {
+        "message": "スクリーンショットモードを有効化"
+    },
+    "enableScreenshotModeHelp": {
+        "message": "スキル実行時にスクリーンショットモードを自動で適用します。"
+    },
+    "cancel": {
+        "message": "キャンセル"
+    },
+    "save": {
+        "message": "保存"
+    },
+    "addProviderTitle": {
+        "message": "AI プロバイダーを追加"
+    },
+    "editProviderTitle": {
+        "message": "AI プロバイダーを編集"
+    },
+    "providerType": {
+        "message": "プロバイダーの種類"
+    },
+    "providerCustomName": {
+        "message": "プロバイダーのカスタム名"
+    },
+    "providerCustomNamePlaceholder": {
+        "message": "例：自分の Gemini アカウント"
+    },
+    "enabledModels": {
+        "message": "有効なモデル（1 つ以上選択）"
+    },
+    "geminiGoogleSearchEnabled": {
+        "message": "Grounding with Google Search ツールを有効にする"
+    },
+    "geminiGoogleSearchEnabledWarning": {
+        "message": "⚠ Google AI Studio の無料枠ではこの設定はサポートされておらず、有効にすると 429 クォータエラーが発生します。Tier 1 以上の有料プランでのみ利用できます。"
+    },
+    "apiKeyOptional": {
+        "message": "API Key（任意）"
+    },
+    "leaveBlankIfNotRequired": {
+        "message": "不要な場合は空欄"
+    },
+    "modelName": {
+        "message": "モデル名"
+    },
+    "loadAllModels": {
+        "message": "利用可能なモデルをすべて読み込む"
+    },
+    "enterModelManually": {
+        "message": "モデル名を手動入力"
+    },
+    "loadEndpointModels": {
+        "message": "エンドポイントのモデルを読み込む"
+    },
+    "loadLocalModels": {
+        "message": "ローカルモデルを読み込む"
+    },
+    "loadLatestCloudModels": {
+        "message": "最新のクラウドモデルを読み込む"
+    },
+    "curatedCloudModels": {
+        "message": "厳選した Ollama Cloud モデル ID を内蔵しています。最新の一覧も読み込めます。"
+    },
+    "testConnection": {
+        "message": "接続をテスト"
+    },
+    "ollamaCloudKeyHelp": {
+        "message": "Ollama API Keys で"
+    },
+    "createKeySuffix": {
+        "message": "キーを作成できます。"
+    },
+    "ollamaApiKeysLink": {
+        "message": "Ollama API Keys"
+    },
+    "openAiCompatibleEndpoint": {
+        "message": "OpenAI 互換エンドポイント"
+    },
+    "geminiApiKeyPlaceholder": {
+        "message": "Gemini API Key を入力"
+    },
+    "openaiApiKeyPlaceholder": {
+        "message": "OpenAI API Key を入力"
+    },
+    "azureApiKeyPlaceholder": {
+        "message": "Azure OpenAI API Key を入力"
+    },
+    "azureEndpointPlaceholder": {
+        "message": "例：https://your-resource.openai.azure.com"
+    },
+    "azureDeploymentPlaceholder": {
+        "message": "例：gpt-4o-mini"
+    },
+    "anthropicApiKeyPlaceholder": {
+        "message": "Anthropic API Key を入力"
+    },
+    "deepseekApiKeyPlaceholder": {
+        "message": "DeepSeek API Key を入力"
+    },
+    "openrouterApiKeyPlaceholder": {
+        "message": "OpenRouter API Key を入力"
+    },
+    "groqApiKeyPlaceholder": {
+        "message": "Groq API Key を入力"
+    },
+    "mistralApiKeyPlaceholder": {
+        "message": "Mistral API Key を入力"
+    },
+    "ollamaCloudApiKeyPlaceholder": {
+        "message": "Ollama API Key を入力"
+    },
+    "openAiEndpointPlaceholder": {
+        "message": "例：http://localhost:11434/v1"
+    },
+    "openAiCompatibleModelPlaceholder": {
+        "message": "例：llama3, mistral"
+    },
+    "ollamaEndpointPlaceholder": {
+        "message": "例：http://localhost:11434/v1"
+    },
+    "ollamaModelPlaceholder": {
+        "message": "例：llama3.3, deepseek-r1"
+    },
+    "providerEndpoint": {
+        "message": "エンドポイント"
+    },
+    "apiKey": {
+        "message": "API Key"
+    },
+    "apiEndpoint": {
+        "message": "API Endpoint"
+    },
+    "deploymentName": {
+        "message": "Deployment Name"
+    },
+    "apiVersion": {
+        "message": "API Version"
+    },
+    "loading": {
+        "message": "読み込み中"
+    },
+    "askPage": {
+        "message": "頁問"
+    },
+    "dragTitleBar": {
+        "message": "タイトルバーをドラッグしてダイアログを移動"
+    },
+    "openPreferences": {
+        "message": "設定を開く"
+    },
+    "inputPlaceholder": {
+        "message": "質問を入力して Enter。最大 4 枚の画像を貼り付けまたはドラッグしてコンテキストに追加できます"
+    },
+    "imageContextTitle": {
+        "message": "画像コンテキスト（Ctrl+V またはドラッグで参考画像を追加）"
+    },
+    "imageContextMeta": {
+        "message": "PNG / JPG / WebP などに対応。1 ファイルの上限は 10MB"
+    },
+    "uploadImage": {
+        "message": "画像をアップロード"
+    },
+    "uploadImageTitle": {
+        "message": "画像を選択して今回の質問のコンテキストに追加"
+    },
+    "annotateScreen": {
+        "message": "画面を注釈"
+    },
+    "annotateScreenTitle": {
+        "message": "ダイアログを一時的に隠し、画面を選択または注釈して画像コンテキストに追加"
+    },
+    "ask": {
+        "message": "質問"
+    },
+    "reasoningEffort": {
+        "message": "推論の強度"
+    },
+    "switchProviderModel": {
+        "message": "AI プロバイダーとモデルを切り替え"
+    },
+    "noModelConfigured": {
+        "message": "モデル未設定"
+    },
+    "builtin": {
+        "message": "組み込み"
+    },
+    "edit": {
+        "message": "編集"
+    },
+    "delete": {
+        "message": "削除"
+    },
+    "endpoint": {
+        "message": "エンドポイント"
+    },
+    "noProviders": {
+        "message": "AI プロバイダーがまだ追加されていません。下の「AI プロバイダーを追加」をクリックしてください。"
+    },
+    "addProviderPrompt": {
+        "message": "AI プロバイダーを追加"
+    },
+    "connectionTestSucceeded": {
+        "message": "🟢 接続テストに成功しました"
+    },
+    "testing": {
+        "message": "⏳ テスト中..."
+    },
+    "processing": {
+        "message": "⏳ 処理中..."
+    },
+    "settingsAutoSaved": {
+        "message": "システムプロンプトを自動保存しました。"
+    },
+    "settingsReset": {
+        "message": "設定をリセットしました。"
+    },
+    "settingsExported": {
+        "message": "設定をエクスポートしました。"
+    },
+    "settingsImported": {
+        "message": "設定をインポートしました。再読み込み中..."
+    },
+    "importInvalid": {
+        "message": "インポートに失敗しました：ファイル形式が正しくありません"
+    },
+    "commandSaved": {
+        "message": "スキルを保存しました"
+    },
+    "builtInCommandCannotDelete": {
+        "message": "組み込みスキルは削除できません"
+    },
+    "commandDeleted": {
+        "message": "スキルを削除しました"
+    },
+    "providerSaved": {
+        "message": "プロバイダーを保存しました"
+    },
+    "providerDeleted": {
+        "message": "プロバイダーを削除しました"
+    },
+    "commandClearHistory": {
+        "message": "質問履歴を消去"
+    },
+    "commandSummaryPage": {
+        "message": "このページを要約"
+    },
+    "commandScreenshot": {
+        "message": "スクリーンショットモードを切り替え"
+    },
+    "commandAgent": {
+        "message": "通常モードとエージェントモードを切り替え（エージェントモードではページ HTML とツールを使用）"
+    },
+    "summaryPrompt": {
+        "message": "この記事を Markdown 形式で要約し、「タイトル」「要点」「まとめ」を含めてください。"
+    },
+    "systemPromptLanguageInstruction": {
+        "message": "言語設定で指定された日本語を主な回答言語として使用してください。ユーザーが現在の質問で別の言語を明示的に指定した場合に限り、その言語に切り替えてください。"
+    },
+    "resetSettingsConfirm": {
+        "message": "すべての設定をリセットしますか？\n\nAI プロバイダー、API キー、スキル、質問履歴などが削除されます。"
+    },
+    "importSettingsConfirm": {
+        "message": "この設定ファイルをインポートしますか？現在の設定は上書きされます。"
+    },
+    "invalidVariableName": {
+        "message": "変数名「$name$」は無効です。英字、数字、アンダースコアのみ使用でき、数字で始めることはできません。",
+        "placeholders": {
+            "name": {
+                "content": "$1"
+            }
+        }
+    },
+    "inconsistentVariableDefault": {
+        "message": "変数「$name$」の重複するデフォルト値が一致しません：$first$ と $second$",
+        "placeholders": {
+            "name": {
+                "content": "$1"
+            },
+            "first": {
+                "content": "$2"
+            },
+            "second": {
+                "content": "$3"
+            }
+        }
+    },
+    "commandNameRequired": {
+        "message": "スキル名を入力してください"
+    },
+    "commandNameInvalid": {
+        "message": "スキル名は / で始まり、英字、数字、アンダースコア、ハイフンのみ使用できます。"
+    },
+    "commandNameBuiltinDuplicate": {
+        "message": "組み込みスキルと同じ名前は使用できません。"
+    },
+    "commandNameCustomDuplicate": {
+        "message": "そのスキル名は既存のカスタムスキルで使用されています。"
+    },
+    "promptContentRequired": {
+        "message": "プロンプト内容を入力してください"
+    },
+    "deleteCommandConfirm": {
+        "message": "スキル $command$ を削除しますか？",
+        "placeholders": {
+            "command": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerGemini": {
+        "message": "Google Gemini"
+    },
+    "providerVertex": {
+        "message": "Gemini Enterprise（Vertex AI）"
+    },
+    "gcpProjectId": {
+        "message": "Google Cloud Project ID"
+    },
+    "gcpRegion": {
+        "message": "リージョン / 地域"
+    },
+    "gcpAuthMode": {
+        "message": "認証方式"
+    },
+    "gcpAccessToken": {
+        "message": "Access Token"
+    },
+    "vertexAuthModeApiKey": {
+        "message": "API Key"
+    },
+    "vertexAuthModeBearerToken": {
+        "message": "OAuth 2.0 アクセストークン"
+    },
+    "vertexProjectIdPlaceholder": {
+        "message": "例: corp-genai-2026"
+    },
+    "vertexRegionPlaceholder": {
+        "message": "例: asia-east1"
+    },
+    "vertexApiKeyPlaceholder": {
+        "message": "Vertex API Key を入力してください"
+    },
+    "vertexAccessTokenPlaceholder": {
+        "message": "OAuth 2.0 アクセストークンを入力してください"
+    },
+    "accessToken": {
+        "message": "Access Token"
+    },
+    "providerProjectIdMissing": {
+        "message": "拡張機能アイコンをクリックして $provider$ の Project ID を設定してください。"
+    },
+    "vertexFieldsRequired": {
+        "message": "Google Cloud の Project ID、Region / Location、認証情報を入力してください。"
+    },
+    "vertexProjectIdRequired": {
+        "message": "Google Cloud の Project ID を入力してください。"
+    },
+    "vertexRegionRequired": {
+        "message": "Google Cloud の Region / Location を入力してください。"
+    },
+    "providerOpenAI": {
+        "message": "OpenAI"
+    },
+    "providerAzure": {
+        "message": "Azure OpenAI"
+    },
+    "providerAnthropic": {
+        "message": "Anthropic Claude"
+    },
+    "providerDeepSeek": {
+        "message": "DeepSeek"
+    },
+    "providerOpenRouter": {
+        "message": "OpenRouter"
+    },
+    "providerGroq": {
+        "message": "Groq"
+    },
+    "providerMistral": {
+        "message": "Mistral AI"
+    },
+    "providerOllamaLocal": {
+        "message": "Ollama（ローカル）"
+    },
+    "providerOllamaCloud": {
+        "message": "Ollama Cloud"
+    },
+    "providerOpenAICompatible": {
+        "message": "OpenAI 互換エンドポイント"
+    },
+    "modelUnspecified": {
+        "message": "モデル未指定"
+    },
+    "providerApiKeyRequired": {
+        "message": "$provider$ API Key を入力してください",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerModelRequired": {
+        "message": "$provider$ のモデルを 1 つ以上選択してください",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "azureFieldsRequired": {
+        "message": "Azure OpenAI の API Key、Endpoint、Deployment Name を入力してください"
+    },
+    "apiEndpointRequired": {
+        "message": "API Endpoint を入力してください"
+    },
+    "modelSelectionRequired": {
+        "message": "モデルを 1 つ以上選択してください"
+    },
+    "modelNameRequired": {
+        "message": "モデル名を入力してください"
+    },
+    "ollamaFieldsRequired": {
+        "message": "Ollama API Endpoint とモデル名を入力してください"
+    },
+    "ollamaModelRequired": {
+        "message": "Ollama のモデル名を入力してください"
+    },
+    "unknownProviderType": {
+        "message": "不明なプロバイダー種別です"
+    },
+    "connectionTestFailed": {
+        "message": "🔴 接続に失敗しました：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "deleteProviderConfirm": {
+        "message": "プロバイダー「$provider$」を削除しますか？",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "activeModelChanged": {
+        "message": "使用モデルを $model$ に切り替えました",
+        "placeholders": {
+            "model": {
+                "content": "$1"
+            }
+        }
+    },
+    "modelActionFailed": {
+        "message": "操作に失敗しました：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "apiResponseError": {
+        "message": "API 応答エラー：$status$ $error$",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "error": {
+                "content": "$2"
+            }
+        }
+    },
+    "noModelsFound": {
+        "message": "使用可能なモデル名が見つかりません"
+    },
+    "customModelNamePrompt": {
+        "message": "手動で追加するモデル名を入力してください："
+    },
+    "customModelAdded": {
+        "message": "モデル $model$ を追加して選択しました",
+        "placeholders": {
+            "model": {
+                "content": "$1"
+            }
+        }
+    },
+    "ollamaConnectionFailed": {
+        "message": "Ollama サービスに接続できませんでした"
+    },
+    "loadedModelsPrompt": {
+        "message": "次のモデル名を読み込みました。選択するモデル名をコピーするか入力してください："
+    },
+    "modelSelected": {
+        "message": "モデル $model$ を選択しました",
+        "placeholders": {
+            "model": {
+                "content": "$1"
+            }
+        }
+    },
+    "modelsLoaded": {
+        "message": "$count$ 個のモデルを読み込みました",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "screenshotMode": {
+        "message": "スクリーンショットモード"
+    },
+    "screenshot": {
+        "message": "スクリーンショット"
+    },
+    "screenshotEnabledState": {
+        "message": "スクリーンショットあり"
+    },
+    "screenshotDisabledState": {
+        "message": "スクリーンショットなし"
+    },
+    "modeSwitch": {
+        "message": "モード切替"
+    },
+    "agentEnabledState": {
+        "message": "エージェントモード"
+    },
+    "inquiryEnabledState": {
+        "message": "質問モード"
+    },
+    "modeToggleAria": {
+        "message": "$label$：現在は$current$。クリックして$next$に切り替え",
+        "placeholders": {
+            "label": {
+                "content": "$1"
+            },
+            "current": {
+                "content": "$2"
+            },
+            "next": {
+                "content": "$3"
+            }
+        }
+    },
+    "reasoningDynamic": {
+        "message": "動的"
+    },
+    "reasoningOff": {
+        "message": "オフ"
+    },
+    "reasoningMinimal": {
+        "message": "最低"
+    },
+    "reasoningLow": {
+        "message": "低"
+    },
+    "reasoningMedium": {
+        "message": "中"
+    },
+    "reasoningHigh": {
+        "message": "高"
+    },
+    "reasoningExtraHigh": {
+        "message": "非常に高い"
+    },
+    "reasoningMaximum": {
+        "message": "最大"
+    },
+    "reasoningToken": {
+        "message": "$count$ Token",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "inputUsingProvider": {
+        "message": "$provider$（$model$）で回答します（$hint$）",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "model": {
+                "content": "$2"
+            },
+            "hint": {
+                "content": "$3"
+            }
+        }
+    },
+    "shiftEnterHint": {
+        "message": "Shift+Enter で改行"
+    },
+    "reasoningBudgetHint": {
+        "message": "スライダーで推論 Token 予算を調整"
+    },
+    "reasoningLevelHint": {
+        "message": "スライダーでこのモデルの推論強度を調整"
+    },
+    "switchProviderModelWithReasoning": {
+        "message": "AI プロバイダーとモデルを切り替え。ホバーで推論強度を調整"
+    },
+    "openOptionsFailedMessage": {
+        "message": "❌ **オプションを開けませんでした**\n\n後でもう一度お試しください。"
+    },
+    "submitQuestion": {
+        "message": "質問を送信"
+    },
+    "disableScreenshot": {
+        "message": "スクリーンショットを無効化"
+    },
+    "enableScreenshot": {
+        "message": "スクリーンショットを有効化"
+    },
+    "switchToInquiryMode": {
+        "message": "質問モードに切り替え（内容に関する回答のみ）"
+    },
+    "switchToAgentMode": {
+        "message": "エージェントモードに切り替え（ツール呼び出しを許可）"
+    },
+    "customCommand": {
+        "message": "カスタムスキル"
+    },
+    "statusPlanning": {
+        "message": "リクエストとページの状態を分析しています。"
+    },
+    "statusToolCallingFallback": {
+        "message": "このエンドポイントはツール呼び出しに対応していないため、テキストモードで続行します。"
+    },
+    "statusOutputLimitRetry": {
+        "message": "出力上限付近で回答が切り捨てられました。出力上限を増やして再試行します。"
+    },
+    "statusEmptyResponseRetry": {
+        "message": "表示できる内容がありませんでした。もう一度試します。"
+    },
+    "statusServiceRetry": {
+        "message": "サービスが一時的に不安定です。まもなく再試行します。"
+    },
+    "httpError": {
+        "message": "HTTP $status$ $statusText$",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            }
+        }
+    },
+    "agentEnabledDescription": {
+        "message": "複数ステップのツール呼び出しで現在のページを分析・操作できます。"
+    },
+    "agentEnabledTitle": {
+        "message": "エージェント：有効"
+    },
+    "agentModeBriefEnabled": {
+        "message": "🤖 **エージェントモードを有効にしました**"
+    },
+    "agentModeDetailedEnabled": {
+        "message": "✅ **エージェントモードを有効にしました**\n\nエージェントモードに切り替えました。ページ HTML とツール呼び出しを使って現在のページを分析・操作できます。この設定は再読み込み後も保持されます。"
+    },
+    "agentModeNoticeEnabled": {
+        "message": "🤖 **エージェントモードは有効です**\n複数ステップのツール呼び出しで現在のページを分析・操作します。"
+    },
+    "agentModeRequiredForImages": {
+        "message": "画像コンテキストを手動で追加するには、エージェントモードに切り替えてください。"
+    },
+    "annotationAdded": {
+        "message": "注釈付きスクリーンショットを追加しました。送信時に再キャプチャは行いません。"
+    },
+    "annotationCancelled": {
+        "message": "注釈がキャンセルされたか、注釈付きスクリーンショットを取得できませんでした。"
+    },
+    "annotationEmpty": {
+        "message": "追加できる注釈付きスクリーンショットを取得できませんでした。"
+    },
+    "annotationStarted": {
+        "message": "注釈モードを開始しました：ページ要素をクリックするか、左ボタンを押したまま描画してください。"
+    },
+    "builtInCommandCopyText": {
+        "message": "**組み込みスキル：**\n- /clear - 履歴を消去（Ctrl+L も可）\n- /summary - ページを要約"
+    },
+    "clearHistoryShortcut": {
+        "message": "履歴を消去（Ctrl+L）"
+    },
+    "clipboardNoImage": {
+        "message": "クリップボードに使用できる画像がありません。"
+    },
+    "customCommandTemplateVariablesError": {
+        "message": "❌ **スキル $command$ のプロンプトに ${変数} が含まれています。スキル名を入力してから Tab で展開し、入力してください。**",
+        "placeholders": {
+            "command": {
+                "content": "$1"
+            }
+        }
+    },
+    "customCommandsCopyHeading": {
+        "message": "スキル："
+    },
+    "dropNoImage": {
+        "message": "ドロップした内容に使用できる画像がありません。"
+    },
+    "imageDropFailed": {
+        "message": "画像を追加できませんでした：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagePasteFailed": {
+        "message": "画像を貼り付けられませんでした：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "imageUploadFailed": {
+        "message": "画像をアップロードできませんでした：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagesAdded": {
+        "message": "$count$ 枚の画像を追加しました。モデルに送信できます。",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagesAlreadyAdded": {
+        "message": "これらの画像は現在の質問にすでに追加されています。"
+    },
+    "inquiryEnabledDescription": {
+        "message": "ページ内容に基づいて回答し、ページツールは呼び出しません。"
+    },
+    "inquiryEnabledTitle": {
+        "message": "質問：有効"
+    },
+    "inquiryModeBriefEnabled": {
+        "message": "💬 **質問モードを有効にしました**"
+    },
+    "inquiryModeDetailedEnabled": {
+        "message": "💬 **質問モードを有効にしました**\n\n質問モードに切り替えました。ページ内容に基づいて回答し、ページツールは呼び出しません。手動で追加した画像コンテキストも無効になります。この設定は再読み込み後も保持されます。"
+    },
+    "inquiryModeNoticeEnabled": {
+        "message": "💬 **質問モードは有効です**\nページ内容に基づいて回答し、ページツールは呼び出しません。"
+    },
+    "maxImagesAdded": {
+        "message": "追加できる画像は最大 $max$ 枚です。先頭の $count$ 枚を追加しました。",
+        "placeholders": {
+            "max": {
+                "content": "$1"
+            },
+            "count": {
+                "content": "$2"
+            }
+        }
+    },
+    "maxImagesAllowed": {
+        "message": "追加できる画像は最大 $max$ 枚です。",
+        "placeholders": {
+            "max": {
+                "content": "$1"
+            }
+        }
+    },
+    "noImageDetected": {
+        "message": "追加できる画像が見つかりませんでした。"
+    },
+    "noImageFiles": {
+        "message": "追加できる画像ファイルがありません。"
+    },
+    "openCustomCommands": {
+        "message": "環境設定を開いてすべてのスキルを表示"
+    },
+    "screenshotDisabledDescription": {
+        "message": "ページのテキストのみを分析し、スクリーンショットは自動添付しません。"
+    },
+    "screenshotDisabledDetailed": {
+        "message": "⭕ **スクリーンショット機能を無効にしました**\n\nスクリーンショットを自動取得しなくなります。質問ではテキストのみを使用します。この設定は再読み込み後も保持されます。"
+    },
+    "screenshotDisabledTitle": {
+        "message": "スクリーンショット：無効"
+    },
+    "screenshotEnabledDescription": {
+        "message": "質問時に現在のビューポートのスクリーンショットを自動添付します。"
+    },
+    "screenshotEnabledDetailed": {
+        "message": "✨ **スクリーンショット機能を有効にしました！** 質問の分析にスクリーンショットを含めます。この設定は再読み込み後も保持されます。"
+    },
+    "screenshotEnabledTitle": {
+        "message": "スクリーンショット：有効"
+    },
+    "screenshotModeBriefDisabled": {
+        "message": "⭕ **スクリーンショットモードを無効にしました**"
+    },
+    "screenshotModeBriefEnabled": {
+        "message": "📸 **スクリーンショットモードを有効にしました**"
+    },
+    "screenshotModeNoticeDisabled": {
+        "message": "📝 **スクリーンショットモードは無効です**\nAskPage は現在のページテキストのみを分析します。"
+    },
+    "screenshotModeNoticeEnabled": {
+        "message": "📸 **スクリーンショットモードは有効です**\n現在のビューポートのスクリーンショットを補助コンテキストとして自動添付します。"
+    },
+    "screenshotRequiredForAnnotation": {
+        "message": "現在の画面に注釈を付けるには、スクリーンショット機能を有効にしてください。"
+    },
+    "screenshotTestFailed": {
+        "message": "❌ **スクリーンショットテストに失敗しました**\n\n機能は有効ですがキャプチャに失敗しました。ブラウザーの権限設定を確認してください。"
+    },
+    "screenshotTestStarting": {
+        "message": "✅ **スクリーンショット機能を有効にしました**\n\n🔄 キャプチャをテストしています..."
+    },
+    "screenshotTestSucceeded": {
+        "message": "📸 **スクリーンショットテストに成功しました！**\n\n**スクリーンショット情報：**\n- 📏 画像サイズ：$imageSize$ KB\n- 🔗 形式：PNG (Base64)\n- 📊 データ長：$dataLength$ 文字\n- 🎯 Base64 データ長：$base64Length$ 文字\n\n**取得したスクリーンショットのプレビュー：**",
+        "placeholders": {
+            "imagesize": {
+                "content": "$1"
+            },
+            "datalength": {
+                "content": "$2"
+            },
+            "base64length": {
+                "content": "$3"
+            }
+        }
+    },
+    "selectImageFile": {
+        "message": "使用できる画像ファイルを選択してください。"
+    },
+    "selectedTextCopyText": {
+        "message": "🎯 **選択テキストを検出**（$count$ 文字）\n\n選択テキストを主な対象として質問できます。\n\n**選択内容：**\n$text$$mode$\n\n💡 $commands$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "text": {
+                "content": "$2"
+            },
+            "mode": {
+                "content": "$3"
+            },
+            "commands": {
+                "content": "$4"
+            }
+        }
+    },
+    "selectedTextDetected": {
+        "message": "選択テキストを検出"
+    },
+    "selectedTextIntro": {
+        "message": "選択テキストを主な対象として分析します。$count$ 文字",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "summaryTemplateVariablesError": {
+        "message": "❌ **/summary のプロンプトに ${変数} が含まれています。/summary 入力後に Tab で展開して入力してください。**"
+    },
+    "unknownCommandError": {
+        "message": "❌ **不明なスキル：$command$**\n\n使用できるスキル：\n$commands$\n\n環境設定でスキルを追加することもできます。",
+        "placeholders": {
+            "command": {
+                "content": "$1"
+            },
+            "commands": {
+                "content": "$2"
+            }
+        }
+    },
+    "usageIntro": {
+        "message": "現在のページについて直接質問するか、先にテキストを選択してください。"
+    },
+    "usageTip": {
+        "message": "使い方"
+    },
+    "usageTipCopyText": {
+        "message": "💡 **使い方：**\n\nこのページについて直接質問するか、ページのテキストを選択してから質問できます。$mode$\n\n$commands$",
+        "placeholders": {
+            "mode": {
+                "content": "$1"
+            },
+            "commands": {
+                "content": "$2"
+            }
+        }
+    },
+    "imageContextTitleWithAnnotation": {
+        "message": "画像コンテキスト（アップロード、貼り付け、ドロップ、画面への注釈）"
+    },
+    "imageContextMetaWithCount": {
+        "message": "PNG / JPG / WebP など、1 ファイル 10 MB まで · $count$/$max$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "max": {
+                "content": "$2"
+            }
+        }
+    },
+    "openFullImage": {
+        "message": "クリックして $index$ 枚目の画像全体を開く",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagePreviewTitle": {
+        "message": "画像プレビュー $index$ - AskPage",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagePreviewHeading": {
+        "message": "画像プレビュー $index$",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "questionImageAlt": {
+        "message": "AskPage の質問画像 $index$",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "removeImage": {
+        "message": "$index$ 枚目の画像を削除",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "screenshotPreviewTitle": {
+        "message": "スクリーンショットプレビュー - AskPage"
+    },
+    "screenshotPreviewHeading": {
+        "message": "スクリーンショットプレビュー"
+    },
+    "screenshotPreviewAlt": {
+        "message": "AskPage スクリーンショットプレビュー"
+    },
+    "openFullScreenshot": {
+        "message": "クリックしてスクリーンショット全体を開く"
+    },
+    "openQuestionScreenshot": {
+        "message": "質問時のスクリーンショット全体を開く"
+    },
+    "questionScreenshotAlt": {
+        "message": "質問時の画面スクリーンショット"
+    },
+    "viewOriginalSize": {
+        "message": "クリックして元のサイズを表示"
+    },
+    "screenshotInfo": {
+        "message": "📊 サイズ：$width$×$height$ | ファイルサイズ：$size$ KB",
+        "placeholders": {
+            "width": {
+                "content": "$1"
+            },
+            "height": {
+                "content": "$2"
+            },
+            "size": {
+                "content": "$3"
+            }
+        }
+    },
+    "copyScreenshotBase64": {
+        "message": "スクリーンショットの Base64 データをコピー"
+    },
+    "copyToClipboard": {
+        "message": "クリップボードにコピー"
+    },
+    "userMessagePrefix": {
+        "message": "あなた"
+    },
+    "screenAnnotationMode": {
+        "message": "AskPage 画面注釈モード"
+    },
+    "screenAnnotationInstructions": {
+        "message": "マウスを動かして DOM 要素を囲み、クリックして選択します。左ボタンを押したまま描画すると DOM は選択されません。"
+    },
+    "collapse": {
+        "message": "折りたたむ"
+    },
+    "expand": {
+        "message": "展開"
+    },
+    "collapseCode": {
+        "message": "コードを折りたたむ"
+    },
+    "expandCode": {
+        "message": "コード全体を展開"
+    },
+    "copyCode": {
+        "message": "コードをコピー"
+    },
+    "openCodePen": {
+        "message": "CodePen で開く"
+    },
+    "codePenOpened": {
+        "message": "開きました"
+    },
+    "codePenFailed": {
+        "message": "失敗"
+    },
+    "expandAll": {
+        "message": "すべて展開"
+    },
+    "imagePreviewSize": {
+        "message": "画像サイズ：約 $size$ KB",
+        "placeholders": {
+            "size": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerDomainNotAllowed": {
+        "message": "$provider$ Service Worker は他のドメインを呼び出せません。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerEndpointNotAllowed": {
+        "message": "$provider$ Service Worker はこの API エンドポイントを呼び出せません。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerRequestFailed": {
+        "message": "$provider$ Service Worker のリクエストに失敗しました。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerPostOnly": {
+        "message": "$provider$ Service Worker では POST リクエストのみ使用できます。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerApiKeyRequired": {
+        "message": "$provider$ API Key を空にすることはできません。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerInvalidJson": {
+        "message": "$provider$ のリクエスト本文は有効な JSON ではありません。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerInvalidRequest": {
+        "message": "$provider$ のリクエスト本文の形式が正しくありません。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerDuplicateResponse": {
+        "message": "$provider$ Service Worker がレスポンス情報を重複して返しました。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerInvalidHttpStatus": {
+        "message": "$provider$ Service Worker が無効な HTTP ステータスを返しました。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerNoResponseInfo": {
+        "message": "$provider$ Service Worker からレスポンス情報がまだ返されていません。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerNoHttpResponse": {
+        "message": "$provider$ Service Worker から HTTP レスポンスが返されませんでした。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerDisconnected": {
+        "message": "$provider$ Service Worker との接続が中断されました。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "imageFileTooLarge": {
+        "message": "画像ファイルが 10MB の上限を超えています。"
+    },
+    "invalidImageFile": {
+        "message": "ファイルの内容が有効な画像ではありません。"
+    },
+    "imageReadFailed": {
+        "message": "画像の内容を読み取れません。"
+    },
+    "droppedImageFetchFailed": {
+        "message": "ドロップした画像を読み取れません（$status$ $statusText$）。",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            }
+        }
+    },
+    "droppedContentNotImage": {
+        "message": "ドロップした内容は画像ではありません。"
+    },
+    "codeLanguagePlainText": {
+        "message": "プレーンテキスト"
+    },
+    "codeLanguage": {
+        "message": "コード"
+    },
+    "autoDetectedLanguage": {
+        "message": "自動判定：$language$",
+        "placeholders": {
+            "language": {
+                "content": "$1"
+            }
+        }
+    },
+    "retryDelaySeconds": {
+        "message": "$seconds$ 秒",
+        "placeholders": {
+            "seconds": {
+                "content": "$1"
+            }
+        }
+    },
+    "retryExhausted": {
+        "message": "$message$ は $count$ 回再試行しても失敗しました。",
+        "placeholders": {
+            "message": {
+                "content": "$1"
+            },
+            "count": {
+                "content": "$2"
+            }
+        }
+    },
+    "statusPlanningWithProvider": {
+        "message": "$provider$ にタスクの計画を依頼しています…",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusAnsweringWithProvider": {
+        "message": "$provider$ にページの分析と回答を依頼しています…",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusRetrying": {
+        "message": "$provider$ は $reason$。$delay$ 後に再試行します（$retryCount$/$maxRetries$）…",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "reason": {
+                "content": "$2"
+            },
+            "delay": {
+                "content": "$3"
+            },
+            "retrycount": {
+                "content": "$4"
+            },
+            "maxretries": {
+                "content": "$5"
+            }
+        }
+    },
+    "statusToolCallingFallbackDetailed": {
+        "message": "$provider$ はツール呼び出しに対応していないため、通常のテキストモードで続行します…",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusEmptyResponseOutputLimitRetry": {
+        "message": "$provider$ から内容が返らず、出力上限に達した可能性があるため、上限を増やして再試行します…",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusEmptyResponseRetryDetailed": {
+        "message": "$provider$ から内容が返らないため、自動的に再試行します…",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusGeminiOutputLimitRetry": {
+        "message": "$provider$ から内容が返らず、出力上限に達した可能性があるため、モデルの最大出力上限で再試行します…",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusToolSelected": {
+        "message": "$provider$ がツール $tools$ を選択しました。実行を準備しています…",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "tools": {
+                "content": "$2"
+            }
+        }
+    },
+    "statusToolExecuting": {
+        "message": "ツール $tool$ を実行しています（$index$/$total$）…",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            },
+            "index": {
+                "content": "$2"
+            },
+            "total": {
+                "content": "$3"
+            }
+        }
+    },
+    "statusToolResults": {
+        "message": "ツール $tools$ を実行しました。結果を $provider$ に返しています…",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            },
+            "provider": {
+                "content": "$2"
+            }
+        }
+    },
+    "toolCallLimitExceeded": {
+        "message": "ツール呼び出し回数の上限に達したため、無限ループを防ぐ目的で実行を中止しました。"
+    },
+    "invalidProviderApiKey": {
+        "message": "$provider$ API Key が無効です。$provider$ API Key の設定を確認してください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerRequestForbidden": {
+        "message": "$provider$ がリクエストを拒否しました。API 権限またはモデルのアクセス設定を確認してください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerModelNotFound": {
+        "message": "指定した $provider$ モデルが見つかりません。モデル設定を確認してください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerRateLimited": {
+        "message": "$provider$ が混雑しているか、リクエスト頻度が高すぎます。後でもう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerUnavailable": {
+        "message": "$provider$ は一時的に利用できません。後でもう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "httpStatusDetails": {
+        "message": "（HTTP $status$$statusText$）",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            }
+        }
+    },
+    "retryReasonTimeout": {
+        "message": "リクエストがタイムアウトしました"
+    },
+    "retryReasonNetwork": {
+        "message": "ネットワーク接続エラー"
+    },
+    "retryReasonResponseFormat": {
+        "message": "レスポンス形式エラー"
+    },
+    "retryReasonContextWindow": {
+        "message": "コンテキストウィンドウ超過"
+    },
+    "retryReasonUnauthorized": {
+        "message": "認証に失敗しました"
+    },
+    "retryReasonForbidden": {
+        "message": "権限がありません"
+    },
+    "retryReasonResourceNotFound": {
+        "message": "リソースが見つかりません"
+    },
+    "retryReasonInvalidRequest": {
+        "message": "リクエスト形式エラー"
+    },
+    "retryReasonQuota": {
+        "message": "クォータを使い切りました"
+    },
+    "retryReasonRateLimit": {
+        "message": "サービスが混雑しているか、リクエストが多すぎます"
+    },
+    "retryReasonServiceError": {
+        "message": "一時的なサービスエラー"
+    },
+    "retryReasonRequestFailed": {
+        "message": "リクエストに失敗しました"
+    },
+    "retryReasonUnknown": {
+        "message": "不明なエラー"
+    },
+    "requestTimeoutMessage": {
+        "message": "$provider$ がタイムアウトしました。サービスが混雑しているか、ネットワークが不安定な可能性があります。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "networkErrorMessage": {
+        "message": "$provider$ サービスに接続できません。ネットワークが不安定か、サービスが応答していない可能性があります。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "invalidResponseMessage": {
+        "message": "$provider$ から解析できないデータが返されました。サービスが一時的に利用できない可能性があります。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "contextWindowExceeded": {
+        "message": "$provider$ から、ページスナップショットと会話全体がモデルのコンテキストウィンドウを超えたと報告されました$statusSuffix。/clear を実行して新しい会話を開始してください。AskPage は既存の会話を自動的に削除または切り詰めません。$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "errorMessageLabel": {
+        "message": "エラーメッセージ"
+    },
+    "providerResourceNotFound": {
+        "message": "指定した $provider$ のモデル、エンドポイント、デプロイ設定が見つかりません。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerInvalidRequest": {
+        "message": "$provider$ がリクエストを拒否しました。パラメーター形式が正しくない可能性があります。$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerQuotaExceeded": {
+        "message": "$provider$ のクォータまたは使用量の上限に達しました$statusSuffix。コンテキストウィンドウまたは TPM（tokens per minute）の上限が原因の可能性があります。モデルを変更するか、入力を減らすために通常モードを使用してください。エラーメッセージ：$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerRateLimitedWithDetails": {
+        "message": "$provider$ が混雑しているか、リクエスト頻度が高すぎます$statusSuffix。$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerServiceError": {
+        "message": "$provider$ で一時的なサービスエラーが発生しました$statusSuffix。$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerUnknownError": {
+        "message": "$provider$ API の呼び出しに失敗しました。原因は不明です。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "streamingUnsupported": {
+        "message": "このブラウザーはストリーミングレスポンスの読み取りに対応していません。"
+    },
+    "openaiRefusal": {
+        "message": "$provider$ がリクエストを拒否しました：$refusal$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "refusal": {
+                "content": "$2"
+            }
+        }
+    },
+    "openaiOutputLimit": {
+        "message": "$provider$ の出力長上限に達しました。質問の範囲を狭めてもう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiContentFiltered": {
+        "message": "$provider$ はコンテンツフィルタリングによりテキストを返しませんでした。質問を調整してもう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiToolCallNoText": {
+        "message": "$provider$ からツール呼び出しの状態は返されましたが、表示できるテキストがありません。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiFunctionCallNoText": {
+        "message": "$provider$ から関数呼び出しの状態は返されましたが、表示できるテキストがありません。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiNonDisplayableStop": {
+        "message": "$provider$ の応答は完了しましたが、表示できるテキストがありません。もう一度お試しいただくか、質問の範囲を狭めてください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerNoCandidates": {
+        "message": "$provider$ から候補が返されませんでした。モデルがまだ回答を生成していない可能性があります。後でもう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerNonDisplayableResult": {
+        "message": "$provider$ から表示できるテキストを含まない結果が返されました。もう一度お試しいただくか、質問の範囲を狭めてください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptSafety": {
+        "message": "$provider$ は安全性の制限によりこのリクエストを処理しませんでした$details$。質問を調整してもう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiPromptBlocklist": {
+        "message": "$provider$ はリクエストにブロックされた語句が含まれているため処理しませんでした。質問を調整してもう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptProhibited": {
+        "message": "$provider$ はこのリクエストを禁止コンテンツと判定したため、回答を返しませんでした。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptImageSafety": {
+        "message": "$provider$ は画像が安全性の制限に該当したため、回答を返しませんでした。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptOther": {
+        "message": "$provider$ はこのリクエストを処理しませんでした。後でもう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiOutputLimit": {
+        "message": "$provider$ の出力長上限に達しました$details$。質問の範囲を狭めてもう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiSafety": {
+        "message": "$provider$ は安全性の制限によりテキストを返しませんでした$details$。質問を調整してもう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiRecitation": {
+        "message": "$provider$ は引用に関する制限によりテキストを返しませんでした$details$。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiLanguage": {
+        "message": "$provider$ は言語に関する制限によりテキストを返しませんでした$details$。繁体字中国語または英語でお試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiBlocklist": {
+        "message": "$provider$ は応答がブロックされた語句の制限に該当したため、テキストを返しませんでした。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiProhibited": {
+        "message": "$provider$ は応答が禁止コンテンツの制限に該当したため、テキストを返しませんでした。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiSensitiveInfo": {
+        "message": "$provider$ は応答に機密性の高い個人情報が含まれる可能性があるため、テキストを返しませんでした。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiMalformedToolCall": {
+        "message": "$provider$ から不正な形式のツール呼び出しが返されました$details$。もう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiOther": {
+        "message": "$provider$ は表示できるテキストを生成しませんでした$details$。後でもう一度お試しください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiNoCandidates": {
+        "message": "$provider$ から候補が返されませんでした。リクエストがブロックされたか、モデルが回答を生成していない可能性があります。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiNonDisplayableResult": {
+        "message": "$provider$ から表示できるテキストを含まない結果が返されました$details$。もう一度お試しいただくか、質問の範囲を狭めてください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "invalidStreamingData": {
+        "message": "$provider$ から解析できないストリーミングデータが返されました：$data$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "data": {
+                "content": "$2"
+            }
+        }
+    },
+    "streamingApiError": {
+        "message": "ストリーミング API エラー：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "httpFallbackError": {
+        "message": "HTTP $status$ $statusText$：$error$",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            },
+            "error": {
+                "content": "$3"
+            }
+        }
+    },
+    "errorPrefix": {
+        "message": "エラー：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerApiKeyMissing": {
+        "message": "拡張機能のアイコンをクリックして $provider$ API Key を設定してください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerApiKeyDecryptFailed": {
+        "message": "$provider$ API Key を復号できません。もう一度設定してください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerEndpointMissing": {
+        "message": "拡張機能のアイコンをクリックして $provider$ Endpoint を設定してください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerDeploymentMissing": {
+        "message": "拡張機能のアイコンをクリックして $provider$ Deployment Name を設定してください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerMissing": {
+        "message": "拡張機能のアイコンをクリックして AI プロバイダーを設定してください。"
+    },
+    "providerDeploymentNotFound": {
+        "message": "指定したデプロイが見つかりません。Endpoint と Deployment Name の設定を確認してください。"
+    },
+    "providerAuthenticationFailed": {
+        "message": "$provider$ の認証に失敗しました：$error$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "error": {
+                "content": "$2"
+            }
+        }
+    },
+    "gptToolCompatibility": {
+        "message": "GPT-5.6 で function tools を使用する場合は Responses API が必要です。Chat Completions は使用できません。"
+    },
+    "unknownTool": {
+        "message": "不明なツール"
+    },
+    "toolListMore": {
+        "message": "$names$ など $count$ 個のツール",
+        "placeholders": {
+            "names": {
+                "content": "$1"
+            },
+            "count": {
+                "content": "$2"
+            }
+        }
+    },
+    "success": {
+        "message": "成功"
+    },
+    "failure": {
+        "message": "失敗"
+    },
+    "toolExecutionSingle": {
+        "message": "$tools$ ツールを実行しました：$result$",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            },
+            "result": {
+                "content": "$2"
+            }
+        }
+    },
+    "toolExecutionAllSuccess": {
+        "message": "$tools$ ツールを実行しました。すべて成功しました",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolExecutionAllFailure": {
+        "message": "$tools$ ツールを実行しました。すべて失敗しました",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolExecutionMixed": {
+        "message": "$tools$ ツールを実行しました。成功 $successCount$ 件、失敗 $failureCount$ 件",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            },
+            "successcount": {
+                "content": "$2"
+            },
+            "failurecount": {
+                "content": "$3"
+            }
+        }
+    },
+    "usageDetails": {
+        "message": "（$details$）",
+        "placeholders": {
+            "details": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageListSeparator": {
+        "message": "、"
+    },
+    "usageLine": {
+        "message": "- $label$：$value$$suffix$",
+        "placeholders": {
+            "label": {
+                "content": "$1"
+            },
+            "value": {
+                "content": "$2"
+            },
+            "suffix": {
+                "content": "$3"
+            }
+        }
+    },
+    "usageInput": {
+        "message": "入力"
+    },
+    "usageOutput": {
+        "message": "出力"
+    },
+    "usageToolInput": {
+        "message": "ツール入力"
+    },
+    "usageTotal": {
+        "message": "合計"
+    },
+    "usageCache": {
+        "message": "キャッシュ $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageCacheWrite": {
+        "message": "キャッシュ書き込み $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageReasoning": {
+        "message": "推論 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageAcceptedPrediction": {
+        "message": "受け入れた予測 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageRejectedPrediction": {
+        "message": "拒否した予測 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageSummary": {
+        "message": "Token 使用量の概要：\n$lines$",
+        "placeholders": {
+            "lines": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolCallInProgress": {
+        "message": "🛠️ $tool$ を実行しています",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolResultFailure": {
+        "message": "（失敗）"
+    },
+    "toolResultSummary": {
+        "message": "\n\n結果の概要：$message$",
+        "placeholders": {
+            "message": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolResultMessageSuffix": {
+        "message": "：$message$",
+        "placeholders": {
+            "message": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolResultReceived": {
+        "message": "📥 $tool$ が結果を返しました$status$$message$",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            },
+            "status": {
+                "content": "$2"
+            },
+            "message": {
+                "content": "$3"
+            }
+        }
+    },
+    "toolResultTraceText": {
+        "message": "📥 **$tool$** が結果を返しました$status$。$summary$\n\n$payload$",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            },
+            "status": {
+                "content": "$2"
+            },
+            "summary": {
+                "content": "$3"
+            },
+            "payload": {
+                "content": "$4"
+            }
+        }
+    },
+    "executionDuration": {
+        "message": "所要時間：$duration$",
+        "placeholders": {
+            "duration": {
+                "content": "$1"
+            }
+        }
+    },
+    "agentExecutionCompleted": {
+        "message": "AskPage は $count$ ステップを実行して完了しました。$duration$$usage$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "duration": {
+                "content": "$2"
+            },
+            "usage": {
+                "content": "$3"
+            }
+        }
+    },
+    "agentExecutionStopped": {
+        "message": "AskPage は $count$ ステップで停止しました。$duration$$usage$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "duration": {
+                "content": "$2"
+            },
+            "usage": {
+                "content": "$3"
+            }
+        }
+    },
+    "endpointToolFallbackMessage": {
+        "message": "⚠️ **この $provider$ エンドポイントは tool calling を完全にはサポートしていません**\n\n自動的に通常のテキストモードへ切り替えたため、今回のリクエストではページの DOM やフォームを直接操作できません。\n\n$answer$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "answer": {
+                "content": "$2"
+            }
+        }
+    },
+    "agentToolFallbackMessage": {
+        "message": "⚠️ **$provider$ プロバイダーは agent モードでの tool calling を完全にはサポートしていません**\n\n自動的に通常のテキストモードへ切り替えたため、今回のリクエストではページの DOM やフォームを直接操作できません。\n\n$answer$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "answer": {
+                "content": "$2"
+            }
+        }
+    }
 }
