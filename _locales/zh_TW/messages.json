@@ -75,7 +75,7 @@
     "providerCustomNamePlaceholder": { "message": "例如：我的 Gemini 帳號" },
     "enabledModels": { "message": "啟用模型 (可複選，最少選一個)" },
     "geminiGoogleSearchEnabled": { "message": "啟用 Grounding with Google Search 工具" },
-    "geminiGoogleSearchEnabledWarning": { "message": "⚠ Google AI Studio 免費方案（Free-tier）不支援此設定，啟用後會觸發 429 配額錯誤。僅付費方案可使用此功能。" },
+    "geminiGoogleSearchEnabledWarning": { "message": "⚠ Google AI Studio 免費方案不支援此設定，啟用後會觸發 429 配額錯誤。僅 Tier 1 以上付費方案可使用此功能。" },
     "apiKeyOptional": { "message": "API Key (選填)" },
     "leaveBlankIfNotRequired": { "message": "若不需要可留空" },
     "modelName": { "message": "模型名稱" },

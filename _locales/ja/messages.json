@@ -75,7 +75,7 @@
     "providerCustomNamePlaceholder": { "message": "例：自分の Gemini アカウント" },
     "enabledModels": { "message": "有効なモデル（1 つ以上選択）" },
     "geminiGoogleSearchEnabled": { "message": "Grounding with Google Search ツールを有効にする" },
-    "geminiGoogleSearchEnabledWarning": { "message": "⚠ Google AI Studio の無料枠（Free-tier）ではこの設定はサポートされておらず、有効にすると 429 クォータエラーが発生します。有料プランでのみ利用できます。" },
+    "geminiGoogleSearchEnabledWarning": { "message": "⚠ Google AI Studio の無料枠ではこの設定はサポートされておらず、有効にすると 429 クォータエラーが発生します。Tier 1 以上の有料プランでのみ利用できます。" },
     "apiKeyOptional": { "message": "API Key（任意）" },
     "leaveBlankIfNotRequired": { "message": "不要な場合は空欄" },
     "modelName": { "message": "モデル名" },
