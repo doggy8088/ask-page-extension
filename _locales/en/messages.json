@@ -553,7 +553,12 @@
         "message": "Access Token"
     },
     "providerProjectIdMissing": {
-        "message": "Click the extension icon to configure your $provider$ Project ID."
+        "message": "Click the extension icon to configure your $provider$ Project ID.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
     },
     "vertexFieldsRequired": {
         "message": "Please fill in the Google Cloud Project ID, Region / Location, and credential."

@@ -11414,7 +11414,7 @@ async function createDialog() {
                 sendRequest: async (requestBody, onRetry, streamHandlers = {}) => {
                     const headers = {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
+                        'Authorization': 'Bearer ' + apiKey
                     };
                     const buildHttpError = (response, errorBody) => {
                         const retryAfterMs = getRetryAfterMilliseconds(response);
@@ -11778,7 +11778,7 @@ async function createDialog() {
                         'Content-Type': 'application/json'
                     };
                     if (apiKey && providerType !== 'ollama-cloud') {
-                        headers.Authorization = `Bearer ${apiKey}`;
+                        headers.Authorization = 'Bearer ' + apiKey;
                     }
 
                     const buildHttpError = (response, errorBody) => createHttpError(

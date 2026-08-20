@@ -553,7 +553,12 @@
         "message": "Access Token"
     },
     "providerProjectIdMissing": {
-        "message": "請點擊擴充功能圖示設定您的 $provider$ Project ID。"
+        "message": "請點擊擴充功能圖示設定您的 $provider$ Project ID。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
     },
     "vertexFieldsRequired": {
         "message": "請填寫 Google Cloud Project ID、Region / Location 與憑證。"

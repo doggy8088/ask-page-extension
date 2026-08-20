@@ -44,7 +44,7 @@ assert.match(settingsHtml, /id="modalOllamaCloudModelsList"/);
 assert.match(settingsHtml, /data-provider-type="ollama-cloud" data-action="fetch-models"/);
 
 assert.match(settingsScript, /url = 'https:\/\/ollama\.com\/v1\/models';/);
-assert.match(settingsScript, /headers\['Authorization'\] = `Bearer \$\{apiKey\}`;/);
+assert.match(settingsScript, /headers\['Authorization'\] = 'Bearer ' \+ apiKey/);
 assert.match(contentScript, /providerType === 'ollama-cloud'/);
 assert.match(contentScript, /endpoint = 'https:\/\/ollama\.com\/v1';/);
 assert.match(contentScript, /'ollama-cloud'\]\.includes\(activeConfig\.type\)/);

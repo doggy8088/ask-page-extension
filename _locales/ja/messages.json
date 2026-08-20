@@ -553,7 +553,12 @@
         "message": "Access Token"
     },
     "providerProjectIdMissing": {
-        "message": "拡張機能アイコンをクリックして $provider$ の Project ID を設定してください。"
+        "message": "拡張機能アイコンをクリックして $provider$ の Project ID を設定してください。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
     },
     "vertexFieldsRequired": {
         "message": "Google Cloud の Project ID、Region / Location、認証情報を入力してください。"

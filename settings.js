@@ -1948,7 +1948,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 url = endpoint.endsWith('/models') ? endpoint : `${endpoint.replace(/\/$/, '')}/models`;
                 if (apiKey) {
-                headers['Authorization'] = 'Bearer ' + apiKey;
+                    headers['Authorization'] = 'Bearer ' + apiKey;
                 }
             } else {
                 throw new Error(t('unknownProviderType'));
@@ -2191,7 +2191,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             apiKey = modalOpenaiApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.openai.com/v1/models';
-                headers['Authorization'] = 'Bearer ' + credential;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         } else if (providerType === 'anthropic') {
             apiKey = modalAnthropicApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
@@ -2203,27 +2203,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             apiKey = modalDeepseekApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.deepseek.com/v1/models';
-                headers['Authorization'] = 'Bearer ' + credential;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         } else if (providerType === 'openrouter') {
             apiKey = modalOpenrouterApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://openrouter.ai/api/v1/models';
-                headers['Authorization'] = 'Bearer ' + credential;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         } else if (providerType === 'groq') {
             apiKey = modalGroqApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.groq.com/openai/v1/models';
-                headers['Authorization'] = 'Bearer ' + credential;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         } else if (providerType === 'mistral') {
             apiKey = modalMistralApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.mistral.ai/v1/models';
-                headers['Authorization'] = 'Bearer ' + credential;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         } else if (providerType === 'ollama-cloud') {
             apiKey = modalOllamaCloudApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://ollama.com/v1/models';
-                headers['Authorization'] = 'Bearer ' + credential;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         }
 
         // 2. Fetch from API

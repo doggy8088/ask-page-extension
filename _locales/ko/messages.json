@@ -553,7 +553,12 @@
         "message": "Access Token"
     },
     "providerProjectIdMissing": {
-        "message": "확장 프로그램 아이콘을 클릭하여 $provider$ Project ID를 설정하세요."
+        "message": "확장 프로그램 아이콘을 클릭하여 $provider$ Project ID를 설정하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
     },
     "vertexFieldsRequired": {
         "message": "Google Cloud Project ID, Region / Location, 인증 정보를 입력하세요."
