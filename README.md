@@ -151,6 +151,12 @@
 4. 選擇想要使用的模型或部署
 5. 點擊「儲存設定」
 
+### Gemini Enterprise (Vertex AI) 設定畫面
+
+新增 AI 提供者時，可直接選擇 `Gemini Enterprise (Vertex AI)`，並填入 Google Cloud Project ID、Location / Region、認證方式（API Key 或 OAuth 2.0 Access Token），再從模型清單中勾選需要啟用的 Gemini 版本：
+
+![Gemini Enterprise (Vertex AI) provider modal](docs/vertex-provider-ui.png)
+
 ### 技能設定
 
 1. 在設定頁面切換到「技能」頁籤

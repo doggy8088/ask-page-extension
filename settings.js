@@ -1838,7 +1838,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models`;
                 if (authMode === 'bearer-token') {
-                    headers['Authorization'] = `******;
+                    headers['Authorization'] = 'Bearer ' + credential;
                 } else {
                     headers['x-goog-api-key'] = credential;
                 }
@@ -1848,7 +1848,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://api.openai.com/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'anthropic') {
                 const apiKey = modalAnthropicApiKey.value.trim();
                 if (!apiKey) {
@@ -1864,35 +1864,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://api.deepseek.com/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'openrouter') {
                 const apiKey = modalOpenrouterApiKey.value.trim();
                 if (!apiKey) {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://openrouter.ai/api/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'groq') {
                 const apiKey = modalGroqApiKey.value.trim();
                 if (!apiKey) {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://api.groq.com/openai/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'mistral') {
                 const apiKey = modalMistralApiKey.value.trim();
                 if (!apiKey) {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://api.mistral.ai/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'ollama-cloud') {
                 const apiKey = modalOllamaCloudApiKey.value.trim();
                 if (!apiKey) {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://ollama.com/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'azure') {
                 const apiKey = modalAzureApiKey.value.trim();
                 const endpoint = modalAzureEndpoint.value.trim();
@@ -1948,7 +1948,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 url = endpoint.endsWith('/models') ? endpoint : `${endpoint.replace(/\/$/, '')}/models`;
                 if (apiKey) {
-                    headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
                 }
             } else {
                 throw new Error(t('unknownProviderType'));
@@ -2183,7 +2183,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models`;
             if (authMode === 'bearer-token') {
-                headers['Authorization'] = `******;
+                headers['Authorization'] = 'Bearer ' + credential;
             } else {
                 headers['x-goog-api-key'] = credential;
             }
@@ -2191,7 +2191,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             apiKey = modalOpenaiApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.openai.com/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + credential;
         } else if (providerType === 'anthropic') {
             apiKey = modalAnthropicApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
@@ -2203,27 +2203,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             apiKey = modalDeepseekApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.deepseek.com/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + credential;
         } else if (providerType === 'openrouter') {
             apiKey = modalOpenrouterApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://openrouter.ai/api/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + credential;
         } else if (providerType === 'groq') {
             apiKey = modalGroqApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.groq.com/openai/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + credential;
         } else if (providerType === 'mistral') {
             apiKey = modalMistralApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.mistral.ai/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + credential;
         } else if (providerType === 'ollama-cloud') {
             apiKey = modalOllamaCloudApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://ollama.com/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + credential;
         }
 
         // 2. Fetch from API
@@ -2340,7 +2340,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!endpoint) {throw new Error(t('apiEndpointRequired'));}
             apiKey = modalOpenaiCompatibleApiKey.value.trim();
             if (apiKey) {
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             }
         }
 
