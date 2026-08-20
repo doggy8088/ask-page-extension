@@ -1868,7 +1868,7 @@ async function getEnabledProviderModelOptions() {
 
     const options = [];
     for (const p of providers) {
-        if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
+        if (['gemini', 'vertex', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
             const models = p.models || [];
             if (models.length > 0) {
                 for (const model of models) {
@@ -1876,13 +1876,14 @@ async function getEnabledProviderModelOptions() {
                         providerId: p.id,
                         providerName: p.name || (
                             p.type === 'gemini' ? 'Gemini' :
-                                p.type === 'openai' ? 'OpenAI' :
-                                    p.type === 'anthropic' ? 'Anthropic' :
-                                        p.type === 'deepseek' ? 'DeepSeek' :
-                                            p.type === 'openrouter' ? 'OpenRouter' :
-                                                p.type === 'groq' ? 'Groq' :
-                                                    p.type === 'mistral' ? 'Mistral AI' :
-                                                        p.type === 'ollama-cloud' ? 'Ollama Cloud' : 'OpenAI Compatible'
+                                p.type === 'vertex' ? 'Gemini Enterprise' :
+                                    p.type === 'openai' ? 'OpenAI' :
+                                        p.type === 'anthropic' ? 'Anthropic' :
+                                            p.type === 'deepseek' ? 'DeepSeek' :
+                                                p.type === 'openrouter' ? 'OpenRouter' :
+                                                    p.type === 'groq' ? 'Groq' :
+                                                        p.type === 'mistral' ? 'Mistral AI' :
+                                                            p.type === 'ollama-cloud' ? 'Ollama Cloud' : 'OpenAI Compatible'
                         ),
                         type: p.type,
                         model: model
@@ -1945,6 +1946,7 @@ async function getActiveProviderConfig() {
 // Map a provider type to its localized display label.
 const PROVIDER_LABEL_KEYS = Object.freeze({
     gemini: 'providerGemini',
+    vertex: 'providerVertex',
     openai: 'providerOpenAI',
     azure: 'providerAzure',
     anthropic: 'providerAnthropic',
@@ -10795,7 +10797,9 @@ async function createDialog() {
         onRetry,
         onAnswerDelta = () => {},
         onReasoningDelta = () => {},
-        providerLabel = 'Gemini'
+        providerLabel = 'Gemini',
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?alt=sse&key=${apiKey}`,
+        headers = { 'Content-Type': 'application/json' }
     }) {
         const responseData = {
             candidates: []
@@ -10803,10 +10807,10 @@ async function createDialog() {
 
         await fetchSseWithRetry({
             providerLabel,
-            url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?alt=sse&key=${apiKey}`,
+            url,
             options: {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(requestBody)
             },
             buildHttpError,
@@ -10993,7 +10997,11 @@ async function createDialog() {
         onTrace = () => {},
         onAnswerDelta = () => {},
         onReasoningDelta = () => {},
-        providerLabel = 'Gemini'
+        providerLabel = 'Gemini',
+        requestUrlBuilder = (useStreaming, model) => useStreaming
+            ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`
+            : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        requestHeadersBuilder = () => ({ 'Content-Type': 'application/json' })
     }) {
         const normalizedInputImages = normalizeInputImageDataUrls(inputImageDataUrls);
         const pageConversationContext = await getPageConversationContext(capturedSelectedText, {
@@ -11086,14 +11094,16 @@ async function createDialog() {
                     onRetry: handleRetry,
                     onAnswerDelta,
                     onReasoningDelta,
-                    providerLabel
+                    providerLabel,
+                    url: requestUrlBuilder(true, selectedModel),
+                    headers: requestHeadersBuilder()
                 })
                 : await fetchJsonWithRetry({
                     providerLabel,
-                    url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
+                    url: requestUrlBuilder(false, selectedModel),
                     options: {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: requestHeadersBuilder(),
                         body: JSON.stringify(requestBody)
                     },
                     buildHttpError: buildGeminiHttpError,
@@ -11191,26 +11201,73 @@ async function createDialog() {
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
 
         const activeConfig = await getActiveProviderConfig();
-        const encryptedApiKey = activeConfig?.apiKey || '';
+        const providerType = activeConfig?.type || 'gemini';
         const selectedModel = activeConfig?.activeModel || 'gemini-flash-lite-latest';
         const providerLabel = getProviderDisplayName(activeConfig);
         const reasoningValue = await getActiveReasoningValue(activeConfig);
 
-        console.log('[AskPage] Selected model:', selectedModel);
-        console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
+        let apiKey = '';
+        let requestUrlBuilder = undefined;
+        let requestHeadersBuilder = undefined;
 
-        if (!encryptedApiKey) {
-            appendErrorMessageAndStore(getLocalizedText('providerApiKeyMissing', { provider: providerLabel }));
-            return;
-        }
+        if (providerType === 'vertex') {
+            const projectId = String(activeConfig?.projectId || '').trim();
+            const region = String(activeConfig?.region || '').trim() || 'us-central1';
+            const authMode = activeConfig?.authMode === 'bearer-token' ? 'bearer-token' : 'api-key';
+            const encryptedCredential = authMode === 'bearer-token'
+                ? activeConfig?.accessToken || activeConfig?.apiKey || ''
+                : activeConfig?.apiKey || activeConfig?.accessToken || '';
 
-        const apiKey = await decryptApiKey(encryptedApiKey);
-        console.log('[AskPage] Decrypted API key available:', apiKey ? 'Yes' : 'No');
-        console.log('[AskPage] API key preview:', maskApiKey(apiKey));
+            if (!projectId) {
+                appendErrorMessageAndStore(getLocalizedText('providerProjectIdMissing', { provider: providerLabel }));
+                return;
+            }
+            if (!encryptedCredential) {
+                appendErrorMessageAndStore(getLocalizedText('providerApiKeyMissing', { provider: providerLabel }));
+                return;
+            }
 
-        if (!apiKey) {
-            appendErrorMessageAndStore(getLocalizedText('providerApiKeyDecryptFailed', { provider: providerLabel }));
-            return;
+            const credential = await decryptApiKey(encryptedCredential);
+            if (!credential) {
+                appendErrorMessageAndStore(getLocalizedText('providerApiKeyDecryptFailed', { provider: providerLabel }));
+                return;
+            }
+
+            apiKey = credential;
+            requestUrlBuilder = (useStreaming, model) => {
+                const modelEndpoint = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}`;
+                return useStreaming
+                    ? `${modelEndpoint}:streamGenerateContent?alt=sse`
+                    : `${modelEndpoint}:generateContent`;
+            };
+            requestHeadersBuilder = () => {
+                const headers = { 'Content-Type': 'application/json' };
+                if (authMode === 'bearer-token') {
+                    headers.Authorization = 'Bearer ' + credential;
+                } else {
+                    headers['x-goog-api-key'] = credential;
+                }
+                return headers;
+            };
+            console.log('[AskPage] Vertex AI provider selected:', { projectId, region, authMode, model: selectedModel });
+        } else {
+            const encryptedApiKey = activeConfig?.apiKey || '';
+            console.log('[AskPage] Selected model:', selectedModel);
+            console.log('[AskPage] API key available:', encryptedApiKey ? 'Yes' : 'No');
+
+            if (!encryptedApiKey) {
+                appendErrorMessageAndStore(getLocalizedText('providerApiKeyMissing', { provider: providerLabel }));
+                return;
+            }
+
+            apiKey = await decryptApiKey(encryptedApiKey);
+            console.log('[AskPage] Decrypted API key available:', apiKey ? 'Yes' : 'No');
+            console.log('[AskPage] API key preview:', maskApiKey(apiKey));
+
+            if (!apiKey) {
+                appendErrorMessageAndStore(getLocalizedText('providerApiKeyDecryptFailed', { provider: providerLabel }));
+                return;
+            }
         }
 
         const traceReporter = createExecutionTraceReporter();
@@ -11236,7 +11293,9 @@ async function createDialog() {
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
                 onAnswerDelta: streamedAnswer ? (delta) => streamedAnswer.append(delta) : () => {},
                 onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta }),
-                providerLabel
+                providerLabel,
+                requestUrlBuilder,
+                requestHeadersBuilder
             });
 
             if (streamedAnswer) {
@@ -11355,7 +11414,7 @@ async function createDialog() {
                 sendRequest: async (requestBody, onRetry, streamHandlers = {}) => {
                     const headers = {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
+                        'Authorization': 'Bearer ' + apiKey
                     };
                     const buildHttpError = (response, errorBody) => {
                         const retryAfterMs = getRetryAfterMilliseconds(response);
@@ -11719,7 +11778,7 @@ async function createDialog() {
                         'Content-Type': 'application/json'
                     };
                     if (apiKey && providerType !== 'ollama-cloud') {
-                        headers.Authorization = `Bearer ${apiKey}`;
+                        headers.Authorization = 'Bearer ' + apiKey;
                     }
 
                     const buildHttpError = (response, errorBody) => createHttpError(

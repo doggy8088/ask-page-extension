@@ -115,6 +115,7 @@ function escapeHtml(value) {
 
 const PROVIDER_LABEL_KEYS = Object.freeze({
     gemini: 'providerGemini',
+    vertex: 'providerVertex',
     openai: 'providerOpenAI',
     azure: 'providerAzure',
     anthropic: 'providerAnthropic',
@@ -128,6 +129,7 @@ const PROVIDER_LABEL_KEYS = Object.freeze({
 });
 const PROVIDER_DEFAULT_NAMES = Object.freeze({
     gemini: 'Google Gemini',
+    vertex: 'Gemini Enterprise',
     openai: 'OpenAI',
     azure: 'Azure OpenAI',
     anthropic: 'Anthropic Claude',
@@ -168,15 +170,17 @@ let agentGlowEffectEnabledCheckbox;
 // Multi-provider UI elements
 let providersList, addProviderBtn, providerModal, providerModalTitle, modalProviderName, modalProviderType;
 let modalProviderCancel, modalProviderSave, modalProviderTest, modalProviderTestResult;
-let modalGeminiFields, modalOpenaiFields, modalAzureFields, modalOpenaiCompatibleFields;
+let modalGeminiFields, modalVertexFields, modalOpenaiFields, modalAzureFields, modalOpenaiCompatibleFields;
 let modalAnthropicFields, modalDeepseekFields, modalOpenrouterFields, modalGroqFields, modalMistralFields, modalOllamaFields, modalOllamaCloudFields;
-let modalGeminiApiKey, modalOpenaiApiKey, modalAzureApiKey, modalAzureEndpoint, modalAzureDeployment, modalAzureApiVersion;
+let modalGeminiApiKey, modalVertexProjectId, modalVertexRegion, modalVertexAuthMode, modalVertexApiKey;
+let modalVertexAccessToken, modalOpenaiApiKey, modalAzureApiKey, modalAzureEndpoint, modalAzureDeployment, modalAzureApiVersion;
 let modalOpenaiCompatibleEndpoint, modalOpenaiCompatibleApiKey, modalOpenaiCompatibleModel;
 let modalOpenaiCompatibleModelInputGroup, modalOpenaiCompatibleModelsListGroup, modalOpenaiCompatibleModelsList;
 let modalAnthropicApiKey, modalDeepseekApiKey, modalOpenrouterApiKey, modalGroqApiKey, modalMistralApiKey, modalOllamaCloudApiKey;
 let modalOllamaEndpoint, modalOllamaModel;
-let modalGeminiModelsList, modalOpenaiModelsList;
+let modalGeminiModelsList, modalVertexModelsList, modalOpenaiModelsList;
 let modalGeminiGoogleSearch, modalGeminiGoogleSearchWarning;
+let modalVertexApiKeyGroup, modalVertexAccessTokenGroup;
 let modalAnthropicModelsList, modalDeepseekModelsList, modalOpenrouterModelsList, modalGroqModelsList, modalMistralModelsList, modalOllamaCloudModelsList;
 let currentEditingProvider = null;
 let providers = [];
@@ -219,6 +223,29 @@ const PREDEFINED_MODELS = {
         'gemini-flash-lite-latest',
         'gemma-4-31b-it',
         'gemma-4-26b-a4b-it'
+    ],
+    vertex: [
+        'gemini-3.7-flash',
+        'gemini-3.6-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.5-flash',
+        'gemini-3.1-pro-preview',
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-pro',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-flash-lite-latest',
+        'gemini-2.0-pro',
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-2.0-flash-thinking-exp',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-8b',
+        'gemma-4-31b-it',
+        'gemma-4-26b-a4b-it',
+        'gemma-2-27b-it',
+        'gemma-2-9b-it'
     ],
     openai: [
         'gpt-5.6-sol',
@@ -308,6 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalProviderTestResult = document.getElementById('modalProviderTestResult');
 
     modalGeminiFields = document.getElementById('modal-gemini-fields');
+    modalVertexFields = document.getElementById('modal-vertex-fields');
     modalOpenaiFields = document.getElementById('modal-openai-fields');
     modalAzureFields = document.getElementById('modal-azure-fields');
     modalOpenaiCompatibleFields = document.getElementById('modal-openai-compatible-fields');
@@ -320,6 +348,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalOllamaCloudFields = document.getElementById('modal-ollama-cloud-fields');
 
     modalGeminiApiKey = document.getElementById('modalGeminiApiKey');
+    modalVertexProjectId = document.getElementById('modalVertexProjectId');
+    modalVertexRegion = document.getElementById('modalVertexRegion');
+    modalVertexAuthMode = document.getElementById('modalVertexAuthMode');
+    modalVertexApiKey = document.getElementById('modalVertexApiKey');
+    modalVertexAccessToken = document.getElementById('modalVertexAccessToken');
+    modalVertexApiKeyGroup = document.getElementById('modalVertexApiKeyGroup');
+    modalVertexAccessTokenGroup = document.getElementById('modalVertexAccessTokenGroup');
+    modalVertexModelsList = document.getElementById('modalVertexModelsList');
     modalOpenaiApiKey = document.getElementById('modalOpenaiApiKey');
     modalAzureApiKey = document.getElementById('modalAzureApiKey');
     modalAzureEndpoint = document.getElementById('modalAzureEndpoint');
@@ -493,6 +529,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalGeminiGoogleSearch.addEventListener('change', () => {
         modalGeminiGoogleSearchWarning.hidden = !modalGeminiGoogleSearch.checked;
     });
+    if (modalVertexAuthMode) {
+        modalVertexAuthMode.addEventListener('change', updateVertexAuthModeFields);
+    }
 
     // Model actions event listeners (fetch models, manually input models, etc.)
     document.querySelectorAll('.btn-action-models').forEach(btn => {
@@ -1158,6 +1197,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (p.type === 'gemini') {
                 borderColor = '#4285F4';
                 typeLabel = t('providerGemini');
+            } else if (p.type === 'vertex') {
+                borderColor = '#1a73e8';
+                typeLabel = t('providerVertex');
             } else if (p.type === 'openai') {
                 borderColor = '#10a37f';
                 typeLabel = t('providerOpenAI');
@@ -1192,7 +1234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             div.style.borderLeft = `4px solid ${borderColor}`;
 
             let modelsHtml = '';
-            if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
+            if (['gemini', 'vertex', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
                 const models = p.models || [];
                 modelsHtml = models.map(m => {
                     const isActive = (p.id === activeProviderId && m === activeModel);
@@ -1260,6 +1302,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalGeminiApiKey.value = '';
         modalGeminiGoogleSearch.checked = false;
         modalGeminiGoogleSearchWarning.hidden = true;
+        modalVertexProjectId.value = '';
+        modalVertexRegion.value = 'us-central1';
+        modalVertexAuthMode.value = 'api-key';
+        modalVertexApiKey.value = '';
+        modalVertexAccessToken.value = '';
         modalOpenaiApiKey.value = '';
         modalAzureApiKey.value = '';
         modalAzureEndpoint.value = '';
@@ -1280,6 +1327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Uncheck checkboxes
         modalGeminiModelsList.innerHTML = '';
+        modalVertexModelsList.innerHTML = '';
         modalOpenaiModelsList.innerHTML = '';
         modalAnthropicModelsList.innerHTML = '';
         modalDeepseekModelsList.innerHTML = '';
@@ -1291,6 +1339,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         modalOpenaiCompatibleModelInputGroup.style.display = 'block';
         modalOpenaiCompatibleModelsListGroup.style.display = 'none';
+        updateVertexAuthModeFields();
 
         if (provider) {
             providerModalTitle.textContent = t('editProviderTitle');
@@ -1298,12 +1347,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalProviderType.value = provider.type;
 
             let decryptedKey = '';
+            let decryptedAccessToken = '';
             if (provider.apiKey) {
                 try {
                     decryptedKey = await decryptApiKey(provider.apiKey, encryptionKey);
                 } catch (e) {
                     console.error('Decryption failed', e);
                     decryptedKey = typeof provider.apiKey === 'string' ? provider.apiKey : '';
+                }
+            }
+            if (provider.accessToken) {
+                try {
+                    decryptedAccessToken = await decryptApiKey(provider.accessToken, encryptionKey);
+                } catch (e) {
+                    console.error('Access token decryption failed', e);
+                    decryptedAccessToken = typeof provider.accessToken === 'string' ? provider.accessToken : '';
                 }
             }
 
@@ -1316,6 +1374,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 renderModalModelsList(modalGeminiModelsList, combinedModels, configuredModels);
                 modalGeminiGoogleSearch.checked = !!provider.googleSearchEnabled;
                 modalGeminiGoogleSearchWarning.hidden = !modalGeminiGoogleSearch.checked;
+            } else if (provider.type === 'vertex') {
+                modalVertexProjectId.value = provider.projectId || '';
+                modalVertexRegion.value = provider.region || 'us-central1';
+                modalVertexAuthMode.value = provider.authMode || 'api-key';
+                if (provider.authMode === 'bearer-token') {
+                    modalVertexAccessToken.value = decryptedAccessToken;
+                } else {
+                    modalVertexApiKey.value = decryptedKey;
+                }
+                renderModalModelsList(modalVertexModelsList, combinedModels, configuredModels);
             } else if (provider.type === 'openai') {
                 modalOpenaiApiKey.value = decryptedKey;
                 renderModalModelsList(modalOpenaiModelsList, combinedModels, configuredModels);
@@ -1364,35 +1432,30 @@ document.addEventListener('DOMContentLoaded', async () => {
             providerModalTitle.textContent = t('addProviderTitle');
             modalProviderName.value = getProviderDefaultName(modalProviderType.value);
 
-            // Set Gemini defaults
             const geminiModels = [...(PREDEFINED_MODELS['gemini'] || [])];
             renderModalModelsList(modalGeminiModelsList, geminiModels, [geminiModels[0]]);
 
-            // Set OpenAI defaults
+            const vertexModels = [...(PREDEFINED_MODELS['vertex'] || [])];
+            renderModalModelsList(modalVertexModelsList, vertexModels, [vertexModels[0]]);
+
             const openaiModels = [...(PREDEFINED_MODELS['openai'] || [])];
             renderModalModelsList(modalOpenaiModelsList, openaiModels, [openaiModels[0]]);
 
-            // Set Anthropic defaults
             const anthropicModels = [...(PREDEFINED_MODELS['anthropic'] || [])];
             renderModalModelsList(modalAnthropicModelsList, anthropicModels, [anthropicModels[0]]);
 
-            // Set DeepSeek defaults
             const deepseekModels = [...(PREDEFINED_MODELS['deepseek'] || [])];
             renderModalModelsList(modalDeepseekModelsList, deepseekModels, [deepseekModels[0]]);
 
-            // Set OpenRouter defaults
             const openrouterModels = [...(PREDEFINED_MODELS['openrouter'] || [])];
             renderModalModelsList(modalOpenrouterModelsList, openrouterModels, [openrouterModels[0]]);
 
-            // Set Groq defaults
             const groqModels = [...(PREDEFINED_MODELS['groq'] || [])];
             renderModalModelsList(modalGroqModelsList, groqModels, [groqModels[0]]);
 
-            // Set Mistral defaults
             const mistralModels = [...(PREDEFINED_MODELS['mistral'] || [])];
             renderModalModelsList(modalMistralModelsList, mistralModels, [mistralModels[0]]);
 
-            // Set Ollama Cloud defaults
             const ollamaCloudModels = [...(PREDEFINED_MODELS['ollama-cloud'] || [])];
             renderModalModelsList(modalOllamaCloudModelsList, ollamaCloudModels, [ollamaCloudModels[0]]);
         }
@@ -1401,9 +1464,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         providerModal.style.display = 'block';
     }
 
+    function updateVertexAuthModeFields() {
+        if (!modalVertexAuthMode) {
+            return;
+        }
+        const isBearerToken = modalVertexAuthMode.value === 'bearer-token';
+        if (modalVertexApiKeyGroup) {
+            modalVertexApiKeyGroup.style.display = isBearerToken ? 'none' : 'block';
+        }
+        if (modalVertexAccessTokenGroup) {
+            modalVertexAccessTokenGroup.style.display = isBearerToken ? 'block' : 'none';
+        }
+    }
+
     function updateModalFieldsVisibility() {
         const type = modalProviderType.value;
         modalGeminiFields.style.display = type === 'gemini' ? 'block' : 'none';
+        modalVertexFields.style.display = type === 'vertex' ? 'block' : 'none';
         modalOpenaiFields.style.display = type === 'openai' ? 'block' : 'none';
         modalAzureFields.style.display = type === 'azure' ? 'block' : 'none';
         modalAnthropicFields.style.display = type === 'anthropic' ? 'block' : 'none';
@@ -1414,6 +1491,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalOllamaFields.style.display = type === 'ollama' ? 'block' : 'none';
         modalOllamaCloudFields.style.display = type === 'ollama-cloud' ? 'block' : 'none';
         modalOpenaiCompatibleFields.style.display = type === 'openai-compatible' ? 'block' : 'none';
+        updateVertexAuthModeFields();
     }
 
     function handleProviderTypeChange() {
@@ -1444,6 +1522,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         let apiKeyRaw = '';
+        let credentialStorageKey = 'apiKey';
         if (type === 'gemini') {
             apiKeyRaw = modalGeminiApiKey.value.trim();
             if (!apiKeyRaw) {
@@ -1460,6 +1539,36 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             providerData.models = selectedModels;
             providerData.googleSearchEnabled = modalGeminiGoogleSearch.checked;
+        } else if (type === 'vertex') {
+            const projectId = modalVertexProjectId.value.trim();
+            const region = modalVertexRegion.value.trim();
+            const authMode = modalVertexAuthMode.value === 'bearer-token' ? 'bearer-token' : 'api-key';
+            const credential = authMode === 'bearer-token'
+                ? modalVertexAccessToken.value.trim()
+                : modalVertexApiKey.value.trim();
+
+            if (!projectId || !region) {
+                alert(t('vertexFieldsRequired'));
+                return;
+            }
+            if (!credential) {
+                alert(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
+                return;
+            }
+            const selectedModels = [];
+            modalVertexModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                selectedModels.push(cb.value);
+            });
+            if (selectedModels.length === 0) {
+                alert(t('providerModelRequired', { provider: getProviderTypeLabel(type) }));
+                return;
+            }
+            providerData.projectId = projectId;
+            providerData.region = region;
+            providerData.authMode = authMode;
+            providerData.models = selectedModels;
+            apiKeyRaw = credential;
+            credentialStorageKey = authMode === 'bearer-token' ? 'accessToken' : 'apiKey';
         } else if (type === 'openai') {
             apiKeyRaw = modalOpenaiApiKey.value.trim();
             if (!apiKeyRaw) {
@@ -1631,13 +1740,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (apiKeyRaw) {
             try {
-                providerData.apiKey = await encryptApiKey(apiKeyRaw, encryptionKey);
+                providerData[credentialStorageKey] = await encryptApiKey(apiKeyRaw, encryptionKey);
             } catch (err) {
                 console.error('Encryption failed', err);
-                providerData.apiKey = apiKeyRaw;
+                providerData[credentialStorageKey] = apiKeyRaw;
+            }
+            if (credentialStorageKey === 'apiKey') {
+                providerData.accessToken = '';
+            } else {
+                providerData.apiKey = '';
             }
         } else {
             providerData.apiKey = '';
+            providerData.accessToken = '';
         }
 
         if (currentEditingProvider) {
@@ -1703,13 +1818,37 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+            } else if (type === 'vertex') {
+                const projectId = modalVertexProjectId.value.trim();
+                const region = modalVertexRegion.value.trim() || 'us-central1';
+                const authMode = modalVertexAuthMode.value === 'bearer-token' ? 'bearer-token' : 'api-key';
+                const credential = authMode === 'bearer-token'
+                    ? modalVertexAccessToken.value.trim()
+                    : modalVertexApiKey.value.trim();
+
+                if (!projectId) {
+                    throw new Error(t('vertexProjectIdRequired'));
+                }
+                if (!region) {
+                    throw new Error(t('vertexRegionRequired'));
+                }
+                if (!credential) {
+                    throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
+                }
+
+                url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models`;
+                if (authMode === 'bearer-token') {
+                    headers['Authorization'] = 'Bearer ' + credential;
+                } else {
+                    headers['x-goog-api-key'] = credential;
+                }
             } else if (type === 'openai') {
                 const apiKey = modalOpenaiApiKey.value.trim();
                 if (!apiKey) {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://api.openai.com/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'anthropic') {
                 const apiKey = modalAnthropicApiKey.value.trim();
                 if (!apiKey) {
@@ -1725,35 +1864,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://api.deepseek.com/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'openrouter') {
                 const apiKey = modalOpenrouterApiKey.value.trim();
                 if (!apiKey) {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://openrouter.ai/api/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'groq') {
                 const apiKey = modalGroqApiKey.value.trim();
                 if (!apiKey) {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://api.groq.com/openai/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'mistral') {
                 const apiKey = modalMistralApiKey.value.trim();
                 if (!apiKey) {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://api.mistral.ai/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'ollama-cloud') {
                 const apiKey = modalOllamaCloudApiKey.value.trim();
                 if (!apiKey) {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://ollama.com/v1/models';
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             } else if (type === 'azure') {
                 const apiKey = modalAzureApiKey.value.trim();
                 const endpoint = modalAzureEndpoint.value.trim();
@@ -1809,7 +1948,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 url = endpoint.endsWith('/models') ? endpoint : `${endpoint.replace(/\/$/, '')}/models`;
                 if (apiKey) {
-                    headers['Authorization'] = `Bearer ${apiKey}`;
+                    headers['Authorization'] = 'Bearer ' + apiKey;
                 }
             } else {
                 throw new Error(t('unknownProviderType'));
@@ -2028,11 +2167,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             apiKey = modalGeminiApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+        } else if (providerType === 'vertex') {
+            const projectId = modalVertexProjectId.value.trim();
+            const region = modalVertexRegion.value.trim() || 'us-central1';
+            const authMode = modalVertexAuthMode.value === 'bearer-token' ? 'bearer-token' : 'api-key';
+            const credential = authMode === 'bearer-token'
+                ? modalVertexAccessToken.value.trim()
+                : modalVertexApiKey.value.trim();
+
+            if (!projectId) {throw new Error(t('vertexProjectIdRequired'));}
+            if (!region) {throw new Error(t('vertexRegionRequired'));}
+            if (!credential) {
+                throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));
+            }
+
+            url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models`;
+            if (authMode === 'bearer-token') {
+                headers['Authorization'] = 'Bearer ' + credential;
+            } else {
+                headers['x-goog-api-key'] = credential;
+            }
         } else if (providerType === 'openai') {
             apiKey = modalOpenaiApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.openai.com/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         } else if (providerType === 'anthropic') {
             apiKey = modalAnthropicApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
@@ -2044,27 +2203,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             apiKey = modalDeepseekApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.deepseek.com/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         } else if (providerType === 'openrouter') {
             apiKey = modalOpenrouterApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://openrouter.ai/api/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         } else if (providerType === 'groq') {
             apiKey = modalGroqApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.groq.com/openai/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         } else if (providerType === 'mistral') {
             apiKey = modalMistralApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.mistral.ai/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         } else if (providerType === 'ollama-cloud') {
             apiKey = modalOllamaCloudApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://ollama.com/v1/models';
-            headers['Authorization'] = `Bearer ${apiKey}`;
+            headers['Authorization'] = 'Bearer ' + apiKey;
         }
 
         // 2. Fetch from API
@@ -2082,6 +2241,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 models = data.models
                     .filter(m => m.name)
                     .map(m => m.name.replace(/^models\//, ''));
+            }
+        } else if (providerType === 'vertex') {
+            const list = data.models || data.data || [];
+            if (Array.isArray(list)) {
+                models = list
+                    .map(m => m.name || m.id || m.model)
+                    .filter(Boolean)
+                    .map(name => name.split('/').pop())
+                    .filter(Boolean);
             }
         } else if (['openai', 'deepseek', 'openrouter', 'groq', 'anthropic', 'mistral', 'ollama-cloud'].includes(providerType)) {
             const list = data.data || data.models || [];
@@ -2172,7 +2340,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!endpoint) {throw new Error(t('apiEndpointRequired'));}
             apiKey = modalOpenaiCompatibleApiKey.value.trim();
             if (apiKey) {
-                headers['Authorization'] = `Bearer ${apiKey}`;
+                headers['Authorization'] = 'Bearer ' + apiKey;
             }
         }
 
@@ -2260,6 +2428,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function getModelListContainer(providerType) {
         if (providerType === 'gemini') {return modalGeminiModelsList;}
+        if (providerType === 'vertex') {return modalVertexModelsList;}
         if (providerType === 'openai') {return modalOpenaiModelsList;}
         if (providerType === 'anthropic') {return modalAnthropicModelsList;}
         if (providerType === 'deepseek') {return modalDeepseekModelsList;}

@@ -1,447 +1,2270 @@
 {
-    "extensionName": { "message": "페이지问 AskPage" },
-    "extensionLogoAlt": { "message": "AskPage 로고" },
-    "extensionDescription": { "message": "설정한 AI API로 현재 페이지에 대해 질문하고 답변을 받습니다" },
-    "commandToggleDialog": { "message": "AskPage 대화 상자 열기" },
-    "commandSwitchProvider": { "message": "AI 제공자 전환" },
-    "settingsMigrationTitle": { "message": "페이지问: 설정 이전 완료" },
-    "settingsMigrationDescription": { "message": "이제 여러 모델을 지원합니다. 곧 전체 설정 페이지로 이동합니다..." },
-    "codepenTitle": { "message": "CodePen으로 이동 중 - 페이지问 AskPage" },
-    "codepenDescription": { "message": "CodePen 코드를 준비하는 중..." },
-    "codepenOpeningDescription": { "message": "잠시 후 새 창에서 편집기가 열립니다" },
-    "codepenMissingData": { "message": "코드 데이터를 찾을 수 없습니다" },
-    "closeAndRetry": { "message": "이 탭을 닫고 다시 시도하세요." },
-    "codepenOpenFailed": { "message": "CodePen을 열 수 없습니다" },
-    "unknownErrorRetry": { "message": "알 수 없는 오류가 발생했습니다. 다시 시도하세요." },
-    "preferencesTitle": { "message": "AskPage: 환경설정" },
-    "preferencesDescription": { "message": "AI 제공자, 스킬 및 시스템 프롬프트를 설정합니다" },
-    "resetSettings": { "message": "설정 초기화" },
-    "exportSettings": { "message": "내보내기" },
-    "importSettings": { "message": "가져오기" },
-    "aiProviders": { "message": "AI 제공자" },
-    "customSlashCommands": { "message": "스킬 관리" },
-    "adjustSystemPrompt": { "message": "시스템 프롬프트 조정" },
-    "aiProviderSettings": { "message": "AI 제공자 설정" },
-    "aiProviderSettingsDescription": { "message": "여러 AI 제공자를 설정하고 하나 이상의 모델을 활성화합니다. 모델 이름을 선택하면 현재 사용할 모델로 전환됩니다." },
-    "addAiProvider": { "message": "AI 제공자 추가" },
-    "slashCommandManagement": { "message": "스킬 관리" },
-    "slashCommandManagementDescription": { "message": "기본 제공 스킬과 사용자 지정 스킬을 관리합니다" },
-    "addCustomSlashCommand": { "message": "스킬 추가" },
-    "systemPromptDescription": { "message": "이 내용은 기본 시스템 프롬프트 끝에 추가됩니다. 비워 두면 추가하지 않으며 기본 시스템 프롬프트는 덮어쓰지 않습니다." },
-    "additionalPrompt": { "message": "추가 프롬프트" },
-    "additionalPromptPlaceholder": { "message": "시스템 프롬프트에 추가할 내용을 입력하세요..." },
-    "additionalPromptSaveDescription": { "message": "저장하면 모든 AI 제공자가 요청에 이 추가 프롬프트를 적용합니다." },
-    "characterCount": { "message": "$count$자", "placeholders": { "count": { "content": "$1" } } },
-    "generalSettingsTab": { "message": "일반 설정" },
-    "interfaceIndicatorsTitle": { "message": "인터페이스 표시 효과" },
-    "interfaceIndicatorsDescription": { "message": "AskPage 대화상자 외에 페이지에 표시되는 시각적 신호를 조정합니다." },
-    "enableAgentGlowEffect": { "message": "에이전트 모드 실행 중 페이지 발광 효과 표시" },
-    "enableAgentGlowEffectHelp": { "message": "활성화하면 에이전트 모드에서 질문을 보낸 후 답변이 완료될 때까지 페이지 가장자리에 호박색 발광 애니메이션이 표시되어 AskPage가 작업 중임을 알려줍니다." },
-    "footerPrefix": { "message": "© 2026 설계·개발·유지 관리:" },
-    "footerLink": { "message": "Will 保哥 기술 교류 센터" },
-    "footerVersion": { "message": " v$version$", "placeholders": { "version": { "content": "$1" } } },
-    "localeLabel": { "message": "인터페이스 언어" },
-    "localeAuto": { "message": "자동" },
-    "localeZhTW": { "message": "繁體中文" },
-    "localeEn": { "message": "English" },
-    "localeZhCN": { "message": "简体中文" },
-    "localeJa": { "message": "日本語" },
-    "localeKo": { "message": "한국어" },
-    "editSlashCommand": { "message": "스킬 편집" },
-    "editBuiltInCommand": { "message": "기본 제공 스킬 편집" },
-    "editCustomCommand": { "message": "스킬 편집" },
-    "addCustomCommand": { "message": "스킬 추가" },
-    "commandName": { "message": "스킬 이름" },
-    "commandNamePlaceholder": { "message": "예: /help" },
-    "commandNameHelp": { "message": "스킬 이름은 /로 시작해야 하며 영문자, 숫자, 밑줄, 하이픈만 사용할 수 있습니다." },
-    "promptContent": { "message": "프롬프트 내용" },
-    "promptContentPlaceholder": { "message": "이 스킬을 실행할 때 AI에 보낼 프롬프트를 입력하세요. ${variableName}으로 입력란을 만들 수 있습니다. 예: Hi, I'm ${name} from ${country:TW}." },
-    "promptContentHelp": { "message": "프롬프트에서 ${variableName}을 사용하면 입력란이 생성됩니다. 스킬 실행 후 하나씩 입력할 수 있습니다. ${variableName:defaultValue}로 기본값을 설정할 수 있으며 같은 이름의 변수는 동기화됩니다." },
-    "showVariableLabels": { "message": "프롬프트를 펼칠 때 변수 이름 표시" },
-    "showVariableLabelsHelp": { "message": "선택하지 않으면 입력하지 않은 변수는 자리 표시자로 이름만 표시되고 입력 후 사라집니다. 선택하면 ‘변수 이름:’ 라벨이 계속 표시됩니다." },
-    "mode": { "message": "모드" },
-    "modeUnspecified": { "message": "지정 안 함" },
-    "modeAgent": { "message": "에이전트" },
-    "modeInquiry": { "message": "일반" },
-    "modeHelp": { "message": "스킬을 실행할 때 모드가 자동으로 전환됩니다. ‘지정 안 함’을 선택하면 현재 모드를 유지합니다." },
-    "enableScreenshotMode": { "message": "스크린샷 모드 사용" },
-    "enableScreenshotModeHelp": { "message": "스킬 실행 시 스크린샷 모드를 자동으로 적용합니다." },
-    "cancel": { "message": "취소" },
-    "save": { "message": "저장" },
-    "addProviderTitle": { "message": "AI 제공자 추가" },
-    "editProviderTitle": { "message": "AI 제공자 편집" },
-    "providerType": { "message": "제공자 유형" },
-    "providerCustomName": { "message": "사용자 지정 제공자 이름" },
-    "providerCustomNamePlaceholder": { "message": "예: 내 Gemini 계정" },
-    "enabledModels": { "message": "활성화할 모델（하나 이상 선택）" },
-    "geminiGoogleSearchEnabled": { "message": "Grounding with Google Search 도구 활성화" },
-    "geminiGoogleSearchEnabledWarning": { "message": "⚠ Google AI Studio 무료 요금제에서는 이 설정을 지원하지 않으며, 활성화하면 429 할당량 오류가 발생합니다. Tier 1 이상 유료 플랜에서만 사용할 수 있습니다." },
-    "apiKeyOptional": { "message": "API Key（선택 사항）" },
-    "leaveBlankIfNotRequired": { "message": "필요하지 않으면 비워 두세요" },
-    "modelName": { "message": "모델 이름" },
-    "loadAllModels": { "message": "사용 가능한 모든 모델 불러오기" },
-    "enterModelManually": { "message": "모델 이름 직접 입력" },
-    "loadEndpointModels": { "message": "엔드포인트 모델 불러오기" },
-    "loadLocalModels": { "message": "로컬 모델 불러오기" },
-    "loadLatestCloudModels": { "message": "최신 클라우드 모델 불러오기" },
-    "curatedCloudModels": { "message": "엄선한 Ollama Cloud 모델 ID가 기본 제공되며 최신 전체 목록도 불러올 수 있습니다." },
-    "testConnection": { "message": "연결 테스트" },
-    "ollamaCloudKeyHelp": { "message": "Ollama API Keys에서 " },
-    "createKeySuffix": { "message": "키를 만들 수 있습니다." },
-    "ollamaApiKeysLink": { "message": "Ollama API Keys" },
-    "openAiCompatibleEndpoint": { "message": "OpenAI 호환 엔드포인트" },
-    "geminiApiKeyPlaceholder": { "message": "Gemini API Key를 입력하세요" },
-    "openaiApiKeyPlaceholder": { "message": "OpenAI API Key를 입력하세요" },
-    "azureApiKeyPlaceholder": { "message": "Azure OpenAI API Key를 입력하세요" },
-    "azureEndpointPlaceholder": { "message": "예: https://your-resource.openai.azure.com" },
-    "azureDeploymentPlaceholder": { "message": "예: gpt-4o-mini" },
-    "anthropicApiKeyPlaceholder": { "message": "Anthropic API Key를 입력하세요" },
-    "deepseekApiKeyPlaceholder": { "message": "DeepSeek API Key를 입력하세요" },
-    "openrouterApiKeyPlaceholder": { "message": "OpenRouter API Key를 입력하세요" },
-    "groqApiKeyPlaceholder": { "message": "Groq API Key를 입력하세요" },
-    "mistralApiKeyPlaceholder": { "message": "Mistral API Key를 입력하세요" },
-    "ollamaCloudApiKeyPlaceholder": { "message": "Ollama API Key를 입력하세요" },
-    "openAiEndpointPlaceholder": { "message": "예: http://localhost:11434/v1" },
-    "openAiCompatibleModelPlaceholder": { "message": "예: llama3, mistral" },
-    "ollamaEndpointPlaceholder": { "message": "예: http://localhost:11434/v1" },
-    "ollamaModelPlaceholder": { "message": "예: llama3.3, deepseek-r1" },
-    "providerEndpoint": { "message": "엔드포인트" },
-    "apiKey": { "message": "API Key" },
-    "apiEndpoint": { "message": "API Endpoint" },
-    "deploymentName": { "message": "Deployment Name" },
-    "apiVersion": { "message": "API Version" },
-    "loading": { "message": "로드 중" },
-    "askPage": { "message": "페이지问" },
-    "dragTitleBar": { "message": "제목 표시줄을 드래그하여 대화 상자 이동" },
-    "openPreferences": { "message": "옵션 열기" },
-    "inputPlaceholder": { "message": "질문을 입력하고 Enter를 누르세요. 최대 4개의 이미지를 붙여넣거나 드래그하여 컨텍스트로 추가할 수 있습니다" },
-    "imageContextTitle": { "message": "이미지 컨텍스트（Ctrl+V 또는 드래그하여 참고 이미지 추가）" },
-    "imageContextMeta": { "message": "PNG / JPG / WebP 등 지원. 파일당 최대 10MB" },
-    "uploadImage": { "message": "이미지 업로드" },
-    "uploadImageTitle": { "message": "이미지를 선택하여 이번 질문의 컨텍스트에 추가" },
-    "annotateScreen": { "message": "화면 주석" },
-    "annotateScreenTitle": { "message": "대화 상자를 잠시 숨긴 후 화면을 선택하거나 주석을 추가하여 이미지 컨텍스트에 포함" },
-    "ask": { "message": "질문" },
-    "reasoningEffort": { "message": "추론 강도" },
-    "switchProviderModel": { "message": "AI 제공자 및 모델 전환" },
-    "noModelConfigured": { "message": "구성된 모델 없음" },
-    "builtin": { "message": "기본 제공" },
-    "edit": { "message": "편집" },
-    "delete": { "message": "삭제" },
-    "endpoint": { "message": "엔드포인트" },
-    "noProviders": { "message": "아직 AI 제공자가 추가되지 않았습니다. 아래의 ‘AI 제공자 추가’를 클릭하세요." },
-    "addProviderPrompt": { "message": "AI 제공자 추가" },
-    "connectionTestSucceeded": { "message": "🟢 연결 테스트 성공" },
-    "testing": { "message": "⏳ 테스트 중..." },
-    "processing": { "message": "⏳ 처리 중..." },
-    "settingsAutoSaved": { "message": "시스템 프롬프트가 자동으로 저장되었습니다." },
-    "settingsReset": { "message": "설정이 초기화되었습니다." },
-    "settingsExported": { "message": "설정을 내보냈습니다." },
-    "settingsImported": { "message": "설정을 성공적으로 가져왔습니다. 다시 로드하는 중..." },
-    "importInvalid": { "message": "가져오기 실패: 잘못된 파일 형식" },
-    "commandSaved": { "message": "스킬이 저장되었습니다" },
-    "builtInCommandCannotDelete": { "message": "기본 제공 스킬은 삭제할 수 없습니다" },
-    "commandDeleted": { "message": "스킬이 삭제되었습니다" },
-    "providerSaved": { "message": "제공자가 저장되었습니다" },
-    "providerDeleted": { "message": "제공자가 삭제되었습니다" },
-    "commandClearHistory": { "message": "질문 기록 지우기" },
-    "commandSummaryPage": { "message": "현재 페이지 요약" },
-    "commandScreenshot": { "message": "스크린샷 모드 전환" },
-    "commandAgent": { "message": "일반 모드와 에이전트 모드 전환（에이전트 모드는 페이지 HTML 및 도구 호출 사용）" },
-    "summaryPrompt": { "message": "이 글을 Markdown 형식으로 요약하고 ‘제목’, ‘핵심 요약’, ‘결론’을 포함해 주세요." },
-    "systemPromptLanguageInstruction": { "message": "환경설정에서 지정한 한국어를 주요 응답 언어로 사용하세요. 사용자가 현재 요청에서 다른 언어를 명시적으로 요구한 경우에만 해당 언어로 전환하세요." },
-    "resetSettingsConfirm": { "message": "모든 설정을 재설정할까요?\n\nAI 제공자, API 키, 스킬, 질문 기록 및 기타 설정이 삭제됩니다." },
-    "importSettingsConfirm": { "message": "이 설정 파일을 가져올까요? 현재 설정을 덮어씁니다." },
-    "invalidVariableName": { "message": "변수 이름 \"$name$\"이(가) 잘못되었습니다. 문자, 숫자, 밑줄만 사용할 수 있으며 숫자로 시작할 수 없습니다.", "placeholders": { "name": { "content": "$1" } } },
-    "inconsistentVariableDefault": { "message": "변수 \"$name$\"의 중복 기본값이 일치하지 않습니다: $first$ 및 $second$", "placeholders": { "name": { "content": "$1" }, "first": { "content": "$2" }, "second": { "content": "$3" } } },
-    "commandNameRequired": { "message": "스킬 이름을 입력하세요" },
-    "commandNameInvalid": { "message": "스킬 이름은 /로 시작하고 문자, 숫자, 밑줄, 하이픈만 포함해야 합니다." },
-    "commandNameBuiltinDuplicate": { "message": "기본 제공 스킬과 같은 이름은 사용할 수 없습니다." },
-    "commandNameCustomDuplicate": { "message": "해당 스킬 이름은 기존 사용자 지정 스킬에서 사용 중입니다." },
-    "promptContentRequired": { "message": "프롬프트 내용을 입력하세요" },
-    "deleteCommandConfirm": { "message": "스킬 $command$을(를) 삭제할까요?", "placeholders": { "command": { "content": "$1" } } },
-    "providerGemini": { "message": "Google Gemini" },
-    "providerOpenAI": { "message": "OpenAI" },
-    "providerAzure": { "message": "Azure OpenAI" },
-    "providerAnthropic": { "message": "Anthropic Claude" },
-    "providerDeepSeek": { "message": "DeepSeek" },
-    "providerOpenRouter": { "message": "OpenRouter" },
-    "providerGroq": { "message": "Groq" },
-    "providerMistral": { "message": "Mistral AI" },
-    "providerOllamaLocal": { "message": "Ollama（로컬）" },
-    "providerOllamaCloud": { "message": "Ollama Cloud" },
-    "providerOpenAICompatible": { "message": "OpenAI 호환 엔드포인트" },
-    "modelUnspecified": { "message": "모델 미지정" },
-    "providerApiKeyRequired": { "message": "$provider$ API Key를 입력하세요", "placeholders": { "provider": { "content": "$1" } } },
-    "providerModelRequired": { "message": "$provider$ 모델을 하나 이상 선택하세요", "placeholders": { "provider": { "content": "$1" } } },
-    "azureFieldsRequired": { "message": "Azure OpenAI API Key, Endpoint, Deployment Name을 입력하세요" },
-    "apiEndpointRequired": { "message": "API Endpoint를 입력하세요" },
-    "modelSelectionRequired": { "message": "모델을 하나 이상 선택하세요" },
-    "modelNameRequired": { "message": "모델 이름을 입력하세요" },
-    "ollamaFieldsRequired": { "message": "Ollama API Endpoint와 모델 이름을 입력하세요" },
-    "ollamaModelRequired": { "message": "Ollama 모델 이름을 입력하세요" },
-    "unknownProviderType": { "message": "알 수 없는 제공자 유형입니다" },
-    "connectionTestFailed": { "message": "🔴 연결 실패: $error$", "placeholders": { "error": { "content": "$1" } } },
-    "deleteProviderConfirm": { "message": "제공자 \"$provider$\"을(를) 삭제할까요?", "placeholders": { "provider": { "content": "$1" } } },
-    "activeModelChanged": { "message": "사용 모델을 $model$(으)로 전환했습니다", "placeholders": { "model": { "content": "$1" } } },
-    "modelActionFailed": { "message": "작업 실패: $error$", "placeholders": { "error": { "content": "$1" } } },
-    "apiResponseError": { "message": "API 응답 오류: $status$ $error$", "placeholders": { "status": { "content": "$1" }, "error": { "content": "$2" } } },
-    "noModelsFound": { "message": "사용 가능한 모델 이름을 찾을 수 없습니다" },
-    "customModelNamePrompt": { "message": "수동으로 추가할 모델 이름을 입력하세요:" },
-    "customModelAdded": { "message": "모델 $model$을(를) 추가하고 선택했습니다", "placeholders": { "model": { "content": "$1" } } },
-    "ollamaConnectionFailed": { "message": "Ollama 서비스에 연결할 수 없습니다" },
-    "loadedModelsPrompt": { "message": "다음 모델 이름을 불러왔습니다. 선택할 모델 이름을 복사하거나 입력하세요:" },
-    "modelSelected": { "message": "모델 $model$을(를) 선택했습니다", "placeholders": { "model": { "content": "$1" } } },
-    "modelsLoaded": { "message": "$count$개 모델을 불러왔습니다", "placeholders": { "count": { "content": "$1" } } },
-    "screenshotMode": { "message": "스크린샷 모드" },
-    "screenshot": { "message": "스크린샷" },
-    "screenshotEnabledState": { "message": "스크린샷 포함" },
-    "screenshotDisabledState": { "message": "스크린샷 제외" },
-    "modeSwitch": { "message": "모드 전환" },
-    "agentEnabledState": { "message": "에이전트 모드" },
-    "inquiryEnabledState": { "message": "질문 모드" },
-    "modeToggleAria": { "message": "$label$: 현재 $current$, 클릭하여 $next$(으)로 전환", "placeholders": { "label": { "content": "$1" }, "current": { "content": "$2" }, "next": { "content": "$3" } } },
-    "reasoningDynamic": { "message": "동적" },
-    "reasoningOff": { "message": "끔" },
-    "reasoningMinimal": { "message": "최소" },
-    "reasoningLow": { "message": "낮음" },
-    "reasoningMedium": { "message": "중간" },
-    "reasoningHigh": { "message": "높음" },
-    "reasoningExtraHigh": { "message": "매우 높음" },
-    "reasoningMaximum": { "message": "최대" },
-    "reasoningToken": { "message": "$count$ 토큰", "placeholders": { "count": { "content": "$1" } } },
-    "inputUsingProvider": { "message": "$provider$($model$)을(를) 사용하여 질문에 답합니다($hint$)", "placeholders": { "provider": { "content": "$1" }, "model": { "content": "$2" }, "hint": { "content": "$3" } } },
-    "shiftEnterHint": { "message": "Shift+Enter로 줄바꿈" },
-    "reasoningBudgetHint": { "message": "슬라이더로 추론 토큰 예산을 조정하세요" },
-    "reasoningLevelHint": { "message": "슬라이더로 이 모델의 추론 강도를 조정하세요" },
-    "switchProviderModelWithReasoning": { "message": "AI 제공자와 모델 전환; 마우스를 올려 추론 강도 조정" },
-    "openOptionsFailedMessage": { "message": "❌ **옵션을 열 수 없습니다**\n\n나중에 다시 시도하세요." },
-    "submitQuestion": { "message": "질문 보내기" },
-    "disableScreenshot": { "message": "스크린샷 모드 끄기" },
-    "enableScreenshot": { "message": "스크린샷 모드 켜기" },
-    "switchToInquiryMode": { "message": "질문 모드로 전환(내용 질문만 처리)" },
-    "switchToAgentMode": { "message": "에이전트 모드로 전환(도구 호출 허용)" },
-    "customCommand": { "message": "사용자 지정 스킬" },
-    "statusPlanning": { "message": "요청과 페이지 상태를 분석하고 있습니다." },
-    "statusToolCallingFallback": { "message": "이 엔드포인트는 도구 호출을 지원하지 않아 텍스트 모드로 계속합니다." },
-    "statusOutputLimitRetry": { "message": "출력 한도에 도달하기 전에 응답이 잘렸습니다. 출력 한도를 늘려 다시 시도합니다." },
-    "statusEmptyResponseRetry": { "message": "표시할 수 있는 내용이 없습니다. 다시 시도합니다." },
-    "statusServiceRetry": { "message": "서비스가 일시적으로 불안정합니다. 잠시 후 다시 시도합니다." },
-    "httpError": { "message": "HTTP $status$ $statusText$", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" } } },
-    "agentEnabledDescription": { "message": "다단계 도구 호출로 현재 페이지를 분석하고 조작할 수 있습니다." },
-    "agentEnabledTitle": { "message": "에이전트: 켜짐" },
-    "agentModeBriefEnabled": { "message": "🤖 **에이전트 모드가 켜졌습니다**" },
-    "agentModeDetailedEnabled": { "message": "✅ **에이전트 모드가 켜졌습니다**\n\n에이전트 모드로 전환했습니다. 페이지 HTML과 도구 호출을 사용하여 현재 페이지를 분석하고 조작할 수 있습니다. 이 설정은 새로 고친 후에도 유지됩니다." },
-    "agentModeNoticeEnabled": { "message": "🤖 **에이전트 모드가 켜져 있습니다**\n다단계 도구 호출로 현재 페이지를 분석하고 조작합니다." },
-    "agentModeRequiredForImages": { "message": "이미지 컨텍스트를 직접 첨부하려면 에이전트 모드로 전환하세요." },
-    "annotationAdded": { "message": "주석이 포함된 스크린샷을 추가했습니다. 전송할 때 스크린샷을 다시 캡처하지 않습니다." },
-    "annotationCancelled": { "message": "주석이 취소되었거나 주석 스크린샷을 가져오지 못했습니다." },
-    "annotationEmpty": { "message": "추가할 주석 스크린샷을 가져오지 못했습니다." },
-    "annotationStarted": { "message": "주석 모드를 시작했습니다. 페이지 요소를 클릭하거나 왼쪽 버튼을 누른 채 그리세요." },
-    "builtInCommandCopyText": { "message": "**기본 제공 스킬:**\n- /clear - 기록 지우기(Ctrl+L도 가능)\n- /summary - 페이지 요약" },
-    "clearHistoryShortcut": { "message": "기록 지우기(Ctrl+L)" },
-    "clipboardNoImage": { "message": "클립보드에 사용할 수 있는 이미지가 없습니다." },
-    "customCommandTemplateVariablesError": { "message": "❌ **스킬 $command$의 프롬프트에 ${변수}가 포함되어 있습니다. 스킬 이름을 입력한 후 Tab을 눌러 펼치고 입력하세요.**", "placeholders": { "command": { "content": "$1" } } },
-    "customCommandsCopyHeading": { "message": "내 스킬:" },
-    "dropNoImage": { "message": "드롭한 콘텐츠에 사용할 수 있는 이미지가 없습니다." },
-    "imageDropFailed": { "message": "드롭한 이미지를 추가할 수 없습니다: $error$", "placeholders": { "error": { "content": "$1" } } },
-    "imagePasteFailed": { "message": "이미지를 붙여 넣을 수 없습니다: $error$", "placeholders": { "error": { "content": "$1" } } },
-    "imageUploadFailed": { "message": "이미지를 업로드할 수 없습니다: $error$", "placeholders": { "error": { "content": "$1" } } },
-    "imagesAdded": { "message": "$count$개의 이미지를 추가했습니다. 모델로 바로 보낼 수 있습니다.", "placeholders": { "count": { "content": "$1" } } },
-    "imagesAlreadyAdded": { "message": "이 이미지는 현재 질문에 이미 추가되어 있습니다." },
-    "inquiryEnabledDescription": { "message": "페이지 콘텐츠를 기준으로 답하고 페이지 도구는 호출하지 않습니다." },
-    "inquiryEnabledTitle": { "message": "질문: 켜짐" },
-    "inquiryModeBriefEnabled": { "message": "💬 **질문 모드가 켜졌습니다**" },
-    "inquiryModeDetailedEnabled": { "message": "💬 **질문 모드가 켜졌습니다**\n\n질문 모드로 전환했습니다. 페이지 콘텐츠를 기준으로 답하고 페이지 도구는 호출하지 않습니다. 직접 첨부한 이미지 컨텍스트도 비활성화됩니다. 이 설정은 새로 고친 후에도 유지됩니다." },
-    "inquiryModeNoticeEnabled": { "message": "💬 **질문 모드가 켜져 있습니다**\n페이지 콘텐츠를 기준으로 답하고 페이지 도구는 호출하지 않습니다." },
-    "maxImagesAdded": { "message": "최대 $max$개의 이미지만 첨부할 수 있어 처음 $count$개를 추가했습니다.", "placeholders": { "max": { "content": "$1" }, "count": { "content": "$2" } } },
-    "maxImagesAllowed": { "message": "최대 $max$개의 이미지만 첨부할 수 있습니다.", "placeholders": { "max": { "content": "$1" } } },
-    "noImageDetected": { "message": "추가할 이미지를 찾지 못했습니다." },
-    "noImageFiles": { "message": "추가할 이미지 파일이 없습니다." },
-    "openCustomCommands": { "message": "환경설정을 열어 모든 스킬 보기" },
-    "screenshotDisabledDescription": { "message": "웹페이지 텍스트만 분석하고 스크린샷은 자동으로 첨부하지 않습니다." },
-    "screenshotDisabledDetailed": { "message": "⭕ **스크린샷 기능이 꺼졌습니다**\n\n스크린샷을 자동으로 캡처하지 않습니다. 질문에는 텍스트만 사용합니다. 이 설정은 새로 고친 후에도 유지됩니다." },
-    "screenshotDisabledTitle": { "message": "스크린샷: 꺼짐" },
-    "screenshotEnabledDescription": { "message": "질문할 때 현재 화면의 스크린샷을 자동으로 첨부합니다." },
-    "screenshotEnabledDetailed": { "message": "✨ **스크린샷 기능이 켜졌습니다!** 이제 분석에 스크린샷을 포함합니다. 이 설정은 새로 고친 후에도 유지됩니다." },
-    "screenshotEnabledTitle": { "message": "스크린샷: 켜짐" },
-    "screenshotModeBriefDisabled": { "message": "⭕ **스크린샷 모드가 꺼졌습니다**" },
-    "screenshotModeBriefEnabled": { "message": "📸 **스크린샷 모드가 켜졌습니다**" },
-    "screenshotModeNoticeDisabled": { "message": "📝 **스크린샷 모드가 꺼져 있습니다**\nAskPage는 현재 웹페이지 텍스트만 분석합니다." },
-    "screenshotModeNoticeEnabled": { "message": "📸 **스크린샷 모드가 켜져 있습니다**\n현재 화면의 스크린샷을 보조 컨텍스트로 자동 첨부합니다." },
-    "screenshotRequiredForAnnotation": { "message": "현재 화면에 주석을 추가하려면 스크린샷 기능을 켜세요." },
-    "screenshotTestFailed": { "message": "❌ **스크린샷 테스트 실패**\n\n스크린샷 기능은 켜져 있지만 캡처하지 못했습니다. 브라우저 권한 설정을 확인하세요." },
-    "screenshotTestStarting": { "message": "✅ **스크린샷 기능이 켜졌습니다**\n\n🔄 스크린샷 캡처를 테스트하는 중..." },
-    "screenshotTestSucceeded": { "message": "📸 **스크린샷 테스트 성공!**\n\n**스크린샷 정보:**\n- 📏 이미지 크기: $imageSize$ KB\n- 🔗 형식: PNG (Base64)\n- 📊 데이터 길이: $dataLength$자\n- 🎯 Base64 데이터 길이: $base64Length$자\n\n**캡처한 스크린샷 미리보기:**", "placeholders": { "imagesize": { "content": "$1" }, "datalength": { "content": "$2" }, "base64length": { "content": "$3" } } },
-    "selectImageFile": { "message": "사용할 수 있는 이미지 파일을 선택하세요." },
-    "selectedTextCopyText": { "message": "🎯 **선택한 텍스트 감지**($count$자)\n\n선택한 텍스트를 중심으로 바로 질문할 수 있습니다.\n\n**선택한 내용:**\n$text$$mode$\n\n💡 $commands$", "placeholders": { "count": { "content": "$1" }, "text": { "content": "$2" }, "mode": { "content": "$3" }, "commands": { "content": "$4" } } },
-    "selectedTextDetected": { "message": "선택한 텍스트 감지" },
-    "selectedTextIntro": { "message": "선택한 텍스트를 중심으로 분석합니다. $count$자", "placeholders": { "count": { "content": "$1" } } },
-    "summaryTemplateVariablesError": { "message": "❌ **/summary 프롬프트에 ${변수}가 포함되어 있습니다. /summary를 입력한 후 Tab을 눌러 펼치고 입력하세요.**" },
-    "unknownCommandError": { "message": "❌ **알 수 없는 스킬: $command$**\n\n사용 가능한 스킬:\n$commands$\n\n환경설정에서 스킬을 추가할 수도 있습니다.", "placeholders": { "command": { "content": "$1" }, "commands": { "content": "$2" } } },
-    "usageIntro": { "message": "현재 페이지에 대해 바로 질문하거나 먼저 텍스트를 선택하세요." },
-    "usageTip": { "message": "사용 팁" },
-    "usageTipCopyText": { "message": "💡 **사용 팁:**\n\n이 페이지에 대해 바로 질문하거나 페이지 텍스트를 선택한 후 질문할 수 있습니다.$mode$\n\n$commands$", "placeholders": { "mode": { "content": "$1" }, "commands": { "content": "$2" } } },
-    "imageContextTitleWithAnnotation": { "message": "이미지 컨텍스트(업로드, 붙여넣기, 드롭 또는 현재 화면 주석)" },
-    "imageContextMetaWithCount": { "message": "PNG / JPG / WebP 등 이미지, 파일당 10MB 이하 · $count$/$max$", "placeholders": { "count": { "content": "$1" }, "max": { "content": "$2" } } },
-    "openFullImage": { "message": "클릭하여 $index$번째 전체 이미지 열기", "placeholders": { "index": { "content": "$1" } } },
-    "imagePreviewTitle": { "message": "이미지 미리보기 $index$ - AskPage", "placeholders": { "index": { "content": "$1" } } },
-    "imagePreviewHeading": { "message": "이미지 미리보기 $index$", "placeholders": { "index": { "content": "$1" } } },
-    "questionImageAlt": { "message": "AskPage 질문 이미지 $index$", "placeholders": { "index": { "content": "$1" } } },
-    "removeImage": { "message": "$index$번째 이미지 삭제", "placeholders": { "index": { "content": "$1" } } },
-    "screenshotPreviewTitle": { "message": "스크린샷 미리보기 - AskPage" },
-    "screenshotPreviewHeading": { "message": "스크린샷 미리보기" },
-    "screenshotPreviewAlt": { "message": "AskPage 스크린샷 미리보기" },
-    "openFullScreenshot": { "message": "클릭하여 전체 스크린샷 열기" },
-    "openQuestionScreenshot": { "message": "질문 당시의 전체 스크린샷 열기" },
-    "questionScreenshotAlt": { "message": "질문 당시 화면 스크린샷" },
-    "viewOriginalSize": { "message": "클릭하여 원본 크기 보기" },
-    "screenshotInfo": { "message": "📊 크기: $width$×$height$ | 파일 크기: $size$ KB", "placeholders": { "width": { "content": "$1" }, "height": { "content": "$2" }, "size": { "content": "$3" } } },
-    "copyScreenshotBase64": { "message": "스크린샷 Base64 데이터 복사" },
-    "copyToClipboard": { "message": "클립보드에 복사" },
-    "userMessagePrefix": { "message": "나" },
-    "screenAnnotationMode": { "message": "AskPage 화면 주석 모드" },
-    "screenAnnotationInstructions": { "message": "마우스를 움직여 DOM 요소를 지정하고 클릭하여 선택하세요. 왼쪽 버튼을 누른 채 그리면 DOM을 선택하지 않습니다." },
-    "collapse": { "message": "접기" },
-    "expand": { "message": "펼치기" },
-    "collapseCode": { "message": "코드 접기" },
-    "expandCode": { "message": "전체 코드 펼치기" },
-    "copyCode": { "message": "코드 복사" },
-    "openCodePen": { "message": "CodePen에서 열기" },
-    "codePenOpened": { "message": "열림" },
-    "codePenFailed": { "message": "실패" },
-    "expandAll": { "message": "모두 펼치기" },
-    "imagePreviewSize": { "message": "이미지 크기: 약 $size$KB", "placeholders": { "size": { "content": "$1" } } },
-    "serviceWorkerDomainNotAllowed": { "message": "$provider$ Service Worker는 다른 도메인을 호출할 수 없습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerEndpointNotAllowed": { "message": "$provider$ Service Worker는 이 API 엔드포인트를 호출할 수 없습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerRequestFailed": { "message": "$provider$ Service Worker 요청에 실패했습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerPostOnly": { "message": "$provider$ Service Worker는 POST 요청만 허용합니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerApiKeyRequired": { "message": "$provider$ API Key를 비워 둘 수 없습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerInvalidJson": { "message": "$provider$ 요청 본문이 올바른 JSON이 아닙니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerInvalidRequest": { "message": "$provider$ 요청 본문 형식이 올바르지 않습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerDuplicateResponse": { "message": "$provider$ Service Worker가 응답 정보를 중복으로 반환했습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerInvalidHttpStatus": { "message": "$provider$ Service Worker가 잘못된 HTTP 상태를 반환했습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerNoResponseInfo": { "message": "$provider$ Service Worker가 아직 응답 정보를 제공하지 않았습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerNoHttpResponse": { "message": "$provider$ Service Worker가 HTTP 응답을 제공하지 않았습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerDisconnected": { "message": "$provider$ Service Worker 연결이 중단되었습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "imageFileTooLarge": { "message": "이미지 파일이 10MB 제한을 초과합니다." },
-    "invalidImageFile": { "message": "파일 내용이 올바른 이미지가 아닙니다." },
-    "imageReadFailed": { "message": "이미지 내용을 읽을 수 없습니다." },
-    "droppedImageFetchFailed": { "message": "드롭한 이미지를 읽을 수 없습니다($status$ $statusText$).", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" } } },
-    "droppedContentNotImage": { "message": "드롭한 콘텐츠가 이미지가 아닙니다." },
-    "codeLanguagePlainText": { "message": "일반 텍스트" },
-    "codeLanguage": { "message": "코드" },
-    "autoDetectedLanguage": { "message": "자동 감지: $language$", "placeholders": { "language": { "content": "$1" } } },
-    "retryDelaySeconds": { "message": "$seconds$초", "placeholders": { "seconds": { "content": "$1" } } },
-    "retryExhausted": { "message": "$message$ $count$회 재시도했지만 실패했습니다.", "placeholders": { "message": { "content": "$1" }, "count": { "content": "$2" } } },
-    "statusPlanningWithProvider": { "message": "$provider$에 작업을 계획하도록 요청하는 중...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusAnsweringWithProvider": { "message": "$provider$에 페이지를 분석하고 답변하도록 요청하는 중...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusRetrying": { "message": "$provider$ $reason$; $delay$ 후 재시도합니다($retryCount$/$maxRetries$)...", "placeholders": { "provider": { "content": "$1" }, "reason": { "content": "$2" }, "delay": { "content": "$3" }, "retrycount": { "content": "$4" }, "maxretries": { "content": "$5" } } },
-    "statusToolCallingFallbackDetailed": { "message": "$provider$가 도구 호출을 지원하지 않아 일반 텍스트 모드로 계속합니다...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusEmptyResponseOutputLimitRetry": { "message": "$provider$가 내용을 반환하지 않았고 출력 한도에 도달했을 수 있어 한도를 늘려 다시 시도합니다...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusEmptyResponseRetryDetailed": { "message": "$provider$가 내용을 반환하지 않아 자동으로 다시 시도합니다...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusGeminiOutputLimitRetry": { "message": "$provider$가 내용을 반환하지 않았고 출력 한도에 도달했을 수 있어 모델의 최대 출력 한도로 다시 시도합니다...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusToolSelected": { "message": "$provider$가 도구 $tools$을(를) 선택했습니다. 실행을 준비하는 중...", "placeholders": { "provider": { "content": "$1" }, "tools": { "content": "$2" } } },
-    "statusToolExecuting": { "message": "도구 $tool$ 실행 중($index$/$total$)...", "placeholders": { "tool": { "content": "$1" }, "index": { "content": "$2" }, "total": { "content": "$3" } } },
-    "statusToolResults": { "message": "도구 $tools$을(를) 실행했으며 결과를 $provider$에 반환하는 중...", "placeholders": { "tools": { "content": "$1" }, "provider": { "content": "$2" } } },
-    "toolCallLimitExceeded": { "message": "도구 호출 횟수 한도에 도달하여 무한 루프를 방지하기 위해 실행을 중단했습니다." },
-    "invalidProviderApiKey": { "message": "$provider$ API Key가 올바르지 않습니다. $provider$ API Key 설정을 확인하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "providerRequestForbidden": { "message": "$provider$가 요청을 거부했습니다. API 권한 또는 모델 액세스 설정을 확인하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "providerModelNotFound": { "message": "지정한 $provider$ 모델을 찾을 수 없습니다. 모델 설정을 확인하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "providerRateLimited": { "message": "$provider$가 바쁘거나 요청 빈도가 너무 높습니다. 나중에 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "providerUnavailable": { "message": "$provider$를 일시적으로 사용할 수 없습니다. 나중에 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "httpStatusDetails": { "message": " (HTTP $status$$statusText$)", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" } } },
-    "retryReasonTimeout": { "message": "요청 시간 초과" },
-    "retryReasonNetwork": { "message": "네트워크 연결 문제" },
-    "retryReasonResponseFormat": { "message": "응답 형식 문제" },
-    "retryReasonContextWindow": { "message": "컨텍스트 창 초과" },
-    "retryReasonUnauthorized": { "message": "인증 실패" },
-    "retryReasonForbidden": { "message": "권한 없음" },
-    "retryReasonResourceNotFound": { "message": "리소스를 찾을 수 없음" },
-    "retryReasonInvalidRequest": { "message": "잘못된 요청" },
-    "retryReasonQuota": { "message": "할당량 소진" },
-    "retryReasonRateLimit": { "message": "서비스가 바쁘거나 요청 빈도가 너무 높음" },
-    "retryReasonServiceError": { "message": "일시적인 서비스 오류" },
-    "retryReasonRequestFailed": { "message": "요청 실패" },
-    "retryReasonUnknown": { "message": "알 수 없는 오류" },
-    "requestTimeoutMessage": { "message": "$provider$ 요청 시간이 초과되었습니다. 서비스가 바쁘거나 네트워크가 불안정할 수 있습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "networkErrorMessage": { "message": "$provider$ 서비스에 연결할 수 없습니다. 네트워크가 불안정하거나 서비스가 응답하지 않을 수 있습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "invalidResponseMessage": { "message": "$provider$가 해석할 수 없는 데이터를 반환했습니다. 서비스가 일시적으로 불안정할 수 있습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "contextWindowExceeded": { "message": "$provider$에서 페이지 스냅샷과 전체 대화가 모델의 컨텍스트 창을 초과했다고 보고했습니다$statusSuffix. /clear를 실행하여 새 대화를 시작하세요. AskPage는 기존 대화를 자동으로 삭제하거나 자르지 않습니다.$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "errorMessageLabel": { "message": "오류 메시지" },
-    "providerResourceNotFound": { "message": "지정한 $provider$ 모델, 엔드포인트 또는 배포 설정을 찾을 수 없습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "providerInvalidRequest": { "message": "$provider$가 요청을 거부했습니다. 매개변수 형식이 올바르지 않을 수 있습니다.$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerQuotaExceeded": { "message": "$provider$ 할당량 또는 사용량 한도에 도달했습니다$statusSuffix. 컨텍스트 창 또는 TPM(tokens per minute) 한도 때문일 수 있습니다. 모델을 변경하거나 일반 모드를 사용하여 입력을 줄이세요. 오류 메시지: $apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerRateLimitedWithDetails": { "message": "$provider$가 바쁘거나 요청 빈도가 너무 높습니다$statusSuffix. $apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerServiceError": { "message": "$provider$ 서비스에서 일시적인 오류가 발생했습니다$statusSuffix. $apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerUnknownError": { "message": "$provider$ API 호출이 알 수 없는 이유로 실패했습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "streamingUnsupported": { "message": "이 브라우저는 스트리밍 응답 읽기를 지원하지 않습니다." },
-    "openaiRefusal": { "message": "$provider$가 요청을 거부했습니다: $refusal$", "placeholders": { "provider": { "content": "$1" }, "refusal": { "content": "$2" } } },
-    "openaiOutputLimit": { "message": "$provider$의 출력 길이 한도에 도달했습니다. 질문 범위를 좁혀 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiContentFiltered": { "message": "$provider$가 콘텐츠 필터링으로 텍스트를 반환하지 않았습니다. 질문을 조정하여 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiToolCallNoText": { "message": "$provider$가 도구 호출 상태를 반환했지만 표시할 텍스트가 없습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiFunctionCallNoText": { "message": "$provider$가 함수 호출 상태를 반환했지만 표시할 텍스트가 없습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiNonDisplayableStop": { "message": "$provider$가 응답을 완료했지만 표시할 텍스트가 없습니다. 다시 시도하거나 질문 범위를 좁히세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "providerNoCandidates": { "message": "$provider$가 후보를 반환하지 않았습니다. 모델이 아직 답변을 생성하지 않았을 수 있으니 나중에 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "providerNonDisplayableResult": { "message": "$provider$가 표시할 텍스트가 없는 결과를 반환했습니다. 다시 시도하거나 질문 범위를 좁히세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptSafety": { "message": "$provider$가 안전 제한으로 이 요청을 처리하지 않았습니다$details$. 질문을 조정하여 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiPromptBlocklist": { "message": "$provider$가 요청에 차단된 용어가 포함되어 있어 처리하지 않았습니다. 질문을 조정하여 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptProhibited": { "message": "$provider$가 이 요청을 금지된 콘텐츠로 판단하여 답변을 반환하지 않았습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptImageSafety": { "message": "$provider$가 이미지의 안전 제한으로 답변을 반환하지 않았습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptOther": { "message": "$provider$가 이 요청을 처리하지 않았습니다. 나중에 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiOutputLimit": { "message": "$provider$의 출력 길이 한도에 도달했습니다$details$. 질문 범위를 좁혀 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiSafety": { "message": "$provider$가 안전 제한으로 텍스트를 반환하지 않았습니다$details$. 질문을 조정하여 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiRecitation": { "message": "$provider$가 인용 제한으로 텍스트를 반환하지 않았습니다$details$.", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiLanguage": { "message": "$provider$가 언어 제한으로 텍스트를 반환하지 않았습니다$details$. 한국어 또는 영어로 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiBlocklist": { "message": "$provider$가 응답의 차단 용어 제한으로 텍스트를 반환하지 않았습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiProhibited": { "message": "$provider$가 응답의 금지된 콘텐츠 제한으로 텍스트를 반환하지 않았습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiSensitiveInfo": { "message": "$provider$가 응답에 민감한 개인 정보가 포함될 수 있어 텍스트를 반환하지 않았습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiMalformedToolCall": { "message": "$provider$가 형식이 잘못된 도구 호출을 반환했습니다$details$. 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiOther": { "message": "$provider$가 표시할 텍스트를 생성하지 않았습니다$details$. 나중에 다시 시도하세요.", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiNoCandidates": { "message": "$provider$가 후보를 반환하지 않았습니다. 요청이 차단되었거나 모델이 답변을 생성하지 않았을 수 있습니다.", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiNonDisplayableResult": { "message": "$provider$가 표시할 텍스트가 없는 결과를 반환했습니다$details$. 다시 시도하거나 질문 범위를 좁히세요.", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "invalidStreamingData": { "message": "$provider$가 해석할 수 없는 스트리밍 데이터를 반환했습니다: $data$", "placeholders": { "provider": { "content": "$1" }, "data": { "content": "$2" } } },
-    "streamingApiError": { "message": "스트리밍 API 오류: $error$", "placeholders": { "error": { "content": "$1" } } },
-    "httpFallbackError": { "message": "HTTP $status$ $statusText$: $error$", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" }, "error": { "content": "$3" } } },
-    "errorPrefix": { "message": "오류: $error$", "placeholders": { "error": { "content": "$1" } } },
-    "providerApiKeyMissing": { "message": "확장 프로그램 아이콘을 클릭하여 $provider$ API Key를 설정하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "providerApiKeyDecryptFailed": { "message": "$provider$ API Key를 해독할 수 없습니다. 다시 설정하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "providerEndpointMissing": { "message": "확장 프로그램 아이콘을 클릭하여 $provider$ Endpoint를 설정하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "providerDeploymentMissing": { "message": "확장 프로그램 아이콘을 클릭하여 $provider$ Deployment Name을 설정하세요.", "placeholders": { "provider": { "content": "$1" } } },
-    "providerMissing": { "message": "확장 프로그램 아이콘을 클릭하여 AI 제공자를 설정하세요." },
-    "providerDeploymentNotFound": { "message": "배포를 찾을 수 없습니다. Endpoint 및 Deployment Name 설정을 확인하세요." },
-    "providerAuthenticationFailed": { "message": "$provider$ 인증에 실패했습니다: $error$", "placeholders": { "provider": { "content": "$1" }, "error": { "content": "$2" } } },
-    "gptToolCompatibility": { "message": "GPT-5.6에서 function tools를 사용하려면 Responses API를 사용해야 하며 Chat Completions는 사용할 수 없습니다." },
-    "unknownTool": { "message": "알 수 없는 도구" },
-    "toolListMore": { "message": "$names$ 외 $count$개 도구", "placeholders": { "names": { "content": "$1" }, "count": { "content": "$2" } } },
-    "success": { "message": "성공" },
-    "failure": { "message": "실패" },
-    "toolExecutionSingle": { "message": "$tools$ 도구를 호출했으며 $result$했습니다", "placeholders": { "tools": { "content": "$1" }, "result": { "content": "$2" } } },
-    "toolExecutionAllSuccess": { "message": "$tools$ 도구를 호출했으며 모두 성공했습니다", "placeholders": { "tools": { "content": "$1" } } },
-    "toolExecutionAllFailure": { "message": "$tools$ 도구를 호출했으며 모두 실패했습니다", "placeholders": { "tools": { "content": "$1" } } },
-    "toolExecutionMixed": { "message": "$tools$ 도구를 호출했으며 성공 $successCount$개, 실패 $failureCount$개입니다", "placeholders": { "tools": { "content": "$1" }, "successcount": { "content": "$2" }, "failurecount": { "content": "$3" } } },
-    "usageDetails": { "message": "($details$)", "placeholders": { "details": { "content": "$1" } } },
-    "usageListSeparator": { "message": ", " },
-    "usageLine": { "message": "- $label$: $value$$suffix$", "placeholders": { "label": { "content": "$1" }, "value": { "content": "$2" }, "suffix": { "content": "$3" } } },
-    "usageInput": { "message": "입력" },
-    "usageOutput": { "message": "출력" },
-    "usageToolInput": { "message": "도구 입력" },
-    "usageTotal": { "message": "합계" },
-    "usageCache": { "message": "캐시 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageCacheWrite": { "message": "캐시 쓰기 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageReasoning": { "message": "추론 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageAcceptedPrediction": { "message": "허용된 예측 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageRejectedPrediction": { "message": "거부된 예측 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageSummary": { "message": "Token 사용량 요약:\n$lines$", "placeholders": { "lines": { "content": "$1" } } },
-    "toolCallInProgress": { "message": "🛠️ $tool$ 실행 중", "placeholders": { "tool": { "content": "$1" } } },
-    "toolResultFailure": { "message": " (실패)" },
-    "toolResultSummary": { "message": "\n\n결과 요약: $message$", "placeholders": { "message": { "content": "$1" } } },
-    "toolResultMessageSuffix": { "message": ": $message$", "placeholders": { "message": { "content": "$1" } } },
-    "toolResultReceived": { "message": "📥 $tool$ 결과 반환$status$$message$", "placeholders": { "tool": { "content": "$1" }, "status": { "content": "$2" }, "message": { "content": "$3" } } },
-    "toolResultTraceText": { "message": "📥 **$tool$** 결과 반환$status$.$summary$\n\n$payload$", "placeholders": { "tool": { "content": "$1" }, "status": { "content": "$2" }, "summary": { "content": "$3" }, "payload": { "content": "$4" } } },
-    "executionDuration": { "message": "소요 시간: $duration$", "placeholders": { "duration": { "content": "$1" } } },
-    "agentExecutionCompleted": { "message": "AskPage가 $count$단계를 실행하고 완료했습니다. $duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
-    "agentExecutionStopped": { "message": "AskPage가 $count$단계 후 중지되었습니다. $duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
-    "endpointToolFallbackMessage": { "message": "⚠️ **이 $provider$ 엔드포인트는 tool calling을 완전히 지원하지 않습니다**\n\n자동으로 일반 텍스트 모드로 전환했으므로 이번 요청에서는 페이지 DOM이나 양식을 직접 조작할 수 없습니다.\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
-    "agentToolFallbackMessage": { "message": "⚠️ **$provider$ 제공자는 agent 모드의 tool calling을 완전히 지원하지 않습니다**\n\n자동으로 일반 텍스트 모드로 전환했으므로 이번 요청에서는 페이지 DOM이나 양식을 직접 조작할 수 없습니다.\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } }
+    "extensionName": {
+        "message": "페이지问 AskPage"
+    },
+    "extensionLogoAlt": {
+        "message": "AskPage 로고"
+    },
+    "extensionDescription": {
+        "message": "설정한 AI API로 현재 페이지에 대해 질문하고 답변을 받습니다"
+    },
+    "commandToggleDialog": {
+        "message": "AskPage 대화 상자 열기"
+    },
+    "commandSwitchProvider": {
+        "message": "AI 제공자 전환"
+    },
+    "settingsMigrationTitle": {
+        "message": "페이지问: 설정 이전 완료"
+    },
+    "settingsMigrationDescription": {
+        "message": "이제 여러 모델을 지원합니다. 곧 전체 설정 페이지로 이동합니다..."
+    },
+    "codepenTitle": {
+        "message": "CodePen으로 이동 중 - 페이지问 AskPage"
+    },
+    "codepenDescription": {
+        "message": "CodePen 코드를 준비하는 중..."
+    },
+    "codepenOpeningDescription": {
+        "message": "잠시 후 새 창에서 편집기가 열립니다"
+    },
+    "codepenMissingData": {
+        "message": "코드 데이터를 찾을 수 없습니다"
+    },
+    "closeAndRetry": {
+        "message": "이 탭을 닫고 다시 시도하세요."
+    },
+    "codepenOpenFailed": {
+        "message": "CodePen을 열 수 없습니다"
+    },
+    "unknownErrorRetry": {
+        "message": "알 수 없는 오류가 발생했습니다. 다시 시도하세요."
+    },
+    "preferencesTitle": {
+        "message": "AskPage: 환경설정"
+    },
+    "preferencesDescription": {
+        "message": "AI 제공자, 스킬 및 시스템 프롬프트를 설정합니다"
+    },
+    "resetSettings": {
+        "message": "설정 초기화"
+    },
+    "exportSettings": {
+        "message": "내보내기"
+    },
+    "importSettings": {
+        "message": "가져오기"
+    },
+    "aiProviders": {
+        "message": "AI 제공자"
+    },
+    "customSlashCommands": {
+        "message": "스킬 관리"
+    },
+    "adjustSystemPrompt": {
+        "message": "시스템 프롬프트 조정"
+    },
+    "aiProviderSettings": {
+        "message": "AI 제공자 설정"
+    },
+    "aiProviderSettingsDescription": {
+        "message": "여러 AI 제공자를 설정하고 하나 이상의 모델을 활성화합니다. 모델 이름을 선택하면 현재 사용할 모델로 전환됩니다."
+    },
+    "addAiProvider": {
+        "message": "AI 제공자 추가"
+    },
+    "slashCommandManagement": {
+        "message": "스킬 관리"
+    },
+    "slashCommandManagementDescription": {
+        "message": "기본 제공 스킬과 사용자 지정 스킬을 관리합니다"
+    },
+    "addCustomSlashCommand": {
+        "message": "스킬 추가"
+    },
+    "systemPromptDescription": {
+        "message": "이 내용은 기본 시스템 프롬프트 끝에 추가됩니다. 비워 두면 추가하지 않으며 기본 시스템 프롬프트는 덮어쓰지 않습니다."
+    },
+    "additionalPrompt": {
+        "message": "추가 프롬프트"
+    },
+    "additionalPromptPlaceholder": {
+        "message": "시스템 프롬프트에 추가할 내용을 입력하세요..."
+    },
+    "additionalPromptSaveDescription": {
+        "message": "저장하면 모든 AI 제공자가 요청에 이 추가 프롬프트를 적용합니다."
+    },
+    "characterCount": {
+        "message": "$count$자",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "generalSettingsTab": {
+        "message": "일반 설정"
+    },
+    "interfaceIndicatorsTitle": {
+        "message": "인터페이스 표시 효과"
+    },
+    "interfaceIndicatorsDescription": {
+        "message": "AskPage 대화상자 외에 페이지에 표시되는 시각적 신호를 조정합니다."
+    },
+    "enableAgentGlowEffect": {
+        "message": "에이전트 모드 실행 중 페이지 발광 효과 표시"
+    },
+    "enableAgentGlowEffectHelp": {
+        "message": "활성화하면 에이전트 모드에서 질문을 보낸 후 답변이 완료될 때까지 페이지 가장자리에 호박색 발광 애니메이션이 표시되어 AskPage가 작업 중임을 알려줍니다."
+    },
+    "footerPrefix": {
+        "message": "© 2026 설계·개발·유지 관리:"
+    },
+    "footerLink": {
+        "message": "Will 保哥 기술 교류 센터"
+    },
+    "footerVersion": {
+        "message": " v$version$",
+        "placeholders": {
+            "version": {
+                "content": "$1"
+            }
+        }
+    },
+    "localeLabel": {
+        "message": "인터페이스 언어"
+    },
+    "localeAuto": {
+        "message": "자동"
+    },
+    "localeZhTW": {
+        "message": "繁體中文"
+    },
+    "localeEn": {
+        "message": "English"
+    },
+    "localeZhCN": {
+        "message": "简体中文"
+    },
+    "localeJa": {
+        "message": "日本語"
+    },
+    "localeKo": {
+        "message": "한국어"
+    },
+    "editSlashCommand": {
+        "message": "스킬 편집"
+    },
+    "editBuiltInCommand": {
+        "message": "기본 제공 스킬 편집"
+    },
+    "editCustomCommand": {
+        "message": "스킬 편집"
+    },
+    "addCustomCommand": {
+        "message": "스킬 추가"
+    },
+    "commandName": {
+        "message": "스킬 이름"
+    },
+    "commandNamePlaceholder": {
+        "message": "예: /help"
+    },
+    "commandNameHelp": {
+        "message": "스킬 이름은 /로 시작해야 하며 영문자, 숫자, 밑줄, 하이픈만 사용할 수 있습니다."
+    },
+    "promptContent": {
+        "message": "프롬프트 내용"
+    },
+    "promptContentPlaceholder": {
+        "message": "이 스킬을 실행할 때 AI에 보낼 프롬프트를 입력하세요. ${variableName}으로 입력란을 만들 수 있습니다. 예: Hi, I'm ${name} from ${country:TW}."
+    },
+    "promptContentHelp": {
+        "message": "프롬프트에서 ${variableName}을 사용하면 입력란이 생성됩니다. 스킬 실행 후 하나씩 입력할 수 있습니다. ${variableName:defaultValue}로 기본값을 설정할 수 있으며 같은 이름의 변수는 동기화됩니다."
+    },
+    "showVariableLabels": {
+        "message": "프롬프트를 펼칠 때 변수 이름 표시"
+    },
+    "showVariableLabelsHelp": {
+        "message": "선택하지 않으면 입력하지 않은 변수는 자리 표시자로 이름만 표시되고 입력 후 사라집니다. 선택하면 ‘변수 이름:’ 라벨이 계속 표시됩니다."
+    },
+    "mode": {
+        "message": "모드"
+    },
+    "modeUnspecified": {
+        "message": "지정 안 함"
+    },
+    "modeAgent": {
+        "message": "에이전트"
+    },
+    "modeInquiry": {
+        "message": "일반"
+    },
+    "modeHelp": {
+        "message": "스킬을 실행할 때 모드가 자동으로 전환됩니다. ‘지정 안 함’을 선택하면 현재 모드를 유지합니다."
+    },
+    "enableScreenshotMode": {
+        "message": "스크린샷 모드 사용"
+    },
+    "enableScreenshotModeHelp": {
+        "message": "스킬 실행 시 스크린샷 모드를 자동으로 적용합니다."
+    },
+    "cancel": {
+        "message": "취소"
+    },
+    "save": {
+        "message": "저장"
+    },
+    "addProviderTitle": {
+        "message": "AI 제공자 추가"
+    },
+    "editProviderTitle": {
+        "message": "AI 제공자 편집"
+    },
+    "providerType": {
+        "message": "제공자 유형"
+    },
+    "providerCustomName": {
+        "message": "사용자 지정 제공자 이름"
+    },
+    "providerCustomNamePlaceholder": {
+        "message": "예: 내 Gemini 계정"
+    },
+    "enabledModels": {
+        "message": "활성화할 모델（하나 이상 선택）"
+    },
+    "geminiGoogleSearchEnabled": {
+        "message": "Grounding with Google Search 도구 활성화"
+    },
+    "geminiGoogleSearchEnabledWarning": {
+        "message": "⚠ Google AI Studio 무료 요금제에서는 이 설정을 지원하지 않으며, 활성화하면 429 할당량 오류가 발생합니다. Tier 1 이상 유료 플랜에서만 사용할 수 있습니다."
+    },
+    "apiKeyOptional": {
+        "message": "API Key（선택 사항）"
+    },
+    "leaveBlankIfNotRequired": {
+        "message": "필요하지 않으면 비워 두세요"
+    },
+    "modelName": {
+        "message": "모델 이름"
+    },
+    "loadAllModels": {
+        "message": "사용 가능한 모든 모델 불러오기"
+    },
+    "enterModelManually": {
+        "message": "모델 이름 직접 입력"
+    },
+    "loadEndpointModels": {
+        "message": "엔드포인트 모델 불러오기"
+    },
+    "loadLocalModels": {
+        "message": "로컬 모델 불러오기"
+    },
+    "loadLatestCloudModels": {
+        "message": "최신 클라우드 모델 불러오기"
+    },
+    "curatedCloudModels": {
+        "message": "엄선한 Ollama Cloud 모델 ID가 기본 제공되며 최신 전체 목록도 불러올 수 있습니다."
+    },
+    "testConnection": {
+        "message": "연결 테스트"
+    },
+    "ollamaCloudKeyHelp": {
+        "message": "Ollama API Keys에서 "
+    },
+    "createKeySuffix": {
+        "message": "키를 만들 수 있습니다."
+    },
+    "ollamaApiKeysLink": {
+        "message": "Ollama API Keys"
+    },
+    "openAiCompatibleEndpoint": {
+        "message": "OpenAI 호환 엔드포인트"
+    },
+    "geminiApiKeyPlaceholder": {
+        "message": "Gemini API Key를 입력하세요"
+    },
+    "openaiApiKeyPlaceholder": {
+        "message": "OpenAI API Key를 입력하세요"
+    },
+    "azureApiKeyPlaceholder": {
+        "message": "Azure OpenAI API Key를 입력하세요"
+    },
+    "azureEndpointPlaceholder": {
+        "message": "예: https://your-resource.openai.azure.com"
+    },
+    "azureDeploymentPlaceholder": {
+        "message": "예: gpt-4o-mini"
+    },
+    "anthropicApiKeyPlaceholder": {
+        "message": "Anthropic API Key를 입력하세요"
+    },
+    "deepseekApiKeyPlaceholder": {
+        "message": "DeepSeek API Key를 입력하세요"
+    },
+    "openrouterApiKeyPlaceholder": {
+        "message": "OpenRouter API Key를 입력하세요"
+    },
+    "groqApiKeyPlaceholder": {
+        "message": "Groq API Key를 입력하세요"
+    },
+    "mistralApiKeyPlaceholder": {
+        "message": "Mistral API Key를 입력하세요"
+    },
+    "ollamaCloudApiKeyPlaceholder": {
+        "message": "Ollama API Key를 입력하세요"
+    },
+    "openAiEndpointPlaceholder": {
+        "message": "예: http://localhost:11434/v1"
+    },
+    "openAiCompatibleModelPlaceholder": {
+        "message": "예: llama3, mistral"
+    },
+    "ollamaEndpointPlaceholder": {
+        "message": "예: http://localhost:11434/v1"
+    },
+    "ollamaModelPlaceholder": {
+        "message": "예: llama3.3, deepseek-r1"
+    },
+    "providerEndpoint": {
+        "message": "엔드포인트"
+    },
+    "apiKey": {
+        "message": "API Key"
+    },
+    "apiEndpoint": {
+        "message": "API Endpoint"
+    },
+    "deploymentName": {
+        "message": "Deployment Name"
+    },
+    "apiVersion": {
+        "message": "API Version"
+    },
+    "loading": {
+        "message": "로드 중"
+    },
+    "askPage": {
+        "message": "페이지问"
+    },
+    "dragTitleBar": {
+        "message": "제목 표시줄을 드래그하여 대화 상자 이동"
+    },
+    "openPreferences": {
+        "message": "옵션 열기"
+    },
+    "inputPlaceholder": {
+        "message": "질문을 입력하고 Enter를 누르세요. 최대 4개의 이미지를 붙여넣거나 드래그하여 컨텍스트로 추가할 수 있습니다"
+    },
+    "imageContextTitle": {
+        "message": "이미지 컨텍스트（Ctrl+V 또는 드래그하여 참고 이미지 추가）"
+    },
+    "imageContextMeta": {
+        "message": "PNG / JPG / WebP 등 지원. 파일당 최대 10MB"
+    },
+    "uploadImage": {
+        "message": "이미지 업로드"
+    },
+    "uploadImageTitle": {
+        "message": "이미지를 선택하여 이번 질문의 컨텍스트에 추가"
+    },
+    "annotateScreen": {
+        "message": "화면 주석"
+    },
+    "annotateScreenTitle": {
+        "message": "대화 상자를 잠시 숨긴 후 화면을 선택하거나 주석을 추가하여 이미지 컨텍스트에 포함"
+    },
+    "ask": {
+        "message": "질문"
+    },
+    "reasoningEffort": {
+        "message": "추론 강도"
+    },
+    "switchProviderModel": {
+        "message": "AI 제공자 및 모델 전환"
+    },
+    "noModelConfigured": {
+        "message": "구성된 모델 없음"
+    },
+    "builtin": {
+        "message": "기본 제공"
+    },
+    "edit": {
+        "message": "편집"
+    },
+    "delete": {
+        "message": "삭제"
+    },
+    "endpoint": {
+        "message": "엔드포인트"
+    },
+    "noProviders": {
+        "message": "아직 AI 제공자가 추가되지 않았습니다. 아래의 ‘AI 제공자 추가’를 클릭하세요."
+    },
+    "addProviderPrompt": {
+        "message": "AI 제공자 추가"
+    },
+    "connectionTestSucceeded": {
+        "message": "🟢 연결 테스트 성공"
+    },
+    "testing": {
+        "message": "⏳ 테스트 중..."
+    },
+    "processing": {
+        "message": "⏳ 처리 중..."
+    },
+    "settingsAutoSaved": {
+        "message": "시스템 프롬프트가 자동으로 저장되었습니다."
+    },
+    "settingsReset": {
+        "message": "설정이 초기화되었습니다."
+    },
+    "settingsExported": {
+        "message": "설정을 내보냈습니다."
+    },
+    "settingsImported": {
+        "message": "설정을 성공적으로 가져왔습니다. 다시 로드하는 중..."
+    },
+    "importInvalid": {
+        "message": "가져오기 실패: 잘못된 파일 형식"
+    },
+    "commandSaved": {
+        "message": "스킬이 저장되었습니다"
+    },
+    "builtInCommandCannotDelete": {
+        "message": "기본 제공 스킬은 삭제할 수 없습니다"
+    },
+    "commandDeleted": {
+        "message": "스킬이 삭제되었습니다"
+    },
+    "providerSaved": {
+        "message": "제공자가 저장되었습니다"
+    },
+    "providerDeleted": {
+        "message": "제공자가 삭제되었습니다"
+    },
+    "commandClearHistory": {
+        "message": "질문 기록 지우기"
+    },
+    "commandSummaryPage": {
+        "message": "현재 페이지 요약"
+    },
+    "commandScreenshot": {
+        "message": "스크린샷 모드 전환"
+    },
+    "commandAgent": {
+        "message": "일반 모드와 에이전트 모드 전환（에이전트 모드는 페이지 HTML 및 도구 호출 사용）"
+    },
+    "summaryPrompt": {
+        "message": "이 글을 Markdown 형식으로 요약하고 ‘제목’, ‘핵심 요약’, ‘결론’을 포함해 주세요."
+    },
+    "systemPromptLanguageInstruction": {
+        "message": "환경설정에서 지정한 한국어를 주요 응답 언어로 사용하세요. 사용자가 현재 요청에서 다른 언어를 명시적으로 요구한 경우에만 해당 언어로 전환하세요."
+    },
+    "resetSettingsConfirm": {
+        "message": "모든 설정을 재설정할까요?\n\nAI 제공자, API 키, 스킬, 질문 기록 및 기타 설정이 삭제됩니다."
+    },
+    "importSettingsConfirm": {
+        "message": "이 설정 파일을 가져올까요? 현재 설정을 덮어씁니다."
+    },
+    "invalidVariableName": {
+        "message": "변수 이름 \"$name$\"이(가) 잘못되었습니다. 문자, 숫자, 밑줄만 사용할 수 있으며 숫자로 시작할 수 없습니다.",
+        "placeholders": {
+            "name": {
+                "content": "$1"
+            }
+        }
+    },
+    "inconsistentVariableDefault": {
+        "message": "변수 \"$name$\"의 중복 기본값이 일치하지 않습니다: $first$ 및 $second$",
+        "placeholders": {
+            "name": {
+                "content": "$1"
+            },
+            "first": {
+                "content": "$2"
+            },
+            "second": {
+                "content": "$3"
+            }
+        }
+    },
+    "commandNameRequired": {
+        "message": "스킬 이름을 입력하세요"
+    },
+    "commandNameInvalid": {
+        "message": "스킬 이름은 /로 시작하고 문자, 숫자, 밑줄, 하이픈만 포함해야 합니다."
+    },
+    "commandNameBuiltinDuplicate": {
+        "message": "기본 제공 스킬과 같은 이름은 사용할 수 없습니다."
+    },
+    "commandNameCustomDuplicate": {
+        "message": "해당 스킬 이름은 기존 사용자 지정 스킬에서 사용 중입니다."
+    },
+    "promptContentRequired": {
+        "message": "프롬프트 내용을 입력하세요"
+    },
+    "deleteCommandConfirm": {
+        "message": "스킬 $command$을(를) 삭제할까요?",
+        "placeholders": {
+            "command": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerGemini": {
+        "message": "Google Gemini"
+    },
+    "providerVertex": {
+        "message": "Gemini Enterprise (Vertex AI)"
+    },
+    "gcpProjectId": {
+        "message": "Google Cloud 프로젝트 ID"
+    },
+    "gcpRegion": {
+        "message": "리전 / 지역"
+    },
+    "gcpAuthMode": {
+        "message": "인증 방식"
+    },
+    "gcpAccessToken": {
+        "message": "Access Token"
+    },
+    "vertexAuthModeApiKey": {
+        "message": "API Key"
+    },
+    "vertexAuthModeBearerToken": {
+        "message": "OAuth 2.0 액세스 토큰"
+    },
+    "vertexProjectIdPlaceholder": {
+        "message": "예: corp-genai-2026"
+    },
+    "vertexRegionPlaceholder": {
+        "message": "예: asia-east1"
+    },
+    "vertexApiKeyPlaceholder": {
+        "message": "Vertex API Key를 입력하세요"
+    },
+    "vertexAccessTokenPlaceholder": {
+        "message": "OAuth 2.0 액세스 토큰을 입력하세요"
+    },
+    "accessToken": {
+        "message": "Access Token"
+    },
+    "providerProjectIdMissing": {
+        "message": "확장 프로그램 아이콘을 클릭하여 $provider$ Project ID를 설정하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "vertexFieldsRequired": {
+        "message": "Google Cloud Project ID, Region / Location, 인증 정보를 입력하세요."
+    },
+    "vertexProjectIdRequired": {
+        "message": "Google Cloud Project ID를 입력하세요."
+    },
+    "vertexRegionRequired": {
+        "message": "Google Cloud Region / Location을 입력하세요."
+    },
+    "providerOpenAI": {
+        "message": "OpenAI"
+    },
+    "providerAzure": {
+        "message": "Azure OpenAI"
+    },
+    "providerAnthropic": {
+        "message": "Anthropic Claude"
+    },
+    "providerDeepSeek": {
+        "message": "DeepSeek"
+    },
+    "providerOpenRouter": {
+        "message": "OpenRouter"
+    },
+    "providerGroq": {
+        "message": "Groq"
+    },
+    "providerMistral": {
+        "message": "Mistral AI"
+    },
+    "providerOllamaLocal": {
+        "message": "Ollama（로컬）"
+    },
+    "providerOllamaCloud": {
+        "message": "Ollama Cloud"
+    },
+    "providerOpenAICompatible": {
+        "message": "OpenAI 호환 엔드포인트"
+    },
+    "modelUnspecified": {
+        "message": "모델 미지정"
+    },
+    "providerApiKeyRequired": {
+        "message": "$provider$ API Key를 입력하세요",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerModelRequired": {
+        "message": "$provider$ 모델을 하나 이상 선택하세요",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "azureFieldsRequired": {
+        "message": "Azure OpenAI API Key, Endpoint, Deployment Name을 입력하세요"
+    },
+    "apiEndpointRequired": {
+        "message": "API Endpoint를 입력하세요"
+    },
+    "modelSelectionRequired": {
+        "message": "모델을 하나 이상 선택하세요"
+    },
+    "modelNameRequired": {
+        "message": "모델 이름을 입력하세요"
+    },
+    "ollamaFieldsRequired": {
+        "message": "Ollama API Endpoint와 모델 이름을 입력하세요"
+    },
+    "ollamaModelRequired": {
+        "message": "Ollama 모델 이름을 입력하세요"
+    },
+    "unknownProviderType": {
+        "message": "알 수 없는 제공자 유형입니다"
+    },
+    "connectionTestFailed": {
+        "message": "🔴 연결 실패: $error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "deleteProviderConfirm": {
+        "message": "제공자 \"$provider$\"을(를) 삭제할까요?",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "activeModelChanged": {
+        "message": "사용 모델을 $model$(으)로 전환했습니다",
+        "placeholders": {
+            "model": {
+                "content": "$1"
+            }
+        }
+    },
+    "modelActionFailed": {
+        "message": "작업 실패: $error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "apiResponseError": {
+        "message": "API 응답 오류: $status$ $error$",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "error": {
+                "content": "$2"
+            }
+        }
+    },
+    "noModelsFound": {
+        "message": "사용 가능한 모델 이름을 찾을 수 없습니다"
+    },
+    "customModelNamePrompt": {
+        "message": "수동으로 추가할 모델 이름을 입력하세요:"
+    },
+    "customModelAdded": {
+        "message": "모델 $model$을(를) 추가하고 선택했습니다",
+        "placeholders": {
+            "model": {
+                "content": "$1"
+            }
+        }
+    },
+    "ollamaConnectionFailed": {
+        "message": "Ollama 서비스에 연결할 수 없습니다"
+    },
+    "loadedModelsPrompt": {
+        "message": "다음 모델 이름을 불러왔습니다. 선택할 모델 이름을 복사하거나 입력하세요:"
+    },
+    "modelSelected": {
+        "message": "모델 $model$을(를) 선택했습니다",
+        "placeholders": {
+            "model": {
+                "content": "$1"
+            }
+        }
+    },
+    "modelsLoaded": {
+        "message": "$count$개 모델을 불러왔습니다",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "screenshotMode": {
+        "message": "스크린샷 모드"
+    },
+    "screenshot": {
+        "message": "스크린샷"
+    },
+    "screenshotEnabledState": {
+        "message": "스크린샷 포함"
+    },
+    "screenshotDisabledState": {
+        "message": "스크린샷 제외"
+    },
+    "modeSwitch": {
+        "message": "모드 전환"
+    },
+    "agentEnabledState": {
+        "message": "에이전트 모드"
+    },
+    "inquiryEnabledState": {
+        "message": "질문 모드"
+    },
+    "modeToggleAria": {
+        "message": "$label$: 현재 $current$, 클릭하여 $next$(으)로 전환",
+        "placeholders": {
+            "label": {
+                "content": "$1"
+            },
+            "current": {
+                "content": "$2"
+            },
+            "next": {
+                "content": "$3"
+            }
+        }
+    },
+    "reasoningDynamic": {
+        "message": "동적"
+    },
+    "reasoningOff": {
+        "message": "끔"
+    },
+    "reasoningMinimal": {
+        "message": "최소"
+    },
+    "reasoningLow": {
+        "message": "낮음"
+    },
+    "reasoningMedium": {
+        "message": "중간"
+    },
+    "reasoningHigh": {
+        "message": "높음"
+    },
+    "reasoningExtraHigh": {
+        "message": "매우 높음"
+    },
+    "reasoningMaximum": {
+        "message": "최대"
+    },
+    "reasoningToken": {
+        "message": "$count$ 토큰",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "inputUsingProvider": {
+        "message": "$provider$($model$)을(를) 사용하여 질문에 답합니다($hint$)",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "model": {
+                "content": "$2"
+            },
+            "hint": {
+                "content": "$3"
+            }
+        }
+    },
+    "shiftEnterHint": {
+        "message": "Shift+Enter로 줄바꿈"
+    },
+    "reasoningBudgetHint": {
+        "message": "슬라이더로 추론 토큰 예산을 조정하세요"
+    },
+    "reasoningLevelHint": {
+        "message": "슬라이더로 이 모델의 추론 강도를 조정하세요"
+    },
+    "switchProviderModelWithReasoning": {
+        "message": "AI 제공자와 모델 전환; 마우스를 올려 추론 강도 조정"
+    },
+    "openOptionsFailedMessage": {
+        "message": "❌ **옵션을 열 수 없습니다**\n\n나중에 다시 시도하세요."
+    },
+    "submitQuestion": {
+        "message": "질문 보내기"
+    },
+    "disableScreenshot": {
+        "message": "스크린샷 모드 끄기"
+    },
+    "enableScreenshot": {
+        "message": "스크린샷 모드 켜기"
+    },
+    "switchToInquiryMode": {
+        "message": "질문 모드로 전환(내용 질문만 처리)"
+    },
+    "switchToAgentMode": {
+        "message": "에이전트 모드로 전환(도구 호출 허용)"
+    },
+    "customCommand": {
+        "message": "사용자 지정 스킬"
+    },
+    "statusPlanning": {
+        "message": "요청과 페이지 상태를 분석하고 있습니다."
+    },
+    "statusToolCallingFallback": {
+        "message": "이 엔드포인트는 도구 호출을 지원하지 않아 텍스트 모드로 계속합니다."
+    },
+    "statusOutputLimitRetry": {
+        "message": "출력 한도에 도달하기 전에 응답이 잘렸습니다. 출력 한도를 늘려 다시 시도합니다."
+    },
+    "statusEmptyResponseRetry": {
+        "message": "표시할 수 있는 내용이 없습니다. 다시 시도합니다."
+    },
+    "statusServiceRetry": {
+        "message": "서비스가 일시적으로 불안정합니다. 잠시 후 다시 시도합니다."
+    },
+    "httpError": {
+        "message": "HTTP $status$ $statusText$",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            }
+        }
+    },
+    "agentEnabledDescription": {
+        "message": "다단계 도구 호출로 현재 페이지를 분석하고 조작할 수 있습니다."
+    },
+    "agentEnabledTitle": {
+        "message": "에이전트: 켜짐"
+    },
+    "agentModeBriefEnabled": {
+        "message": "🤖 **에이전트 모드가 켜졌습니다**"
+    },
+    "agentModeDetailedEnabled": {
+        "message": "✅ **에이전트 모드가 켜졌습니다**\n\n에이전트 모드로 전환했습니다. 페이지 HTML과 도구 호출을 사용하여 현재 페이지를 분석하고 조작할 수 있습니다. 이 설정은 새로 고친 후에도 유지됩니다."
+    },
+    "agentModeNoticeEnabled": {
+        "message": "🤖 **에이전트 모드가 켜져 있습니다**\n다단계 도구 호출로 현재 페이지를 분석하고 조작합니다."
+    },
+    "agentModeRequiredForImages": {
+        "message": "이미지 컨텍스트를 직접 첨부하려면 에이전트 모드로 전환하세요."
+    },
+    "annotationAdded": {
+        "message": "주석이 포함된 스크린샷을 추가했습니다. 전송할 때 스크린샷을 다시 캡처하지 않습니다."
+    },
+    "annotationCancelled": {
+        "message": "주석이 취소되었거나 주석 스크린샷을 가져오지 못했습니다."
+    },
+    "annotationEmpty": {
+        "message": "추가할 주석 스크린샷을 가져오지 못했습니다."
+    },
+    "annotationStarted": {
+        "message": "주석 모드를 시작했습니다. 페이지 요소를 클릭하거나 왼쪽 버튼을 누른 채 그리세요."
+    },
+    "builtInCommandCopyText": {
+        "message": "**기본 제공 스킬:**\n- /clear - 기록 지우기(Ctrl+L도 가능)\n- /summary - 페이지 요약"
+    },
+    "clearHistoryShortcut": {
+        "message": "기록 지우기(Ctrl+L)"
+    },
+    "clipboardNoImage": {
+        "message": "클립보드에 사용할 수 있는 이미지가 없습니다."
+    },
+    "customCommandTemplateVariablesError": {
+        "message": "❌ **스킬 $command$의 프롬프트에 ${변수}가 포함되어 있습니다. 스킬 이름을 입력한 후 Tab을 눌러 펼치고 입력하세요.**",
+        "placeholders": {
+            "command": {
+                "content": "$1"
+            }
+        }
+    },
+    "customCommandsCopyHeading": {
+        "message": "내 스킬:"
+    },
+    "dropNoImage": {
+        "message": "드롭한 콘텐츠에 사용할 수 있는 이미지가 없습니다."
+    },
+    "imageDropFailed": {
+        "message": "드롭한 이미지를 추가할 수 없습니다: $error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagePasteFailed": {
+        "message": "이미지를 붙여 넣을 수 없습니다: $error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "imageUploadFailed": {
+        "message": "이미지를 업로드할 수 없습니다: $error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagesAdded": {
+        "message": "$count$개의 이미지를 추가했습니다. 모델로 바로 보낼 수 있습니다.",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagesAlreadyAdded": {
+        "message": "이 이미지는 현재 질문에 이미 추가되어 있습니다."
+    },
+    "inquiryEnabledDescription": {
+        "message": "페이지 콘텐츠를 기준으로 답하고 페이지 도구는 호출하지 않습니다."
+    },
+    "inquiryEnabledTitle": {
+        "message": "질문: 켜짐"
+    },
+    "inquiryModeBriefEnabled": {
+        "message": "💬 **질문 모드가 켜졌습니다**"
+    },
+    "inquiryModeDetailedEnabled": {
+        "message": "💬 **질문 모드가 켜졌습니다**\n\n질문 모드로 전환했습니다. 페이지 콘텐츠를 기준으로 답하고 페이지 도구는 호출하지 않습니다. 직접 첨부한 이미지 컨텍스트도 비활성화됩니다. 이 설정은 새로 고친 후에도 유지됩니다."
+    },
+    "inquiryModeNoticeEnabled": {
+        "message": "💬 **질문 모드가 켜져 있습니다**\n페이지 콘텐츠를 기준으로 답하고 페이지 도구는 호출하지 않습니다."
+    },
+    "maxImagesAdded": {
+        "message": "최대 $max$개의 이미지만 첨부할 수 있어 처음 $count$개를 추가했습니다.",
+        "placeholders": {
+            "max": {
+                "content": "$1"
+            },
+            "count": {
+                "content": "$2"
+            }
+        }
+    },
+    "maxImagesAllowed": {
+        "message": "최대 $max$개의 이미지만 첨부할 수 있습니다.",
+        "placeholders": {
+            "max": {
+                "content": "$1"
+            }
+        }
+    },
+    "noImageDetected": {
+        "message": "추가할 이미지를 찾지 못했습니다."
+    },
+    "noImageFiles": {
+        "message": "추가할 이미지 파일이 없습니다."
+    },
+    "openCustomCommands": {
+        "message": "환경설정을 열어 모든 스킬 보기"
+    },
+    "screenshotDisabledDescription": {
+        "message": "웹페이지 텍스트만 분석하고 스크린샷은 자동으로 첨부하지 않습니다."
+    },
+    "screenshotDisabledDetailed": {
+        "message": "⭕ **스크린샷 기능이 꺼졌습니다**\n\n스크린샷을 자동으로 캡처하지 않습니다. 질문에는 텍스트만 사용합니다. 이 설정은 새로 고친 후에도 유지됩니다."
+    },
+    "screenshotDisabledTitle": {
+        "message": "스크린샷: 꺼짐"
+    },
+    "screenshotEnabledDescription": {
+        "message": "질문할 때 현재 화면의 스크린샷을 자동으로 첨부합니다."
+    },
+    "screenshotEnabledDetailed": {
+        "message": "✨ **스크린샷 기능이 켜졌습니다!** 이제 분석에 스크린샷을 포함합니다. 이 설정은 새로 고친 후에도 유지됩니다."
+    },
+    "screenshotEnabledTitle": {
+        "message": "스크린샷: 켜짐"
+    },
+    "screenshotModeBriefDisabled": {
+        "message": "⭕ **스크린샷 모드가 꺼졌습니다**"
+    },
+    "screenshotModeBriefEnabled": {
+        "message": "📸 **스크린샷 모드가 켜졌습니다**"
+    },
+    "screenshotModeNoticeDisabled": {
+        "message": "📝 **스크린샷 모드가 꺼져 있습니다**\nAskPage는 현재 웹페이지 텍스트만 분석합니다."
+    },
+    "screenshotModeNoticeEnabled": {
+        "message": "📸 **스크린샷 모드가 켜져 있습니다**\n현재 화면의 스크린샷을 보조 컨텍스트로 자동 첨부합니다."
+    },
+    "screenshotRequiredForAnnotation": {
+        "message": "현재 화면에 주석을 추가하려면 스크린샷 기능을 켜세요."
+    },
+    "screenshotTestFailed": {
+        "message": "❌ **스크린샷 테스트 실패**\n\n스크린샷 기능은 켜져 있지만 캡처하지 못했습니다. 브라우저 권한 설정을 확인하세요."
+    },
+    "screenshotTestStarting": {
+        "message": "✅ **스크린샷 기능이 켜졌습니다**\n\n🔄 스크린샷 캡처를 테스트하는 중..."
+    },
+    "screenshotTestSucceeded": {
+        "message": "📸 **스크린샷 테스트 성공!**\n\n**스크린샷 정보:**\n- 📏 이미지 크기: $imageSize$ KB\n- 🔗 형식: PNG (Base64)\n- 📊 데이터 길이: $dataLength$자\n- 🎯 Base64 데이터 길이: $base64Length$자\n\n**캡처한 스크린샷 미리보기:**",
+        "placeholders": {
+            "imagesize": {
+                "content": "$1"
+            },
+            "datalength": {
+                "content": "$2"
+            },
+            "base64length": {
+                "content": "$3"
+            }
+        }
+    },
+    "selectImageFile": {
+        "message": "사용할 수 있는 이미지 파일을 선택하세요."
+    },
+    "selectedTextCopyText": {
+        "message": "🎯 **선택한 텍스트 감지**($count$자)\n\n선택한 텍스트를 중심으로 바로 질문할 수 있습니다.\n\n**선택한 내용:**\n$text$$mode$\n\n💡 $commands$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "text": {
+                "content": "$2"
+            },
+            "mode": {
+                "content": "$3"
+            },
+            "commands": {
+                "content": "$4"
+            }
+        }
+    },
+    "selectedTextDetected": {
+        "message": "선택한 텍스트 감지"
+    },
+    "selectedTextIntro": {
+        "message": "선택한 텍스트를 중심으로 분석합니다. $count$자",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "summaryTemplateVariablesError": {
+        "message": "❌ **/summary 프롬프트에 ${변수}가 포함되어 있습니다. /summary를 입력한 후 Tab을 눌러 펼치고 입력하세요.**"
+    },
+    "unknownCommandError": {
+        "message": "❌ **알 수 없는 스킬: $command$**\n\n사용 가능한 스킬:\n$commands$\n\n환경설정에서 스킬을 추가할 수도 있습니다.",
+        "placeholders": {
+            "command": {
+                "content": "$1"
+            },
+            "commands": {
+                "content": "$2"
+            }
+        }
+    },
+    "usageIntro": {
+        "message": "현재 페이지에 대해 바로 질문하거나 먼저 텍스트를 선택하세요."
+    },
+    "usageTip": {
+        "message": "사용 팁"
+    },
+    "usageTipCopyText": {
+        "message": "💡 **사용 팁:**\n\n이 페이지에 대해 바로 질문하거나 페이지 텍스트를 선택한 후 질문할 수 있습니다.$mode$\n\n$commands$",
+        "placeholders": {
+            "mode": {
+                "content": "$1"
+            },
+            "commands": {
+                "content": "$2"
+            }
+        }
+    },
+    "imageContextTitleWithAnnotation": {
+        "message": "이미지 컨텍스트(업로드, 붙여넣기, 드롭 또는 현재 화면 주석)"
+    },
+    "imageContextMetaWithCount": {
+        "message": "PNG / JPG / WebP 등 이미지, 파일당 10MB 이하 · $count$/$max$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "max": {
+                "content": "$2"
+            }
+        }
+    },
+    "openFullImage": {
+        "message": "클릭하여 $index$번째 전체 이미지 열기",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagePreviewTitle": {
+        "message": "이미지 미리보기 $index$ - AskPage",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagePreviewHeading": {
+        "message": "이미지 미리보기 $index$",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "questionImageAlt": {
+        "message": "AskPage 질문 이미지 $index$",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "removeImage": {
+        "message": "$index$번째 이미지 삭제",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "screenshotPreviewTitle": {
+        "message": "스크린샷 미리보기 - AskPage"
+    },
+    "screenshotPreviewHeading": {
+        "message": "스크린샷 미리보기"
+    },
+    "screenshotPreviewAlt": {
+        "message": "AskPage 스크린샷 미리보기"
+    },
+    "openFullScreenshot": {
+        "message": "클릭하여 전체 스크린샷 열기"
+    },
+    "openQuestionScreenshot": {
+        "message": "질문 당시의 전체 스크린샷 열기"
+    },
+    "questionScreenshotAlt": {
+        "message": "질문 당시 화면 스크린샷"
+    },
+    "viewOriginalSize": {
+        "message": "클릭하여 원본 크기 보기"
+    },
+    "screenshotInfo": {
+        "message": "📊 크기: $width$×$height$ | 파일 크기: $size$ KB",
+        "placeholders": {
+            "width": {
+                "content": "$1"
+            },
+            "height": {
+                "content": "$2"
+            },
+            "size": {
+                "content": "$3"
+            }
+        }
+    },
+    "copyScreenshotBase64": {
+        "message": "스크린샷 Base64 데이터 복사"
+    },
+    "copyToClipboard": {
+        "message": "클립보드에 복사"
+    },
+    "userMessagePrefix": {
+        "message": "나"
+    },
+    "screenAnnotationMode": {
+        "message": "AskPage 화면 주석 모드"
+    },
+    "screenAnnotationInstructions": {
+        "message": "마우스를 움직여 DOM 요소를 지정하고 클릭하여 선택하세요. 왼쪽 버튼을 누른 채 그리면 DOM을 선택하지 않습니다."
+    },
+    "collapse": {
+        "message": "접기"
+    },
+    "expand": {
+        "message": "펼치기"
+    },
+    "collapseCode": {
+        "message": "코드 접기"
+    },
+    "expandCode": {
+        "message": "전체 코드 펼치기"
+    },
+    "copyCode": {
+        "message": "코드 복사"
+    },
+    "openCodePen": {
+        "message": "CodePen에서 열기"
+    },
+    "codePenOpened": {
+        "message": "열림"
+    },
+    "codePenFailed": {
+        "message": "실패"
+    },
+    "expandAll": {
+        "message": "모두 펼치기"
+    },
+    "imagePreviewSize": {
+        "message": "이미지 크기: 약 $size$KB",
+        "placeholders": {
+            "size": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerDomainNotAllowed": {
+        "message": "$provider$ Service Worker는 다른 도메인을 호출할 수 없습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerEndpointNotAllowed": {
+        "message": "$provider$ Service Worker는 이 API 엔드포인트를 호출할 수 없습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerRequestFailed": {
+        "message": "$provider$ Service Worker 요청에 실패했습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerPostOnly": {
+        "message": "$provider$ Service Worker는 POST 요청만 허용합니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerApiKeyRequired": {
+        "message": "$provider$ API Key를 비워 둘 수 없습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerInvalidJson": {
+        "message": "$provider$ 요청 본문이 올바른 JSON이 아닙니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerInvalidRequest": {
+        "message": "$provider$ 요청 본문 형식이 올바르지 않습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerDuplicateResponse": {
+        "message": "$provider$ Service Worker가 응답 정보를 중복으로 반환했습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerInvalidHttpStatus": {
+        "message": "$provider$ Service Worker가 잘못된 HTTP 상태를 반환했습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerNoResponseInfo": {
+        "message": "$provider$ Service Worker가 아직 응답 정보를 제공하지 않았습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerNoHttpResponse": {
+        "message": "$provider$ Service Worker가 HTTP 응답을 제공하지 않았습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerDisconnected": {
+        "message": "$provider$ Service Worker 연결이 중단되었습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "imageFileTooLarge": {
+        "message": "이미지 파일이 10MB 제한을 초과합니다."
+    },
+    "invalidImageFile": {
+        "message": "파일 내용이 올바른 이미지가 아닙니다."
+    },
+    "imageReadFailed": {
+        "message": "이미지 내용을 읽을 수 없습니다."
+    },
+    "droppedImageFetchFailed": {
+        "message": "드롭한 이미지를 읽을 수 없습니다($status$ $statusText$).",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            }
+        }
+    },
+    "droppedContentNotImage": {
+        "message": "드롭한 콘텐츠가 이미지가 아닙니다."
+    },
+    "codeLanguagePlainText": {
+        "message": "일반 텍스트"
+    },
+    "codeLanguage": {
+        "message": "코드"
+    },
+    "autoDetectedLanguage": {
+        "message": "자동 감지: $language$",
+        "placeholders": {
+            "language": {
+                "content": "$1"
+            }
+        }
+    },
+    "retryDelaySeconds": {
+        "message": "$seconds$초",
+        "placeholders": {
+            "seconds": {
+                "content": "$1"
+            }
+        }
+    },
+    "retryExhausted": {
+        "message": "$message$ $count$회 재시도했지만 실패했습니다.",
+        "placeholders": {
+            "message": {
+                "content": "$1"
+            },
+            "count": {
+                "content": "$2"
+            }
+        }
+    },
+    "statusPlanningWithProvider": {
+        "message": "$provider$에 작업을 계획하도록 요청하는 중...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusAnsweringWithProvider": {
+        "message": "$provider$에 페이지를 분석하고 답변하도록 요청하는 중...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusRetrying": {
+        "message": "$provider$ $reason$; $delay$ 후 재시도합니다($retryCount$/$maxRetries$)...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "reason": {
+                "content": "$2"
+            },
+            "delay": {
+                "content": "$3"
+            },
+            "retrycount": {
+                "content": "$4"
+            },
+            "maxretries": {
+                "content": "$5"
+            }
+        }
+    },
+    "statusToolCallingFallbackDetailed": {
+        "message": "$provider$가 도구 호출을 지원하지 않아 일반 텍스트 모드로 계속합니다...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusEmptyResponseOutputLimitRetry": {
+        "message": "$provider$가 내용을 반환하지 않았고 출력 한도에 도달했을 수 있어 한도를 늘려 다시 시도합니다...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusEmptyResponseRetryDetailed": {
+        "message": "$provider$가 내용을 반환하지 않아 자동으로 다시 시도합니다...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusGeminiOutputLimitRetry": {
+        "message": "$provider$가 내용을 반환하지 않았고 출력 한도에 도달했을 수 있어 모델의 최대 출력 한도로 다시 시도합니다...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusToolSelected": {
+        "message": "$provider$가 도구 $tools$을(를) 선택했습니다. 실행을 준비하는 중...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "tools": {
+                "content": "$2"
+            }
+        }
+    },
+    "statusToolExecuting": {
+        "message": "도구 $tool$ 실행 중($index$/$total$)...",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            },
+            "index": {
+                "content": "$2"
+            },
+            "total": {
+                "content": "$3"
+            }
+        }
+    },
+    "statusToolResults": {
+        "message": "도구 $tools$을(를) 실행했으며 결과를 $provider$에 반환하는 중...",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            },
+            "provider": {
+                "content": "$2"
+            }
+        }
+    },
+    "toolCallLimitExceeded": {
+        "message": "도구 호출 횟수 한도에 도달하여 무한 루프를 방지하기 위해 실행을 중단했습니다."
+    },
+    "invalidProviderApiKey": {
+        "message": "$provider$ API Key가 올바르지 않습니다. $provider$ API Key 설정을 확인하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerRequestForbidden": {
+        "message": "$provider$가 요청을 거부했습니다. API 권한 또는 모델 액세스 설정을 확인하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerModelNotFound": {
+        "message": "지정한 $provider$ 모델을 찾을 수 없습니다. 모델 설정을 확인하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerRateLimited": {
+        "message": "$provider$가 바쁘거나 요청 빈도가 너무 높습니다. 나중에 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerUnavailable": {
+        "message": "$provider$를 일시적으로 사용할 수 없습니다. 나중에 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "httpStatusDetails": {
+        "message": " (HTTP $status$$statusText$)",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            }
+        }
+    },
+    "retryReasonTimeout": {
+        "message": "요청 시간 초과"
+    },
+    "retryReasonNetwork": {
+        "message": "네트워크 연결 문제"
+    },
+    "retryReasonResponseFormat": {
+        "message": "응답 형식 문제"
+    },
+    "retryReasonContextWindow": {
+        "message": "컨텍스트 창 초과"
+    },
+    "retryReasonUnauthorized": {
+        "message": "인증 실패"
+    },
+    "retryReasonForbidden": {
+        "message": "권한 없음"
+    },
+    "retryReasonResourceNotFound": {
+        "message": "리소스를 찾을 수 없음"
+    },
+    "retryReasonInvalidRequest": {
+        "message": "잘못된 요청"
+    },
+    "retryReasonQuota": {
+        "message": "할당량 소진"
+    },
+    "retryReasonRateLimit": {
+        "message": "서비스가 바쁘거나 요청 빈도가 너무 높음"
+    },
+    "retryReasonServiceError": {
+        "message": "일시적인 서비스 오류"
+    },
+    "retryReasonRequestFailed": {
+        "message": "요청 실패"
+    },
+    "retryReasonUnknown": {
+        "message": "알 수 없는 오류"
+    },
+    "requestTimeoutMessage": {
+        "message": "$provider$ 요청 시간이 초과되었습니다. 서비스가 바쁘거나 네트워크가 불안정할 수 있습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "networkErrorMessage": {
+        "message": "$provider$ 서비스에 연결할 수 없습니다. 네트워크가 불안정하거나 서비스가 응답하지 않을 수 있습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "invalidResponseMessage": {
+        "message": "$provider$가 해석할 수 없는 데이터를 반환했습니다. 서비스가 일시적으로 불안정할 수 있습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "contextWindowExceeded": {
+        "message": "$provider$에서 페이지 스냅샷과 전체 대화가 모델의 컨텍스트 창을 초과했다고 보고했습니다$statusSuffix. /clear를 실행하여 새 대화를 시작하세요. AskPage는 기존 대화를 자동으로 삭제하거나 자르지 않습니다.$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "errorMessageLabel": {
+        "message": "오류 메시지"
+    },
+    "providerResourceNotFound": {
+        "message": "지정한 $provider$ 모델, 엔드포인트 또는 배포 설정을 찾을 수 없습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerInvalidRequest": {
+        "message": "$provider$가 요청을 거부했습니다. 매개변수 형식이 올바르지 않을 수 있습니다.$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerQuotaExceeded": {
+        "message": "$provider$ 할당량 또는 사용량 한도에 도달했습니다$statusSuffix. 컨텍스트 창 또는 TPM(tokens per minute) 한도 때문일 수 있습니다. 모델을 변경하거나 일반 모드를 사용하여 입력을 줄이세요. 오류 메시지: $apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerRateLimitedWithDetails": {
+        "message": "$provider$가 바쁘거나 요청 빈도가 너무 높습니다$statusSuffix. $apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerServiceError": {
+        "message": "$provider$ 서비스에서 일시적인 오류가 발생했습니다$statusSuffix. $apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerUnknownError": {
+        "message": "$provider$ API 호출이 알 수 없는 이유로 실패했습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "streamingUnsupported": {
+        "message": "이 브라우저는 스트리밍 응답 읽기를 지원하지 않습니다."
+    },
+    "openaiRefusal": {
+        "message": "$provider$가 요청을 거부했습니다: $refusal$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "refusal": {
+                "content": "$2"
+            }
+        }
+    },
+    "openaiOutputLimit": {
+        "message": "$provider$의 출력 길이 한도에 도달했습니다. 질문 범위를 좁혀 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiContentFiltered": {
+        "message": "$provider$가 콘텐츠 필터링으로 텍스트를 반환하지 않았습니다. 질문을 조정하여 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiToolCallNoText": {
+        "message": "$provider$가 도구 호출 상태를 반환했지만 표시할 텍스트가 없습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiFunctionCallNoText": {
+        "message": "$provider$가 함수 호출 상태를 반환했지만 표시할 텍스트가 없습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiNonDisplayableStop": {
+        "message": "$provider$가 응답을 완료했지만 표시할 텍스트가 없습니다. 다시 시도하거나 질문 범위를 좁히세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerNoCandidates": {
+        "message": "$provider$가 후보를 반환하지 않았습니다. 모델이 아직 답변을 생성하지 않았을 수 있으니 나중에 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerNonDisplayableResult": {
+        "message": "$provider$가 표시할 텍스트가 없는 결과를 반환했습니다. 다시 시도하거나 질문 범위를 좁히세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptSafety": {
+        "message": "$provider$가 안전 제한으로 이 요청을 처리하지 않았습니다$details$. 질문을 조정하여 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiPromptBlocklist": {
+        "message": "$provider$가 요청에 차단된 용어가 포함되어 있어 처리하지 않았습니다. 질문을 조정하여 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptProhibited": {
+        "message": "$provider$가 이 요청을 금지된 콘텐츠로 판단하여 답변을 반환하지 않았습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptImageSafety": {
+        "message": "$provider$가 이미지의 안전 제한으로 답변을 반환하지 않았습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptOther": {
+        "message": "$provider$가 이 요청을 처리하지 않았습니다. 나중에 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiOutputLimit": {
+        "message": "$provider$의 출력 길이 한도에 도달했습니다$details$. 질문 범위를 좁혀 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiSafety": {
+        "message": "$provider$가 안전 제한으로 텍스트를 반환하지 않았습니다$details$. 질문을 조정하여 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiRecitation": {
+        "message": "$provider$가 인용 제한으로 텍스트를 반환하지 않았습니다$details$.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiLanguage": {
+        "message": "$provider$가 언어 제한으로 텍스트를 반환하지 않았습니다$details$. 한국어 또는 영어로 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiBlocklist": {
+        "message": "$provider$가 응답의 차단 용어 제한으로 텍스트를 반환하지 않았습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiProhibited": {
+        "message": "$provider$가 응답의 금지된 콘텐츠 제한으로 텍스트를 반환하지 않았습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiSensitiveInfo": {
+        "message": "$provider$가 응답에 민감한 개인 정보가 포함될 수 있어 텍스트를 반환하지 않았습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiMalformedToolCall": {
+        "message": "$provider$가 형식이 잘못된 도구 호출을 반환했습니다$details$. 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiOther": {
+        "message": "$provider$가 표시할 텍스트를 생성하지 않았습니다$details$. 나중에 다시 시도하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiNoCandidates": {
+        "message": "$provider$가 후보를 반환하지 않았습니다. 요청이 차단되었거나 모델이 답변을 생성하지 않았을 수 있습니다.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiNonDisplayableResult": {
+        "message": "$provider$가 표시할 텍스트가 없는 결과를 반환했습니다$details$. 다시 시도하거나 질문 범위를 좁히세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "invalidStreamingData": {
+        "message": "$provider$가 해석할 수 없는 스트리밍 데이터를 반환했습니다: $data$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "data": {
+                "content": "$2"
+            }
+        }
+    },
+    "streamingApiError": {
+        "message": "스트리밍 API 오류: $error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "httpFallbackError": {
+        "message": "HTTP $status$ $statusText$: $error$",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            },
+            "error": {
+                "content": "$3"
+            }
+        }
+    },
+    "errorPrefix": {
+        "message": "오류: $error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerApiKeyMissing": {
+        "message": "확장 프로그램 아이콘을 클릭하여 $provider$ API Key를 설정하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerApiKeyDecryptFailed": {
+        "message": "$provider$ API Key를 해독할 수 없습니다. 다시 설정하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerEndpointMissing": {
+        "message": "확장 프로그램 아이콘을 클릭하여 $provider$ Endpoint를 설정하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerDeploymentMissing": {
+        "message": "확장 프로그램 아이콘을 클릭하여 $provider$ Deployment Name을 설정하세요.",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerMissing": {
+        "message": "확장 프로그램 아이콘을 클릭하여 AI 제공자를 설정하세요."
+    },
+    "providerDeploymentNotFound": {
+        "message": "배포를 찾을 수 없습니다. Endpoint 및 Deployment Name 설정을 확인하세요."
+    },
+    "providerAuthenticationFailed": {
+        "message": "$provider$ 인증에 실패했습니다: $error$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "error": {
+                "content": "$2"
+            }
+        }
+    },
+    "gptToolCompatibility": {
+        "message": "GPT-5.6에서 function tools를 사용하려면 Responses API를 사용해야 하며 Chat Completions는 사용할 수 없습니다."
+    },
+    "unknownTool": {
+        "message": "알 수 없는 도구"
+    },
+    "toolListMore": {
+        "message": "$names$ 외 $count$개 도구",
+        "placeholders": {
+            "names": {
+                "content": "$1"
+            },
+            "count": {
+                "content": "$2"
+            }
+        }
+    },
+    "success": {
+        "message": "성공"
+    },
+    "failure": {
+        "message": "실패"
+    },
+    "toolExecutionSingle": {
+        "message": "$tools$ 도구를 호출했으며 $result$했습니다",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            },
+            "result": {
+                "content": "$2"
+            }
+        }
+    },
+    "toolExecutionAllSuccess": {
+        "message": "$tools$ 도구를 호출했으며 모두 성공했습니다",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolExecutionAllFailure": {
+        "message": "$tools$ 도구를 호출했으며 모두 실패했습니다",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolExecutionMixed": {
+        "message": "$tools$ 도구를 호출했으며 성공 $successCount$개, 실패 $failureCount$개입니다",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            },
+            "successcount": {
+                "content": "$2"
+            },
+            "failurecount": {
+                "content": "$3"
+            }
+        }
+    },
+    "usageDetails": {
+        "message": "($details$)",
+        "placeholders": {
+            "details": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageListSeparator": {
+        "message": ", "
+    },
+    "usageLine": {
+        "message": "- $label$: $value$$suffix$",
+        "placeholders": {
+            "label": {
+                "content": "$1"
+            },
+            "value": {
+                "content": "$2"
+            },
+            "suffix": {
+                "content": "$3"
+            }
+        }
+    },
+    "usageInput": {
+        "message": "입력"
+    },
+    "usageOutput": {
+        "message": "출력"
+    },
+    "usageToolInput": {
+        "message": "도구 입력"
+    },
+    "usageTotal": {
+        "message": "합계"
+    },
+    "usageCache": {
+        "message": "캐시 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageCacheWrite": {
+        "message": "캐시 쓰기 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageReasoning": {
+        "message": "추론 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageAcceptedPrediction": {
+        "message": "허용된 예측 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageRejectedPrediction": {
+        "message": "거부된 예측 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageSummary": {
+        "message": "Token 사용량 요약:\n$lines$",
+        "placeholders": {
+            "lines": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolCallInProgress": {
+        "message": "🛠️ $tool$ 실행 중",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolResultFailure": {
+        "message": " (실패)"
+    },
+    "toolResultSummary": {
+        "message": "\n\n결과 요약: $message$",
+        "placeholders": {
+            "message": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolResultMessageSuffix": {
+        "message": ": $message$",
+        "placeholders": {
+            "message": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolResultReceived": {
+        "message": "📥 $tool$ 결과 반환$status$$message$",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            },
+            "status": {
+                "content": "$2"
+            },
+            "message": {
+                "content": "$3"
+            }
+        }
+    },
+    "toolResultTraceText": {
+        "message": "📥 **$tool$** 결과 반환$status$.$summary$\n\n$payload$",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            },
+            "status": {
+                "content": "$2"
+            },
+            "summary": {
+                "content": "$3"
+            },
+            "payload": {
+                "content": "$4"
+            }
+        }
+    },
+    "executionDuration": {
+        "message": "소요 시간: $duration$",
+        "placeholders": {
+            "duration": {
+                "content": "$1"
+            }
+        }
+    },
+    "agentExecutionCompleted": {
+        "message": "AskPage가 $count$단계를 실행하고 완료했습니다. $duration$$usage$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "duration": {
+                "content": "$2"
+            },
+            "usage": {
+                "content": "$3"
+            }
+        }
+    },
+    "agentExecutionStopped": {
+        "message": "AskPage가 $count$단계 후 중지되었습니다. $duration$$usage$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "duration": {
+                "content": "$2"
+            },
+            "usage": {
+                "content": "$3"
+            }
+        }
+    },
+    "endpointToolFallbackMessage": {
+        "message": "⚠️ **이 $provider$ 엔드포인트는 tool calling을 완전히 지원하지 않습니다**\n\n자동으로 일반 텍스트 모드로 전환했으므로 이번 요청에서는 페이지 DOM이나 양식을 직접 조작할 수 없습니다.\n\n$answer$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "answer": {
+                "content": "$2"
+            }
+        }
+    },
+    "agentToolFallbackMessage": {
+        "message": "⚠️ **$provider$ 제공자는 agent 모드의 tool calling을 완전히 지원하지 않습니다**\n\n자동으로 일반 텍스트 모드로 전환했으므로 이번 요청에서는 페이지 DOM이나 양식을 직접 조작할 수 없습니다.\n\n$answer$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "answer": {
+                "content": "$2"
+            }
+        }
+    }
 }

@@ -902,6 +902,7 @@
         <label for="modalProviderType" data-i18n="providerType">提供者類型</label>
         <select id="modalProviderType">
           <option value="gemini" data-i18n="providerGemini">Google Gemini</option>
+          <option value="vertex" data-i18n="providerVertex">Gemini Enterprise (Vertex AI)</option>
           <option value="openai" data-i18n="providerOpenAI">OpenAI</option>
           <option value="azure" data-i18n="providerAzure">Azure OpenAI</option>
           <option value="anthropic" data-i18n="providerAnthropic">Anthropic Claude</option>
@@ -944,6 +945,54 @@
             <span data-i18n="geminiGoogleSearchEnabled">啟用 Grounding with Google Search 工具</span>
           </label>
           <p id="modalGeminiGoogleSearchWarning" hidden style="margin: 8px 0 0; padding: 8px 12px; border-radius: 6px; background: rgba(255, 154, 74, 0.12); border: 1px solid var(--warning-color); color: var(--warning-color); font-size: 12px; line-height: 1.5;" data-i18n="geminiGoogleSearchEnabledWarning">⚠ Google AI Studio 免費方案不支援此設定，啟用後會觸發 429 配額錯誤。僅 Tier 1 以上付費方案可使用此功能。</p>
+        </div>
+      </div>
+
+      <!-- Vertex Settings Fields -->
+      <div id="modal-vertex-fields" class="provider-fields" style="display: none; margin-top: 12px;">
+        <div class="form-group">
+          <label for="modalVertexProjectId" data-i18n="gcpProjectId">Google Cloud Project ID</label>
+          <input id="modalVertexProjectId" type="text" data-i18n-placeholder="vertexProjectIdPlaceholder" placeholder="例如：corp-genai-2026">
+        </div>
+        <div class="form-group" style="margin-top: 8px;">
+          <label for="modalVertexRegion" data-i18n="gcpRegion">Location / Region</label>
+          <input id="modalVertexRegion" type="text" list="modalVertexRegionList" data-i18n-placeholder="vertexRegionPlaceholder" placeholder="例如：asia-east1">
+          <datalist id="modalVertexRegionList">
+            <option value="asia-east1">asia-east1</option>
+            <option value="asia-northeast1">asia-northeast1</option>
+            <option value="asia-southeast1">asia-southeast1</option>
+            <option value="us-central1">us-central1</option>
+            <option value="us-east4">us-east4</option>
+            <option value="europe-west1">europe-west1</option>
+            <option value="europe-west4">europe-west4</option>
+          </datalist>
+        </div>
+        <div class="form-group" style="margin-top: 8px;">
+          <label for="modalVertexAuthMode" data-i18n="gcpAuthMode">認證方式</label>
+          <select id="modalVertexAuthMode">
+            <option value="api-key" data-i18n="vertexAuthModeApiKey">API Key</option>
+            <option value="bearer-token" data-i18n="vertexAuthModeBearerToken">OAuth 2.0 Access Token</option>
+          </select>
+        </div>
+        <div id="modalVertexApiKeyGroup" class="form-group" style="margin-top: 8px;">
+          <label for="modalVertexApiKey" data-i18n="apiKey">API Key</label>
+          <input id="modalVertexApiKey" type="password" data-i18n-placeholder="vertexApiKeyPlaceholder" placeholder="請輸入您的 Vertex API Key">
+        </div>
+        <div id="modalVertexAccessTokenGroup" class="form-group" style="display: none; margin-top: 8px;">
+          <label for="modalVertexAccessToken" data-i18n="accessToken">Access Token</label>
+          <input id="modalVertexAccessToken" type="password" data-i18n-placeholder="vertexAccessTokenPlaceholder" placeholder="請輸入您的 OAuth 2.0 Access Token">
+        </div>
+        <div class="form-group" style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label style="margin-bottom: 0;" data-i18n="enabledModels">啟用模型 (可複選，最少選一個)</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="vertex" data-action="fetch-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;"><span aria-hidden="true">🔍</span> <span data-i18n="loadAllModels">載入所有可用模型</span></button>
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="vertex" data-action="add-custom-model" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;"><span aria-hidden="true">✏️</span> <span data-i18n="enterModelManually">手動輸入模型名稱</span></button>
+            </div>
+          </div>
+          <div id="modalVertexModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
+            <!-- 動態載入 -->
+          </div>
         </div>
       </div>
 

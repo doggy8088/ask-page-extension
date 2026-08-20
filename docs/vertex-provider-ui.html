@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gemini Enterprise (Vertex AI) Provider UI</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020612;
+        --bg-2: #0b1220;
+        --card: rgba(7, 13, 24, 0.94);
+        --card-strong: rgba(9, 20, 34, 0.96);
+        --primary: #1687ff;
+        --primary-strong: #0068f0;
+        --border: rgba(133, 164, 202, 0.28);
+        --text: #edf6ff;
+        --muted: #8ea2bc;
+        --success: #35d07f;
+        --warning: #ff9a4a;
+        --shadow: 0 18px 48px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(150, 185, 226, 0.1);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 18% 8%, rgba(22, 135, 255, 0.28), transparent 28rem),
+          radial-gradient(circle at 82% 4%, rgba(117, 216, 255, 0.14), transparent 26rem),
+          var(--bg);
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 18px;
+      }
+
+      .frame {
+        width: min(1100px, 100%);
+        border-radius: 20px;
+        background: rgba(5, 13, 24, 0.82);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        padding: 20px 18px 28px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 18px;
+        align-items: center;
+        margin-bottom: 16px;
+        padding: 18px 16px 16px;
+        border-radius: 18px;
+        background: linear-gradient(145deg, rgba(7, 13, 24, 0.96), #020612 72%);
+        border: 1px solid var(--border);
+      }
+
+      .title {
+        font-size: clamp(22px, 3vw, 32px);
+        font-weight: 900;
+        letter-spacing: 0.06em;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .select,
+      .button,
+      .input,
+      .modal select,
+      .modal input {
+        height: 40px;
+        border-radius: 10px;
+        border: 1px solid rgba(129, 158, 194, 0.38);
+        background: rgba(8, 17, 29, 0.88);
+        color: var(--text);
+        font: inherit;
+      }
+
+      .select,
+      .button {
+        padding: 0 14px;
+      }
+
+      .button {
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+      }
+
+      .button.primary {
+        background: linear-gradient(180deg, rgba(31, 130, 255, 0.9), rgba(4, 86, 211, 0.86));
+        border-color: rgba(107, 181, 255, 0.86);
+      }
+
+      .button.secondary {
+        background: rgba(12, 24, 39, 0.72);
+      }
+
+      .tabs {
+        display: flex;
+        gap: 8px;
+        padding: 4px;
+        background: rgba(5, 13, 24, 0.76);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        margin-bottom: 14px;
+      }
+
+      .tab {
+        flex: 1;
+        padding: 10px 14px;
+        border-radius: 12px;
+        font-weight: 800;
+        color: var(--muted);
+        border: 1px solid transparent;
+        background: transparent;
+        text-align: center;
+      }
+
+      .tab.active {
+        background: linear-gradient(180deg, rgba(31, 130, 255, 0.9), rgba(4, 86, 211, 0.86));
+        border-color: rgba(107, 181, 255, 0.86);
+        color: #f5fbff;
+      }
+
+      .card {
+        border-radius: 18px;
+        border: 1px solid var(--border);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.047), rgba(255, 255, 255, 0)), var(--card);
+        box-shadow: var(--shadow);
+        padding: 18px;
+      }
+
+      .provider-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .provider-title {
+        font-size: 16px;
+        font-weight: 800;
+      }
+
+      .provider-meta {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 4px;
+      }
+
+      .provider-list {
+        min-height: 70px;
+        border-radius: 12px;
+        border: 1px solid rgba(129, 160, 204, 0.24);
+        background: rgba(9, 19, 32, 0.8);
+        padding: 12px;
+      }
+
+      .provider-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(129, 160, 204, 0.22);
+        background: rgba(10, 25, 42, 0.6);
+      }
+
+      .provider-item.primary {
+        border-color: rgba(117, 216, 255, 0.5);
+        box-shadow: 0 0 0 1px rgba(117, 216, 255, 0.16);
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--success);
+        box-shadow: 0 0 12px rgba(53, 208, 127, 0.8);
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.48);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .modal {
+        width: min(680px, 100%);
+        max-height: 85vh;
+        overflow: auto;
+        padding: 24px 24px 18px;
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0)), var(--card-strong);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+      }
+
+      .modal h3 {
+        margin: 0 0 20px;
+        font-size: 20px;
+      }
+
+      .field {
+        margin-bottom: 14px;
+      }
+
+      .field label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      .field input,
+      .field select,
+      .modal select,
+      .modal input {
+        width: 100%;
+        padding: 0 12px;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .model-panel {
+        margin-top: 12px;
+        margin-bottom: 18px;
+        border-radius: 12px;
+        border: 1px solid rgba(129, 160, 204, 0.2);
+        background: rgba(10, 20, 33, 0.7);
+        padding: 12px;
+      }
+
+      .model-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+
+      .small-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .mini {
+        height: 30px;
+        padding: 0 10px;
+        font-size: 11px;
+      }
+
+      .model-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 8px;
+      }
+
+      .model-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(9, 18, 31, 0.8);
+        border: 1px solid rgba(129, 160, 204, 0.18);
+      }
+
+      .model-item input {
+        width: auto;
+        margin: 0;
+      }
+
+      .action-row {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 10px;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="topbar">
+        <div class="title">頁問: 偏好設定</div>
+        <div class="toolbar">
+          <select class="select" aria-label="介面語系">
+            <option>繁體中文</option>
+          </select>
+          <button class="button secondary">重置設定</button>
+          <button class="button secondary">匯出</button>
+          <button class="button secondary">匯入</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active">AI 提供者</div>
+        <div class="tab">技能管理</div>
+        <div class="tab">調整系統提示</div>
+        <div class="tab">一般設定</div>
+      </div>
+
+      <div class="card">
+        <div class="provider-header">
+          <div>
+            <div class="provider-title">AI 提供者設定</div>
+            <div class="provider-meta">設定多個不同的 AI 提供者，並啟用一至多個模型</div>
+          </div>
+          <button class="button primary">➕ 新增 AI 提供者</button>
+        </div>
+
+        <div class="provider-list">
+          <div class="provider-item primary">
+            <div class="row">
+              <span class="dot"></span>
+              <strong>Gemini Enterprise</strong>
+            </div>
+            <span class="muted">Vertex AI</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop">
+      <div class="modal">
+        <h3>新增 AI 提供者</h3>
+
+        <div class="field">
+          <label for="provider-type">提供者類型</label>
+          <select id="provider-type">
+            <option>Google Gemini</option>
+            <option selected>Gemini Enterprise (Vertex AI)</option>
+            <option>OpenAI</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="provider-name">提供者自訂名稱</label>
+          <input id="provider-name" value="Gemini Enterprise" />
+        </div>
+
+        <div class="field">
+          <label for="project-id">Google Cloud Project ID</label>
+          <input id="project-id" value="corp-genai-2026" />
+        </div>
+
+        <div class="field">
+          <label for="region">Location / Region</label>
+          <input id="region" value="asia-east1" />
+        </div>
+
+        <div class="field">
+          <label for="auth-mode">認證方式</label>
+          <select id="auth-mode">
+            <option selected>API Key</option>
+            <option>OAuth 2.0 Access Token</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="api-key">API Key</label>
+          <input id="api-key" type="password" value="••••••••••••••••••••••••••••••••" />
+        </div>
+
+        <div class="model-panel">
+          <div class="model-header">
+            <strong>啟用模型 (可複選，最少選一個)</strong>
+            <div class="small-actions">
+              <button class="button secondary mini">🔍 載入所有可用模型</button>
+              <button class="button secondary mini">✏️ 手動輸入模型名稱</button>
+            </div>
+          </div>
+
+          <div class="model-grid">
+            <label class="model-item"><input type="checkbox" checked /> gemini-2.5-pro</label>
+            <label class="model-item"><input type="checkbox" checked /> gemini-2.5-flash</label>
+            <label class="model-item"><input type="checkbox" checked /> gemini-2.5-flash-lite</label>
+            <label class="model-item"><input type="checkbox" checked /> gemini-2.0-flash</label>
+            <label class="model-item"><input type="checkbox" checked /> gemini-2.0-flash-lite</label>
+            <label class="model-item"><input type="checkbox" checked /> gemini-1.5-pro</label>
+            <label class="model-item"><input type="checkbox" checked /> gemini-1.5-flash</label>
+            <label class="model-item"><input type="checkbox" checked /> gemini-flash-lite-latest</label>
+          </div>
+        </div>
+
+        <div class="action-row">
+          <button class="button secondary">取消</button>
+          <button class="button primary">儲存</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

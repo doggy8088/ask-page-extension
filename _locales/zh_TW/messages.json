@@ -1,447 +1,2270 @@
 {
-    "extensionName": { "message": "頁問 AskPage" },
-    "extensionLogoAlt": { "message": "頁問標誌" },
-    "extensionDescription": { "message": "以您設定的 AI API 為基礎，針對目前頁面提出問題並取得回答" },
-    "commandToggleDialog": { "message": "開啟頁問對話框" },
-    "commandSwitchProvider": { "message": "切換 AI 提供者" },
-    "settingsMigrationTitle": { "message": "頁問：設定已移轉" },
-    "settingsMigrationDescription": { "message": "設定已升級至支援多模型設定，即將為您跳轉至完整設定頁面..." },
-    "codepenTitle": { "message": "正在前往 CodePen - 頁問 AskPage" },
-    "codepenDescription": { "message": "正在準備 CodePen 程式碼..." },
-    "codepenOpeningDescription": { "message": "即將為您在新視窗開啟編輯器" },
-    "codepenMissingData": { "message": "找不到程式碼資料" },
-    "closeAndRetry": { "message": "請關閉此分頁並重新嘗試。" },
-    "codepenOpenFailed": { "message": "開啟 CodePen 失敗" },
-    "unknownErrorRetry": { "message": "未知錯誤，請重試。" },
-    "preferencesTitle": { "message": "頁問：偏好設定" },
-    "preferencesDescription": { "message": "設定您的 AI 提供者、技能和系統提示" },
-    "resetSettings": { "message": "重置設定" },
-    "exportSettings": { "message": "匯出" },
-    "importSettings": { "message": "匯入" },
-    "aiProviders": { "message": "AI 提供者" },
-    "customSlashCommands": { "message": "技能管理" },
-    "adjustSystemPrompt": { "message": "調整系統提示" },
-    "aiProviderSettings": { "message": "AI 提供者設定" },
-    "aiProviderSettingsDescription": { "message": "設定多個不同的 AI 提供者，並啟用一至多個模型，點擊模型名稱可切換為目前使用模型" },
-    "addAiProvider": { "message": "新增 AI 提供者" },
-    "slashCommandManagement": { "message": "技能管理" },
-    "slashCommandManagementDescription": { "message": "管理內建與自訂技能" },
-    "addCustomSlashCommand": { "message": "新增技能" },
-    "systemPromptDescription": { "message": "這段內容會附加在內建系統提示最後面；留空則不追加。內建系統提示不會被覆寫。" },
-    "additionalPrompt": { "message": "追加提示詞" },
-    "additionalPromptPlaceholder": { "message": "請輸入要附加到系統提示最後面的內容..." },
-    "additionalPromptSaveDescription": { "message": "儲存後，所有 AI 提供者都會在送出請求時套用這段追加提示詞。" },
-    "characterCount": { "message": "$count$ 字元", "placeholders": { "count": { "content": "$1" } } },
-    "generalSettingsTab": { "message": "一般設定" },
-    "interfaceIndicatorsTitle": { "message": "介面提示效果" },
-    "interfaceIndicatorsDescription": { "message": "調整 AskPage 對話框以外，在網頁上顯示的視覺提示效果。" },
-    "enableAgentGlowEffect": { "message": "代理模式執行時顯示網頁背光效果" },
-    "enableAgentGlowEffectHelp": { "message": "啟用後，從送出問題到代理模式回覆完成前，網頁四周會顯示琥珀色背光動畫，提示 AskPage 正在頁面上工作。" },
-    "footerPrefix": { "message": "© 2026 本工具由" },
-    "footerLink": { "message": "Will 保哥的技術交流中心" },
-    "footerVersion": { "message": "設計、開發與維護 v$version$", "placeholders": { "version": { "content": "$1" } } },
-    "localeLabel": { "message": "介面語系" },
-    "localeAuto": { "message": "自動" },
-    "localeZhTW": { "message": "繁體中文" },
-    "localeEn": { "message": "English" },
-    "localeZhCN": { "message": "简体中文" },
-    "localeJa": { "message": "日本語" },
-    "localeKo": { "message": "한국어" },
-    "editSlashCommand": { "message": "編輯技能" },
-    "editBuiltInCommand": { "message": "編輯內建技能" },
-    "editCustomCommand": { "message": "編輯技能" },
-    "addCustomCommand": { "message": "新增技能" },
-    "commandName": { "message": "技能名稱" },
-    "commandNamePlaceholder": { "message": "例如：/help" },
-    "commandNameHelp": { "message": "技能名稱必須以 / 開頭，只能包含字母、數字、底線和連字符" },
-    "promptContent": { "message": "提示內容" },
-    "promptContentPlaceholder": { "message": "請輸入執行此技能時要傳送給 AI 的提示內容。使用 ${變數名} 產生填空，例如：Hi, I'm ${name} from ${country:TW}。" },
-    "promptContentHelp": { "message": "在提示內容中以 ${變數名} 產生填空，使用者執行技能後可逐一填寫；用 ${變數名:預設值} 設預設值。同名變數會同步填寫，最多只能有一組預設值。" },
-    "showVariableLabels": { "message": "展開提示詞時顯示變數名稱" },
-    "showVariableLabelsHelp": { "message": "未勾選時，未填寫的變數只會以空白提示顯示變數名稱，一旦輸入內容就會消失；勾選後則會持續顯示「變數名稱：」的標籤。" },
-    "mode": { "message": "模式" },
-    "modeUnspecified": { "message": "不指定" },
-    "modeAgent": { "message": "代理" },
-    "modeInquiry": { "message": "詢問" },
-    "modeHelp": { "message": "執行技能時會自動切換模式；選擇「不指定」不會改變目前模式。" },
-    "enableScreenshotMode": { "message": "啟用截圖模式" },
-    "enableScreenshotModeHelp": { "message": "執行技能時會自動套用截圖模式。" },
-    "cancel": { "message": "取消" },
-    "save": { "message": "儲存" },
-    "addProviderTitle": { "message": "新增 AI 提供者" },
-    "editProviderTitle": { "message": "編輯 AI 提供者" },
-    "providerType": { "message": "提供者類型" },
-    "providerCustomName": { "message": "提供者自訂名稱" },
-    "providerCustomNamePlaceholder": { "message": "例如：我的 Gemini 帳號" },
-    "enabledModels": { "message": "啟用模型 (可複選，最少選一個)" },
-    "geminiGoogleSearchEnabled": { "message": "啟用 Grounding with Google Search 工具" },
-    "geminiGoogleSearchEnabledWarning": { "message": "⚠ Google AI Studio 免費方案不支援此設定，啟用後會觸發 429 配額錯誤。僅 Tier 1 以上付費方案可使用此功能。" },
-    "apiKeyOptional": { "message": "API Key (選填)" },
-    "leaveBlankIfNotRequired": { "message": "若不需要可留空" },
-    "modelName": { "message": "模型名稱" },
-    "loadAllModels": { "message": "載入所有可用模型" },
-    "enterModelManually": { "message": "手動輸入模型名稱" },
-    "loadEndpointModels": { "message": "載入端點模型" },
-    "loadLocalModels": { "message": "載入本機模型" },
-    "loadLatestCloudModels": { "message": "載入最新雲端模型" },
-    "curatedCloudModels": { "message": "內建精選的 Ollama Cloud 模型 ID；也可載入最新完整清單。" },
-    "testConnection": { "message": "測試連線" },
-    "ollamaCloudKeyHelp": { "message": "可至 " },
-    "createKeySuffix": { "message": " 建立金鑰。" },
-    "ollamaApiKeysLink": { "message": "Ollama API Keys" },
-    "openAiCompatibleEndpoint": { "message": "OpenAI 相容端點" },
-    "geminiApiKeyPlaceholder": { "message": "請輸入您的 Gemini API Key" },
-    "openaiApiKeyPlaceholder": { "message": "請輸入您的 OpenAI API Key" },
-    "azureApiKeyPlaceholder": { "message": "請輸入您的 Azure OpenAI API Key" },
-    "azureEndpointPlaceholder": { "message": "例如: https://your-resource.openai.azure.com" },
-    "azureDeploymentPlaceholder": { "message": "例如: gpt-4o-mini" },
-    "anthropicApiKeyPlaceholder": { "message": "請輸入您的 Anthropic API Key" },
-    "deepseekApiKeyPlaceholder": { "message": "請輸入您的 DeepSeek API Key" },
-    "openrouterApiKeyPlaceholder": { "message": "請輸入您的 OpenRouter API Key" },
-    "groqApiKeyPlaceholder": { "message": "請輸入您的 Groq API Key" },
-    "mistralApiKeyPlaceholder": { "message": "請輸入您的 Mistral API Key" },
-    "ollamaCloudApiKeyPlaceholder": { "message": "請輸入您的 Ollama API Key" },
-    "openAiEndpointPlaceholder": { "message": "例如: http://localhost:11434/v1" },
-    "openAiCompatibleModelPlaceholder": { "message": "例如: llama3, mistral" },
-    "ollamaEndpointPlaceholder": { "message": "例如: http://localhost:11434/v1" },
-    "ollamaModelPlaceholder": { "message": "例如: llama3.3, deepseek-r1" },
-    "providerEndpoint": { "message": "端點" },
-    "apiKey": { "message": "API Key" },
-    "apiEndpoint": { "message": "API Endpoint" },
-    "deploymentName": { "message": "Deployment Name" },
-    "apiVersion": { "message": "API Version" },
-    "loading": { "message": "載入中" },
-    "askPage": { "message": "頁問" },
-    "dragTitleBar": { "message": "拖曳標題列可移動對話框" },
-    "openPreferences": { "message": "開啟選項" },
-    "inputPlaceholder": { "message": "輸入問題後按 Enter；也可貼上或拖曳最多 4 張圖片作為上下文" },
-    "imageContextTitle": { "message": "圖片上下文（可透過 Ctrl+V 或拖曳貼上參考圖片）" },
-    "imageContextMeta": { "message": "支援 PNG / JPG / WebP 等圖片，單檔大小上限 10MB" },
-    "uploadImage": { "message": "上傳圖片" },
-    "uploadImageTitle": { "message": "選取圖片並加入本次提問上下文" },
-    "annotateScreen": { "message": "標注畫面" },
-    "annotateScreenTitle": { "message": "暫時隱藏對話框，選取或標注目前畫面後加入圖片上下文" },
-    "ask": { "message": "問" },
-    "reasoningEffort": { "message": "推理強度" },
-    "switchProviderModel": { "message": "切換 AI 提供者與模型" },
-    "noModelConfigured": { "message": "尚未設定模型" },
-    "builtin": { "message": "內建" },
-    "edit": { "message": "編輯" },
-    "delete": { "message": "刪除" },
-    "endpoint": { "message": "端點" },
-    "noProviders": { "message": "尚未新增任何 AI 提供者，請點擊下方的「新增 AI 提供者」按鈕。" },
-    "addProviderPrompt": { "message": "新增 AI 提供者" },
-    "connectionTestSucceeded": { "message": "🟢 連線測試成功" },
-    "testing": { "message": "⏳ 測試中..." },
-    "processing": { "message": "⏳ 處理中..." },
-    "settingsAutoSaved": { "message": "系統提示已自動儲存！" },
-    "settingsReset": { "message": "設定已重置！" },
-    "settingsExported": { "message": "設定已匯出！" },
-    "settingsImported": { "message": "設定匯入成功！正在重新載入..." },
-    "importInvalid": { "message": "匯入失敗：檔案格式錯誤" },
-    "commandSaved": { "message": "技能已儲存" },
-    "builtInCommandCannotDelete": { "message": "無法刪除內建技能" },
-    "commandDeleted": { "message": "技能已刪除" },
-    "providerSaved": { "message": "提供者已儲存！" },
-    "providerDeleted": { "message": "提供者已刪除" },
-    "commandClearHistory": { "message": "清除提問歷史紀錄" },
-    "commandSummaryPage": { "message": "總結本頁內容" },
-    "commandScreenshot": { "message": "切換截圖功能狀態" },
-    "commandAgent": { "message": "切換詢問 / 代理模式（代理模式會使用頁面 HTML 與工具調用）" },
-    "summaryPrompt": { "message": "請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」" },
-    "systemPromptLanguageInstruction": { "message": "請以偏好設定所指定的台灣繁體中文作為主要回答語言；僅當使用者在目前提問中明確要求其他語言時，才改用該語言。" },
-    "resetSettingsConfirm": { "message": "確定要重置所有設定嗎？\n\n這會清除 AI 提供者、API Key、技能、提問歷史與所有其他設定。" },
-    "importSettingsConfirm": { "message": "確定要匯入此設定檔嗎？這將會覆蓋您目前的設定。" },
-    "invalidVariableName": { "message": "變數名稱「$name$」無效，只能包含字母、數字與底線，且開頭不能是數字", "placeholders": { "name": { "content": "$1" } } },
-    "inconsistentVariableDefault": { "message": "變數「$name$」的重複預設值不一致：$first$ 與 $second$", "placeholders": { "name": { "content": "$1" }, "first": { "content": "$2" }, "second": { "content": "$3" } } },
-    "commandNameRequired": { "message": "請輸入技能名稱" },
-    "commandNameInvalid": { "message": "技能名稱格式不正確，必須以 / 開頭且只能包含字母、數字、底線和連字符" },
-    "commandNameBuiltinDuplicate": { "message": "技能名稱不能與內建技能重複" },
-    "commandNameCustomDuplicate": { "message": "技能名稱已被既有自訂技能使用" },
-    "promptContentRequired": { "message": "請輸入提示內容" },
-    "deleteCommandConfirm": { "message": "確定要刪除技能 $command$ 嗎？", "placeholders": { "command": { "content": "$1" } } },
-    "providerGemini": { "message": "Google Gemini" },
-    "providerOpenAI": { "message": "OpenAI" },
-    "providerAzure": { "message": "Azure OpenAI" },
-    "providerAnthropic": { "message": "Anthropic Claude" },
-    "providerDeepSeek": { "message": "DeepSeek" },
-    "providerOpenRouter": { "message": "OpenRouter" },
-    "providerGroq": { "message": "Groq" },
-    "providerMistral": { "message": "Mistral AI" },
-    "providerOllamaLocal": { "message": "Ollama（本機）" },
-    "providerOllamaCloud": { "message": "Ollama Cloud" },
-    "providerOpenAICompatible": { "message": "OpenAI 相容端點" },
-    "modelUnspecified": { "message": "未指定模型" },
-    "providerApiKeyRequired": { "message": "請輸入 $provider$ API Key", "placeholders": { "provider": { "content": "$1" } } },
-    "providerModelRequired": { "message": "請至少勾選一個 $provider$ 模型", "placeholders": { "provider": { "content": "$1" } } },
-    "azureFieldsRequired": { "message": "請填寫 Azure OpenAI 的 API Key、Endpoint 與 Deployment Name" },
-    "apiEndpointRequired": { "message": "請填寫 API Endpoint" },
-    "modelSelectionRequired": { "message": "請至少勾選一個模型" },
-    "modelNameRequired": { "message": "請填寫模型名稱" },
-    "ollamaFieldsRequired": { "message": "請填寫 Ollama API Endpoint 與模型名稱" },
-    "ollamaModelRequired": { "message": "請填寫 Ollama 模型名稱" },
-    "unknownProviderType": { "message": "未知的提供者類型" },
-    "connectionTestFailed": { "message": "🔴 連線失敗：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "deleteProviderConfirm": { "message": "確定要刪除「$provider$」提供者嗎？", "placeholders": { "provider": { "content": "$1" } } },
-    "activeModelChanged": { "message": "已切換使用模型為 $model$", "placeholders": { "model": { "content": "$1" } } },
-    "modelActionFailed": { "message": "操作失敗：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "apiResponseError": { "message": "API 回傳錯誤：$status$ $error$", "placeholders": { "status": { "content": "$1" }, "error": { "content": "$2" } } },
-    "noModelsFound": { "message": "未找到任何可用的模型名稱" },
-    "customModelNamePrompt": { "message": "請輸入要手動新增的模型名稱：" },
-    "customModelAdded": { "message": "已手動加入並選取模型：$model$", "placeholders": { "model": { "content": "$1" } } },
-    "ollamaConnectionFailed": { "message": "無法連線至 Ollama 服務" },
-    "loadedModelsPrompt": { "message": "已成功載入下列模型名稱。請複製或直接輸入您要選取的模型名稱：" },
-    "modelSelected": { "message": "已選取模型：$model$", "placeholders": { "model": { "content": "$1" } } },
-    "modelsLoaded": { "message": "已成功載入 $count$ 個模型！", "placeholders": { "count": { "content": "$1" } } },
-    "screenshotMode": { "message": "截圖模式" },
-    "screenshot": { "message": "截圖" },
-    "screenshotEnabledState": { "message": "含截圖" },
-    "screenshotDisabledState": { "message": "無截圖" },
-    "modeSwitch": { "message": "模式切換" },
-    "agentEnabledState": { "message": "代理模式" },
-    "inquiryEnabledState": { "message": "詢問模式" },
-    "modeToggleAria": { "message": "$label$：目前為$current$，點擊切換為$next$", "placeholders": { "label": { "content": "$1" }, "current": { "content": "$2" }, "next": { "content": "$3" } } },
-    "reasoningDynamic": { "message": "動態" },
-    "reasoningOff": { "message": "關閉" },
-    "reasoningMinimal": { "message": "最低" },
-    "reasoningLow": { "message": "低" },
-    "reasoningMedium": { "message": "中" },
-    "reasoningHigh": { "message": "高" },
-    "reasoningExtraHigh": { "message": "極高" },
-    "reasoningMaximum": { "message": "最高" },
-    "reasoningToken": { "message": "$count$ Token", "placeholders": { "count": { "content": "$1" } } },
-    "inputUsingProvider": { "message": "目前使用 $provider$（$model$）回答您的提問（$hint$）", "placeholders": { "provider": { "content": "$1" }, "model": { "content": "$2" }, "hint": { "content": "$3" } } },
-    "shiftEnterHint": { "message": "Shift+Enter 可換行" },
-    "reasoningBudgetHint": { "message": "滑動以調整推理 Token 預算" },
-    "reasoningLevelHint": { "message": "滑動以調整本模型的推理強度" },
-    "switchProviderModelWithReasoning": { "message": "切換 AI 提供者與模型；滑鼠停留可調整推理強度" },
-    "openOptionsFailedMessage": { "message": "❌ **無法開啟選項畫面**\n\n請稍後再試一次。" },
-    "submitQuestion": { "message": "送出提問" },
-    "disableScreenshot": { "message": "停用截圖功能" },
-    "enableScreenshot": { "message": "啟用截圖功能" },
-    "switchToInquiryMode": { "message": "切換為詢問模式（只做內容問答）" },
-    "switchToAgentMode": { "message": "切換為代理模式（允許工具調用）" },
-    "customCommand": { "message": "自訂技能" },
-    "statusPlanning": { "message": "正在分析需求與頁面狀態。" },
-    "statusToolCallingFallback": { "message": "這個端點不支援 tool calling，我改用一般文字模式繼續。" },
-    "statusOutputLimitRetry": { "message": "這次回應在輸出上限前就被截斷了，我會放寬輸出額度再試一次。" },
-    "statusEmptyResponseRetry": { "message": "這次沒有拿到可顯示內容，我再試一次。" },
-    "statusServiceRetry": { "message": "服務暫時不穩定，我會稍候自動重試。" },
-    "httpError": { "message": "HTTP $status$ $statusText$", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" } } },
-    "agentEnabledDescription": { "message": "可用多步驟工具呼叫分析與操作目前頁面。" },
-    "agentEnabledTitle": { "message": "代理：啟用" },
-    "agentModeBriefEnabled": { "message": "🤖 **代理模式已啟用**" },
-    "agentModeDetailedEnabled": { "message": "✅ **代理模式已啟用**\n\n目前已切換為代理模式。系統會使用頁面 HTML 與工具調用能力來分析與操作目前頁面，此設定會保留到重新載入後。" },
-    "agentModeNoticeEnabled": { "message": "🤖 **代理模式目前為啟用狀態**\n系統會使用多步驟代理的工具調用能力來分析與操作目前頁面。" },
-    "agentModeRequiredForImages": { "message": "請先切換到代理模式，才能手動附加圖片上下文。" },
-    "annotationAdded": { "message": "已加入標注截圖；送出提示時不會再額外擷取一次畫面。" },
-    "annotationCancelled": { "message": "已取消或未取得標注畫面，未加入圖片上下文。" },
-    "annotationEmpty": { "message": "沒有取得可加入的標注截圖。" },
-    "annotationStarted": { "message": "標注模式已啟動：點擊頁面元素，或按住左鍵拖曳畫線。" },
-    "builtInCommandCopyText": { "message": "**內建技能：**\n- /clear - 清除歷史紀錄（也可按 Ctrl+L）\n- /summary - 總結整個頁面" },
-    "clearHistoryShortcut": { "message": "清除歷史紀錄（Ctrl+L）" },
-    "clipboardNoImage": { "message": "剪貼簿裡沒有可用的圖片。" },
-    "customCommandTemplateVariablesError": { "message": "❌ **技能 $command$ 的提示內容包含 ${變數}，請輸入技能名稱後按 Tab 展開並填寫變數。**", "placeholders": { "command": { "content": "$1" } } },
-    "customCommandsCopyHeading": { "message": "您的技能：" },
-    "dropNoImage": { "message": "拖曳內容中沒有可用的圖片。" },
-    "imageDropFailed": { "message": "無法加入拖曳圖片：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "imagePasteFailed": { "message": "無法貼上圖片：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "imageUploadFailed": { "message": "無法上傳圖片：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "imagesAdded": { "message": "已加入 $count$ 張圖片，可直接送出給模型。", "placeholders": { "count": { "content": "$1" } } },
-    "imagesAlreadyAdded": { "message": "這些圖片已經加入目前提問。" },
-    "inquiryEnabledDescription": { "message": "根據頁面內容回答，不呼叫頁面工具。" },
-    "inquiryEnabledTitle": { "message": "詢問：啟用" },
-    "inquiryModeBriefEnabled": { "message": "💬 **詢問模式已啟用**" },
-    "inquiryModeDetailedEnabled": { "message": "💬 **詢問模式已啟用**\n\n目前已切換為詢問模式。系統只會根據頁面內容回答問題，不會呼叫頁面工具，手動附加的圖片上下文也會一併停用，此設定會保留到重新載入後。" },
-    "inquiryModeNoticeEnabled": { "message": "💬 **詢問模式目前為啟用狀態**\n系統只會根據頁面內容回答問題，不會呼叫頁面工具。" },
-    "maxImagesAdded": { "message": "最多只能附加 $max$ 張圖片，已加入前 $count$ 張。", "placeholders": { "max": { "content": "$1" }, "count": { "content": "$2" } } },
-    "maxImagesAllowed": { "message": "最多只能附加 $max$ 張圖片。", "placeholders": { "max": { "content": "$1" } } },
-    "noImageDetected": { "message": "沒有偵測到可加入的圖片。" },
-    "noImageFiles": { "message": "沒有可加入的圖片檔案。" },
-    "openCustomCommands": { "message": "開啟偏好設定查看所有技能" },
-    "screenshotDisabledDescription": { "message": "只分析網頁文字，不自動附帶截圖。" },
-    "screenshotDisabledDetailed": { "message": "⭕ **截圖功能已停用**\n\n系統將不再自動捕獲截圖。您的提問將僅使用文字內容進行分析。此設定會記憶到下次重新載入頁面。" },
-    "screenshotDisabledTitle": { "message": "截圖：停用" },
-    "screenshotEnabledDescription": { "message": "提問時自動附帶目前可視範圍截圖。" },
-    "screenshotEnabledDetailed": { "message": "✨ **截圖功能已啟用！** 您現在提問時，系統會自動包含截圖進行分析。此設定會記憶到下次重新載入頁面。" },
-    "screenshotEnabledTitle": { "message": "截圖：啟用" },
-    "screenshotModeBriefDisabled": { "message": "⭕ **截圖模式已停用**" },
-    "screenshotModeBriefEnabled": { "message": "📸 **截圖模式已啟用**" },
-    "screenshotModeNoticeDisabled": { "message": "📝 **截圖模式目前為停用狀態**\n頁問只會對目前網頁的文字內容進行分析，不會自動附帶截圖。" },
-    "screenshotModeNoticeEnabled": { "message": "📸 **截圖模式目前為啟用狀態**\n系統會在提問時自動附帶目前可視範圍的截圖作為輔助分析。" },
-    "screenshotRequiredForAnnotation": { "message": "請先啟用截圖功能，才能標注目前畫面。" },
-    "screenshotTestFailed": { "message": "❌ **截圖測試失敗**\n\n截圖功能已啟用，但截圖捕獲失敗。請檢查瀏覽器權限設定。" },
-    "screenshotTestStarting": { "message": "✅ **截圖功能已啟用**\n\n🔄 正在測試截圖功能..." },
-    "screenshotTestSucceeded": { "message": "📸 **截圖測試成功！**\n\n**截圖資訊：**\n- 📏 圖片大小：$imageSize$ KB\n- 🔗 格式：PNG (Base64)\n- 📊 資料長度：$dataLength$ 字元\n- 🎯 Base64 資料長度：$base64Length$ 字元\n\n**捕獲的截圖預覽：**", "placeholders": { "imagesize": { "content": "$1" }, "datalength": { "content": "$2" }, "base64length": { "content": "$3" } } },
-    "selectImageFile": { "message": "請選擇可用的圖片檔案。" },
-    "selectedTextCopyText": { "message": "🎯 **已偵測到選取文字**（$count$ 字元）\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n**選取內容：**\n$text$$mode$\n\n💡 $commands$", "placeholders": { "count": { "content": "$1" }, "text": { "content": "$2" }, "mode": { "content": "$3" }, "commands": { "content": "$4" } } },
-    "selectedTextDetected": { "message": "已偵測到選取文字" },
-    "selectedTextIntro": { "message": "將以選取文字作為主要分析對象。$count$ 字元", "placeholders": { "count": { "content": "$1" } } },
-    "summaryTemplateVariablesError": { "message": "❌ **/summary 提示內容包含 ${變數}，請輸入 /summary 後按 Tab 展開並填寫變數。**" },
-    "unknownCommandError": { "message": "❌ **找不到技能：$command$**\n\n可用技能：\n$commands$\n\n您也可以在偏好設定中新增技能。", "placeholders": { "command": { "content": "$1" }, "commands": { "content": "$2" } } },
-    "usageIntro": { "message": "直接提問目前頁面，或先選取文字範圍再提問。" },
-    "usageTip": { "message": "使用提示" },
-    "usageTipCopyText": { "message": "💡 **使用提示：**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。$mode$\n\n$commands$", "placeholders": { "mode": { "content": "$1" }, "commands": { "content": "$2" } } },
-    "imageContextTitleWithAnnotation": { "message": "圖片上下文（可上傳、貼上、拖曳，或標注目前畫面）" },
-    "imageContextMetaWithCount": { "message": "支援 PNG / JPG / WebP 等圖片，單檔大小上限 10MB · $count$/$max$", "placeholders": { "count": { "content": "$1" }, "max": { "content": "$2" } } },
-    "openFullImage": { "message": "點擊開啟第 $index$ 張完整圖片", "placeholders": { "index": { "content": "$1" } } },
-    "imagePreviewTitle": { "message": "圖片預覽 $index$ - AskPage", "placeholders": { "index": { "content": "$1" } } },
-    "imagePreviewHeading": { "message": "圖片預覽 $index$", "placeholders": { "index": { "content": "$1" } } },
-    "questionImageAlt": { "message": "AskPage 提問圖片 $index$", "placeholders": { "index": { "content": "$1" } } },
-    "removeImage": { "message": "移除第 $index$ 張圖片", "placeholders": { "index": { "content": "$1" } } },
-    "screenshotPreviewTitle": { "message": "截圖預覽 - AskPage" },
-    "screenshotPreviewHeading": { "message": "截圖預覽" },
-    "screenshotPreviewAlt": { "message": "AskPage 截圖預覽" },
-    "openFullScreenshot": { "message": "點擊開啟完整截圖" },
-    "openQuestionScreenshot": { "message": "開啟提問當下的完整截圖" },
-    "questionScreenshotAlt": { "message": "提問當下的畫面截圖" },
-    "viewOriginalSize": { "message": "點擊查看原始大小" },
-    "screenshotInfo": { "message": "📊 尺寸資訊：$width$×$height$ | 檔案大小：$size$ KB", "placeholders": { "width": { "content": "$1" }, "height": { "content": "$2" }, "size": { "content": "$3" } } },
-    "copyScreenshotBase64": { "message": "複製截圖 Base64 資料" },
-    "copyToClipboard": { "message": "複製到剪貼簿" },
-    "userMessagePrefix": { "message": "你" },
-    "screenAnnotationMode": { "message": "AskPage 畫面標注模式" },
-    "screenAnnotationInstructions": { "message": "移動滑鼠可框選 DOM 元素；點擊選取。按住左鍵拖曳時只會畫線，不會選取 DOM。" },
-    "collapse": { "message": "收合" },
-    "expand": { "message": "展開" },
-    "collapseCode": { "message": "收合程式碼" },
-    "expandCode": { "message": "展開完整程式碼" },
-    "copyCode": { "message": "複製程式碼" },
-    "openCodePen": { "message": "在 CodePen 開啟" },
-    "codePenOpened": { "message": "已開啟" },
-    "codePenFailed": { "message": "失敗" },
-    "expandAll": { "message": "展開全部" },
-    "imagePreviewSize": { "message": "圖片大小：約 $size$ KB", "placeholders": { "size": { "content": "$1" } } },
-    "serviceWorkerDomainNotAllowed": { "message": "$provider$ Service Worker 不允許呼叫其他網域。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerEndpointNotAllowed": { "message": "$provider$ Service Worker 不允許呼叫這個 API 端點。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerRequestFailed": { "message": "$provider$ Service Worker 請求失敗。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerPostOnly": { "message": "$provider$ Service Worker 僅允許 POST 請求。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerApiKeyRequired": { "message": "$provider$ API Key 不可為空。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerInvalidJson": { "message": "$provider$ 請求內容不是有效的 JSON。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerInvalidRequest": { "message": "$provider$ 請求內容格式不正確。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerDuplicateResponse": { "message": "$provider$ Service Worker 重複回傳回應資訊。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerInvalidHttpStatus": { "message": "$provider$ Service Worker 回傳了無效的 HTTP 狀態。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerNoResponseInfo": { "message": "$provider$ Service Worker 尚未提供回應資訊。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerNoHttpResponse": { "message": "$provider$ Service Worker 未提供 HTTP 回應。", "placeholders": { "provider": { "content": "$1" } } },
-    "serviceWorkerDisconnected": { "message": "$provider$ Service Worker 連線已中斷。", "placeholders": { "provider": { "content": "$1" } } },
-    "imageFileTooLarge": { "message": "圖片檔案超過 10MB 上限。" },
-    "invalidImageFile": { "message": "讀取到的檔案內容不是有效圖片。" },
-    "imageReadFailed": { "message": "無法讀取圖片內容。" },
-    "droppedImageFetchFailed": { "message": "無法讀取拖曳圖片（$status$ $statusText$）。", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" } } },
-    "droppedContentNotImage": { "message": "拖曳內容不是圖片。" },
-    "codeLanguagePlainText": { "message": "純文字" },
-    "codeLanguage": { "message": "程式碼" },
-    "autoDetectedLanguage": { "message": "自動判斷：$language$", "placeholders": { "language": { "content": "$1" } } },
-    "retryDelaySeconds": { "message": "$seconds$ 秒", "placeholders": { "seconds": { "content": "$1" } } },
-    "retryExhausted": { "message": "$message$ 已重試 $count$ 次仍失敗。", "placeholders": { "message": { "content": "$1" }, "count": { "content": "$2" } } },
-    "statusPlanningWithProvider": { "message": "正在請 $provider$ 規劃任務...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusAnsweringWithProvider": { "message": "正在請 $provider$ 分析頁面並回答問題...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusRetrying": { "message": "$provider$ $reason$，將在 $delay$ 後重試（$retryCount$/$maxRetries$）...", "placeholders": { "provider": { "content": "$1" }, "reason": { "content": "$2" }, "delay": { "content": "$3" }, "retrycount": { "content": "$4" }, "maxretries": { "content": "$5" } } },
-    "statusToolCallingFallbackDetailed": { "message": "$provider$ 端點不支援 tool calling，正在退回一般文字模式...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusEmptyResponseOutputLimitRetry": { "message": "$provider$ 回傳內容為空且疑似達到輸出上限，正在放寬輸出限制後自動重試一次...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusEmptyResponseRetryDetailed": { "message": "$provider$ 回傳內容為空，正在自動重試一次...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusGeminiOutputLimitRetry": { "message": "$provider$ 回傳內容為空且疑似達到輸出上限，正在以模型最大輸出上限自動重試一次...", "placeholders": { "provider": { "content": "$1" } } },
-    "statusToolSelected": { "message": "$provider$ 已選擇工具 $tools$，準備執行...", "placeholders": { "provider": { "content": "$1" }, "tools": { "content": "$2" } } },
-    "statusToolExecuting": { "message": "正在執行工具 $tool$（$index$/$total$）...", "placeholders": { "tool": { "content": "$1" }, "index": { "content": "$2" }, "total": { "content": "$3" } } },
-    "statusToolResults": { "message": "已執行工具 $tools$，正在把結果交回 $provider$...", "placeholders": { "tools": { "content": "$1" }, "provider": { "content": "$2" } } },
-    "toolCallLimitExceeded": { "message": "工具呼叫輪數已達上限，已中止以避免無限循環。" },
-    "invalidProviderApiKey": { "message": "無效的 $provider$ API Key，請檢查您的 $provider$ API Key 設定。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerRequestForbidden": { "message": "$provider$ 拒絕了這次請求，請檢查 API 權限或模型存取設定。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerModelNotFound": { "message": "找不到指定的 $provider$ 模型，請檢查模型設定。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerRateLimited": { "message": "$provider$ 服務目前忙碌或請求頻率過高，請稍後再試。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerUnavailable": { "message": "$provider$ 服務暫時不可用，請稍後再試。", "placeholders": { "provider": { "content": "$1" } } },
-    "httpStatusDetails": { "message": "（HTTP $status$$statusText$）", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" } } },
-    "retryReasonTimeout": { "message": "請求逾時" },
-    "retryReasonNetwork": { "message": "網路連線異常" },
-    "retryReasonResponseFormat": { "message": "回應格式異常" },
-    "retryReasonContextWindow": { "message": "對話內容超過 Context Window" },
-    "retryReasonUnauthorized": { "message": "驗證失敗" },
-    "retryReasonForbidden": { "message": "權限不足" },
-    "retryReasonResourceNotFound": { "message": "找不到資源" },
-    "retryReasonInvalidRequest": { "message": "請求格式錯誤" },
-    "retryReasonQuota": { "message": "配額已用盡" },
-    "retryReasonRateLimit": { "message": "服務忙碌或請求過多" },
-    "retryReasonServiceError": { "message": "服務暫時異常" },
-    "retryReasonRequestFailed": { "message": "請求失敗" },
-    "retryReasonUnknown": { "message": "未知錯誤" },
-    "requestTimeoutMessage": { "message": "$provider$ 請求逾時，可能是服務忙碌或網路不穩。", "placeholders": { "provider": { "content": "$1" } } },
-    "networkErrorMessage": { "message": "無法連線到 $provider$ 服務，可能是網路不穩或服務暫時無回應。", "placeholders": { "provider": { "content": "$1" } } },
-    "invalidResponseMessage": { "message": "$provider$ 回傳了無法解析的資料，可能是服務暫時異常。", "placeholders": { "provider": { "content": "$1" } } },
-    "contextWindowExceeded": { "message": "$provider$ 回報目前頁面快照與完整對話已超過模型的 Context Window$statusSuffix。請自行執行 /clear 開始新對話；AskPage 不會自動清除或裁切既有對話。$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "errorMessageLabel": { "message": "錯誤訊息" },
-    "providerResourceNotFound": { "message": "$provider$ 找不到指定的模型、端點或部署設定。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerInvalidRequest": { "message": "$provider$ 拒絕了這次請求，可能是參數格式不正確。$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerQuotaExceeded": { "message": "$provider$ 額度或用量限制已達上限$statusSuffix。可能是上下文超出現有模型的 Context Window 限制或允許的 TPM (Token per minute) 上限。請更換模型或使用「詢問」模式減少輸入內容。錯誤訊息：$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerRateLimitedWithDetails": { "message": "$provider$ 服務目前忙碌或請求頻率過高$statusSuffix。$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerServiceError": { "message": "$provider$ 服務暫時異常$statusSuffix。$apiMessage$", "placeholders": { "provider": { "content": "$1" }, "apimessage": { "content": "$2" } } },
-    "providerUnknownError": { "message": "$provider$ API 呼叫失敗，原因不明。", "placeholders": { "provider": { "content": "$1" } } },
-    "streamingUnsupported": { "message": "此瀏覽器不支援讀取串流回應。" },
-    "openaiRefusal": { "message": "$provider$ 拒絕回應這次請求：$refusal$", "placeholders": { "provider": { "content": "$1" }, "refusal": { "content": "$2" } } },
-    "openaiOutputLimit": { "message": "$provider$ 已達輸出長度上限，請縮小問題範圍後再試。", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiContentFiltered": { "message": "$provider$ 因內容過濾而未回傳文字內容，請調整提問內容後再試。", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiToolCallNoText": { "message": "$provider$ 回傳了工具呼叫狀態，但沒有提供可顯示的文字內容。", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiFunctionCallNoText": { "message": "$provider$ 回傳了函式呼叫狀態，但沒有提供可顯示的文字內容。", "placeholders": { "provider": { "content": "$1" } } },
-    "openaiNonDisplayableStop": { "message": "$provider$ 已完成回應，但內容不是可顯示的文字。請再試一次，或縮小問題範圍。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerNoCandidates": { "message": "$provider$ 沒有回傳任何候選內容，可能是模型暫時沒有產生答案，請稍後再試。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerNonDisplayableResult": { "message": "$provider$ 已回傳結果，但內容不是可顯示的文字。請再試一次，或縮小問題範圍。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptSafety": { "message": "$provider$ 因安全性限制而未處理這次請求$details$，請調整提問內容後再試。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiPromptBlocklist": { "message": "$provider$ 因請求內容包含封鎖詞而未處理這次請求，請調整提問內容後再試。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptProhibited": { "message": "$provider$ 判定這次請求屬於禁止內容，因此未回傳答案。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptImageSafety": { "message": "$provider$ 因圖片內容觸發安全性限制，因此未回傳答案。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiPromptOther": { "message": "$provider$ 沒有處理這次請求，請稍後再試。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiOutputLimit": { "message": "$provider$ 已達輸出長度上限$details$，請縮小問題範圍後再試。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiSafety": { "message": "$provider$ 因安全性限制而未回傳文字內容$details$，請調整提問內容後再試。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiRecitation": { "message": "$provider$ 因引用內容限制而未回傳文字內容$details$。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiLanguage": { "message": "$provider$ 因語言限制而未回傳文字內容$details$，請改用繁體中文或英文後再試。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiBlocklist": { "message": "$provider$ 因回應內容觸發封鎖詞限制而未回傳文字內容。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiProhibited": { "message": "$provider$ 因回應內容觸發禁止內容限制而未回傳文字內容。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiSensitiveInfo": { "message": "$provider$ 因回應內容可能包含敏感個人資訊而未回傳文字內容。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiMalformedToolCall": { "message": "$provider$ 回傳了格式不正確的工具呼叫$details$，請再試一次。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiOther": { "message": "$provider$ 沒有產生可顯示的文字內容$details$，請稍後再試。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "geminiNoCandidates": { "message": "$provider$ 沒有回傳任何候選內容，可能是請求被系統攔下或模型暫時沒有產生答案。", "placeholders": { "provider": { "content": "$1" } } },
-    "geminiNonDisplayableResult": { "message": "$provider$ 已回傳結果，但內容不是可顯示的文字$details$。請再試一次，或縮小問題範圍。", "placeholders": { "provider": { "content": "$1" }, "details": { "content": "$2" } } },
-    "invalidStreamingData": { "message": "$provider$ 回傳了無法解析的串流資料：$data$", "placeholders": { "provider": { "content": "$1" }, "data": { "content": "$2" } } },
-    "streamingApiError": { "message": "API 串流錯誤：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "httpFallbackError": { "message": "HTTP $status$ $statusText$：$error$", "placeholders": { "status": { "content": "$1" }, "statustext": { "content": "$2" }, "error": { "content": "$3" } } },
-    "errorPrefix": { "message": "錯誤：$error$", "placeholders": { "error": { "content": "$1" } } },
-    "providerApiKeyMissing": { "message": "請點擊擴充功能圖示設定您的 $provider$ API Key。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerApiKeyDecryptFailed": { "message": "無法解密 $provider$ API Key，請重新設定。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerEndpointMissing": { "message": "請點擊擴充功能圖示設定您的 $provider$ Endpoint。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerDeploymentMissing": { "message": "請點擊擴充功能圖示設定您的 $provider$ Deployment Name。", "placeholders": { "provider": { "content": "$1" } } },
-    "providerMissing": { "message": "請點擊擴充功能圖示設定您的 AI 提供者。" },
-    "providerDeploymentNotFound": { "message": "找不到指定的部署，請檢查您的 Endpoint 和 Deployment Name 設定。" },
-    "providerAuthenticationFailed": { "message": "$provider$ 驗證失敗：$error$", "placeholders": { "provider": { "content": "$1" }, "error": { "content": "$2" } } },
-    "gptToolCompatibility": { "message": "GPT-5.6 搭配 function tools 時必須使用 Responses API，無法使用 Chat Completions。" },
-    "unknownTool": { "message": "未知工具" },
-    "toolListMore": { "message": "$names$ 等 $count$ 個工具", "placeholders": { "names": { "content": "$1" }, "count": { "content": "$2" } } },
-    "success": { "message": "成功" },
-    "failure": { "message": "失敗" },
-    "toolExecutionSingle": { "message": "剛剛調用 $tools$ 工具$result$", "placeholders": { "tools": { "content": "$1" }, "result": { "content": "$2" } } },
-    "toolExecutionAllSuccess": { "message": "剛剛調用 $tools$ 工具全部成功", "placeholders": { "tools": { "content": "$1" } } },
-    "toolExecutionAllFailure": { "message": "剛剛調用 $tools$ 工具全部失敗", "placeholders": { "tools": { "content": "$1" } } },
-    "toolExecutionMixed": { "message": "剛剛調用 $tools$ 工具，成功 $successCount$ 個、失敗 $failureCount$ 個", "placeholders": { "tools": { "content": "$1" }, "successcount": { "content": "$2" }, "failurecount": { "content": "$3" } } },
-    "usageDetails": { "message": "（$details$）", "placeholders": { "details": { "content": "$1" } } },
-    "usageListSeparator": { "message": "、" },
-    "usageLine": { "message": "- $label$：$value$$suffix$", "placeholders": { "label": { "content": "$1" }, "value": { "content": "$2" }, "suffix": { "content": "$3" } } },
-    "usageInput": { "message": "輸入" },
-    "usageOutput": { "message": "輸出" },
-    "usageToolInput": { "message": "工具輸入" },
-    "usageTotal": { "message": "總計" },
-    "usageCache": { "message": "快取 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageCacheWrite": { "message": "快取寫入 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageReasoning": { "message": "推理 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageAcceptedPrediction": { "message": "已接受預測 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageRejectedPrediction": { "message": "已否決預測 $count$", "placeholders": { "count": { "content": "$1" } } },
-    "usageSummary": { "message": "Token 用量統計：\n$lines$", "placeholders": { "lines": { "content": "$1" } } },
-    "toolCallInProgress": { "message": "🛠️ 正在執行 $tool$", "placeholders": { "tool": { "content": "$1" } } },
-    "toolResultFailure": { "message": "（失敗）" },
-    "toolResultSummary": { "message": "\n\n結果摘要：$message$", "placeholders": { "message": { "content": "$1" } } },
-    "toolResultMessageSuffix": { "message": "：$message$", "placeholders": { "message": { "content": "$1" } } },
-    "toolResultReceived": { "message": "📥 $tool$ 已回傳$status$$message$", "placeholders": { "tool": { "content": "$1" }, "status": { "content": "$2" }, "message": { "content": "$3" } } },
-    "toolResultTraceText": { "message": "📥 **$tool$** 已回傳$status$。$summary$\n\n$payload$", "placeholders": { "tool": { "content": "$1" }, "status": { "content": "$2" }, "summary": { "content": "$3" }, "payload": { "content": "$4" } } },
-    "executionDuration": { "message": "費時：$duration$", "placeholders": { "duration": { "content": "$1" } } },
-    "agentExecutionCompleted": { "message": "頁問已經打完收工，共執行 $count$ 個步驟，$duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
-    "agentExecutionStopped": { "message": "頁問提早收工，共執行 $count$ 個步驟，$duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
-    "endpointToolFallbackMessage": { "message": "⚠️ **目前這個 $provider$ 端點未完整支援 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
-    "agentToolFallbackMessage": { "message": "⚠️ **目前 $provider$ 提供者未完整支援 agent 模式下的 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } }
+    "extensionName": {
+        "message": "頁問 AskPage"
+    },
+    "extensionLogoAlt": {
+        "message": "頁問標誌"
+    },
+    "extensionDescription": {
+        "message": "以您設定的 AI API 為基礎，針對目前頁面提出問題並取得回答"
+    },
+    "commandToggleDialog": {
+        "message": "開啟頁問對話框"
+    },
+    "commandSwitchProvider": {
+        "message": "切換 AI 提供者"
+    },
+    "settingsMigrationTitle": {
+        "message": "頁問：設定已移轉"
+    },
+    "settingsMigrationDescription": {
+        "message": "設定已升級至支援多模型設定，即將為您跳轉至完整設定頁面..."
+    },
+    "codepenTitle": {
+        "message": "正在前往 CodePen - 頁問 AskPage"
+    },
+    "codepenDescription": {
+        "message": "正在準備 CodePen 程式碼..."
+    },
+    "codepenOpeningDescription": {
+        "message": "即將為您在新視窗開啟編輯器"
+    },
+    "codepenMissingData": {
+        "message": "找不到程式碼資料"
+    },
+    "closeAndRetry": {
+        "message": "請關閉此分頁並重新嘗試。"
+    },
+    "codepenOpenFailed": {
+        "message": "開啟 CodePen 失敗"
+    },
+    "unknownErrorRetry": {
+        "message": "未知錯誤，請重試。"
+    },
+    "preferencesTitle": {
+        "message": "頁問：偏好設定"
+    },
+    "preferencesDescription": {
+        "message": "設定您的 AI 提供者、技能和系統提示"
+    },
+    "resetSettings": {
+        "message": "重置設定"
+    },
+    "exportSettings": {
+        "message": "匯出"
+    },
+    "importSettings": {
+        "message": "匯入"
+    },
+    "aiProviders": {
+        "message": "AI 提供者"
+    },
+    "customSlashCommands": {
+        "message": "技能管理"
+    },
+    "adjustSystemPrompt": {
+        "message": "調整系統提示"
+    },
+    "aiProviderSettings": {
+        "message": "AI 提供者設定"
+    },
+    "aiProviderSettingsDescription": {
+        "message": "設定多個不同的 AI 提供者，並啟用一至多個模型，點擊模型名稱可切換為目前使用模型"
+    },
+    "addAiProvider": {
+        "message": "新增 AI 提供者"
+    },
+    "slashCommandManagement": {
+        "message": "技能管理"
+    },
+    "slashCommandManagementDescription": {
+        "message": "管理內建與自訂技能"
+    },
+    "addCustomSlashCommand": {
+        "message": "新增技能"
+    },
+    "systemPromptDescription": {
+        "message": "這段內容會附加在內建系統提示最後面；留空則不追加。內建系統提示不會被覆寫。"
+    },
+    "additionalPrompt": {
+        "message": "追加提示詞"
+    },
+    "additionalPromptPlaceholder": {
+        "message": "請輸入要附加到系統提示最後面的內容..."
+    },
+    "additionalPromptSaveDescription": {
+        "message": "儲存後，所有 AI 提供者都會在送出請求時套用這段追加提示詞。"
+    },
+    "characterCount": {
+        "message": "$count$ 字元",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "generalSettingsTab": {
+        "message": "一般設定"
+    },
+    "interfaceIndicatorsTitle": {
+        "message": "介面提示效果"
+    },
+    "interfaceIndicatorsDescription": {
+        "message": "調整 AskPage 對話框以外，在網頁上顯示的視覺提示效果。"
+    },
+    "enableAgentGlowEffect": {
+        "message": "代理模式執行時顯示網頁背光效果"
+    },
+    "enableAgentGlowEffectHelp": {
+        "message": "啟用後，從送出問題到代理模式回覆完成前，網頁四周會顯示琥珀色背光動畫，提示 AskPage 正在頁面上工作。"
+    },
+    "footerPrefix": {
+        "message": "© 2026 本工具由"
+    },
+    "footerLink": {
+        "message": "Will 保哥的技術交流中心"
+    },
+    "footerVersion": {
+        "message": "設計、開發與維護 v$version$",
+        "placeholders": {
+            "version": {
+                "content": "$1"
+            }
+        }
+    },
+    "localeLabel": {
+        "message": "介面語系"
+    },
+    "localeAuto": {
+        "message": "自動"
+    },
+    "localeZhTW": {
+        "message": "繁體中文"
+    },
+    "localeEn": {
+        "message": "English"
+    },
+    "localeZhCN": {
+        "message": "简体中文"
+    },
+    "localeJa": {
+        "message": "日本語"
+    },
+    "localeKo": {
+        "message": "한국어"
+    },
+    "editSlashCommand": {
+        "message": "編輯技能"
+    },
+    "editBuiltInCommand": {
+        "message": "編輯內建技能"
+    },
+    "editCustomCommand": {
+        "message": "編輯技能"
+    },
+    "addCustomCommand": {
+        "message": "新增技能"
+    },
+    "commandName": {
+        "message": "技能名稱"
+    },
+    "commandNamePlaceholder": {
+        "message": "例如：/help"
+    },
+    "commandNameHelp": {
+        "message": "技能名稱必須以 / 開頭，只能包含字母、數字、底線和連字符"
+    },
+    "promptContent": {
+        "message": "提示內容"
+    },
+    "promptContentPlaceholder": {
+        "message": "請輸入執行此技能時要傳送給 AI 的提示內容。使用 ${變數名} 產生填空，例如：Hi, I'm ${name} from ${country:TW}。"
+    },
+    "promptContentHelp": {
+        "message": "在提示內容中以 ${變數名} 產生填空，使用者執行技能後可逐一填寫；用 ${變數名:預設值} 設預設值。同名變數會同步填寫，最多只能有一組預設值。"
+    },
+    "showVariableLabels": {
+        "message": "展開提示詞時顯示變數名稱"
+    },
+    "showVariableLabelsHelp": {
+        "message": "未勾選時，未填寫的變數只會以空白提示顯示變數名稱，一旦輸入內容就會消失；勾選後則會持續顯示「變數名稱：」的標籤。"
+    },
+    "mode": {
+        "message": "模式"
+    },
+    "modeUnspecified": {
+        "message": "不指定"
+    },
+    "modeAgent": {
+        "message": "代理"
+    },
+    "modeInquiry": {
+        "message": "詢問"
+    },
+    "modeHelp": {
+        "message": "執行技能時會自動切換模式；選擇「不指定」不會改變目前模式。"
+    },
+    "enableScreenshotMode": {
+        "message": "啟用截圖模式"
+    },
+    "enableScreenshotModeHelp": {
+        "message": "執行技能時會自動套用截圖模式。"
+    },
+    "cancel": {
+        "message": "取消"
+    },
+    "save": {
+        "message": "儲存"
+    },
+    "addProviderTitle": {
+        "message": "新增 AI 提供者"
+    },
+    "editProviderTitle": {
+        "message": "編輯 AI 提供者"
+    },
+    "providerType": {
+        "message": "提供者類型"
+    },
+    "providerCustomName": {
+        "message": "提供者自訂名稱"
+    },
+    "providerCustomNamePlaceholder": {
+        "message": "例如：我的 Gemini 帳號"
+    },
+    "enabledModels": {
+        "message": "啟用模型 (可複選，最少選一個)"
+    },
+    "geminiGoogleSearchEnabled": {
+        "message": "啟用 Grounding with Google Search 工具"
+    },
+    "geminiGoogleSearchEnabledWarning": {
+        "message": "⚠ Google AI Studio 免費方案不支援此設定，啟用後會觸發 429 配額錯誤。僅 Tier 1 以上付費方案可使用此功能。"
+    },
+    "apiKeyOptional": {
+        "message": "API Key (選填)"
+    },
+    "leaveBlankIfNotRequired": {
+        "message": "若不需要可留空"
+    },
+    "modelName": {
+        "message": "模型名稱"
+    },
+    "loadAllModels": {
+        "message": "載入所有可用模型"
+    },
+    "enterModelManually": {
+        "message": "手動輸入模型名稱"
+    },
+    "loadEndpointModels": {
+        "message": "載入端點模型"
+    },
+    "loadLocalModels": {
+        "message": "載入本機模型"
+    },
+    "loadLatestCloudModels": {
+        "message": "載入最新雲端模型"
+    },
+    "curatedCloudModels": {
+        "message": "內建精選的 Ollama Cloud 模型 ID；也可載入最新完整清單。"
+    },
+    "testConnection": {
+        "message": "測試連線"
+    },
+    "ollamaCloudKeyHelp": {
+        "message": "可至 "
+    },
+    "createKeySuffix": {
+        "message": " 建立金鑰。"
+    },
+    "ollamaApiKeysLink": {
+        "message": "Ollama API Keys"
+    },
+    "openAiCompatibleEndpoint": {
+        "message": "OpenAI 相容端點"
+    },
+    "geminiApiKeyPlaceholder": {
+        "message": "請輸入您的 Gemini API Key"
+    },
+    "openaiApiKeyPlaceholder": {
+        "message": "請輸入您的 OpenAI API Key"
+    },
+    "azureApiKeyPlaceholder": {
+        "message": "請輸入您的 Azure OpenAI API Key"
+    },
+    "azureEndpointPlaceholder": {
+        "message": "例如: https://your-resource.openai.azure.com"
+    },
+    "azureDeploymentPlaceholder": {
+        "message": "例如: gpt-4o-mini"
+    },
+    "anthropicApiKeyPlaceholder": {
+        "message": "請輸入您的 Anthropic API Key"
+    },
+    "deepseekApiKeyPlaceholder": {
+        "message": "請輸入您的 DeepSeek API Key"
+    },
+    "openrouterApiKeyPlaceholder": {
+        "message": "請輸入您的 OpenRouter API Key"
+    },
+    "groqApiKeyPlaceholder": {
+        "message": "請輸入您的 Groq API Key"
+    },
+    "mistralApiKeyPlaceholder": {
+        "message": "請輸入您的 Mistral API Key"
+    },
+    "ollamaCloudApiKeyPlaceholder": {
+        "message": "請輸入您的 Ollama API Key"
+    },
+    "openAiEndpointPlaceholder": {
+        "message": "例如: http://localhost:11434/v1"
+    },
+    "openAiCompatibleModelPlaceholder": {
+        "message": "例如: llama3, mistral"
+    },
+    "ollamaEndpointPlaceholder": {
+        "message": "例如: http://localhost:11434/v1"
+    },
+    "ollamaModelPlaceholder": {
+        "message": "例如: llama3.3, deepseek-r1"
+    },
+    "providerEndpoint": {
+        "message": "端點"
+    },
+    "apiKey": {
+        "message": "API Key"
+    },
+    "apiEndpoint": {
+        "message": "API Endpoint"
+    },
+    "deploymentName": {
+        "message": "Deployment Name"
+    },
+    "apiVersion": {
+        "message": "API Version"
+    },
+    "loading": {
+        "message": "載入中"
+    },
+    "askPage": {
+        "message": "頁問"
+    },
+    "dragTitleBar": {
+        "message": "拖曳標題列可移動對話框"
+    },
+    "openPreferences": {
+        "message": "開啟選項"
+    },
+    "inputPlaceholder": {
+        "message": "輸入問題後按 Enter；也可貼上或拖曳最多 4 張圖片作為上下文"
+    },
+    "imageContextTitle": {
+        "message": "圖片上下文（可透過 Ctrl+V 或拖曳貼上參考圖片）"
+    },
+    "imageContextMeta": {
+        "message": "支援 PNG / JPG / WebP 等圖片，單檔大小上限 10MB"
+    },
+    "uploadImage": {
+        "message": "上傳圖片"
+    },
+    "uploadImageTitle": {
+        "message": "選取圖片並加入本次提問上下文"
+    },
+    "annotateScreen": {
+        "message": "標注畫面"
+    },
+    "annotateScreenTitle": {
+        "message": "暫時隱藏對話框，選取或標注目前畫面後加入圖片上下文"
+    },
+    "ask": {
+        "message": "問"
+    },
+    "reasoningEffort": {
+        "message": "推理強度"
+    },
+    "switchProviderModel": {
+        "message": "切換 AI 提供者與模型"
+    },
+    "noModelConfigured": {
+        "message": "尚未設定模型"
+    },
+    "builtin": {
+        "message": "內建"
+    },
+    "edit": {
+        "message": "編輯"
+    },
+    "delete": {
+        "message": "刪除"
+    },
+    "endpoint": {
+        "message": "端點"
+    },
+    "noProviders": {
+        "message": "尚未新增任何 AI 提供者，請點擊下方的「新增 AI 提供者」按鈕。"
+    },
+    "addProviderPrompt": {
+        "message": "新增 AI 提供者"
+    },
+    "connectionTestSucceeded": {
+        "message": "🟢 連線測試成功"
+    },
+    "testing": {
+        "message": "⏳ 測試中..."
+    },
+    "processing": {
+        "message": "⏳ 處理中..."
+    },
+    "settingsAutoSaved": {
+        "message": "系統提示已自動儲存！"
+    },
+    "settingsReset": {
+        "message": "設定已重置！"
+    },
+    "settingsExported": {
+        "message": "設定已匯出！"
+    },
+    "settingsImported": {
+        "message": "設定匯入成功！正在重新載入..."
+    },
+    "importInvalid": {
+        "message": "匯入失敗：檔案格式錯誤"
+    },
+    "commandSaved": {
+        "message": "技能已儲存"
+    },
+    "builtInCommandCannotDelete": {
+        "message": "無法刪除內建技能"
+    },
+    "commandDeleted": {
+        "message": "技能已刪除"
+    },
+    "providerSaved": {
+        "message": "提供者已儲存！"
+    },
+    "providerDeleted": {
+        "message": "提供者已刪除"
+    },
+    "commandClearHistory": {
+        "message": "清除提問歷史紀錄"
+    },
+    "commandSummaryPage": {
+        "message": "總結本頁內容"
+    },
+    "commandScreenshot": {
+        "message": "切換截圖功能狀態"
+    },
+    "commandAgent": {
+        "message": "切換詢問 / 代理模式（代理模式會使用頁面 HTML 與工具調用）"
+    },
+    "summaryPrompt": {
+        "message": "請幫我總結這篇文章，並以 Markdown 格式輸出，內容包含「標題」、「重點摘要」、「總結」"
+    },
+    "systemPromptLanguageInstruction": {
+        "message": "請以偏好設定所指定的台灣繁體中文作為主要回答語言；僅當使用者在目前提問中明確要求其他語言時，才改用該語言。"
+    },
+    "resetSettingsConfirm": {
+        "message": "確定要重置所有設定嗎？\n\n這會清除 AI 提供者、API Key、技能、提問歷史與所有其他設定。"
+    },
+    "importSettingsConfirm": {
+        "message": "確定要匯入此設定檔嗎？這將會覆蓋您目前的設定。"
+    },
+    "invalidVariableName": {
+        "message": "變數名稱「$name$」無效，只能包含字母、數字與底線，且開頭不能是數字",
+        "placeholders": {
+            "name": {
+                "content": "$1"
+            }
+        }
+    },
+    "inconsistentVariableDefault": {
+        "message": "變數「$name$」的重複預設值不一致：$first$ 與 $second$",
+        "placeholders": {
+            "name": {
+                "content": "$1"
+            },
+            "first": {
+                "content": "$2"
+            },
+            "second": {
+                "content": "$3"
+            }
+        }
+    },
+    "commandNameRequired": {
+        "message": "請輸入技能名稱"
+    },
+    "commandNameInvalid": {
+        "message": "技能名稱格式不正確，必須以 / 開頭且只能包含字母、數字、底線和連字符"
+    },
+    "commandNameBuiltinDuplicate": {
+        "message": "技能名稱不能與內建技能重複"
+    },
+    "commandNameCustomDuplicate": {
+        "message": "技能名稱已被既有自訂技能使用"
+    },
+    "promptContentRequired": {
+        "message": "請輸入提示內容"
+    },
+    "deleteCommandConfirm": {
+        "message": "確定要刪除技能 $command$ 嗎？",
+        "placeholders": {
+            "command": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerGemini": {
+        "message": "Google Gemini"
+    },
+    "providerVertex": {
+        "message": "Gemini Enterprise（Vertex AI）"
+    },
+    "gcpProjectId": {
+        "message": "Google Cloud 專案 ID"
+    },
+    "gcpRegion": {
+        "message": "區域 / 地區"
+    },
+    "gcpAuthMode": {
+        "message": "認證方式"
+    },
+    "gcpAccessToken": {
+        "message": "Access Token"
+    },
+    "vertexAuthModeApiKey": {
+        "message": "API Key"
+    },
+    "vertexAuthModeBearerToken": {
+        "message": "OAuth 2.0 Access Token"
+    },
+    "vertexProjectIdPlaceholder": {
+        "message": "例如：corp-genai-2026"
+    },
+    "vertexRegionPlaceholder": {
+        "message": "例如：asia-east1"
+    },
+    "vertexApiKeyPlaceholder": {
+        "message": "請輸入您的 Vertex API Key"
+    },
+    "vertexAccessTokenPlaceholder": {
+        "message": "請輸入您的 OAuth 2.0 Access Token"
+    },
+    "accessToken": {
+        "message": "Access Token"
+    },
+    "providerProjectIdMissing": {
+        "message": "請點擊擴充功能圖示設定您的 $provider$ Project ID。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "vertexFieldsRequired": {
+        "message": "請填寫 Google Cloud Project ID、Region / Location 與憑證。"
+    },
+    "vertexProjectIdRequired": {
+        "message": "請填寫 Google Cloud Project ID。"
+    },
+    "vertexRegionRequired": {
+        "message": "請填寫 Google Cloud Region / Location。"
+    },
+    "providerOpenAI": {
+        "message": "OpenAI"
+    },
+    "providerAzure": {
+        "message": "Azure OpenAI"
+    },
+    "providerAnthropic": {
+        "message": "Anthropic Claude"
+    },
+    "providerDeepSeek": {
+        "message": "DeepSeek"
+    },
+    "providerOpenRouter": {
+        "message": "OpenRouter"
+    },
+    "providerGroq": {
+        "message": "Groq"
+    },
+    "providerMistral": {
+        "message": "Mistral AI"
+    },
+    "providerOllamaLocal": {
+        "message": "Ollama（本機）"
+    },
+    "providerOllamaCloud": {
+        "message": "Ollama Cloud"
+    },
+    "providerOpenAICompatible": {
+        "message": "OpenAI 相容端點"
+    },
+    "modelUnspecified": {
+        "message": "未指定模型"
+    },
+    "providerApiKeyRequired": {
+        "message": "請輸入 $provider$ API Key",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerModelRequired": {
+        "message": "請至少勾選一個 $provider$ 模型",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "azureFieldsRequired": {
+        "message": "請填寫 Azure OpenAI 的 API Key、Endpoint 與 Deployment Name"
+    },
+    "apiEndpointRequired": {
+        "message": "請填寫 API Endpoint"
+    },
+    "modelSelectionRequired": {
+        "message": "請至少勾選一個模型"
+    },
+    "modelNameRequired": {
+        "message": "請填寫模型名稱"
+    },
+    "ollamaFieldsRequired": {
+        "message": "請填寫 Ollama API Endpoint 與模型名稱"
+    },
+    "ollamaModelRequired": {
+        "message": "請填寫 Ollama 模型名稱"
+    },
+    "unknownProviderType": {
+        "message": "未知的提供者類型"
+    },
+    "connectionTestFailed": {
+        "message": "🔴 連線失敗：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "deleteProviderConfirm": {
+        "message": "確定要刪除「$provider$」提供者嗎？",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "activeModelChanged": {
+        "message": "已切換使用模型為 $model$",
+        "placeholders": {
+            "model": {
+                "content": "$1"
+            }
+        }
+    },
+    "modelActionFailed": {
+        "message": "操作失敗：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "apiResponseError": {
+        "message": "API 回傳錯誤：$status$ $error$",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "error": {
+                "content": "$2"
+            }
+        }
+    },
+    "noModelsFound": {
+        "message": "未找到任何可用的模型名稱"
+    },
+    "customModelNamePrompt": {
+        "message": "請輸入要手動新增的模型名稱："
+    },
+    "customModelAdded": {
+        "message": "已手動加入並選取模型：$model$",
+        "placeholders": {
+            "model": {
+                "content": "$1"
+            }
+        }
+    },
+    "ollamaConnectionFailed": {
+        "message": "無法連線至 Ollama 服務"
+    },
+    "loadedModelsPrompt": {
+        "message": "已成功載入下列模型名稱。請複製或直接輸入您要選取的模型名稱："
+    },
+    "modelSelected": {
+        "message": "已選取模型：$model$",
+        "placeholders": {
+            "model": {
+                "content": "$1"
+            }
+        }
+    },
+    "modelsLoaded": {
+        "message": "已成功載入 $count$ 個模型！",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "screenshotMode": {
+        "message": "截圖模式"
+    },
+    "screenshot": {
+        "message": "截圖"
+    },
+    "screenshotEnabledState": {
+        "message": "含截圖"
+    },
+    "screenshotDisabledState": {
+        "message": "無截圖"
+    },
+    "modeSwitch": {
+        "message": "模式切換"
+    },
+    "agentEnabledState": {
+        "message": "代理模式"
+    },
+    "inquiryEnabledState": {
+        "message": "詢問模式"
+    },
+    "modeToggleAria": {
+        "message": "$label$：目前為$current$，點擊切換為$next$",
+        "placeholders": {
+            "label": {
+                "content": "$1"
+            },
+            "current": {
+                "content": "$2"
+            },
+            "next": {
+                "content": "$3"
+            }
+        }
+    },
+    "reasoningDynamic": {
+        "message": "動態"
+    },
+    "reasoningOff": {
+        "message": "關閉"
+    },
+    "reasoningMinimal": {
+        "message": "最低"
+    },
+    "reasoningLow": {
+        "message": "低"
+    },
+    "reasoningMedium": {
+        "message": "中"
+    },
+    "reasoningHigh": {
+        "message": "高"
+    },
+    "reasoningExtraHigh": {
+        "message": "極高"
+    },
+    "reasoningMaximum": {
+        "message": "最高"
+    },
+    "reasoningToken": {
+        "message": "$count$ Token",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "inputUsingProvider": {
+        "message": "目前使用 $provider$（$model$）回答您的提問（$hint$）",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "model": {
+                "content": "$2"
+            },
+            "hint": {
+                "content": "$3"
+            }
+        }
+    },
+    "shiftEnterHint": {
+        "message": "Shift+Enter 可換行"
+    },
+    "reasoningBudgetHint": {
+        "message": "滑動以調整推理 Token 預算"
+    },
+    "reasoningLevelHint": {
+        "message": "滑動以調整本模型的推理強度"
+    },
+    "switchProviderModelWithReasoning": {
+        "message": "切換 AI 提供者與模型；滑鼠停留可調整推理強度"
+    },
+    "openOptionsFailedMessage": {
+        "message": "❌ **無法開啟選項畫面**\n\n請稍後再試一次。"
+    },
+    "submitQuestion": {
+        "message": "送出提問"
+    },
+    "disableScreenshot": {
+        "message": "停用截圖功能"
+    },
+    "enableScreenshot": {
+        "message": "啟用截圖功能"
+    },
+    "switchToInquiryMode": {
+        "message": "切換為詢問模式（只做內容問答）"
+    },
+    "switchToAgentMode": {
+        "message": "切換為代理模式（允許工具調用）"
+    },
+    "customCommand": {
+        "message": "自訂技能"
+    },
+    "statusPlanning": {
+        "message": "正在分析需求與頁面狀態。"
+    },
+    "statusToolCallingFallback": {
+        "message": "這個端點不支援 tool calling，我改用一般文字模式繼續。"
+    },
+    "statusOutputLimitRetry": {
+        "message": "這次回應在輸出上限前就被截斷了，我會放寬輸出額度再試一次。"
+    },
+    "statusEmptyResponseRetry": {
+        "message": "這次沒有拿到可顯示內容，我再試一次。"
+    },
+    "statusServiceRetry": {
+        "message": "服務暫時不穩定，我會稍候自動重試。"
+    },
+    "httpError": {
+        "message": "HTTP $status$ $statusText$",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            }
+        }
+    },
+    "agentEnabledDescription": {
+        "message": "可用多步驟工具呼叫分析與操作目前頁面。"
+    },
+    "agentEnabledTitle": {
+        "message": "代理：啟用"
+    },
+    "agentModeBriefEnabled": {
+        "message": "🤖 **代理模式已啟用**"
+    },
+    "agentModeDetailedEnabled": {
+        "message": "✅ **代理模式已啟用**\n\n目前已切換為代理模式。系統會使用頁面 HTML 與工具調用能力來分析與操作目前頁面，此設定會保留到重新載入後。"
+    },
+    "agentModeNoticeEnabled": {
+        "message": "🤖 **代理模式目前為啟用狀態**\n系統會使用多步驟代理的工具調用能力來分析與操作目前頁面。"
+    },
+    "agentModeRequiredForImages": {
+        "message": "請先切換到代理模式，才能手動附加圖片上下文。"
+    },
+    "annotationAdded": {
+        "message": "已加入標注截圖；送出提示時不會再額外擷取一次畫面。"
+    },
+    "annotationCancelled": {
+        "message": "已取消或未取得標注畫面，未加入圖片上下文。"
+    },
+    "annotationEmpty": {
+        "message": "沒有取得可加入的標注截圖。"
+    },
+    "annotationStarted": {
+        "message": "標注模式已啟動：點擊頁面元素，或按住左鍵拖曳畫線。"
+    },
+    "builtInCommandCopyText": {
+        "message": "**內建技能：**\n- /clear - 清除歷史紀錄（也可按 Ctrl+L）\n- /summary - 總結整個頁面"
+    },
+    "clearHistoryShortcut": {
+        "message": "清除歷史紀錄（Ctrl+L）"
+    },
+    "clipboardNoImage": {
+        "message": "剪貼簿裡沒有可用的圖片。"
+    },
+    "customCommandTemplateVariablesError": {
+        "message": "❌ **技能 $command$ 的提示內容包含 ${變數}，請輸入技能名稱後按 Tab 展開並填寫變數。**",
+        "placeholders": {
+            "command": {
+                "content": "$1"
+            }
+        }
+    },
+    "customCommandsCopyHeading": {
+        "message": "您的技能："
+    },
+    "dropNoImage": {
+        "message": "拖曳內容中沒有可用的圖片。"
+    },
+    "imageDropFailed": {
+        "message": "無法加入拖曳圖片：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagePasteFailed": {
+        "message": "無法貼上圖片：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "imageUploadFailed": {
+        "message": "無法上傳圖片：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagesAdded": {
+        "message": "已加入 $count$ 張圖片，可直接送出給模型。",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagesAlreadyAdded": {
+        "message": "這些圖片已經加入目前提問。"
+    },
+    "inquiryEnabledDescription": {
+        "message": "根據頁面內容回答，不呼叫頁面工具。"
+    },
+    "inquiryEnabledTitle": {
+        "message": "詢問：啟用"
+    },
+    "inquiryModeBriefEnabled": {
+        "message": "💬 **詢問模式已啟用**"
+    },
+    "inquiryModeDetailedEnabled": {
+        "message": "💬 **詢問模式已啟用**\n\n目前已切換為詢問模式。系統只會根據頁面內容回答問題，不會呼叫頁面工具，手動附加的圖片上下文也會一併停用，此設定會保留到重新載入後。"
+    },
+    "inquiryModeNoticeEnabled": {
+        "message": "💬 **詢問模式目前為啟用狀態**\n系統只會根據頁面內容回答問題，不會呼叫頁面工具。"
+    },
+    "maxImagesAdded": {
+        "message": "最多只能附加 $max$ 張圖片，已加入前 $count$ 張。",
+        "placeholders": {
+            "max": {
+                "content": "$1"
+            },
+            "count": {
+                "content": "$2"
+            }
+        }
+    },
+    "maxImagesAllowed": {
+        "message": "最多只能附加 $max$ 張圖片。",
+        "placeholders": {
+            "max": {
+                "content": "$1"
+            }
+        }
+    },
+    "noImageDetected": {
+        "message": "沒有偵測到可加入的圖片。"
+    },
+    "noImageFiles": {
+        "message": "沒有可加入的圖片檔案。"
+    },
+    "openCustomCommands": {
+        "message": "開啟偏好設定查看所有技能"
+    },
+    "screenshotDisabledDescription": {
+        "message": "只分析網頁文字，不自動附帶截圖。"
+    },
+    "screenshotDisabledDetailed": {
+        "message": "⭕ **截圖功能已停用**\n\n系統將不再自動捕獲截圖。您的提問將僅使用文字內容進行分析。此設定會記憶到下次重新載入頁面。"
+    },
+    "screenshotDisabledTitle": {
+        "message": "截圖：停用"
+    },
+    "screenshotEnabledDescription": {
+        "message": "提問時自動附帶目前可視範圍截圖。"
+    },
+    "screenshotEnabledDetailed": {
+        "message": "✨ **截圖功能已啟用！** 您現在提問時，系統會自動包含截圖進行分析。此設定會記憶到下次重新載入頁面。"
+    },
+    "screenshotEnabledTitle": {
+        "message": "截圖：啟用"
+    },
+    "screenshotModeBriefDisabled": {
+        "message": "⭕ **截圖模式已停用**"
+    },
+    "screenshotModeBriefEnabled": {
+        "message": "📸 **截圖模式已啟用**"
+    },
+    "screenshotModeNoticeDisabled": {
+        "message": "📝 **截圖模式目前為停用狀態**\n頁問只會對目前網頁的文字內容進行分析，不會自動附帶截圖。"
+    },
+    "screenshotModeNoticeEnabled": {
+        "message": "📸 **截圖模式目前為啟用狀態**\n系統會在提問時自動附帶目前可視範圍的截圖作為輔助分析。"
+    },
+    "screenshotRequiredForAnnotation": {
+        "message": "請先啟用截圖功能，才能標注目前畫面。"
+    },
+    "screenshotTestFailed": {
+        "message": "❌ **截圖測試失敗**\n\n截圖功能已啟用，但截圖捕獲失敗。請檢查瀏覽器權限設定。"
+    },
+    "screenshotTestStarting": {
+        "message": "✅ **截圖功能已啟用**\n\n🔄 正在測試截圖功能..."
+    },
+    "screenshotTestSucceeded": {
+        "message": "📸 **截圖測試成功！**\n\n**截圖資訊：**\n- 📏 圖片大小：$imageSize$ KB\n- 🔗 格式：PNG (Base64)\n- 📊 資料長度：$dataLength$ 字元\n- 🎯 Base64 資料長度：$base64Length$ 字元\n\n**捕獲的截圖預覽：**",
+        "placeholders": {
+            "imagesize": {
+                "content": "$1"
+            },
+            "datalength": {
+                "content": "$2"
+            },
+            "base64length": {
+                "content": "$3"
+            }
+        }
+    },
+    "selectImageFile": {
+        "message": "請選擇可用的圖片檔案。"
+    },
+    "selectedTextCopyText": {
+        "message": "🎯 **已偵測到選取文字**（$count$ 字元）\n\n您可以直接提問，系統將以選取的文字作為分析對象。\n\n**選取內容：**\n$text$$mode$\n\n💡 $commands$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "text": {
+                "content": "$2"
+            },
+            "mode": {
+                "content": "$3"
+            },
+            "commands": {
+                "content": "$4"
+            }
+        }
+    },
+    "selectedTextDetected": {
+        "message": "已偵測到選取文字"
+    },
+    "selectedTextIntro": {
+        "message": "將以選取文字作為主要分析對象。$count$ 字元",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "summaryTemplateVariablesError": {
+        "message": "❌ **/summary 提示內容包含 ${變數}，請輸入 /summary 後按 Tab 展開並填寫變數。**"
+    },
+    "unknownCommandError": {
+        "message": "❌ **找不到技能：$command$**\n\n可用技能：\n$commands$\n\n您也可以在偏好設定中新增技能。",
+        "placeholders": {
+            "command": {
+                "content": "$1"
+            },
+            "commands": {
+                "content": "$2"
+            }
+        }
+    },
+    "usageIntro": {
+        "message": "直接提問目前頁面，或先選取文字範圍再提問。"
+    },
+    "usageTip": {
+        "message": "使用提示"
+    },
+    "usageTipCopyText": {
+        "message": "💡 **使用提示：**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。$mode$\n\n$commands$",
+        "placeholders": {
+            "mode": {
+                "content": "$1"
+            },
+            "commands": {
+                "content": "$2"
+            }
+        }
+    },
+    "imageContextTitleWithAnnotation": {
+        "message": "圖片上下文（可上傳、貼上、拖曳，或標注目前畫面）"
+    },
+    "imageContextMetaWithCount": {
+        "message": "支援 PNG / JPG / WebP 等圖片，單檔大小上限 10MB · $count$/$max$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "max": {
+                "content": "$2"
+            }
+        }
+    },
+    "openFullImage": {
+        "message": "點擊開啟第 $index$ 張完整圖片",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagePreviewTitle": {
+        "message": "圖片預覽 $index$ - AskPage",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "imagePreviewHeading": {
+        "message": "圖片預覽 $index$",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "questionImageAlt": {
+        "message": "AskPage 提問圖片 $index$",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "removeImage": {
+        "message": "移除第 $index$ 張圖片",
+        "placeholders": {
+            "index": {
+                "content": "$1"
+            }
+        }
+    },
+    "screenshotPreviewTitle": {
+        "message": "截圖預覽 - AskPage"
+    },
+    "screenshotPreviewHeading": {
+        "message": "截圖預覽"
+    },
+    "screenshotPreviewAlt": {
+        "message": "AskPage 截圖預覽"
+    },
+    "openFullScreenshot": {
+        "message": "點擊開啟完整截圖"
+    },
+    "openQuestionScreenshot": {
+        "message": "開啟提問當下的完整截圖"
+    },
+    "questionScreenshotAlt": {
+        "message": "提問當下的畫面截圖"
+    },
+    "viewOriginalSize": {
+        "message": "點擊查看原始大小"
+    },
+    "screenshotInfo": {
+        "message": "📊 尺寸資訊：$width$×$height$ | 檔案大小：$size$ KB",
+        "placeholders": {
+            "width": {
+                "content": "$1"
+            },
+            "height": {
+                "content": "$2"
+            },
+            "size": {
+                "content": "$3"
+            }
+        }
+    },
+    "copyScreenshotBase64": {
+        "message": "複製截圖 Base64 資料"
+    },
+    "copyToClipboard": {
+        "message": "複製到剪貼簿"
+    },
+    "userMessagePrefix": {
+        "message": "你"
+    },
+    "screenAnnotationMode": {
+        "message": "AskPage 畫面標注模式"
+    },
+    "screenAnnotationInstructions": {
+        "message": "移動滑鼠可框選 DOM 元素；點擊選取。按住左鍵拖曳時只會畫線，不會選取 DOM。"
+    },
+    "collapse": {
+        "message": "收合"
+    },
+    "expand": {
+        "message": "展開"
+    },
+    "collapseCode": {
+        "message": "收合程式碼"
+    },
+    "expandCode": {
+        "message": "展開完整程式碼"
+    },
+    "copyCode": {
+        "message": "複製程式碼"
+    },
+    "openCodePen": {
+        "message": "在 CodePen 開啟"
+    },
+    "codePenOpened": {
+        "message": "已開啟"
+    },
+    "codePenFailed": {
+        "message": "失敗"
+    },
+    "expandAll": {
+        "message": "展開全部"
+    },
+    "imagePreviewSize": {
+        "message": "圖片大小：約 $size$ KB",
+        "placeholders": {
+            "size": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerDomainNotAllowed": {
+        "message": "$provider$ Service Worker 不允許呼叫其他網域。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerEndpointNotAllowed": {
+        "message": "$provider$ Service Worker 不允許呼叫這個 API 端點。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerRequestFailed": {
+        "message": "$provider$ Service Worker 請求失敗。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerPostOnly": {
+        "message": "$provider$ Service Worker 僅允許 POST 請求。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerApiKeyRequired": {
+        "message": "$provider$ API Key 不可為空。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerInvalidJson": {
+        "message": "$provider$ 請求內容不是有效的 JSON。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerInvalidRequest": {
+        "message": "$provider$ 請求內容格式不正確。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerDuplicateResponse": {
+        "message": "$provider$ Service Worker 重複回傳回應資訊。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerInvalidHttpStatus": {
+        "message": "$provider$ Service Worker 回傳了無效的 HTTP 狀態。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerNoResponseInfo": {
+        "message": "$provider$ Service Worker 尚未提供回應資訊。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerNoHttpResponse": {
+        "message": "$provider$ Service Worker 未提供 HTTP 回應。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "serviceWorkerDisconnected": {
+        "message": "$provider$ Service Worker 連線已中斷。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "imageFileTooLarge": {
+        "message": "圖片檔案超過 10MB 上限。"
+    },
+    "invalidImageFile": {
+        "message": "讀取到的檔案內容不是有效圖片。"
+    },
+    "imageReadFailed": {
+        "message": "無法讀取圖片內容。"
+    },
+    "droppedImageFetchFailed": {
+        "message": "無法讀取拖曳圖片（$status$ $statusText$）。",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            }
+        }
+    },
+    "droppedContentNotImage": {
+        "message": "拖曳內容不是圖片。"
+    },
+    "codeLanguagePlainText": {
+        "message": "純文字"
+    },
+    "codeLanguage": {
+        "message": "程式碼"
+    },
+    "autoDetectedLanguage": {
+        "message": "自動判斷：$language$",
+        "placeholders": {
+            "language": {
+                "content": "$1"
+            }
+        }
+    },
+    "retryDelaySeconds": {
+        "message": "$seconds$ 秒",
+        "placeholders": {
+            "seconds": {
+                "content": "$1"
+            }
+        }
+    },
+    "retryExhausted": {
+        "message": "$message$ 已重試 $count$ 次仍失敗。",
+        "placeholders": {
+            "message": {
+                "content": "$1"
+            },
+            "count": {
+                "content": "$2"
+            }
+        }
+    },
+    "statusPlanningWithProvider": {
+        "message": "正在請 $provider$ 規劃任務...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusAnsweringWithProvider": {
+        "message": "正在請 $provider$ 分析頁面並回答問題...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusRetrying": {
+        "message": "$provider$ $reason$，將在 $delay$ 後重試（$retryCount$/$maxRetries$）...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "reason": {
+                "content": "$2"
+            },
+            "delay": {
+                "content": "$3"
+            },
+            "retrycount": {
+                "content": "$4"
+            },
+            "maxretries": {
+                "content": "$5"
+            }
+        }
+    },
+    "statusToolCallingFallbackDetailed": {
+        "message": "$provider$ 端點不支援 tool calling，正在退回一般文字模式...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusEmptyResponseOutputLimitRetry": {
+        "message": "$provider$ 回傳內容為空且疑似達到輸出上限，正在放寬輸出限制後自動重試一次...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusEmptyResponseRetryDetailed": {
+        "message": "$provider$ 回傳內容為空，正在自動重試一次...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusGeminiOutputLimitRetry": {
+        "message": "$provider$ 回傳內容為空且疑似達到輸出上限，正在以模型最大輸出上限自動重試一次...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "statusToolSelected": {
+        "message": "$provider$ 已選擇工具 $tools$，準備執行...",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "tools": {
+                "content": "$2"
+            }
+        }
+    },
+    "statusToolExecuting": {
+        "message": "正在執行工具 $tool$（$index$/$total$）...",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            },
+            "index": {
+                "content": "$2"
+            },
+            "total": {
+                "content": "$3"
+            }
+        }
+    },
+    "statusToolResults": {
+        "message": "已執行工具 $tools$，正在把結果交回 $provider$...",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            },
+            "provider": {
+                "content": "$2"
+            }
+        }
+    },
+    "toolCallLimitExceeded": {
+        "message": "工具呼叫輪數已達上限，已中止以避免無限循環。"
+    },
+    "invalidProviderApiKey": {
+        "message": "無效的 $provider$ API Key，請檢查您的 $provider$ API Key 設定。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerRequestForbidden": {
+        "message": "$provider$ 拒絕了這次請求，請檢查 API 權限或模型存取設定。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerModelNotFound": {
+        "message": "找不到指定的 $provider$ 模型，請檢查模型設定。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerRateLimited": {
+        "message": "$provider$ 服務目前忙碌或請求頻率過高，請稍後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerUnavailable": {
+        "message": "$provider$ 服務暫時不可用，請稍後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "httpStatusDetails": {
+        "message": "（HTTP $status$$statusText$）",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            }
+        }
+    },
+    "retryReasonTimeout": {
+        "message": "請求逾時"
+    },
+    "retryReasonNetwork": {
+        "message": "網路連線異常"
+    },
+    "retryReasonResponseFormat": {
+        "message": "回應格式異常"
+    },
+    "retryReasonContextWindow": {
+        "message": "對話內容超過 Context Window"
+    },
+    "retryReasonUnauthorized": {
+        "message": "驗證失敗"
+    },
+    "retryReasonForbidden": {
+        "message": "權限不足"
+    },
+    "retryReasonResourceNotFound": {
+        "message": "找不到資源"
+    },
+    "retryReasonInvalidRequest": {
+        "message": "請求格式錯誤"
+    },
+    "retryReasonQuota": {
+        "message": "配額已用盡"
+    },
+    "retryReasonRateLimit": {
+        "message": "服務忙碌或請求過多"
+    },
+    "retryReasonServiceError": {
+        "message": "服務暫時異常"
+    },
+    "retryReasonRequestFailed": {
+        "message": "請求失敗"
+    },
+    "retryReasonUnknown": {
+        "message": "未知錯誤"
+    },
+    "requestTimeoutMessage": {
+        "message": "$provider$ 請求逾時，可能是服務忙碌或網路不穩。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "networkErrorMessage": {
+        "message": "無法連線到 $provider$ 服務，可能是網路不穩或服務暫時無回應。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "invalidResponseMessage": {
+        "message": "$provider$ 回傳了無法解析的資料，可能是服務暫時異常。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "contextWindowExceeded": {
+        "message": "$provider$ 回報目前頁面快照與完整對話已超過模型的 Context Window$statusSuffix。請自行執行 /clear 開始新對話；AskPage 不會自動清除或裁切既有對話。$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "errorMessageLabel": {
+        "message": "錯誤訊息"
+    },
+    "providerResourceNotFound": {
+        "message": "$provider$ 找不到指定的模型、端點或部署設定。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerInvalidRequest": {
+        "message": "$provider$ 拒絕了這次請求，可能是參數格式不正確。$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerQuotaExceeded": {
+        "message": "$provider$ 額度或用量限制已達上限$statusSuffix。可能是上下文超出現有模型的 Context Window 限制或允許的 TPM (Token per minute) 上限。請更換模型或使用「詢問」模式減少輸入內容。錯誤訊息：$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerRateLimitedWithDetails": {
+        "message": "$provider$ 服務目前忙碌或請求頻率過高$statusSuffix。$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerServiceError": {
+        "message": "$provider$ 服務暫時異常$statusSuffix。$apiMessage$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "apimessage": {
+                "content": "$2"
+            }
+        }
+    },
+    "providerUnknownError": {
+        "message": "$provider$ API 呼叫失敗，原因不明。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "streamingUnsupported": {
+        "message": "此瀏覽器不支援讀取串流回應。"
+    },
+    "openaiRefusal": {
+        "message": "$provider$ 拒絕回應這次請求：$refusal$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "refusal": {
+                "content": "$2"
+            }
+        }
+    },
+    "openaiOutputLimit": {
+        "message": "$provider$ 已達輸出長度上限，請縮小問題範圍後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiContentFiltered": {
+        "message": "$provider$ 因內容過濾而未回傳文字內容，請調整提問內容後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiToolCallNoText": {
+        "message": "$provider$ 回傳了工具呼叫狀態，但沒有提供可顯示的文字內容。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiFunctionCallNoText": {
+        "message": "$provider$ 回傳了函式呼叫狀態，但沒有提供可顯示的文字內容。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "openaiNonDisplayableStop": {
+        "message": "$provider$ 已完成回應，但內容不是可顯示的文字。請再試一次，或縮小問題範圍。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerNoCandidates": {
+        "message": "$provider$ 沒有回傳任何候選內容，可能是模型暫時沒有產生答案，請稍後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerNonDisplayableResult": {
+        "message": "$provider$ 已回傳結果，但內容不是可顯示的文字。請再試一次，或縮小問題範圍。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptSafety": {
+        "message": "$provider$ 因安全性限制而未處理這次請求$details$，請調整提問內容後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiPromptBlocklist": {
+        "message": "$provider$ 因請求內容包含封鎖詞而未處理這次請求，請調整提問內容後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptProhibited": {
+        "message": "$provider$ 判定這次請求屬於禁止內容，因此未回傳答案。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptImageSafety": {
+        "message": "$provider$ 因圖片內容觸發安全性限制，因此未回傳答案。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiPromptOther": {
+        "message": "$provider$ 沒有處理這次請求，請稍後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiOutputLimit": {
+        "message": "$provider$ 已達輸出長度上限$details$，請縮小問題範圍後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiSafety": {
+        "message": "$provider$ 因安全性限制而未回傳文字內容$details$，請調整提問內容後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiRecitation": {
+        "message": "$provider$ 因引用內容限制而未回傳文字內容$details$。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiLanguage": {
+        "message": "$provider$ 因語言限制而未回傳文字內容$details$，請改用繁體中文或英文後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiBlocklist": {
+        "message": "$provider$ 因回應內容觸發封鎖詞限制而未回傳文字內容。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiProhibited": {
+        "message": "$provider$ 因回應內容觸發禁止內容限制而未回傳文字內容。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiSensitiveInfo": {
+        "message": "$provider$ 因回應內容可能包含敏感個人資訊而未回傳文字內容。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiMalformedToolCall": {
+        "message": "$provider$ 回傳了格式不正確的工具呼叫$details$，請再試一次。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiOther": {
+        "message": "$provider$ 沒有產生可顯示的文字內容$details$，請稍後再試。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "geminiNoCandidates": {
+        "message": "$provider$ 沒有回傳任何候選內容，可能是請求被系統攔下或模型暫時沒有產生答案。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "geminiNonDisplayableResult": {
+        "message": "$provider$ 已回傳結果，但內容不是可顯示的文字$details$。請再試一次，或縮小問題範圍。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "details": {
+                "content": "$2"
+            }
+        }
+    },
+    "invalidStreamingData": {
+        "message": "$provider$ 回傳了無法解析的串流資料：$data$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "data": {
+                "content": "$2"
+            }
+        }
+    },
+    "streamingApiError": {
+        "message": "API 串流錯誤：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "httpFallbackError": {
+        "message": "HTTP $status$ $statusText$：$error$",
+        "placeholders": {
+            "status": {
+                "content": "$1"
+            },
+            "statustext": {
+                "content": "$2"
+            },
+            "error": {
+                "content": "$3"
+            }
+        }
+    },
+    "errorPrefix": {
+        "message": "錯誤：$error$",
+        "placeholders": {
+            "error": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerApiKeyMissing": {
+        "message": "請點擊擴充功能圖示設定您的 $provider$ API Key。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerApiKeyDecryptFailed": {
+        "message": "無法解密 $provider$ API Key，請重新設定。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerEndpointMissing": {
+        "message": "請點擊擴充功能圖示設定您的 $provider$ Endpoint。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerDeploymentMissing": {
+        "message": "請點擊擴充功能圖示設定您的 $provider$ Deployment Name。",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            }
+        }
+    },
+    "providerMissing": {
+        "message": "請點擊擴充功能圖示設定您的 AI 提供者。"
+    },
+    "providerDeploymentNotFound": {
+        "message": "找不到指定的部署，請檢查您的 Endpoint 和 Deployment Name 設定。"
+    },
+    "providerAuthenticationFailed": {
+        "message": "$provider$ 驗證失敗：$error$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "error": {
+                "content": "$2"
+            }
+        }
+    },
+    "gptToolCompatibility": {
+        "message": "GPT-5.6 搭配 function tools 時必須使用 Responses API，無法使用 Chat Completions。"
+    },
+    "unknownTool": {
+        "message": "未知工具"
+    },
+    "toolListMore": {
+        "message": "$names$ 等 $count$ 個工具",
+        "placeholders": {
+            "names": {
+                "content": "$1"
+            },
+            "count": {
+                "content": "$2"
+            }
+        }
+    },
+    "success": {
+        "message": "成功"
+    },
+    "failure": {
+        "message": "失敗"
+    },
+    "toolExecutionSingle": {
+        "message": "剛剛調用 $tools$ 工具$result$",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            },
+            "result": {
+                "content": "$2"
+            }
+        }
+    },
+    "toolExecutionAllSuccess": {
+        "message": "剛剛調用 $tools$ 工具全部成功",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolExecutionAllFailure": {
+        "message": "剛剛調用 $tools$ 工具全部失敗",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolExecutionMixed": {
+        "message": "剛剛調用 $tools$ 工具，成功 $successCount$ 個、失敗 $failureCount$ 個",
+        "placeholders": {
+            "tools": {
+                "content": "$1"
+            },
+            "successcount": {
+                "content": "$2"
+            },
+            "failurecount": {
+                "content": "$3"
+            }
+        }
+    },
+    "usageDetails": {
+        "message": "（$details$）",
+        "placeholders": {
+            "details": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageListSeparator": {
+        "message": "、"
+    },
+    "usageLine": {
+        "message": "- $label$：$value$$suffix$",
+        "placeholders": {
+            "label": {
+                "content": "$1"
+            },
+            "value": {
+                "content": "$2"
+            },
+            "suffix": {
+                "content": "$3"
+            }
+        }
+    },
+    "usageInput": {
+        "message": "輸入"
+    },
+    "usageOutput": {
+        "message": "輸出"
+    },
+    "usageToolInput": {
+        "message": "工具輸入"
+    },
+    "usageTotal": {
+        "message": "總計"
+    },
+    "usageCache": {
+        "message": "快取 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageCacheWrite": {
+        "message": "快取寫入 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageReasoning": {
+        "message": "推理 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageAcceptedPrediction": {
+        "message": "已接受預測 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageRejectedPrediction": {
+        "message": "已否決預測 $count$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "usageSummary": {
+        "message": "Token 用量統計：\n$lines$",
+        "placeholders": {
+            "lines": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolCallInProgress": {
+        "message": "🛠️ 正在執行 $tool$",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolResultFailure": {
+        "message": "（失敗）"
+    },
+    "toolResultSummary": {
+        "message": "\n\n結果摘要：$message$",
+        "placeholders": {
+            "message": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolResultMessageSuffix": {
+        "message": "：$message$",
+        "placeholders": {
+            "message": {
+                "content": "$1"
+            }
+        }
+    },
+    "toolResultReceived": {
+        "message": "📥 $tool$ 已回傳$status$$message$",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            },
+            "status": {
+                "content": "$2"
+            },
+            "message": {
+                "content": "$3"
+            }
+        }
+    },
+    "toolResultTraceText": {
+        "message": "📥 **$tool$** 已回傳$status$。$summary$\n\n$payload$",
+        "placeholders": {
+            "tool": {
+                "content": "$1"
+            },
+            "status": {
+                "content": "$2"
+            },
+            "summary": {
+                "content": "$3"
+            },
+            "payload": {
+                "content": "$4"
+            }
+        }
+    },
+    "executionDuration": {
+        "message": "費時：$duration$",
+        "placeholders": {
+            "duration": {
+                "content": "$1"
+            }
+        }
+    },
+    "agentExecutionCompleted": {
+        "message": "頁問已經打完收工，共執行 $count$ 個步驟，$duration$$usage$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "duration": {
+                "content": "$2"
+            },
+            "usage": {
+                "content": "$3"
+            }
+        }
+    },
+    "agentExecutionStopped": {
+        "message": "頁問提早收工，共執行 $count$ 個步驟，$duration$$usage$",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            },
+            "duration": {
+                "content": "$2"
+            },
+            "usage": {
+                "content": "$3"
+            }
+        }
+    },
+    "endpointToolFallbackMessage": {
+        "message": "⚠️ **目前這個 $provider$ 端點未完整支援 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n$answer$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "answer": {
+                "content": "$2"
+            }
+        }
+    },
+    "agentToolFallbackMessage": {
+        "message": "⚠️ **目前 $provider$ 提供者未完整支援 agent 模式下的 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n$answer$",
+        "placeholders": {
+            "provider": {
+                "content": "$1"
+            },
+            "answer": {
+                "content": "$2"
+            }
+        }
+    }
 }
