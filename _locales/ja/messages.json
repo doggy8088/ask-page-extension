@@ -220,6 +220,7 @@
     "switchProviderModelWithReasoning": { "message": "AI プロバイダーとモデルを切り替え。ホバーで推論強度を調整" },
     "openOptionsFailedMessage": { "message": "❌ **オプションを開けませんでした**\n\n後でもう一度お試しください。" },
     "submitQuestion": { "message": "質問を送信" },
+    "stopTask": { "message": "現在実行中のすべてのタスクを停止" },
     "disableScreenshot": { "message": "スクリーンショットを無効化" },
     "enableScreenshot": { "message": "スクリーンショットを有効化" },
     "switchToInquiryMode": { "message": "質問モードに切り替え（内容に関する回答のみ）" },

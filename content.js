@@ -16,6 +16,8 @@ let inquiryConversationContextPromise = null;
 let inquiryPromptCacheKey = '';
 let activeDialogState = null;
 let activeScreenAnnotationCancel = null;
+let activeAskTask = null;
+let askTaskSequence = 0;
 let dialogStylesTextPromise = null;
 let lastDialogPosition = null;
 const MAX_INPUT_VISIBLE_LINES = 5;
@@ -107,6 +109,8 @@ const AGENT_GLOW_OVERLAY_ID = 'askpage-agent-glow-overlay';
 const AGENT_GLOW_STYLE_ELEMENT_ID = 'askpage-agent-glow-styles';
 const AGENT_GLOW_VISIBLE_CLASS = 'askpage-agent-glow-visible';
 const AGENT_GLOW_FADE_DURATION_MS = 400;
+const ASK_TASK_CANCELLED_ERROR_NAME = 'AbortError';
+const ASK_TASK_STOP_BUTTON_CLASS = 'askpage-submit-stop';
 const AUTO_SCROLL_PROGRAMMATIC_WINDOW_MS = 100;
 const AUTO_SCROLL_ANIMATION_DURATION_MS = 240;
 const ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX = 90;
@@ -139,6 +143,144 @@ const DIALOG_HOST_ISOLATION_STYLES = [
     ['direction', 'ltr'],
     ['color-scheme', 'dark']
 ];
+
+function createAskTaskCancellationError() {
+    const error = new Error('AskPage task cancelled.');
+    error.name = ASK_TASK_CANCELLED_ERROR_NAME;
+    error.askPageTaskCancellation = true;
+    return error;
+}
+
+function isAskTaskCancellationError(error) {
+    return error?.askPageTaskCancellation === true;
+}
+
+function isAskTaskCancelled(taskOrSignal) {
+    const task = taskOrSignal && typeof taskOrSignal === 'object' && taskOrSignal.signal
+        ? taskOrSignal
+        : null;
+    const signal = task?.signal || taskOrSignal;
+    return Boolean(
+        task?.cancelRequested
+        || signal?.aborted
+        || (task && activeAskTask !== task)
+    );
+}
+
+function throwIfAskTaskCancelled(taskOrSignal) {
+    if (isAskTaskCancelled(taskOrSignal)) {
+        throw createAskTaskCancellationError();
+    }
+}
+
+function awaitWithAskTaskCancellation(value, signal) {
+    throwIfAskTaskCancelled(signal);
+    if (!signal) {
+        return Promise.resolve(value);
+    }
+
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        const cleanup = () => {
+            signal.removeEventListener('abort', handleAbort);
+        };
+        const handleAbort = () => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            cleanup();
+            reject(createAskTaskCancellationError());
+        };
+
+        signal.addEventListener('abort', handleAbort, { once: true });
+        Promise.resolve(value).then((result) => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            cleanup();
+            resolve(result);
+        }, (error) => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            cleanup();
+            reject(error);
+        });
+
+        if (signal.aborted) {
+            handleAbort();
+        }
+    });
+}
+
+function setAskTaskButtonState(button, isRunning) {
+    if (!button) {
+        return;
+    }
+
+    const labelKey = isRunning ? 'stopTask' : 'submitQuestion';
+    const label = getLocalizedText(labelKey);
+    button.classList.toggle(ASK_TASK_STOP_BUTTON_CLASS, isRunning);
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.setAttribute('aria-busy', isRunning ? 'true' : 'false');
+    button.dataset.askpageTaskState = isRunning ? 'running' : 'idle';
+}
+
+function refreshActiveAskTaskButton() {
+    setAskTaskButtonState(
+        getActiveDialogElementById('gemini-qna-btn'),
+        Boolean(activeAskTask)
+    );
+}
+
+function beginAskTask() {
+    if (activeAskTask) {
+        return null;
+    }
+
+    const controller = new AbortController();
+    const task = {
+        id: ++askTaskSequence,
+        controller,
+        signal: controller.signal,
+        cancelRequested: false
+    };
+    activeAskTask = task;
+    refreshActiveAskTaskButton();
+    return task;
+}
+
+function cancelActiveAskTask() {
+    if (!activeAskTask) {
+        return false;
+    }
+
+    activeAskTask.cancelRequested = true;
+    if (!activeAskTask.signal.aborted) {
+        activeAskTask.controller.abort();
+    }
+    return true;
+}
+
+function finishAskTask(task) {
+    if (!task || activeAskTask !== task) {
+        return;
+    }
+
+    activeAskTask = null;
+    refreshActiveAskTaskButton();
+}
+
+function canUpdateAskTaskUi(task) {
+    return !task || (activeAskTask === task && Boolean(getActiveDialogHost()));
+}
 
 function doesGeminiModelSupportCombinedTools(model = '') {
     return normalizeModelIdentifier(model).startsWith('gemini-3');
@@ -205,6 +347,9 @@ function createServiceWorkerFetch({ providerType, providerLabel, apiKey, getEndp
             throw new Error(getLocalizedText('serviceWorkerApiKeyRequired', { provider: providerLabel }));
         }
 
+        const signal = options.signal;
+        throwIfAskTaskCancelled(signal);
+
         let requestBody;
         try {
             requestBody = typeof options.body === 'string'
@@ -254,11 +399,16 @@ function createServiceWorkerFetch({ providerType, providerLabel, apiKey, getEndp
                 }
             };
 
+            const cleanupAbortListener = () => {
+                signal?.removeEventListener('abort', handleAbort);
+            };
+
             const failRequest = (error) => {
                 if (streamFinished) {
                     return;
                 }
                 streamFinished = true;
+                cleanupAbortListener();
                 if (responseStarted) {
                     streamController.error(error);
                 } else {
@@ -266,6 +416,16 @@ function createServiceWorkerFetch({ providerType, providerLabel, apiKey, getEndp
                 }
                 disconnectPort();
             };
+
+            const handleAbort = () => {
+                failRequest(createAskTaskCancellationError());
+            };
+
+            signal?.addEventListener('abort', handleAbort, { once: true });
+            if (signal?.aborted) {
+                handleAbort();
+                return;
+            }
 
             try {
                 port = chrome.runtime.connect({ name: LLM_API_FETCH_PORT });
@@ -317,6 +477,7 @@ function createServiceWorkerFetch({ providerType, providerLabel, apiKey, getEndp
                         return;
                     }
                     streamFinished = true;
+                    cleanupAbortListener();
                     streamController.close();
                     disconnectPort();
                     return;
@@ -676,6 +837,7 @@ function scrollActiveMessagesToBottom(fallbackMessagesEl) {
 }
 
 function closeActiveDialog() {
+    cancelActiveAskTask();
     if (typeof activeScreenAnnotationCancel === 'function') {
         activeScreenAnnotationCancel();
     }
@@ -2234,9 +2396,10 @@ function hideAgentGlowEffect() {
 /* --------------------------------------------------
     截圖功能
 -------------------------------------------------- */
-async function captureViewportScreenshot() {
+async function captureViewportScreenshot(signal = null) {
     console.log('[AskPage] ===== SCREENSHOT CAPTURE STARTED =====');
     console.log('[AskPage] Starting viewport screenshot capture');
+    throwIfAskTaskCancelled(signal);
 
     // 暫時隱藏對話框以避免在截圖中出現
     const overlay = getActiveDialogOverlay();
@@ -2251,10 +2414,10 @@ async function captureViewportScreenshot() {
 
     try {
         // 給瀏覽器一點時間來隱藏對話框
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await awaitWithAskTaskCancellation(new Promise(resolve => setTimeout(resolve, 100)), signal);
 
         // 使用 chrome.tabs API 捕獲當前標籤頁的截圖
-        const canvas = await new Promise((resolve, reject) => {
+        const canvas = await awaitWithAskTaskCancellation(new Promise((resolve, reject) => {
             console.log('[AskPage] Sending screenshot request to background script');
             chrome.runtime.sendMessage({ action: 'capture-screenshot' }, (response) => {
                 console.log('[AskPage] Received response from background script:', response);
@@ -2274,11 +2437,14 @@ async function captureViewportScreenshot() {
                     reject(new Error(response?.error || 'Screenshot capture failed'));
                 }
             });
-        });
+        }), signal);
 
         console.log('[AskPage] Screenshot capture completed successfully');
         return canvas;
     } catch (error) {
+        if (isAskTaskCancellationError(error)) {
+            throw error;
+        }
         console.error('[AskPage] ===== SCREENSHOT CAPTURE FAILED =====');
         console.error('[AskPage] 截圖失敗:', error);
         console.error('[AskPage] Error details:', error.message);
@@ -5130,8 +5296,9 @@ async function createDialog() {
     intelliBox.tabIndex = -1;
     const btn = document.createElement('button');
     btn.id = 'gemini-qna-btn';
+    btn.type = 'button';
     btn.textContent = getLocalizedText('ask');
-    btn.setAttribute('aria-label', getLocalizedText('submitQuestion'));
+    setAskTaskButtonState(btn, Boolean(activeAskTask));
 
     inputRow.appendChild(inputWrapper);
     inputRow.appendChild(btn);
@@ -5251,7 +5418,7 @@ async function createDialog() {
             annotateScreenBtn.title = getLocalizedText('annotateScreenTitle');
             annotateScreenBtn.setAttribute('aria-label', getLocalizedText('annotateScreenTitle'));
             btn.textContent = getLocalizedText('ask');
-            btn.setAttribute('aria-label', getLocalizedText('submitQuestion'));
+            setAskTaskButtonState(btn, Boolean(activeAskTask));
             updateModeToggleButtons();
             updateProviderDisplay();
             if (dialogLocaleReady) {
@@ -5287,6 +5454,7 @@ async function createDialog() {
             [DIALOG_OVERLAY_ID]: overlay,
             [DIALOG_MESSAGES_ID]: messagesEl,
             'gemini-qna-input': input,
+            'gemini-qna-btn': btn,
             'provider-display-name': providerDisplayName,
             'provider-display-model': providerDisplayModel
         }
@@ -5788,6 +5956,7 @@ async function createDialog() {
     });
 
     function closeDialog() {
+        cancelActiveAskTask();
         stopDialogDrag();
         hideIntelliBox();
         clearDialogDimTimer();
@@ -6551,6 +6720,10 @@ async function createDialog() {
     });
 
     async function handleAsk() {
+        if (activeAskTask) {
+            return;
+        }
+
         hideIntelliBox();
         const executeSnippetCommand = getSnippetExecution(snippetState);
         finalizeSnippetInput();
@@ -6558,113 +6731,134 @@ async function createDialog() {
         let displayedQuestion = question;
         const inputImageDataUrls = normalizeInputImageDataUrls(inputContextImageDataUrls);
         if (!question) { return; }
-        if (executeSnippetCommand) {
-            await executeSnippetCommand();
-        }
-        resumeActiveMessagesAutoScroll(messagesEl);
-
-        if (question === '/clear') {
-            promptHistory.length = 0;
-            historyIndex = 0;
-            await setValue(PROMPT_HISTORY_STORAGE, '[]');
-            clearConversationHistory();
-            capturedSelectedText = '';
-            messagesEl.innerHTML = '';
-            await appendUsagePromptMessage({ showUsageTipOnly: true });
-            clearInputContextImages();
-            setInputValue('', { resetToSingleLine: true });
-            input.focus();
+        const task = beginAskTask();
+        if (!task) {
             return;
         }
 
-        if (question === '/summary') {
-            if (typeof AskPageI18n !== 'undefined') {
-                await AskPageI18n.ready;
+        try {
+            if (executeSnippetCommand) {
+                await executeSnippetCommand();
             }
-            const customPrompt = await getValue(CUSTOM_SUMMARY_PROMPT_STORAGE, '');
-            const summaryPromptTemplate = customPrompt || getLocalizedText('summaryPrompt');
-            if (extractTemplateVariables(summaryPromptTemplate).length > 0) {
-                // 有變數的範本應由 snippet 流程展開，不應直接以 /summary 送出
-                appendMessage('user', question);
-                appendMessage('assistant', getLocalizedText('summaryTemplateVariablesError'));
+            resumeActiveMessagesAutoScroll(messagesEl);
+
+            if (question === '/clear') {
+                promptHistory.length = 0;
+                historyIndex = 0;
+                await setValue(PROMPT_HISTORY_STORAGE, '[]');
+                clearConversationHistory();
+                capturedSelectedText = '';
+                messagesEl.innerHTML = '';
+                await appendUsagePromptMessage({ showUsageTipOnly: true });
                 clearInputContextImages();
                 setInputValue('', { resetToSingleLine: true });
                 input.focus();
                 return;
             }
-            question = summaryPromptTemplate;
-            displayedQuestion = question;
-        }
 
-        if (question === '/screenshot') {
-            appendMessage('user', question);
-            clearInputContextImages();
-            setInputValue('', { resetToSingleLine: true });
-            input.focus();
-
-            await handleScreenshotModeToggle({ feedback: 'detailed' });
-            return;
-        }
-
-        if (question === '/agent') {
-            appendMessage('user', question);
-            clearInputContextImages();
-            setInputValue('', { resetToSingleLine: true });
-            input.focus();
-
-            await handleAgentModeToggle({ feedback: 'detailed' });
-            return;
-        }
-
-        // Handle custom commands
-        if (question.startsWith('/')) {
-            const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
-            const customCommand = customCommands.find(cmd => cmd.cmd === question);
-
-            if (customCommand) {
-                if (extractTemplateVariables(customCommand.prompt || '').length > 0) {
+            if (question === '/summary') {
+                if (typeof AskPageI18n !== 'undefined') {
+                    await AskPageI18n.ready;
+                }
+                const customPrompt = await getValue(CUSTOM_SUMMARY_PROMPT_STORAGE, '');
+                const summaryPromptTemplate = customPrompt || getLocalizedText('summaryPrompt');
+                if (extractTemplateVariables(summaryPromptTemplate).length > 0) {
+                // 有變數的範本應由 snippet 流程展開，不應直接以 /summary 送出
                     appendMessage('user', question);
-                    appendMessage('assistant', getLocalizedText('customCommandTemplateVariablesError', { command: question }));
+                    appendMessage('assistant', getLocalizedText('summaryTemplateVariablesError'));
                     clearInputContextImages();
                     setInputValue('', { resetToSingleLine: true });
                     input.focus();
                     return;
                 }
-                await applyCustomCommandExecutionMode(customCommand);
-                await incrementCustomCommandUsage(customCommand.cmd);
-                // Replace the command with its prompt
-                question = customCommand.prompt;
+                question = summaryPromptTemplate;
                 displayedQuestion = question;
-                // Continue with AI processing using the custom prompt
-            } else {
-                // Unknown command
+            }
+
+            if (question === '/screenshot') {
                 appendMessage('user', question);
-                appendMessage('assistant', getLocalizedText('unknownCommandError', {
-                    command: question,
-                    commands: getLocalizedText('builtInCommandCopyText')
-                }));
                 clearInputContextImages();
                 setInputValue('', { resetToSingleLine: true });
                 input.focus();
+
+                await handleScreenshotModeToggle({ feedback: 'detailed' });
                 return;
             }
+
+            if (question === '/agent') {
+                appendMessage('user', question);
+                clearInputContextImages();
+                setInputValue('', { resetToSingleLine: true });
+                input.focus();
+
+                await handleAgentModeToggle({ feedback: 'detailed' });
+                return;
+            }
+
+            // Handle custom commands
+            if (question.startsWith('/')) {
+                const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+                const customCommand = customCommands.find(cmd => cmd.cmd === question);
+
+                if (customCommand) {
+                    if (extractTemplateVariables(customCommand.prompt || '').length > 0) {
+                        appendMessage('user', question);
+                        appendMessage('assistant', getLocalizedText('customCommandTemplateVariablesError', { command: question }));
+                        clearInputContextImages();
+                        setInputValue('', { resetToSingleLine: true });
+                        input.focus();
+                        return;
+                    }
+                    await applyCustomCommandExecutionMode(customCommand);
+                    await incrementCustomCommandUsage(customCommand.cmd);
+                    // Replace the command with its prompt
+                    question = customCommand.prompt;
+                    displayedQuestion = question;
+                // Continue with AI processing using the custom prompt
+                } else {
+                // Unknown command
+                    appendMessage('user', question);
+                    appendMessage('assistant', getLocalizedText('unknownCommandError', {
+                        command: question,
+                        commands: getLocalizedText('builtInCommandCopyText')
+                    }));
+                    clearInputContextImages();
+                    setInputValue('', { resetToSingleLine: true });
+                    input.focus();
+                    return;
+                }
+            }
+
+            promptHistory.push(question);
+            if (promptHistory.length > 100) { promptHistory.shift(); }
+            historyIndex = promptHistory.length;
+            await setValue(PROMPT_HISTORY_STORAGE, JSON.stringify(promptHistory));
+
+            throwIfAskTaskCancelled(task);
+            const activeSelectedText = getActiveSelectedText(capturedSelectedText);
+            const screenshotEnabled = await getScreenshotEnabled();
+            const hasAnnotatedScreenshotContext = hasPendingAnnotatedScreenshotContext(inputImageDataUrls);
+            throwIfAskTaskCancelled(task);
+            const screenshotDataUrl = screenshotEnabled && !hasAnnotatedScreenshotContext
+                ? await captureViewportScreenshot(task.signal)
+                : null;
+            throwIfAskTaskCancelled(task);
+            appendMessage('user', displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
+            addConversationTurn('user', question, displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
+            clearInputContextImages();
+            setInputValue('', { resetToSingleLine: true });
+            input.focus();
+            await askAI(question, activeSelectedText, screenshotDataUrl, inputImageDataUrls, task);
+        } catch (error) {
+            if (!isAskTaskCancellationError(error) && canUpdateAskTaskUi(task)) {
+                console.error('[AskPage] Failed to handle question:', error);
+                appendErrorMessageAndStore(getLocalizedText('errorPrefix', {
+                    error: error.userMessage || error.message
+                }));
+            }
+        } finally {
+            finishAskTask(task);
         }
-
-        promptHistory.push(question);
-        if (promptHistory.length > 100) { promptHistory.shift(); }
-        historyIndex = promptHistory.length;
-        await setValue(PROMPT_HISTORY_STORAGE, JSON.stringify(promptHistory));
-
-        const activeSelectedText = getActiveSelectedText(capturedSelectedText);
-        const screenshotEnabled = await getScreenshotEnabled();
-        const hasAnnotatedScreenshotContext = hasPendingAnnotatedScreenshotContext(inputImageDataUrls);
-        const screenshotDataUrl = screenshotEnabled && !hasAnnotatedScreenshotContext ? await captureViewportScreenshot() : null;
-        appendMessage('user', displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
-        addConversationTurn('user', question, displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
-        clearInputContextImages();
-        setInputValue('', { resetToSingleLine: true });
-        input.focus();
-        await askAI(question, activeSelectedText, screenshotDataUrl, inputImageDataUrls);
     }
 
     let intelliActive = false;
@@ -7302,7 +7496,14 @@ async function createDialog() {
             }
         }
     }, true);
-    btn.addEventListener('click', handleAsk);
+    btn.addEventListener('click', () => {
+        if (activeAskTask) {
+            cancelActiveAskTask();
+            return;
+        }
+
+        handleAsk();
+    });
 
     function renderAssistantMessageElement(element, text, options = {}) {
         const sourceText = String(text ?? '');
@@ -7991,8 +8192,8 @@ async function createDialog() {
         appendNodeToActiveMessages(div, messagesEl);
     }
 
-    function sleep(ms) {
-        return new Promise((resolve) => setTimeout(resolve, ms));
+    function sleep(ms, signal = null) {
+        return awaitWithAskTaskCancellation(new Promise((resolve) => setTimeout(resolve, ms)), signal);
     }
 
     function parseApiErrorBody(body) {
@@ -8332,23 +8533,30 @@ async function createDialog() {
         buildHttpError,
         onRetry,
         transformResponse,
-        fetchImpl = fetch
+        fetchImpl = fetch,
+        signal = null
     }) {
         let retryCount = 0;
         let curlCommandLogged = false;
 
         for (;;) {
             try {
-                const response = await fetchImpl(url, options);
+                throwIfAskTaskCancelled(signal);
+                const requestOptions = signal ? { ...options, signal } : options;
+                const response = await fetchImpl(url, requestOptions);
                 if (!response.ok) {
                     const errorBody = await response.text();
                     throw buildHttpError(response, errorBody);
                 }
                 const responseData = await response.json();
+                throwIfAskTaskCancelled(signal);
                 return typeof transformResponse === 'function'
                     ? transformResponse(responseData)
                     : responseData;
             } catch (error) {
+                if (isAskTaskCancellationError(error) || isAskTaskCancelled(signal)) {
+                    throw createAskTaskCancellationError();
+                }
                 const analysis = analyzeProviderApiError(providerLabel, error, retryCount);
                 if (!curlCommandLogged) {
                     logCopyableCurlCommand(providerLabel, url, options, error);
@@ -8375,7 +8583,7 @@ async function createDialog() {
                         });
                     }
                     retryCount = nextRetryCount;
-                    await sleep(delayMs);
+                    await sleep(delayMs, signal);
                     continue;
                 }
 
@@ -8387,7 +8595,7 @@ async function createDialog() {
         }
     }
 
-    async function readServerSentEvents(response, onEvent) {
+    async function readServerSentEvents(response, onEvent, signal = null) {
         if (!response.body || typeof response.body.getReader !== 'function') {
             throw new Error(getLocalizedText('streamingUnsupported'));
         }
@@ -8397,7 +8605,9 @@ async function createDialog() {
         let buffer = '';
 
         for (;;) {
+            throwIfAskTaskCancelled(signal);
             const { value, done } = await reader.read();
+            throwIfAskTaskCancelled(signal);
             if (done) {
                 break;
             }
@@ -8407,6 +8617,7 @@ async function createDialog() {
             buffer = blocks.pop() || '';
 
             for (const block of blocks) {
+                throwIfAskTaskCancelled(signal);
                 if (handleServerSentEventBlock(block, onEvent) === false) {
                     return;
                 }
@@ -8414,6 +8625,7 @@ async function createDialog() {
         }
 
         buffer += decoder.decode();
+        throwIfAskTaskCancelled(signal);
         if (buffer.trim()) {
             handleServerSentEventBlock(buffer, onEvent);
         }
@@ -8463,7 +8675,8 @@ async function createDialog() {
         buildHttpError,
         onRetry,
         onEvent,
-        fetchImpl = fetch
+        fetchImpl = fetch,
+        signal = null
     }) {
         let retryCount = 0;
         let curlCommandLogged = false;
@@ -8471,18 +8684,24 @@ async function createDialog() {
         for (;;) {
             let receivedEvent = false;
             try {
-                const response = await fetchImpl(url, options);
+                throwIfAskTaskCancelled(signal);
+                const requestOptions = signal ? { ...options, signal } : options;
+                const response = await fetchImpl(url, requestOptions);
                 if (!response.ok) {
                     const errorBody = await response.text();
                     throw buildHttpError(response, errorBody);
                 }
 
                 await readServerSentEvents(response, (event) => {
+                    throwIfAskTaskCancelled(signal);
                     receivedEvent = true;
                     onEvent(event);
-                });
+                }, signal);
                 return;
             } catch (error) {
+                if (isAskTaskCancellationError(error) || isAskTaskCancelled(signal)) {
+                    throw createAskTaskCancellationError();
+                }
                 const analysis = analyzeProviderApiError(providerLabel, error, retryCount);
                 if (!curlCommandLogged) {
                     logCopyableCurlCommand(providerLabel, url, options, error);
@@ -8511,7 +8730,7 @@ async function createDialog() {
                         });
                     }
                     retryCount = nextRetryCount;
-                    await sleep(delayMs);
+                    await sleep(delayMs, signal);
                     continue;
                 }
 
@@ -9484,6 +9703,8 @@ async function createDialog() {
     }
 
     async function executeOllamaCloudWebSearch(toolArgs, webSearchContext = {}) {
+        const cancellationContext = webSearchContext.task || webSearchContext.signal;
+        throwIfAskTaskCancelled(cancellationContext);
         const query = String(toolArgs.query || '').trim();
         if (!query) {
             return createToolResult(false, 'query 參數不可為空。');
@@ -9512,8 +9733,10 @@ async function createDialog() {
                 undefined,
                 { retryAfterMs: getRetryAfterMilliseconds(response) }
             ),
-            fetchImpl: webSearchContext.fetchImpl
+            fetchImpl: webSearchContext.fetchImpl,
+            signal: webSearchContext.signal
         });
+        throwIfAskTaskCancelled(cancellationContext);
 
         const results = Array.isArray(responseData?.results)
             ? responseData.results
@@ -9538,6 +9761,8 @@ async function createDialog() {
     }
 
     async function executeToolCall({ id = '', name = '', args = {} }, toolContext = {}) {
+        const cancellationContext = toolContext.task || toolContext.signal;
+        throwIfAskTaskCancelled(cancellationContext);
         const toolArgs = args && typeof args === 'object' ? args : {};
         console.log('[AskPage] Executing tool:', name, toolArgs);
 
@@ -9762,10 +9987,11 @@ async function createDialog() {
                 const restoreDialogHost = detachActiveDialogHostForPageTool();
                 let response;
                 try {
-                    response = await chrome.runtime.sendMessage({
+                    response = await awaitWithAskTaskCancellation(chrome.runtime.sendMessage({
                         action: 'execute-main-world-javascript',
                         code
-                    });
+                    }), toolContext.signal);
+                    throwIfAskTaskCancelled(cancellationContext);
                 } finally {
                     restoreDialogHost();
                 }
@@ -9797,6 +10023,9 @@ async function createDialog() {
                 result: createToolResult(false, `未知工具：${name}`)
             };
         } catch (error) {
+            if (isAskTaskCancellationError(error)) {
+                throw error;
+            }
             console.error('[AskPage] Tool execution failed:', name, error);
             return {
                 id,
@@ -9872,7 +10101,9 @@ async function createDialog() {
 
     async function executeToolCalls(toolCalls, onToolStatus = () => {}, toolContext = {}) {
         const results = [];
+        const cancellationContext = toolContext.task || toolContext.signal;
         for (const [index, toolCall] of toolCalls.entries()) {
+            throwIfAskTaskCancelled(cancellationContext);
             onToolStatus({
                 name: toolCall.name,
                 index: index + 1,
@@ -10463,7 +10694,8 @@ async function createDialog() {
         onRetry,
         onAnswerDelta = () => {},
         onReasoningDelta = () => {},
-        fetchImpl = fetch
+        fetchImpl = fetch,
+        signal = null
     }) {
         const message = {
             role: 'assistant',
@@ -10489,6 +10721,7 @@ async function createDialog() {
             },
             buildHttpError,
             onRetry,
+            signal,
             onEvent: (sseEvent) => {
                 const chunk = parseSseJsonEvent(providerLabel, sseEvent);
                 responseId = chunk.id || responseId;
@@ -10626,7 +10859,8 @@ async function createDialog() {
         onRetry,
         onAnswerDelta = () => {},
         onReasoningDelta = () => {},
-        fetchImpl = fetch
+        fetchImpl = fetch,
+        signal = null
     }) {
         let isChatCompletionsFormat = false;
         const state = {
@@ -10673,6 +10907,7 @@ async function createDialog() {
             },
             buildHttpError,
             onRetry,
+            signal,
             onEvent: (sseEvent) => {
                 const payload = parseSseJsonEvent(providerLabel, sseEvent);
 
@@ -10906,7 +11141,8 @@ async function createDialog() {
         onRetry,
         onAnswerDelta = () => {},
         onReasoningDelta = () => {},
-        providerLabel = 'Gemini'
+        providerLabel = 'Gemini',
+        signal = null
     }) {
         const responseData = {
             candidates: []
@@ -10922,6 +11158,7 @@ async function createDialog() {
             },
             buildHttpError,
             onRetry,
+            signal,
             onEvent: (sseEvent) => {
                 const chunk = parseSseJsonEvent(providerLabel, sseEvent);
                 mergeGeminiStreamChunk(responseData, chunk, onAnswerDelta, onReasoningDelta);
@@ -10941,6 +11178,8 @@ async function createDialog() {
         initialMessages,
         buildRequestBody,
         sendRequest,
+        signal = null,
+        task = null,
         toolContext = {},
         allowToolFallback = false,
         initialUseTools = true,
@@ -10957,12 +11196,15 @@ async function createDialog() {
         let previousToolSummary = '';
         let maxOutputTokens = initialMaxOutputTokens;
         let emptyResponseRetryCount = 0;
+        const cancellationContext = task || signal;
         const reportStatus = (status) => {
+            throwIfAskTaskCancelled(cancellationContext);
             onStatusUpdate(status);
             onTrace({ type: 'status', text: status });
         };
 
         for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round++) {
+            throwIfAskTaskCancelled(cancellationContext);
             const roundPrefix = previousToolSummary ? `${previousToolSummary}，` : '';
             reportStatus(formatRoundStatus(
                 round,
@@ -10986,9 +11228,11 @@ async function createDialog() {
                     )),
                     {
                         onAnswerDelta,
-                        onReasoningDelta
+                        onReasoningDelta,
+                        signal
                     }
                 );
+                throwIfAskTaskCancelled(cancellationContext);
             } catch (error) {
                 if (useTools && allowToolFallback && isLikelyToolUnsupportedError(error)) {
                     console.warn(`[AskPage] ${providerLabel} does not appear to support tool calling, falling back to plain chat.`, error);
@@ -11069,8 +11313,13 @@ async function createDialog() {
                     index: toolStatus.index,
                     total: toolStatus.total
                 }))),
-                toolContext
+                {
+                    ...toolContext,
+                    signal,
+                    task
+                }
             );
+            throwIfAskTaskCancelled(cancellationContext);
 
             previousToolSummary = buildToolExecutionSummary(toolResults);
             const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
@@ -11106,19 +11355,25 @@ async function createDialog() {
         onTrace = () => {},
         onAnswerDelta = () => {},
         onReasoningDelta = () => {},
-        providerLabel = 'Gemini'
+        providerLabel = 'Gemini',
+        signal = null,
+        task = null,
+        toolContext = {}
     }) {
         const normalizedInputImages = normalizeInputImageDataUrls(inputImageDataUrls);
         const pageConversationContext = await getPageConversationContext(capturedSelectedText, {
             includeScreenshot: !!screenshotDataUrl,
             inputImageDataUrls: normalizedInputImages
         }, enableTools);
+        const cancellationContext = task || signal;
+        throwIfAskTaskCancelled(cancellationContext);
         console.log('[AskPage] Gemini context mode:', pageConversationContext.contextMode);
         console.log('[AskPage] Conversation history messages:', conversationHistory.length);
         let previousToolSummary = '';
         const maxOutputTokens = getGeminiMaxOutputTokens(selectedModel);
         let emptyResponseRetryCount = 0;
         const reportStatus = (status) => {
+            throwIfAskTaskCancelled(cancellationContext);
             onStatusUpdate(status);
             onTrace({ type: 'status', text: status });
         };
@@ -11137,6 +11392,7 @@ async function createDialog() {
             : buildGeminiConversationContents();
 
         for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round++) {
+            throwIfAskTaskCancelled(cancellationContext);
             const roundPrefix = previousToolSummary ? `${previousToolSummary}，` : '';
             reportStatus(formatRoundStatus(
                 round,
@@ -11199,7 +11455,8 @@ async function createDialog() {
                     onRetry: handleRetry,
                     onAnswerDelta,
                     onReasoningDelta,
-                    providerLabel
+                    providerLabel,
+                    signal
                 })
                 : await fetchJsonWithRetry({
                     providerLabel,
@@ -11210,8 +11467,10 @@ async function createDialog() {
                         body: JSON.stringify(requestBody)
                     },
                     buildHttpError: buildGeminiHttpError,
-                    onRetry: handleRetry
+                    onRetry: handleRetry,
+                    signal
                 });
+            throwIfAskTaskCancelled(cancellationContext);
             logGeminiUsageMetadata(responseData);
             onTrace({ type: 'usage', round, usage: responseData?.usageMetadata || null });
             const responseCandidate = getGeminiPrimaryCandidate(responseData);
@@ -11272,8 +11531,14 @@ async function createDialog() {
                     tool: formatToolDisplayName(toolStatus.name),
                     index: toolStatus.index,
                     total: toolStatus.total
-                })))
+                }))),
+                {
+                    ...toolContext,
+                    signal,
+                    task
+                }
             );
+            throwIfAskTaskCancelled(cancellationContext);
 
             previousToolSummary = buildToolExecutionSummary(toolResults);
             const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
@@ -11298,12 +11563,14 @@ async function createDialog() {
         throw new Error(getLocalizedText('toolCallLimitExceeded'));
     }
 
-    async function askGemini(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
+    async function askGemini(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = [], taskContext = null) {
         console.log('[AskPage] ===== GEMINI API CALL STARTED =====');
         console.log('[AskPage] Question:', question);
         console.log('[AskPage] Captured selected text length:', capturedSelectedText ? capturedSelectedText.length : 0);
+        throwIfAskTaskCancelled(taskContext);
 
         const activeConfig = await getActiveProviderConfig();
+        throwIfAskTaskCancelled(taskContext);
         const encryptedApiKey = activeConfig?.apiKey || '';
         const selectedModel = activeConfig?.activeModel || 'gemini-flash-lite-latest';
         const providerLabel = getProviderDisplayName(activeConfig);
@@ -11318,6 +11585,7 @@ async function createDialog() {
         }
 
         const apiKey = await decryptApiKey(encryptedApiKey);
+        throwIfAskTaskCancelled(taskContext);
         console.log('[AskPage] Decrypted API key available:', apiKey ? 'Yes' : 'No');
         console.log('[AskPage] API key preview:', maskApiKey(apiKey));
 
@@ -11349,9 +11617,12 @@ async function createDialog() {
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
                 onAnswerDelta: streamedAnswer ? (delta) => streamedAnswer.append(delta) : () => {},
                 onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta }),
-                providerLabel
+                providerLabel,
+                signal: taskContext?.signal,
+                task: taskContext
             });
 
+            throwIfAskTaskCancelled(taskContext);
             if (streamedAnswer) {
                 streamedAnswer.finalize(answer);
             } else {
@@ -11364,6 +11635,15 @@ async function createDialog() {
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
+            if (isAskTaskCancellationError(error)) {
+                if (streamedAnswer) {
+                    streamedAnswer.discard();
+                }
+                if (canUpdateAskTaskUi(taskContext)) {
+                    traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats()));
+                }
+                return;
+            }
             if (!isExpectedNonDisplayableTextError(error)) {
                 console.error('[AskPage] Gemini API call failed:', error);
             }
@@ -11378,9 +11658,11 @@ async function createDialog() {
         }
     }
 
-    async function askOpenAI(capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
+    async function askOpenAI(capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = [], taskContext = null) {
         console.log('[AskPage] ===== OPENAI API CALL STARTED =====');
+        throwIfAskTaskCancelled(taskContext);
         const activeConfig = await getActiveProviderConfig();
+        throwIfAskTaskCancelled(taskContext);
         const encryptedApiKey = activeConfig?.apiKey || '';
         const selectedModel = activeConfig?.activeModel || 'gpt-4o-mini';
         const providerLabel = getProviderDisplayName(activeConfig);
@@ -11392,6 +11674,7 @@ async function createDialog() {
         }
 
         const apiKey = await decryptApiKey(encryptedApiKey);
+        throwIfAskTaskCancelled(taskContext);
         if (!apiKey) {
             appendErrorMessageAndStore(getLocalizedText('providerApiKeyDecryptFailed', { provider: providerLabel }));
             return;
@@ -11406,6 +11689,7 @@ async function createDialog() {
             includeScreenshot: Boolean(screenshotDataUrl),
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
+        throwIfAskTaskCancelled(taskContext);
         const promptCacheKey = agentModeEnabled ? '' : getInquiryPromptCacheKey();
         const streamingEnabled = isStreamingSupported('openai', selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
@@ -11420,6 +11704,8 @@ async function createDialog() {
                 providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
                 initialUseTools: agentModeEnabled,
+                signal: taskContext?.signal,
+                task: taskContext,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
                 buildRequestBody: (messages, useTools, maxOutputTokens) => {
@@ -11498,7 +11784,8 @@ async function createDialog() {
                             buildHttpError,
                             onRetry,
                             onAnswerDelta: streamHandlers.onAnswerDelta,
-                            onReasoningDelta: streamHandlers.onReasoningDelta
+                            onReasoningDelta: streamHandlers.onReasoningDelta,
+                            signal: taskContext?.signal
                         };
                         return useResponsesApi
                             ? await fetchResponsesApiStream(streamOptions)
@@ -11515,7 +11802,8 @@ async function createDialog() {
                         },
                         buildHttpError,
                         onRetry,
-                        transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined
+                        transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined,
+                        signal: taskContext?.signal
                     });
                 },
                 onStatusUpdate: handleStatusUpdate,
@@ -11524,6 +11812,7 @@ async function createDialog() {
                 onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta })
             });
 
+            throwIfAskTaskCancelled(taskContext);
             if (streamedAnswer) {
                 streamedAnswer.finalize(answer.answer);
             } else {
@@ -11536,6 +11825,15 @@ async function createDialog() {
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
+            if (isAskTaskCancellationError(error)) {
+                if (streamedAnswer) {
+                    streamedAnswer.discard();
+                }
+                if (canUpdateAskTaskUi(taskContext)) {
+                    traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats()));
+                }
+                return;
+            }
             if (!isExpectedNonDisplayableTextError(error)) {
                 console.error('[AskPage] OpenAI API call failed:', error);
             }
@@ -11550,9 +11848,11 @@ async function createDialog() {
         }
     }
 
-    async function askAzureOpenAI(capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
+    async function askAzureOpenAI(capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = [], taskContext = null) {
         console.log('[AskPage] ===== AZURE OPENAI API CALL STARTED =====');
+        throwIfAskTaskCancelled(taskContext);
         const activeConfig = await getActiveProviderConfig();
+        throwIfAskTaskCancelled(taskContext);
         const encryptedApiKey = activeConfig?.apiKey || '';
         const endpoint = activeConfig?.azureEndpoint || '';
         const deployment = activeConfig?.azureDeployment || '';
@@ -11576,6 +11876,7 @@ async function createDialog() {
         }
 
         const apiKey = await decryptApiKey(encryptedApiKey);
+        throwIfAskTaskCancelled(taskContext);
         if (!apiKey) {
             appendErrorMessageAndStore(getLocalizedText('providerApiKeyDecryptFailed', { provider: providerLabel }));
             return;
@@ -11590,6 +11891,7 @@ async function createDialog() {
             includeScreenshot: Boolean(screenshotDataUrl),
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
+        throwIfAskTaskCancelled(taskContext);
         const streamingEnabled = isStreamingSupported('azure', deployment);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const isReasoning = Boolean(getReasoningCapability('azure', deployment));
@@ -11608,6 +11910,8 @@ async function createDialog() {
                 providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
                 initialUseTools: agentModeEnabled,
+                signal: taskContext?.signal,
+                task: taskContext,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
                 buildRequestBody: (messages, useTools, maxOutputTokens) => {
@@ -11676,7 +11980,8 @@ async function createDialog() {
                             buildHttpError,
                             onRetry,
                             onAnswerDelta: streamHandlers.onAnswerDelta,
-                            onReasoningDelta: streamHandlers.onReasoningDelta
+                            onReasoningDelta: streamHandlers.onReasoningDelta,
+                            signal: taskContext?.signal
                         };
                         return useResponsesApi
                             ? await fetchResponsesApiStream(streamOptions)
@@ -11693,7 +11998,8 @@ async function createDialog() {
                         },
                         buildHttpError,
                         onRetry,
-                        transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined
+                        transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined,
+                        signal: taskContext?.signal
                     });
                 },
                 onStatusUpdate: handleStatusUpdate,
@@ -11702,6 +12008,7 @@ async function createDialog() {
                 onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta })
             });
 
+            throwIfAskTaskCancelled(taskContext);
             if (streamedAnswer) {
                 streamedAnswer.finalize(answer.answer);
             } else {
@@ -11714,6 +12021,15 @@ async function createDialog() {
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
+            if (isAskTaskCancellationError(error)) {
+                if (streamedAnswer) {
+                    streamedAnswer.discard();
+                }
+                if (canUpdateAskTaskUi(taskContext)) {
+                    traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats()));
+                }
+                return;
+            }
             if (!isExpectedNonDisplayableTextError(error)) {
                 console.error('[AskPage] Azure OpenAI API call failed:', error);
             }
@@ -11728,8 +12044,9 @@ async function createDialog() {
         }
     }
 
-    async function askOpenAICompatible(capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
+    async function askOpenAICompatible(capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = [], taskContext = null) {
         const activeConfig = await getActiveProviderConfig();
+        throwIfAskTaskCancelled(taskContext);
         const providerType = activeConfig?.type || 'openai-compatible';
         const providerLabel = getProviderDisplayName(activeConfig);
 
@@ -11762,6 +12079,7 @@ async function createDialog() {
         if (encryptedApiKey) {
             apiKey = await decryptApiKey(encryptedApiKey);
         }
+        throwIfAskTaskCancelled(taskContext);
         const providerFetch = providerType === 'ollama-cloud'
             ? createOllamaCloudServiceWorkerFetch(apiKey)
             : fetch;
@@ -11775,6 +12093,7 @@ async function createDialog() {
             includeScreenshot: Boolean(screenshotDataUrl),
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
+        throwIfAskTaskCancelled(taskContext);
         const streamingEnabled = isStreamingSupported(providerType, selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const cleanEndpoint = endpoint.replace(/\/$/, '');
@@ -11796,11 +12115,15 @@ async function createDialog() {
                 providerLabel: providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
                 initialUseTools: agentModeEnabled || webSearchEnabled,
+                signal: taskContext?.signal,
+                task: taskContext,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
                 toolContext: {
                     webSearch: {
-                        fetchImpl: providerFetch
+                        fetchImpl: providerFetch,
+                        signal: taskContext?.signal,
+                        task: taskContext
                     }
                 },
                 buildRequestBody: (messages, useTools, maxOutputTokens) => {
@@ -11863,7 +12186,8 @@ async function createDialog() {
                             onRetry,
                             onAnswerDelta: streamHandlers.onAnswerDelta,
                             onReasoningDelta: streamHandlers.onReasoningDelta,
-                            fetchImpl: providerFetch
+                            fetchImpl: providerFetch,
+                            signal: taskContext?.signal
                         };
                         return useResponsesApi
                             ? await fetchResponsesApiStream(streamOptions)
@@ -11881,7 +12205,8 @@ async function createDialog() {
                         buildHttpError,
                         onRetry,
                         transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined,
-                        fetchImpl: providerFetch
+                        fetchImpl: providerFetch,
+                        signal: taskContext?.signal
                     });
                 },
                 allowToolFallback: !isGpt56FamilyModel(selectedModel),
@@ -11891,6 +12216,7 @@ async function createDialog() {
                 onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta })
             });
 
+            throwIfAskTaskCancelled(taskContext);
             const finalAnswer = answer.fallbackUsed
                 ? getLocalizedText('endpointToolFallbackMessage', {
                     provider: providerLabel,
@@ -11909,6 +12235,15 @@ async function createDialog() {
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
+            if (isAskTaskCancellationError(error)) {
+                if (streamedAnswer) {
+                    streamedAnswer.discard();
+                }
+                if (canUpdateAskTaskUi(taskContext)) {
+                    traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats()));
+                }
+                return;
+            }
             if (!isExpectedNonDisplayableTextError(error)) {
                 console.error(`[AskPage] ${providerLabel} API call failed:`, error);
             }
@@ -11963,7 +12298,8 @@ async function createDialog() {
         onRetry,
         onAnswerDelta = () => {},
         fetchImpl = fetch,
-        providerLabel = 'Anthropic'
+        providerLabel = 'Anthropic',
+        signal = null
     }) {
         let answerText = '';
         let responseId = '';
@@ -12007,7 +12343,8 @@ async function createDialog() {
                     answerText += textDelta;
                     onAnswerDelta(textDelta);
                 }
-            }
+            },
+            signal
         });
 
         return {
@@ -12018,9 +12355,11 @@ async function createDialog() {
         };
     }
 
-    async function askAnthropic(capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
+    async function askAnthropic(capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = [], taskContext = null) {
         console.log('[AskPage] ===== ANTHROPIC API CALL STARTED =====');
+        throwIfAskTaskCancelled(taskContext);
         const activeConfig = await getActiveProviderConfig();
+        throwIfAskTaskCancelled(taskContext);
         const encryptedApiKey = activeConfig?.apiKey || '';
         const selectedModel = activeConfig?.activeModel || 'claude-3-5-sonnet-latest';
         const providerLabel = getProviderDisplayName(activeConfig);
@@ -12032,6 +12371,7 @@ async function createDialog() {
         }
 
         const apiKey = await decryptApiKey(encryptedApiKey);
+        throwIfAskTaskCancelled(taskContext);
         if (!apiKey) {
             appendErrorMessageAndStore(getLocalizedText('providerApiKeyDecryptFailed', { provider: providerLabel }));
             return;
@@ -12047,6 +12387,7 @@ async function createDialog() {
             includeScreenshot: Boolean(screenshotDataUrl),
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
+        throwIfAskTaskCancelled(taskContext);
         const streamingEnabled = isStreamingSupported('anthropic', selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
 
@@ -12136,7 +12477,8 @@ async function createDialog() {
                         }
                     },
                     fetchImpl: providerFetch,
-                    providerLabel
+                    providerLabel,
+                    signal: taskContext?.signal
                 });
                 traceReporter.reportUsage(providerLabel, streamResult.usage);
                 finalAnswer = agentModeEnabled
@@ -12164,12 +12506,14 @@ async function createDialog() {
                             maxRetries: retryInfo.maxRetries
                         })
                     ),
-                    fetchImpl: providerFetch
+                    fetchImpl: providerFetch,
+                    signal: taskContext?.signal
                 });
                 traceReporter.reportUsage(providerLabel, response.usage);
                 finalAnswer = response.content?.map(block => block.text).join('') || '';
             }
 
+            throwIfAskTaskCancelled(taskContext);
             if (streamedAnswer) {
                 streamedAnswer.finalize(finalAnswer);
             } else {
@@ -12182,6 +12526,15 @@ async function createDialog() {
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
         } catch (error) {
+            if (isAskTaskCancellationError(error)) {
+                if (streamedAnswer) {
+                    streamedAnswer.discard();
+                }
+                if (canUpdateAskTaskUi(taskContext)) {
+                    traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats()));
+                }
+                return;
+            }
             if (!isExpectedNonDisplayableTextError(error)) {
                 console.error('[AskPage] Anthropic API call failed:', error);
             }
@@ -12196,8 +12549,10 @@ async function createDialog() {
         }
     }
 
-    async function askAI(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = []) {
+    async function askAI(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = [], taskContext = null) {
+        throwIfAskTaskCancelled(taskContext);
         const activeConfig = await getActiveProviderConfig();
+        throwIfAskTaskCancelled(taskContext);
         if (!activeConfig) {
             appendErrorMessageAndStore(getLocalizedText('providerMissing'));
             return;
@@ -12217,15 +12572,15 @@ async function createDialog() {
 
         try {
             if (activeConfig.type === 'openai') {
-                await askOpenAI(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+                await askOpenAI(capturedSelectedText, screenshotDataUrl, inputImageDataUrls, taskContext);
             } else if (activeConfig.type === 'azure') {
-                await askAzureOpenAI(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+                await askAzureOpenAI(capturedSelectedText, screenshotDataUrl, inputImageDataUrls, taskContext);
             } else if (activeConfig.type === 'anthropic') {
-                await askAnthropic(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+                await askAnthropic(capturedSelectedText, screenshotDataUrl, inputImageDataUrls, taskContext);
             } else if (['openai-compatible', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama', 'ollama-cloud'].includes(activeConfig.type)) {
-                await askOpenAICompatible(capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+                await askOpenAICompatible(capturedSelectedText, screenshotDataUrl, inputImageDataUrls, taskContext);
             } else {
-                await askGemini(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls);
+                await askGemini(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls, taskContext);
             }
         } finally {
             if (shouldShowAgentGlow) {

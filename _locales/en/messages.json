@@ -220,6 +220,7 @@
     "switchProviderModelWithReasoning": { "message": "Switch AI provider and model; hover to adjust reasoning effort" },
     "openOptionsFailedMessage": { "message": "❌ **Could not open options**\n\nPlease try again later." },
     "submitQuestion": { "message": "Submit question" },
+    "stopTask": { "message": "Stop all current tasks" },
     "disableScreenshot": { "message": "Disable screenshot mode" },
     "enableScreenshot": { "message": "Enable screenshot mode" },
     "switchToInquiryMode": { "message": "Switch to inquiry mode (content questions only)" },

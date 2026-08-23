@@ -220,6 +220,7 @@
     "switchProviderModelWithReasoning": { "message": "切換 AI 提供者與模型；滑鼠停留可調整推理強度" },
     "openOptionsFailedMessage": { "message": "❌ **無法開啟選項畫面**\n\n請稍後再試一次。" },
     "submitQuestion": { "message": "送出提問" },
+    "stopTask": { "message": "終止目前所有任務" },
     "disableScreenshot": { "message": "停用截圖功能" },
     "enableScreenshot": { "message": "啟用截圖功能" },
     "switchToInquiryMode": { "message": "切換為詢問模式（只做內容問答）" },

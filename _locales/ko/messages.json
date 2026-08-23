@@ -220,6 +220,7 @@
     "switchProviderModelWithReasoning": { "message": "AI 제공자와 모델 전환; 마우스를 올려 추론 강도 조정" },
     "openOptionsFailedMessage": { "message": "❌ **옵션을 열 수 없습니다**\n\n나중에 다시 시도하세요." },
     "submitQuestion": { "message": "질문 보내기" },
+    "stopTask": { "message": "현재 실행 중인 모든 작업 중지" },
     "disableScreenshot": { "message": "스크린샷 모드 끄기" },
     "enableScreenshot": { "message": "스크린샷 모드 켜기" },
     "switchToInquiryMode": { "message": "질문 모드로 전환(내용 질문만 처리)" },

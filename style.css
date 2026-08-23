@@ -1935,9 +1935,11 @@
 }
 
 #gemini-qna-btn {
-  min-width: 54px;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
   min-height: 48px;
-  padding: 0 18px;
+  padding: 0;
   border: 1px solid rgba(107, 181, 255, 0.88);
   border-radius: 18px;
   background:
@@ -1946,6 +1948,9 @@
   color: #ffffff;
   font-size: 18px;
   font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: 0 12px 28px rgba(0, 104, 240, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.32);
   transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
 }
@@ -1954,6 +1959,31 @@
   transform: translateY(-1px);
   filter: saturate(1.1) brightness(1.05);
   box-shadow: 0 16px 34px rgba(0, 104, 240, 0.42), 0 0 26px rgba(0, 132, 255, 0.3);
+}
+
+#gemini-qna-btn.askpage-submit-stop {
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  border-color: rgba(255, 143, 143, 0.96);
+  background:
+    radial-gradient(circle at 35% 20%, rgba(255, 255, 255, 0.34), transparent 24%),
+    linear-gradient(145deg, #ef4444, #b91c1c);
+  box-shadow: 0 12px 28px rgba(185, 28, 28, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+#gemini-qna-btn.askpage-submit-stop::before {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  background: #ffffff;
+  content: '';
+}
+
+#gemini-qna-btn.askpage-submit-stop:hover {
+  filter: saturate(1.08) brightness(1.06);
+  box-shadow: 0 16px 34px rgba(185, 28, 28, 0.52), 0 0 26px rgba(239, 68, 68, 0.34);
 }
 
 #askpage-input-image-strip {
