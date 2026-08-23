@@ -10,6 +10,13 @@
 
 （目前暫無未發佈變更）
 
+## [0.43.0] - 2026-08-24
+
+### 新增 / 改進（v0.43.0）
+
+- **Ollama Cloud Web Search 工具整合**：Ollama Cloud 提供者設定新增「啟用 Web search 工具」選項；啟用後，模型可透過 `web_search` function tool 查詢最新網路資訊，並將搜尋結果的標題、網址與內容摘要納入後續回答。支援一般詢問模式、代理模式、Chat Completions、Responses API 與串流工具呼叫；搜尋使用既有 Ollama Cloud API Key，`max_results` 預設為 5、上限為 10。
+- **Ollama Web Search 文件與測試補充**：新增官方 API 整合研究文件、工具清單說明、多語系設定文字與 Ollama Cloud provider 靜態測試；Web Search 採固定 Service Worker API 端點代理，未整合 `web_fetch`。
+
 ## [0.42.5] - 2026-08-19
 
 ### 新增 / 改進（v0.42.5）
