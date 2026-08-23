@@ -279,13 +279,12 @@ assert.strictEqual(getReasoningCapability('openrouter', 'deepseek/deepseek-v4-pr
 // Ollama Cloud DeepSeek V4 models expose explicit Off, High and Max modes.
 assert.deepStrictEqual(Array.from(OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY.options), ['none', 'high', 'max']);
 assert.strictEqual(OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY.defaultValue, 'max');
-assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-flash:0731-cloud'), ['none', 'high', 'max']);
-assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-flash'), ['none', 'high', 'max']);
-assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-pro'), ['none', 'high', 'max']);
+assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-flash:0731'), ['none', 'high', 'max']);
+assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-pro:0813'), ['none', 'high', 'max']);
 assert.strictEqual(getReasoningCapability('ollama-cloud', 'deepseek-v3.1:cloud'), null);
 assert.strictEqual(getReasoningCapability('ollama', 'deepseek-v4-flash:cloud'), null);
 assert.strictEqual(
-    normalizeReasoningValue(getReasoningCapability('ollama-cloud', 'deepseek-v4-pro'), 'low'),
+    normalizeReasoningValue(getReasoningCapability('ollama-cloud', 'deepseek-v4-pro:0813'), 'low'),
     'max'
 );
 
@@ -379,14 +378,14 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(openAIOffBody)), {
     model: 'gpt-5.4',
     reasoning_effort: 'none'
 });
-const ollamaCloudChatBody = applyOpenAIReasoningEffort({ model: 'deepseek-v4-flash:0731-cloud' }, 'max', false);
+const ollamaCloudChatBody = applyOpenAIReasoningEffort({ model: 'deepseek-v4-flash:0731' }, 'max', false);
 assert.deepStrictEqual(JSON.parse(JSON.stringify(ollamaCloudChatBody)), {
-    model: 'deepseek-v4-flash:0731-cloud',
+    model: 'deepseek-v4-flash:0731',
     reasoning_effort: 'max'
 });
-const ollamaCloudOffBody = applyOpenAIReasoningEffort({ model: 'deepseek-v4-flash:0731-cloud' }, 'none', false);
+const ollamaCloudOffBody = applyOpenAIReasoningEffort({ model: 'deepseek-v4-flash:0731' }, 'none', false);
 assert.deepStrictEqual(JSON.parse(JSON.stringify(ollamaCloudOffBody)), {
-    model: 'deepseek-v4-flash:0731-cloud',
+    model: 'deepseek-v4-flash:0731',
     reasoning_effort: 'none'
 });
 const ollamaCloudGlmOffBody = applyOpenAIReasoningEffort({ model: 'glm-5.2' }, 'none', false);
