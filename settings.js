@@ -177,6 +177,7 @@ let modalAnthropicApiKey, modalDeepseekApiKey, modalOpenrouterApiKey, modalGroqA
 let modalOllamaEndpoint, modalOllamaModel;
 let modalGeminiModelsList, modalOpenaiModelsList;
 let modalGeminiGoogleSearch, modalGeminiGoogleSearchWarning;
+let modalOllamaCloudWebSearch;
 let modalAnthropicModelsList, modalDeepseekModelsList, modalOpenrouterModelsList, modalGroqModelsList, modalMistralModelsList, modalOllamaCloudModelsList;
 let currentEditingProvider = null;
 let providers = [];
@@ -346,6 +347,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalGeminiModelsList = document.getElementById('modalGeminiModelsList');
     modalGeminiGoogleSearch = document.getElementById('modalGeminiGoogleSearch');
     modalGeminiGoogleSearchWarning = document.getElementById('modalGeminiGoogleSearchWarning');
+    modalOllamaCloudWebSearch = document.getElementById('modalOllamaCloudWebSearch');
     modalOpenaiModelsList = document.getElementById('modalOpenaiModelsList');
     modalAnthropicModelsList = document.getElementById('modalAnthropicModelsList');
     modalDeepseekModelsList = document.getElementById('modalDeepseekModelsList');
@@ -1260,6 +1262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalGeminiApiKey.value = '';
         modalGeminiGoogleSearch.checked = false;
         modalGeminiGoogleSearchWarning.hidden = true;
+        modalOllamaCloudWebSearch.checked = false;
         modalOpenaiApiKey.value = '';
         modalAzureApiKey.value = '';
         modalAzureEndpoint.value = '';
@@ -1359,6 +1362,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (provider.type === 'ollama-cloud') {
                 modalOllamaCloudApiKey.value = decryptedKey;
                 renderModalModelsList(modalOllamaCloudModelsList, combinedModels, configuredModels);
+                modalOllamaCloudWebSearch.checked = !!provider.webSearchEnabled;
             }
         } else {
             providerModalTitle.textContent = t('addProviderTitle');
@@ -1627,6 +1631,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
             providerData.models = selectedModels;
+            providerData.webSearchEnabled = modalOllamaCloudWebSearch.checked;
         }
 
         if (apiKeyRaw) {

@@ -41,20 +41,32 @@ assert.strictEqual(new Set(actualModels).size, actualModels.length);
 assert.match(settingsHtml, /<option value="ollama-cloud"[^>]*data-i18n="providerOllamaCloud"[^>]*>Ollama Cloud<\/option>/);
 assert.match(settingsHtml, /id="modalOllamaCloudApiKey"/);
 assert.match(settingsHtml, /id="modalOllamaCloudModelsList"/);
+assert.match(settingsHtml, /id="modalOllamaCloudWebSearch"/);
+assert.match(settingsHtml, /https:\/\/docs\.ollama\.com\/capabilities\/web-search/);
 assert.match(settingsHtml, /data-provider-type="ollama-cloud" data-action="fetch-models"/);
 
 assert.match(settingsScript, /url = 'https:\/\/ollama\.com\/v1\/models';/);
 assert.match(settingsScript, /headers\['Authorization'\] = `Bearer \$\{apiKey\}`;/);
+assert.match(settingsScript, /modalOllamaCloudWebSearch\.checked = !!provider\.webSearchEnabled/);
+assert.match(settingsScript, /providerData\.webSearchEnabled = modalOllamaCloudWebSearch\.checked/);
 assert.match(contentScript, /providerType === 'ollama-cloud'/);
 assert.match(contentScript, /endpoint = 'https:\/\/ollama\.com\/v1';/);
 assert.match(contentScript, /'ollama-cloud'\]\.includes\(activeConfig\.type\)/);
 assert.match(contentScript, /chrome\.runtime\.connect\(\{ name: LLM_API_FETCH_PORT \}\)/);
 assert.match(contentScript, /createOllamaCloudServiceWorkerFetch\(apiKey\)/);
+assert.match(contentScript, /name: 'web_search'/);
+assert.match(contentScript, /required: \['query'\]/);
+assert.match(contentScript, /const OLLAMA_CLOUD_WEB_SEARCH_ENDPOINT = 'api\/web_search';/);
+assert.match(contentScript, /\$\{OLLAMA_CLOUD_API_ORIGIN\}\/\$\{OLLAMA_CLOUD_WEB_SEARCH_ENDPOINT\}/);
+assert.match(contentScript, /includeWebSearch: webSearchEnabled/);
 assert.match(contentScript, /fetchImpl: providerFetch/);
 
 assert.match(backgroundScript, /chrome\.runtime\.onConnect\.addListener/);
 assert.match(backgroundScript, /const OLLAMA_CLOUD_API_BASE_URL = 'https:\/\/ollama\.com\/v1';/);
-assert.match(backgroundScript, /new Set\(\['chat\/completions', 'responses'\]\)/);
+assert.match(backgroundScript, /const OLLAMA_CLOUD_WEB_SEARCH_ENDPOINT = 'api\/web_search';/);
+assert.match(backgroundScript, /const OLLAMA_CLOUD_WEB_SEARCH_URL = 'https:\/\/ollama\.com\/api\/web_search';/);
+assert.match(backgroundScript, /OLLAMA_CLOUD_ALLOWED_ENDPOINTS = new Set\(\[/);
+assert.match(backgroundScript, /getServiceWorkerRequestUrl\(providerType, endpoint\)/);
 assert.match(backgroundScript, /'Authorization':\s*'Bearer ' \+ apiKey/);
 
 console.log('ollama-cloud-provider: ok');

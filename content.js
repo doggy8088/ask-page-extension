@@ -117,7 +117,14 @@ const CODEPEN_PREFILL_ENDPOINT = 'https://codepen.io/cpe/pen/define/';
 // 保留既有 Ollama Cloud 通道名稱，讓舊版內容腳本可與新版背景服務工作者相容。
 const LLM_API_FETCH_PORT = 'ollama-cloud-fetch';
 const OLLAMA_CLOUD_API_ORIGIN = 'https://ollama.com';
-const OLLAMA_CLOUD_ALLOWED_ENDPOINTS = new Set(['chat/completions', 'responses']);
+const OLLAMA_CLOUD_WEB_SEARCH_ENDPOINT = 'api/web_search';
+const OLLAMA_CLOUD_WEB_SEARCH_DEFAULT_MAX_RESULTS = 5;
+const OLLAMA_CLOUD_WEB_SEARCH_MAX_RESULTS = 10;
+const OLLAMA_CLOUD_ALLOWED_ENDPOINTS = new Set([
+    'chat/completions',
+    'responses',
+    OLLAMA_CLOUD_WEB_SEARCH_ENDPOINT
+]);
 const ANTHROPIC_API_ORIGIN = 'https://api.anthropic.com';
 const ANTHROPIC_ALLOWED_ENDPOINTS = new Set(['messages']);
 const DIALOG_HOST_ISOLATION_STYLES = [
@@ -9354,6 +9361,29 @@ async function createDialog() {
         });
     }
 
+    function getWebSearchToolDefinition() {
+        return {
+            name: 'web_search',
+            description: '搜尋網路上的最新資訊，回傳相關網頁標題、網址與內容摘要。需要最新或目前網路資訊時使用。',
+            parameters: {
+                type: 'object',
+                properties: {
+                    query: {
+                        type: 'string',
+                        description: '要搜尋的網路查詢字串。'
+                    },
+                    max_results: {
+                        type: 'integer',
+                        minimum: 1,
+                        maximum: OLLAMA_CLOUD_WEB_SEARCH_MAX_RESULTS,
+                        description: '最多回傳幾筆結果，預設 5，最多 10。'
+                    }
+                },
+                required: ['query']
+            }
+        };
+    }
+
     function getToolDefinitions() {
         return [
             {
@@ -9442,7 +9472,72 @@ async function createDialog() {
         ];
     }
 
-    async function executeToolCall({ id = '', name = '', args = {} }) {
+    function normalizeOllamaCloudWebSearchMaxResults(value) {
+        if (!Number.isFinite(Number(value))) {
+            return OLLAMA_CLOUD_WEB_SEARCH_DEFAULT_MAX_RESULTS;
+        }
+
+        return Math.max(1, Math.min(
+            OLLAMA_CLOUD_WEB_SEARCH_MAX_RESULTS,
+            Math.floor(Number(value))
+        ));
+    }
+
+    async function executeOllamaCloudWebSearch(toolArgs, webSearchContext = {}) {
+        const query = String(toolArgs.query || '').trim();
+        if (!query) {
+            return createToolResult(false, 'query 參數不可為空。');
+        }
+
+        if (typeof webSearchContext.fetchImpl !== 'function') {
+            return createToolResult(false, 'Ollama Cloud Web Search 尚未完成設定。');
+        }
+
+        const maxResults = normalizeOllamaCloudWebSearchMaxResults(toolArgs.max_results);
+        const responseData = await fetchJsonWithRetry({
+            providerLabel: 'Ollama Cloud Web Search',
+            url: `${OLLAMA_CLOUD_API_ORIGIN}/${OLLAMA_CLOUD_WEB_SEARCH_ENDPOINT}`,
+            options: {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query,
+                    max_results: maxResults
+                })
+            },
+            buildHttpError: (response, errorBody) => createHttpError(
+                response.status,
+                response.statusText,
+                errorBody,
+                undefined,
+                { retryAfterMs: getRetryAfterMilliseconds(response) }
+            ),
+            fetchImpl: webSearchContext.fetchImpl
+        });
+
+        const results = Array.isArray(responseData?.results)
+            ? responseData.results
+                .map((result) => ({
+                    title: String(result?.title || '').trim(),
+                    url: String(result?.url || '').trim(),
+                    content: String(result?.content || '').trim()
+                }))
+                .filter((result) => result.title || result.url || result.content)
+                .slice(0, maxResults)
+            : null;
+
+        if (!results) {
+            throw new Error('Ollama Cloud Web Search 回應格式不正確。');
+        }
+
+        return createToolResult(
+            true,
+            results.length ? `已找到 ${results.length} 筆網路搜尋結果。` : '找不到符合條件的網路搜尋結果。',
+            { query, results }
+        );
+    }
+
+    async function executeToolCall({ id = '', name = '', args = {} }, toolContext = {}) {
         const toolArgs = args && typeof args === 'object' ? args : {};
         console.log('[AskPage] Executing tool:', name, toolArgs);
 
@@ -9457,6 +9552,14 @@ async function createDialog() {
         }
 
         try {
+            if (name === 'web_search') {
+                return {
+                    id,
+                    name,
+                    result: await executeOllamaCloudWebSearch(toolArgs, toolContext.webSearch)
+                };
+            }
+
             if (name === 'get_page_metadata') {
                 const metadata = collectPageMetadata();
                 return {
@@ -9706,8 +9809,16 @@ async function createDialog() {
         }
     }
 
-    function getOpenAIToolDefinitions() {
-        return getToolDefinitions().map((tool) => ({
+    function getToolDefinitionsForRequest({ includePageTools = true, includeWebSearch = false } = {}) {
+        const tools = includePageTools ? getToolDefinitions() : [];
+        if (includeWebSearch) {
+            tools.push(getWebSearchToolDefinition());
+        }
+        return tools;
+    }
+
+    function getOpenAIToolDefinitions(options = {}) {
+        return getToolDefinitionsForRequest(options).map((tool) => ({
             type: 'function',
             function: {
                 name: tool.name,
@@ -9717,8 +9828,8 @@ async function createDialog() {
         }));
     }
 
-    function getOpenAIResponsesToolDefinitions() {
-        return getToolDefinitions().map((tool) => ({
+    function getOpenAIResponsesToolDefinitions(options = {}) {
+        return getToolDefinitionsForRequest(options).map((tool) => ({
             type: 'function',
             name: tool.name,
             description: tool.description,
@@ -9759,7 +9870,7 @@ async function createDialog() {
         }
     }
 
-    async function executeToolCalls(toolCalls, onToolStatus = () => {}) {
+    async function executeToolCalls(toolCalls, onToolStatus = () => {}, toolContext = {}) {
         const results = [];
         for (const [index, toolCall] of toolCalls.entries()) {
             onToolStatus({
@@ -9767,7 +9878,7 @@ async function createDialog() {
                 index: index + 1,
                 total: toolCalls.length
             });
-            results.push(await executeToolCall(toolCall));
+            results.push(await executeToolCall(toolCall, toolContext));
         }
         return results;
     }
@@ -9889,7 +10000,7 @@ async function createDialog() {
         }
 
         if (options.useTools) {
-            requestBody.tools = getOpenAIResponsesToolDefinitions();
+            requestBody.tools = getOpenAIResponsesToolDefinitions(options.toolOptions);
         }
 
         if (options.reasoningEffort) {
@@ -10830,6 +10941,7 @@ async function createDialog() {
         initialMessages,
         buildRequestBody,
         sendRequest,
+        toolContext = {},
         allowToolFallback = false,
         initialUseTools = true,
         onStatusUpdate = () => {},
@@ -10956,7 +11068,8 @@ async function createDialog() {
                     tool: formatToolDisplayName(toolStatus.name),
                     index: toolStatus.index,
                     total: toolStatus.total
-                })))
+                }))),
+                toolContext
             );
 
             previousToolSummary = buildToolExecutionSummary(toolResults);
@@ -11671,15 +11784,25 @@ async function createDialog() {
             ? `${baseEndpoint}/responses`
             : (cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(selectedModel);
+        const webSearchEnabled = providerType === 'ollama-cloud' && !!activeConfig?.webSearchEnabled;
+        const toolOptions = {
+            includePageTools: agentModeEnabled,
+            includeWebSearch: webSearchEnabled
+        };
         console.log(`[AskPage] ${providerLabel} max output tokens:`, maxOutputTokens, 'model:', selectedModel || '(unspecified)', 'responses_api:', useResponsesApi, 'reasoning_effort:', reasoningEffort || 'default', 'streaming:', streamingEnabled);
 
         try {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
-                initialUseTools: agentModeEnabled,
+                initialUseTools: agentModeEnabled || webSearchEnabled,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
+                toolContext: {
+                    webSearch: {
+                        fetchImpl: providerFetch
+                    }
+                },
                 buildRequestBody: (messages, useTools, maxOutputTokens) => {
                     assertGpt56ChatCompletionsToolCompatibility(selectedModel, useResponsesApi, useTools);
 
@@ -11688,7 +11811,8 @@ async function createDialog() {
                             model: selectedModel,
                             maxOutputTokens,
                             useTools,
-                            reasoningEffort
+                            reasoningEffort,
+                            toolOptions
                         });
                     }
 
@@ -11703,7 +11827,7 @@ async function createDialog() {
                     }
 
                     if (useTools) {
-                        requestBody.tools = getOpenAIToolDefinitions();
+                        requestBody.tools = getOpenAIToolDefinitions(toolOptions);
                     }
 
                     if (providerType === 'deepseek') {

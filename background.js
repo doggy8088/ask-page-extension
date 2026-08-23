@@ -451,7 +451,13 @@ async function executeMainWorldJavaScript(tabId, code) {
 // 保留既有 Ollama Cloud 通道名稱，讓舊版內容腳本可與新版背景服務工作者相容。
 const LLM_API_FETCH_PORT = 'ollama-cloud-fetch';
 const OLLAMA_CLOUD_API_BASE_URL = 'https://ollama.com/v1';
-const OLLAMA_CLOUD_ALLOWED_ENDPOINTS = new Set(['chat/completions', 'responses']);
+const OLLAMA_CLOUD_WEB_SEARCH_ENDPOINT = 'api/web_search';
+const OLLAMA_CLOUD_WEB_SEARCH_URL = 'https://ollama.com/api/web_search';
+const OLLAMA_CLOUD_ALLOWED_ENDPOINTS = new Set([
+    'chat/completions',
+    'responses',
+    OLLAMA_CLOUD_WEB_SEARCH_ENDPOINT
+]);
 const ANTHROPIC_API_BASE_URL = 'https://api.anthropic.com/v1';
 const ANTHROPIC_ALLOWED_ENDPOINTS = new Set(['messages']);
 const SERVICE_WORKER_PROVIDER_CONFIG = {
@@ -524,6 +530,15 @@ function getServiceWorkerRequestHeaders(providerType, apiKey) {
     };
 }
 
+function getServiceWorkerRequestUrl(providerType, endpoint) {
+    if (providerType === 'ollama-cloud' && endpoint === OLLAMA_CLOUD_WEB_SEARCH_ENDPOINT) {
+        return OLLAMA_CLOUD_WEB_SEARCH_URL;
+    }
+
+    const providerConfig = getServiceWorkerProviderConfig(providerType);
+    return providerConfig.baseUrl + '/' + endpoint;
+}
+
 function postOllamaCloudProxyMessage(port, message) {
     try {
         port.postMessage(message);
@@ -571,8 +586,7 @@ chrome.runtime.onConnect.addListener((port) => {
                     proxyRequest = getServiceWorkerProxyRequest(message);
                 }
                 const { providerType, endpoint, apiKey, requestBody } = proxyRequest;
-                const providerConfig = getServiceWorkerProviderConfig(providerType);
-                const response = await fetch(providerConfig.baseUrl + '/' + endpoint, {
+                const response = await fetch(getServiceWorkerRequestUrl(providerType, endpoint), {
                     method: 'POST',
                     headers: getServiceWorkerRequestHeaders(providerType, apiKey),
                     body: JSON.stringify(requestBody),

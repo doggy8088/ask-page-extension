@@ -44,6 +44,22 @@ AskPage 也支援使用者在設定頁建立自訂斜線指令。每筆資料包
 
 > 注意：OpenAI Compatible 採 best-effort 模式，若端點不支援 tool calling，會自動退回一般文字模式。
 
+Ollama Cloud 另有可選的 `web_search` 工具。使用者在 Ollama Cloud provider 設定中啟用「Web search」後，模型可透過 function calling 搜尋網路；此工具呼叫的是 Ollama 的獨立 Web Search API，不是頁面操作工具。
+
+### 0. `web_search`
+
+- **用途**：搜尋網路上的最新資訊，回傳標題、網址與內容摘要
+- **適用 provider**：Ollama Cloud
+- **啟用方式**：在 Ollama Cloud provider 編輯畫面勾選「啟用 Web search 工具」
+- **參數**：
+
+| 參數 | 型別 | 說明 |
+| --- | --- | --- |
+| `query` | `string` | 必填的搜尋查詢字串 |
+| `max_results` | `integer` | 可選，範圍 1–10，預設 5 |
+
+此工具只回傳搜尋結果，不會自動使用 Ollama 的 `web_fetch` API。詳細 API 格式請參閱 [`docs/ollama-web-search.md`](ollama-web-search.md)。
+
 ### 1. `inspect_selection`
 
 - **用途**：取得目前選取範圍的文字與 HTML
