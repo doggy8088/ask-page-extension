@@ -837,7 +837,6 @@ function scrollActiveMessagesToBottom(fallbackMessagesEl) {
 }
 
 function closeActiveDialog() {
-    cancelActiveAskTask();
     if (typeof activeScreenAnnotationCancel === 'function') {
         activeScreenAnnotationCancel();
     }
@@ -5956,7 +5955,6 @@ async function createDialog() {
     });
 
     function closeDialog() {
-        cancelActiveAskTask();
         stopDialogDrag();
         hideIntelliBox();
         clearDialogDimTimer();

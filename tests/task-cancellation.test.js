@@ -17,6 +17,39 @@ assert.match(contentScript, /if \(activeAskTask\) \{[\s\S]*?cancelActiveAskTask\
 assert.match(contentScript, /await askAI\(question, activeSelectedText, screenshotDataUrl, inputImageDataUrls, task\);/);
 assert.match(contentScript, /function finishAskTask\(task\)[\s\S]*?activeAskTask !== task/);
 
+const closeActiveDialogStart = contentScript.indexOf('function closeActiveDialog()');
+const closeActiveDialogEnd = contentScript.indexOf('// Listen for the message from the background script', closeActiveDialogStart);
+assert.notStrictEqual(closeActiveDialogStart, -1);
+assert.notStrictEqual(closeActiveDialogEnd, -1);
+assert.doesNotMatch(
+    contentScript.slice(closeActiveDialogStart, closeActiveDialogEnd),
+    /cancelActiveAskTask\(\)/,
+    'closing the dialog must not cancel the active ask task'
+);
+
+const closeDialogStart = contentScript.indexOf('    function closeDialog() {');
+const closeDialogEnd = contentScript.indexOf(
+    '\n    if (activeDialogState && activeDialogState.host === host) {',
+    closeDialogStart
+);
+assert.notStrictEqual(closeDialogStart, -1);
+assert.notStrictEqual(closeDialogEnd, -1);
+assert.doesNotMatch(
+    contentScript.slice(closeDialogStart, closeDialogEnd),
+    /cancelActiveAskTask\(\)/,
+    'closing the dialog from the overlay must not cancel the active ask task'
+);
+
+const stopButtonHandlerStart = contentScript.indexOf("btn.addEventListener('click', () => {");
+const stopButtonHandlerEnd = contentScript.indexOf('\n    function renderAssistantMessageElement', stopButtonHandlerStart);
+assert.notStrictEqual(stopButtonHandlerStart, -1);
+assert.notStrictEqual(stopButtonHandlerEnd, -1);
+assert.match(
+    contentScript.slice(stopButtonHandlerStart, stopButtonHandlerEnd),
+    /if \(activeAskTask\) \{[\s\S]*?cancelActiveAskTask\(\);/,
+    'the STOP button must cancel the active ask task'
+);
+
 const fetchJsonSection = contentScript.slice(
     contentScript.indexOf('async function fetchJsonWithRetry'),
     contentScript.indexOf('async function readServerSentEvents')
