@@ -4833,8 +4833,11 @@ function clearConversationHistory() {
     clearInquiryConversationContext();
 }
 
-function requestOpenOptionsPage() {
-    return chrome.runtime.sendMessage({ action: 'open-options-page' });
+function requestOpenOptionsPage(targetTab = '') {
+    return chrome.runtime.sendMessage({
+        action: 'open-options-page',
+        tab: targetTab || undefined
+    });
 }
 
 /* --------------------------------------------------
@@ -5739,7 +5742,7 @@ async function createDialog() {
             })
             .join('');
         const customCommandSubtitle = hiddenCustomCommandCount > 0
-            ? `${escapeHtml(getLocalizedText('customCommand'))} (<button type="button" class="askpage-usage-more-link askpage-usage-count-link" data-askpage-open-options="true" title="${escapeHtml(getLocalizedText('openCustomCommands'))}" aria-label="${escapeHtml(getLocalizedText('openCustomCommands'))}">${hiddenCustomCommandCount + visibleCustomCommands.length}</button>)`
+            ? `${escapeHtml(getLocalizedText('customCommand'))} (<button type="button" class="askpage-usage-more-link askpage-usage-count-link" data-askpage-open-options="true" data-askpage-options-tab="commands" title="${escapeHtml(getLocalizedText('openCustomCommands'))}" aria-label="${escapeHtml(getLocalizedText('openCustomCommands'))}">${hiddenCustomCommandCount + visibleCustomCommands.length}</button>)`
             : escapeHtml(getLocalizedText('customCommand'));
         const customCommandItems = customCommands.length
             ? `
@@ -5847,7 +5850,7 @@ async function createDialog() {
                 event.preventDefault();
                 event.stopPropagation();
                 try {
-                    await requestOpenOptionsPage();
+                    await requestOpenOptionsPage(element.dataset.askpageOptionsTab || '');
                 } catch (error) {
                     console.error('[AskPage] Failed to open options page:', error);
                     appendMessage('assistant', getLocalizedText('openOptionsFailedMessage'));

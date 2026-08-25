@@ -190,6 +190,7 @@ const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE = 'CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
 const LAST_ACTIVE_TAB_STORAGE = 'LAST_ACTIVE_TAB';
+const PENDING_OPTIONS_TAB_STORAGE = 'PENDING_OPTIONS_TAB';
 const AGENT_GLOW_EFFECT_ENABLED_STORAGE = 'AGENT_GLOW_EFFECT_ENABLED';
 
 const CUSTOM_COMMAND_MODE_AGENT = 'agent';
@@ -436,6 +437,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Tab navigation
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabPanes = document.querySelectorAll('.tab-pane');
+
+    // 切換到指定頁籤，回傳是否成功切換
+    function activateTab(targetTab) {
+        if (!targetTab) {
+            return false;
+        }
+
+        const tabButton = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
+        if (!tabButton) {
+            return false;
+        }
+
+        tabButton.click();
+        return true;
+    }
+
+    // 取出外部要求的頁籤並立即清除，避免下次開啟時又被強制切換
+    function consumePendingOptionsTab(pendingTab) {
+        if (!pendingTab) {
+            return '';
+        }
+
+        chrome.storage.local.remove(PENDING_OPTIONS_TAB_STORAGE);
+        return pendingTab;
+    }
 
     // Handle tab switching
     tabButtons.forEach(button => {
@@ -1087,7 +1113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         'PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL',
         CUSTOM_SUMMARY_PROMPT_STORAGE, CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE,
         CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
-        LAST_ACTIVE_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE
+        LAST_ACTIVE_TAB_STORAGE, PENDING_OPTIONS_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE
     ], async (result) => {
         activeProviderId = result.ACTIVE_PROVIDER_ID || '';
         activeModel = result.ACTIVE_MODEL || '';
@@ -1126,14 +1152,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             agentGlowEffectEnabledCheckbox.checked = result[AGENT_GLOW_EFFECT_ENABLED_STORAGE] !== false;
         }
 
-        // Restore active tab
-        const lastActiveTab = result[LAST_ACTIVE_TAB_STORAGE];
-        if (lastActiveTab) {
-            const tabButton = document.querySelector(`.tab-btn[data-tab="${lastActiveTab}"]`);
-            if (tabButton) {
-                tabButton.click();
-            }
+        // 優先切換到呼叫端指定的頁籤，其次還原上次使用的頁籤
+        const pendingTab = consumePendingOptionsTab(result[PENDING_OPTIONS_TAB_STORAGE]);
+        if (!activateTab(pendingTab)) {
+            activateTab(result[LAST_ACTIVE_TAB_STORAGE]);
         }
+    });
+
+    // 偏好設定頁已開啟時，仍要能因為外部要求而切換頁籤
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName !== 'local' || !changes[PENDING_OPTIONS_TAB_STORAGE]) {
+            return;
+        }
+
+        const requestedTab = consumePendingOptionsTab(changes[PENDING_OPTIONS_TAB_STORAGE].newValue);
+        activateTab(requestedTab);
     });
 
     // Render providers list

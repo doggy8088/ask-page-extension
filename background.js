@@ -17,6 +17,21 @@ function logSendMessageError(prefix, error) {
 }
 
 const OPTIONS_SOURCE_TAB_STORAGE = 'OPTIONS_SOURCE_TAB';
+const PENDING_OPTIONS_TAB_STORAGE = 'PENDING_OPTIONS_TAB';
+const OPTIONS_TAB_IDS = ['provider', 'commands', 'system-prompt', 'general'];
+
+// 記錄開啟偏好設定時要直接切換到的頁籤，由 settings.js 讀取後清除
+async function rememberPendingOptionsTab(tabId) {
+    if (!tabId || !OPTIONS_TAB_IDS.includes(tabId)) {
+        return;
+    }
+
+    try {
+        await chrome.storage.local.set({ [PENDING_OPTIONS_TAB_STORAGE]: tabId });
+    } catch (error) {
+        console.warn('[AskPage] Failed to remember pending options tab:', error);
+    }
+}
 
 async function rememberOptionsSourceTab(tab) {
     if (!tab || typeof tab.id !== 'number') {
@@ -755,7 +770,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === 'open-options-page') {
-        rememberOptionsSourceTab(sender.tab).then(() => chrome.runtime.openOptionsPage()).then(() => {
+        Promise.all([
+            rememberOptionsSourceTab(sender.tab),
+            rememberPendingOptionsTab(request.tab)
+        ]).then(() => chrome.runtime.openOptionsPage()).then(() => {
             sendResponse({ success: true });
         }).catch((error) => {
             console.error('[AskPage] Failed to open Options page:', error);
