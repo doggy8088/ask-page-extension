@@ -6816,18 +6816,8 @@ async function createDialog() {
                     question = customCommand.prompt;
                     displayedQuestion = question;
                 // Continue with AI processing using the custom prompt
-                } else {
-                // Unknown command
-                    appendMessage('user', question);
-                    appendMessage('assistant', getLocalizedText('unknownCommandError', {
-                        command: question,
-                        commands: getLocalizedText('builtInCommandCopyText')
-                    }));
-                    clearInputContextImages();
-                    setInputValue('', { resetToSingleLine: true });
-                    input.focus();
-                    return;
                 }
+            // 找不到對應技能時不視為錯誤，直接把原始輸入當成一般提示詞送出，交由模型自行判斷語意
             }
 
             promptHistory.push(question);

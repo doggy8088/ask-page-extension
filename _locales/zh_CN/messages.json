@@ -282,7 +282,6 @@
     "selectedTextDetected": { "message": "已检测到选取文字" },
     "selectedTextIntro": { "message": "将以选取文字作为主要分析对象。$count$ 字符", "placeholders": { "count": { "content": "$1" } } },
     "summaryTemplateVariablesError": { "message": "❌ **/summary 提示内容包含 ${变量}，请输入 /summary 后按 Tab 展开并填写变量。**" },
-    "unknownCommandError": { "message": "❌ **未知技能：$command$**\n\n可用技能：\n$commands$\n\n您也可以在偏好设置中添加技能。", "placeholders": { "command": { "content": "$1" }, "commands": { "content": "$2" } } },
     "usageIntro": { "message": "直接提问当前页面，或先选取文字范围再提问。" },
     "usageTip": { "message": "使用提示" },
     "usageTipCopyText": { "message": "💡 **使用提示：**\n\n您可以直接提问关于此页面的问题，或先选取页面上的文字范围后再提问。$mode$\n\n$commands$", "placeholders": { "mode": { "content": "$1" }, "commands": { "content": "$2" } } },

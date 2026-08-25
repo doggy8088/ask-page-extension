@@ -282,7 +282,6 @@
     "selectedTextDetected": { "message": "選択テキストを検出" },
     "selectedTextIntro": { "message": "選択テキストを主な対象として分析します。$count$ 文字", "placeholders": { "count": { "content": "$1" } } },
     "summaryTemplateVariablesError": { "message": "❌ **/summary のプロンプトに ${変数} が含まれています。/summary 入力後に Tab で展開して入力してください。**" },
-    "unknownCommandError": { "message": "❌ **不明なスキル：$command$**\n\n使用できるスキル：\n$commands$\n\n環境設定でスキルを追加することもできます。", "placeholders": { "command": { "content": "$1" }, "commands": { "content": "$2" } } },
     "usageIntro": { "message": "現在のページについて直接質問するか、先にテキストを選択してください。" },
     "usageTip": { "message": "使い方" },
     "usageTipCopyText": { "message": "💡 **使い方：**\n\nこのページについて直接質問するか、ページのテキストを選択してから質問できます。$mode$\n\n$commands$", "placeholders": { "mode": { "content": "$1" }, "commands": { "content": "$2" } } },

@@ -282,7 +282,6 @@
     "selectedTextDetected": { "message": "已偵測到選取文字" },
     "selectedTextIntro": { "message": "將以選取文字作為主要分析對象。$count$ 字元", "placeholders": { "count": { "content": "$1" } } },
     "summaryTemplateVariablesError": { "message": "❌ **/summary 提示內容包含 ${變數}，請輸入 /summary 後按 Tab 展開並填寫變數。**" },
-    "unknownCommandError": { "message": "❌ **找不到技能：$command$**\n\n可用技能：\n$commands$\n\n您也可以在偏好設定中新增技能。", "placeholders": { "command": { "content": "$1" }, "commands": { "content": "$2" } } },
     "usageIntro": { "message": "直接提問目前頁面，或先選取文字範圍再提問。" },
     "usageTip": { "message": "使用提示" },
     "usageTipCopyText": { "message": "💡 **使用提示：**\n\n您可以直接提問關於此頁面的問題，或先選取頁面上的文字範圍後再提問。$mode$\n\n$commands$", "placeholders": { "mode": { "content": "$1" }, "commands": { "content": "$2" } } },

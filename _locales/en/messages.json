@@ -282,7 +282,6 @@
     "selectedTextDetected": { "message": "Selected text detected" },
     "selectedTextIntro": { "message": "The selected text will be the main focus. $count$ characters", "placeholders": { "count": { "content": "$1" } } },
     "summaryTemplateVariablesError": { "message": "❌ **The /summary prompt contains ${variables}. Enter /summary and press Tab to expand and fill them.**" },
-    "unknownCommandError": { "message": "❌ **Unknown skill: $command$**\n\nAvailable skills:\n$commands$\n\nYou can also add skills in preferences.", "placeholders": { "command": { "content": "$1" }, "commands": { "content": "$2" } } },
     "usageIntro": { "message": "Ask about the current page directly, or select text before asking." },
     "usageTip": { "message": "Usage tip" },
     "usageTipCopyText": { "message": "💡 **Usage tip:**\n\nAsk a question about this page directly, or select page text before asking.$mode$\n\n$commands$", "placeholders": { "mode": { "content": "$1" }, "commands": { "content": "$2" } } },
