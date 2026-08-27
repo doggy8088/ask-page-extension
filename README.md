@@ -248,7 +248,7 @@
 
 - 使用固定端點 `https://ollama.com/v1`
 - 需要 Ollama Cloud API Key
-- 設定頁內建 6 個精選的 [Ollama Cloud 模型](https://ollama.com/search?c=cloud) ID，支援 Checkbox 複選
+- 設定頁內建 8 個精選的 [Ollama Cloud 模型](https://ollama.com/search?c=cloud) ID，支援 Checkbox 複選
 - 可透過「載入最新雲端模型」從 Ollama API 更新模型清單
 
 #### OpenAI Compatible
