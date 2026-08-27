@@ -10,6 +10,12 @@
 
 （目前暫無未發佈變更）
 
+## [0.44.4] - 2026-08-27
+
+### 新增 / 改進（v0.44.4）
+
+- **Ollama Cloud 內建模型清單與排序更新**：更新 Ollama Cloud 提供者之預設模型選項，新增 `glm-5.3-flash` 並置於清單首位（新增 Provider 時作為預設勾選模型），將 `deepseek-v4-flash:0731` 改為 `deepseek-v4-flash`、`deepseek-v4-pro:0813` 改為 `deepseek-v4-pro`，並移除 `glm-5.2`；更新後內建清單為 `glm-5.3-flash`、`deepseek-v4-flash`、`deepseek-v4-pro`、`kimi-k3`、`kimi-k2.7-code`、`minimax-m3`、`gemma4:31b`、`gpt-oss:120b` 共 8 個模型。既有已儲存 `glm-5.2` 或 `deepseek-v4-...:0731`/`:0813` 設定的使用者不受影響，推理強度控制照常運作；`glm-5.3-flash` 未加入推理強度控制，不顯示推理強度滑桿。同步更新推理強度對應文件與 README 內建模型數量說明。
+
 ## [0.44.3] - 2026-08-26
 
 ### 新增 / 改進（v0.44.3）
