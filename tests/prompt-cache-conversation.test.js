@@ -283,6 +283,28 @@ function toPlainValue(value) {
         ttl: '3600s'
     });
 
+    const geminiCacheRequestWithTools = toPlainValue(buildGeminiCachedContentRequest('gemini-3.5-flash-lite', {
+        systemPrompt: 'system prompt',
+        conversationContextText: 'stable page context'
+    }, {
+        tools: [{ google_search: {} }],
+        toolConfig: { includeServerSideToolInvocations: true },
+        ttl: '1800s'
+    }));
+    assert.deepStrictEqual(geminiCacheRequestWithTools, {
+        model: 'models/gemini-3.5-flash-lite',
+        systemInstruction: {
+            parts: [{ text: 'system prompt' }]
+        },
+        contents: [{
+            role: 'user',
+            parts: [{ text: 'stable page context' }]
+        }],
+        tools: [{ google_search: {} }],
+        toolConfig: { includeServerSideToolInvocations: true },
+        ttl: '1800s'
+    });
+
     assert.strictEqual(doesOpenRouterModelNeedExplicitCacheControl('anthropic/claude-sonnet-4.6'), true);
     assert.strictEqual(doesOpenRouterModelNeedExplicitCacheControl('qwen/qwen3.7-max'), true);
     assert.strictEqual(doesOpenRouterModelNeedExplicitCacheControl('openai/gpt-5.6-sol'), false);
@@ -343,6 +365,7 @@ function toPlainValue(value) {
 
     assert.match(contentScript, /v1beta\/cachedContents\?key=/);
     assert.match(contentScript, /requestBody\.cachedContent = explicitCacheName/);
+    assert.match(contentScript, /const tools = getGeminiToolDefinitions\(selectedModel, enableTools, googleSearchEnabled\)/);
     assert.match(contentScript, /geminiCacheEntries = new Map\(\)/);
     assert.match(contentScript, /isGeminiCachedContentReferenceError\(error\)/);
     assert.match(contentScript, /const contents = explicitCacheName\s*\n\s*\? buildGeminiConversationContents\(\)/);

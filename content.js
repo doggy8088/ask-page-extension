@@ -4832,8 +4832,14 @@ function buildGeminiConversationContents() {
         });
 }
 
-function buildGeminiCachedContentRequest(selectedModel, pageConversationContext) {
-    return {
+function buildGeminiCachedContentRequest(selectedModel, pageConversationContext, options = {}) {
+    const {
+        tools = null,
+        toolConfig = null,
+        ttl = '3600s'
+    } = options;
+
+    const request = {
         model: `models/${selectedModel}`,
         systemInstruction: {
             parts: [{ text: pageConversationContext.systemPrompt }]
@@ -4842,8 +4848,18 @@ function buildGeminiCachedContentRequest(selectedModel, pageConversationContext)
             role: 'user',
             parts: [{ text: pageConversationContext.conversationContextText }]
         }],
-        ttl: '3600s'
+        ttl
     };
+
+    if (Array.isArray(tools) && tools.length > 0) {
+        request.tools = tools;
+    }
+
+    if (toolConfig) {
+        request.toolConfig = toolConfig;
+    }
+
+    return request;
 }
 
 function doesOpenRouterModelNeedExplicitCacheControl(model = '') {
@@ -10659,14 +10675,20 @@ async function createDialog() {
         apiKey,
         selectedModel,
         pageConversationContext,
+        enableTools = false,
+        googleSearchEnabled = false,
         promptCacheKey,
         providerLabel,
         signal
     }) {
+        const tools = getGeminiToolDefinitions(selectedModel, enableTools, googleSearchEnabled);
+        const toolConfig = buildGeminiToolConfig(selectedModel, enableTools);
         const cacheIdentity = JSON.stringify([
             promptCacheKey,
             selectedModel,
             apiKey,
+            tools,
+            toolConfig,
             pageConversationContext.systemPrompt,
             pageConversationContext.conversationContextText
         ]);
@@ -10682,7 +10704,10 @@ async function createDialog() {
             return await existingPromise;
         }
 
-        const cacheRequest = buildGeminiCachedContentRequest(selectedModel, pageConversationContext);
+        const cacheRequest = buildGeminiCachedContentRequest(selectedModel, pageConversationContext, {
+            tools,
+            toolConfig
+        });
         const cachePromise = fetchJsonWithRetry({
             providerLabel: `${providerLabel} prompt cache`,
             url: `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${apiKey}`,
@@ -11561,6 +11586,8 @@ async function createDialog() {
             apiKey,
             selectedModel,
             pageConversationContext,
+            enableTools,
+            googleSearchEnabled,
             promptCacheKey,
             providerLabel,
             signal
@@ -11599,15 +11626,18 @@ async function createDialog() {
                 requestBody.systemInstruction = {
                     parts: [{ text: systemInstructionText }]
                 };
+                const tools = getGeminiToolDefinitions(selectedModel, enableTools, googleSearchEnabled);
+                if (Array.isArray(tools) && tools.length > 0) {
+                    requestBody.tools = tools;
+                }
+                const toolConfig = buildGeminiToolConfig(selectedModel, enableTools);
+                if (toolConfig) {
+                    requestBody.toolConfig = toolConfig;
+                }
             }
             const thinkingConfig = buildGeminiThinkingConfig(selectedModel, reasoningValue, enableTools);
             if (thinkingConfig) {
                 requestBody.generationConfig.thinkingConfig = thinkingConfig;
-            }
-            requestBody.tools = getGeminiToolDefinitions(selectedModel, enableTools, googleSearchEnabled);
-            const toolConfig = buildGeminiToolConfig(selectedModel, enableTools);
-            if (toolConfig) {
-                requestBody.toolConfig = toolConfig;
             }
 
             const buildGeminiHttpError = (response, errorBody) => {
@@ -11673,6 +11703,8 @@ async function createDialog() {
                         apiKey,
                         selectedModel,
                         pageConversationContext,
+                        enableTools,
+                        googleSearchEnabled,
                         promptCacheKey,
                         providerLabel,
                         signal
