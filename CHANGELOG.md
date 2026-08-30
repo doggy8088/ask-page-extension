@@ -8,6 +8,12 @@
 
 ### 新增 / 改進（Unreleased）
 
+（目前暫無未發佈變更）
+
+## [0.44.5] - 2026-08-30
+
+### 新增 / 改進（v0.44.5）
+
 - **跨供應商提示詞快取修正與代理模式優化**：Gemini 會為固定的系統提示與頁面內容建立一小時的 explicit `cachedContents`，後續多輪請求以 `cachedContent` 重用；代理模式依系統提示與 HTML Snapshot 產生不含頁面內容的穩定雜湊 key，頁面未變時沿用快取，DOM 改變時自動切換，避免讀取過時 Snapshot。不支援 explicit cache、內容未達最低 Token 門檻或快取服務暫時不可用時，會記錄警告並安全降級至既有 implicit caching。OpenAI、Azure OpenAI GPT-5.6 與 OpenRouter 同樣使用 Snapshot-aware `prompt_cache_key` 改善路由命中，Anthropic 代理模式啟用 automatic caching，OpenRouter 的 Anthropic 與 Qwen 模型另加入 `cache_control`。DeepSeek Token 統計新增 `prompt_cache_hit_tokens` 解析，避免實際命中卻未顯示。
 
 ## [0.44.4] - 2026-08-27
