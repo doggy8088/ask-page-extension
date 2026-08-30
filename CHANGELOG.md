@@ -10,6 +10,12 @@
 
 （目前暫無未發佈變更）
 
+## [0.44.6] - 2026-08-30
+
+### 修正 / 更新（v0.44.6）
+
+- **修正 Gemini 顯式快取請求結構避免 HTTP 400 錯誤**：依 Google Gemini API 規範，當 `generateContent` 或 `streamGenerateContent` 引用顯式快取（`cachedContent`）時，請求主體不得再重複帶入 `system_instruction`、`tools` 或 `tool_config`。已將工具定義（如 Google 搜尋與頁面操作工具）與工具配置移至快取建立階段（`cachedContents`）一併宣告，並在引用顯式快取的生成請求中排除這些欄位，徹底解決因重複傳遞 tools 導致的 `CachedContent can not be used with GenerateContent request setting system_instruction, tools or tool_config` HTTP 400 錯誤；在顯式快取不可用或安全降級回退至隱式快取時，仍維持在生成請求中正常傳遞工具與系統提示。
+
 ## [0.44.5] - 2026-08-30
 
 ### 新增 / 改進（v0.44.5）
