@@ -14,6 +14,8 @@ let conversationSelectedText = '';
 let inquiryConversationContext = null;
 let inquiryConversationContextPromise = null;
 let inquiryPromptCacheKey = '';
+const geminiCacheEntries = new Map();
+const geminiCachePromises = new Map();
 let activeDialogState = null;
 let activeScreenAnnotationCancel = null;
 let activeAskTask = null;
@@ -3474,7 +3476,8 @@ function createApiTokenUsageSummary(providerLabel, usageData) {
         inputDetails.cached_tokens,
         usageData.cachedContentTokenCount,
         sumTokenUsageDetails(usageData.cacheTokensDetails),
-        usageData.cache_read_input_tokens
+        usageData.cache_read_input_tokens,
+        usageData.prompt_cache_hit_tokens
     );
 
     addApiTokenUsageField(summary, 'inputTokens', getFirstFiniteTokenUsageValue(
@@ -4675,6 +4678,8 @@ function clearInquiryConversationContext() {
     inquiryConversationContext = null;
     inquiryConversationContextPromise = null;
     inquiryPromptCacheKey = '';
+    geminiCacheEntries.clear();
+    geminiCachePromises.clear();
 }
 
 if (typeof AskPageI18n !== 'undefined' && typeof AskPageI18n.onLocaleChanged === 'function') {
@@ -4685,6 +4690,34 @@ if (typeof AskPageI18n !== 'undefined' && typeof AskPageI18n.onLocaleChanged ===
 
 function getInquiryPromptCacheKey() {
     return inquiryPromptCacheKey;
+}
+
+function hashPromptCacheContext(value) {
+    const text = String(value || '');
+    let firstHash = 2166136261;
+    let secondHash = 2246822507;
+
+    for (let index = 0; index < text.length; index++) {
+        const code = text.charCodeAt(index);
+        firstHash = Math.imul(firstHash ^ code, 16777619);
+        secondHash = Math.imul(secondHash ^ code, 3266489909);
+    }
+
+    return [firstHash, secondHash]
+        .map((hash) => (hash >>> 0).toString(36).padStart(7, '0'))
+        .join('');
+}
+
+function getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled) {
+    if (!agentModeEnabled) {
+        return getInquiryPromptCacheKey();
+    }
+
+    const snapshotIdentity = [
+        pageConversationContext?.systemPrompt || '',
+        pageConversationContext?.conversationContextText || ''
+    ].join('\u0000');
+    return `askpage:agent:${hashPromptCacheContext(snapshotIdentity)}`;
 }
 
 async function getPageConversationContext(
@@ -4799,12 +4832,50 @@ function buildGeminiConversationContents() {
         });
 }
 
-function applyPromptCacheRequestOptions(requestBody, options = {}) {
-    if (options.agentModeEnabled) {
+function buildGeminiCachedContentRequest(selectedModel, pageConversationContext) {
+    return {
+        model: `models/${selectedModel}`,
+        systemInstruction: {
+            parts: [{ text: pageConversationContext.systemPrompt }]
+        },
+        contents: [{
+            role: 'user',
+            parts: [{ text: pageConversationContext.conversationContextText }]
+        }],
+        ttl: '3600s'
+    };
+}
+
+function doesOpenRouterModelNeedExplicitCacheControl(model = '') {
+    const normalizedModel = normalizeModelIdentifier(model);
+    return normalizedModel.startsWith('anthropic/')
+        || normalizedModel.startsWith('qwen/')
+        || normalizedModel.startsWith('qwen-')
+        || normalizedModel.startsWith('qwen3');
+}
+
+function applyOpenRouterCacheControl(requestBody, model = '') {
+    if (!doesOpenRouterModelNeedExplicitCacheControl(model)) {
         return requestBody;
     }
 
-    if (options.providerType === 'openai' && options.promptCacheKey) {
+    const systemMessage = Array.isArray(requestBody.messages)
+        ? requestBody.messages.find((message) => message?.role === 'system')
+        : null;
+    if (!systemMessage || typeof systemMessage.content !== 'string' || !systemMessage.content) {
+        return requestBody;
+    }
+
+    systemMessage.content = [{
+        type: 'text',
+        text: systemMessage.content,
+        cache_control: { type: 'ephemeral' }
+    }];
+    return requestBody;
+}
+
+function applyPromptCacheRequestOptions(requestBody, options = {}) {
+    if (['openai', 'azure', 'openrouter'].includes(options.providerType) && options.promptCacheKey) {
         requestBody.prompt_cache_key = options.promptCacheKey;
     } else if (options.providerType === 'anthropic') {
         requestBody.cache_control = { type: 'ephemeral' };
@@ -10556,6 +10627,119 @@ async function createDialog() {
         });
     }
 
+    function canFallbackFromGeminiCacheError(error) {
+        return !isAskTaskCancellationError(error)
+            && Number(error?.status) !== 401;
+    }
+
+    function isGeminiCacheEntryUsable(entry) {
+        return entry && entry.expiresAt > Date.now() + 60000;
+    }
+
+    function invalidateGeminiCacheName(cacheName) {
+        for (const [identity, entry] of geminiCacheEntries.entries()) {
+            if (entry.name === cacheName) {
+                geminiCacheEntries.delete(identity);
+            }
+        }
+    }
+
+    function isGeminiCachedContentReferenceError(error) {
+        if (![400, 404].includes(Number(error?.status))) {
+            return false;
+        }
+
+        const message = `${error?.apiMessage || ''}\n${error?.body || ''}\n${error?.message || ''}`.toLowerCase();
+        return message.includes('cached content')
+            || message.includes('cachedcontent')
+            || message.includes('cache') && (message.includes('expired') || message.includes('not found'));
+    }
+
+    async function getOrCreateGeminiExplicitCache({
+        apiKey,
+        selectedModel,
+        pageConversationContext,
+        promptCacheKey,
+        providerLabel,
+        signal
+    }) {
+        const cacheIdentity = JSON.stringify([
+            promptCacheKey,
+            selectedModel,
+            apiKey,
+            pageConversationContext.systemPrompt,
+            pageConversationContext.conversationContextText
+        ]);
+
+        const existingEntry = geminiCacheEntries.get(cacheIdentity);
+        if (isGeminiCacheEntryUsable(existingEntry)) {
+            return existingEntry.name;
+        }
+        geminiCacheEntries.delete(cacheIdentity);
+
+        const existingPromise = geminiCachePromises.get(cacheIdentity);
+        if (existingPromise) {
+            return await existingPromise;
+        }
+
+        const cacheRequest = buildGeminiCachedContentRequest(selectedModel, pageConversationContext);
+        const cachePromise = fetchJsonWithRetry({
+            providerLabel: `${providerLabel} prompt cache`,
+            url: `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${apiKey}`,
+            options: {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cacheRequest)
+            },
+            buildHttpError: (response, errorBody) => createHttpError(
+                response.status,
+                response.statusText,
+                errorBody,
+                undefined,
+                { retryAfterMs: getRetryAfterMilliseconds(response) }
+            ),
+            signal
+        }).then((cache) => {
+            if (!cache?.name) {
+                throw new Error('Gemini cachedContents response did not include a cache name.');
+            }
+
+            if (geminiCachePromises.get(cacheIdentity) === cachePromise) {
+                const parsedExpireTime = Date.parse(cache.expireTime || '');
+                geminiCacheEntries.set(cacheIdentity, {
+                    name: cache.name,
+                    expiresAt: Number.isFinite(parsedExpireTime)
+                        ? parsedExpireTime
+                        : Date.now() + 3300000
+                });
+            }
+            return cache.name;
+        }).catch((error) => {
+            if (!canFallbackFromGeminiCacheError(error)) {
+                throw error;
+            }
+
+            console.warn('[AskPage] Gemini explicit prompt cache unavailable; using implicit caching.', {
+                model: selectedModel,
+                status: error.status
+            });
+            if (geminiCachePromises.get(cacheIdentity) === cachePromise) {
+                geminiCacheEntries.set(cacheIdentity, {
+                    name: '',
+                    expiresAt: Date.now() + 300000
+                });
+            }
+            return '';
+        }).finally(() => {
+            if (geminiCachePromises.get(cacheIdentity) === cachePromise) {
+                geminiCachePromises.delete(cacheIdentity);
+            }
+        });
+
+        geminiCachePromises.set(cacheIdentity, cachePromise);
+        return await cachePromise;
+    }
+
     function formatGeminiUsageMetadataSummary(usageMetadata) {
         if (!usageMetadata || typeof usageMetadata !== 'object') {
             return '';
@@ -11372,15 +11556,29 @@ async function createDialog() {
         const systemInstructionText = enableTools
             ? pageConversationContext.systemPrompt
             : `${pageConversationContext.systemPrompt}\n\n${pageConversationContext.conversationContextText}`;
-        const contents = enableTools
-            ? [
-                {
-                    role: 'user',
-                    parts: [{ text: pageConversationContext.conversationContextText }]
-                },
-                ...buildGeminiConversationContents()
-            ]
-            : buildGeminiConversationContents();
+        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, enableTools);
+        let explicitCacheName = await getOrCreateGeminiExplicitCache({
+            apiKey,
+            selectedModel,
+            pageConversationContext,
+            promptCacheKey,
+            providerLabel,
+            signal
+        });
+        throwIfAskTaskCancelled(cancellationContext);
+        const contents = explicitCacheName
+            ? buildGeminiConversationContents()
+            : (enableTools
+                ? [
+                    {
+                        role: 'user',
+                        parts: [{ text: pageConversationContext.conversationContextText }]
+                    },
+                    ...buildGeminiConversationContents()
+                ]
+                : buildGeminiConversationContents());
+        let pageContextIncludedInContents = enableTools && !explicitCacheName;
+        let cacheRecoveryAttempted = false;
 
         for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round++) {
             throwIfAskTaskCancelled(cancellationContext);
@@ -11392,12 +11590,16 @@ async function createDialog() {
                     : getLocalizedText('statusAnsweringWithProvider', { provider: providerLabel })
             ));
             const requestBody = {
-                systemInstruction: {
-                    parts: [{ text: systemInstructionText }]
-                },
                 contents,
                 generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens }
             };
+            if (explicitCacheName) {
+                requestBody.cachedContent = explicitCacheName;
+            } else {
+                requestBody.systemInstruction = {
+                    parts: [{ text: systemInstructionText }]
+                };
+            }
             const thinkingConfig = buildGeminiThinkingConfig(selectedModel, reasoningValue, enableTools);
             if (thinkingConfig) {
                 requestBody.generationConfig.thinkingConfig = thinkingConfig;
@@ -11437,30 +11639,56 @@ async function createDialog() {
                     maxRetries: retryInfo.maxRetries
                 })
             ));
-            const responseData = streamingEnabled
-                ? await fetchGeminiStream({
-                    apiKey,
-                    selectedModel,
-                    requestBody,
-                    buildHttpError: buildGeminiHttpError,
-                    onRetry: handleRetry,
-                    onAnswerDelta,
-                    onReasoningDelta,
-                    providerLabel,
-                    signal
-                })
-                : await fetchJsonWithRetry({
-                    providerLabel,
-                    url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
-                    options: {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(requestBody)
-                    },
-                    buildHttpError: buildGeminiHttpError,
-                    onRetry: handleRetry,
-                    signal
-                });
+            let responseData;
+            try {
+                responseData = streamingEnabled
+                    ? await fetchGeminiStream({
+                        apiKey,
+                        selectedModel,
+                        requestBody,
+                        buildHttpError: buildGeminiHttpError,
+                        onRetry: handleRetry,
+                        onAnswerDelta,
+                        onReasoningDelta,
+                        providerLabel,
+                        signal
+                    })
+                    : await fetchJsonWithRetry({
+                        providerLabel,
+                        url: `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
+                        options: {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(requestBody)
+                        },
+                        buildHttpError: buildGeminiHttpError,
+                        onRetry: handleRetry,
+                        signal
+                    });
+            } catch (error) {
+                if (!cacheRecoveryAttempted && explicitCacheName && isGeminiCachedContentReferenceError(error)) {
+                    cacheRecoveryAttempted = true;
+                    invalidateGeminiCacheName(explicitCacheName);
+                    explicitCacheName = await getOrCreateGeminiExplicitCache({
+                        apiKey,
+                        selectedModel,
+                        pageConversationContext,
+                        promptCacheKey,
+                        providerLabel,
+                        signal
+                    });
+                    if (!explicitCacheName && enableTools && !pageContextIncludedInContents) {
+                        contents.unshift({
+                            role: 'user',
+                            parts: [{ text: pageConversationContext.conversationContextText }]
+                        });
+                        pageContextIncludedInContents = true;
+                    }
+                    round--;
+                    continue;
+                }
+                throw error;
+            }
             throwIfAskTaskCancelled(cancellationContext);
             logGeminiUsageMetadata(responseData);
             onTrace({ type: 'usage', round, usage: responseData?.usageMetadata || null });
@@ -11681,7 +11909,7 @@ async function createDialog() {
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
         throwIfAskTaskCancelled(taskContext);
-        const promptCacheKey = agentModeEnabled ? '' : getInquiryPromptCacheKey();
+        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled);
         const streamingEnabled = isStreamingSupported('openai', selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const usesMaxCompletionTokens = isReasoningModel(selectedModel);
@@ -11883,6 +12111,7 @@ async function createDialog() {
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
         throwIfAskTaskCancelled(taskContext);
+        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled);
         const streamingEnabled = isStreamingSupported('azure', deployment);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const isReasoning = Boolean(getReasoningCapability('azure', deployment));
@@ -11909,11 +12138,15 @@ async function createDialog() {
                     assertGpt56ChatCompletionsToolCompatibility(deployment, useResponsesApi, useTools);
 
                     if (useResponsesApi) {
-                        return buildResponsesApiRequestBody(messages, {
+                        return applyPromptCacheRequestOptions(buildResponsesApiRequestBody(messages, {
                             model: deployment,
                             maxOutputTokens,
                             useTools,
                             reasoningEffort: effectiveReasoningEffort
+                        }), {
+                            providerType: 'azure',
+                            agentModeEnabled,
+                            promptCacheKey
                         });
                     }
 
@@ -11936,7 +12169,11 @@ async function createDialog() {
                         requestBody.tools = getOpenAIToolDefinitions();
                     }
 
-                    return requestBody;
+                    return applyPromptCacheRequestOptions(requestBody, {
+                        providerType: 'azure',
+                        agentModeEnabled,
+                        promptCacheKey
+                    });
                 },
                 sendRequest: async (requestBody, onRetry, streamHandlers = {}) => {
                     const headers = {
@@ -11962,36 +12199,55 @@ async function createDialog() {
                         }
                         return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
                     };
-                    if (streamingEnabled) {
-                        const streamOptions = {
+                    const sendAzureRequest = async (body) => {
+                        if (streamingEnabled) {
+                            const streamOptions = {
+                                providerLabel,
+                                url: apiUrl,
+                                requestBody: body,
+                                headers,
+                                buildHttpError,
+                                onRetry,
+                                onAnswerDelta: streamHandlers.onAnswerDelta,
+                                onReasoningDelta: streamHandlers.onReasoningDelta,
+                                signal: taskContext?.signal
+                            };
+                            return useResponsesApi
+                                ? await fetchResponsesApiStream(streamOptions)
+                                : await fetchOpenAIChatCompletionsStream(streamOptions);
+                        }
+
+                        return await fetchJsonWithRetry({
                             providerLabel,
                             url: apiUrl,
-                            requestBody,
-                            headers,
+                            options: {
+                                method: 'POST',
+                                headers,
+                                body: JSON.stringify(body)
+                            },
                             buildHttpError,
                             onRetry,
-                            onAnswerDelta: streamHandlers.onAnswerDelta,
-                            onReasoningDelta: streamHandlers.onReasoningDelta,
+                            transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined,
                             signal: taskContext?.signal
-                        };
-                        return useResponsesApi
-                            ? await fetchResponsesApiStream(streamOptions)
-                            : await fetchOpenAIChatCompletionsStream(streamOptions);
-                    }
+                        });
+                    };
 
-                    return await fetchJsonWithRetry({
-                        providerLabel,
-                        url: apiUrl,
-                        options: {
-                            method: 'POST',
-                            headers,
-                            body: JSON.stringify(requestBody)
-                        },
-                        buildHttpError,
-                        onRetry,
-                        transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined,
-                        signal: taskContext?.signal
-                    });
+                    try {
+                        return await sendAzureRequest(requestBody);
+                    } catch (error) {
+                        const errorText = `${error?.apiMessage || ''}\n${error?.body || ''}\n${error?.message || ''}`.toLowerCase();
+                        const cacheKeyUnsupported = Number(error?.status) === 400
+                            && errorText.includes('prompt_cache_key')
+                            && ['unknown', 'unsupported', 'unrecognized', 'not allowed', 'extra field']
+                                .some((fragment) => errorText.includes(fragment));
+                        if (!requestBody.prompt_cache_key || !cacheKeyUnsupported) {
+                            throw error;
+                        }
+
+                        const fallbackRequestBody = { ...requestBody };
+                        delete fallbackRequestBody.prompt_cache_key;
+                        return await sendAzureRequest(fallbackRequestBody);
+                    }
                 },
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
@@ -12085,6 +12341,7 @@ async function createDialog() {
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
         throwIfAskTaskCancelled(taskContext);
+        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled);
         const streamingEnabled = isStreamingSupported(providerType, selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const cleanEndpoint = endpoint.replace(/\/$/, '');
@@ -12121,12 +12378,16 @@ async function createDialog() {
                     assertGpt56ChatCompletionsToolCompatibility(selectedModel, useResponsesApi, useTools);
 
                     if (useResponsesApi) {
-                        return buildResponsesApiRequestBody(messages, {
+                        return applyPromptCacheRequestOptions(buildResponsesApiRequestBody(messages, {
                             model: selectedModel,
                             maxOutputTokens,
                             useTools,
                             reasoningEffort,
                             toolOptions
+                        }), {
+                            providerType,
+                            agentModeEnabled,
+                            promptCacheKey
                         });
                     }
 
@@ -12150,7 +12411,12 @@ async function createDialog() {
                         applyOpenAIReasoningEffort(requestBody, reasoningEffort, false);
                     }
 
-                    return requestBody;
+                    applyOpenRouterCacheControl(requestBody, providerType === 'openrouter' ? selectedModel : '');
+                    return applyPromptCacheRequestOptions(requestBody, {
+                        providerType,
+                        agentModeEnabled,
+                        promptCacheKey
+                    });
                 },
                 sendRequest: async (requestBody, onRetry, streamHandlers = {}) => {
                     const headers = {

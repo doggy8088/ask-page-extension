@@ -59,33 +59,41 @@ sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(`${contentScript}\nglobalThis.__promptCacheConversationTestExports = {
     addConversationTurn,
+    applyOpenRouterCacheControl,
     applyPromptCacheRequestOptions,
+    buildGeminiCachedContentRequest,
     buildGeminiRequestTools,
     buildGeminiToolConfig,
     buildGeminiConversationContents,
     buildSystemPrompt,
     clearConversationHistory,
     createApiTokenUsageSummary,
+    doesOpenRouterModelNeedExplicitCacheControl,
     doesGeminiModelSupportCombinedTools,
     getConversationHistory: () => conversationHistory,
     getConversationMessagesForTextProviders,
     getInquiryPromptCacheKey,
+    getPromptCacheKeyForContext,
     getPageConversationContext
 };`, sandbox, { filename: 'content.js' });
 
 const {
     addConversationTurn,
+    applyOpenRouterCacheControl,
     applyPromptCacheRequestOptions,
+    buildGeminiCachedContentRequest,
     buildGeminiRequestTools,
     buildGeminiToolConfig,
     buildGeminiConversationContents,
     buildSystemPrompt,
     clearConversationHistory,
     createApiTokenUsageSummary,
+    doesOpenRouterModelNeedExplicitCacheControl,
     doesGeminiModelSupportCombinedTools,
     getConversationHistory,
     getConversationMessagesForTextProviders,
     getInquiryPromptCacheKey,
+    getPromptCacheKeyForContext,
     getPageConversationContext
 } = sandbox.__promptCacheConversationTestExports;
 
@@ -126,6 +134,20 @@ function toPlainValue(value) {
     assert.strictEqual(agentContext.conversationContextText, 'page-2:代理模式選取');
     assert.strictEqual(agentContext.contextMode, 'screenshot');
     assert.strictEqual(getInquiryPromptCacheKey(), firstCacheKey);
+    const firstAgentCacheKey = getPromptCacheKeyForContext(agentContext, true);
+    assert.match(firstAgentCacheKey, /^askpage:agent:[a-z0-9]{14}$/);
+    assert.strictEqual(getPromptCacheKeyForContext({
+        ...agentContext
+    }, true), firstAgentCacheKey);
+    assert.notStrictEqual(getPromptCacheKeyForContext({
+        ...agentContext,
+        conversationContextText: `${agentContext.conversationContextText}-changed`
+    }, true), firstAgentCacheKey);
+    assert.notStrictEqual(getPromptCacheKeyForContext({
+        ...agentContext,
+        systemPrompt: `${agentContext.systemPrompt}-changed`
+    }, true), firstAgentCacheKey);
+    assert.doesNotMatch(firstAgentCacheKey, /page-2|代理模式選取/);
 
     clearConversationHistory();
     const resetContext = await getPageConversationContext('清除後選取', {}, false, contextBuilder);
@@ -224,16 +246,60 @@ function toPlainValue(value) {
         providerType: 'openai',
         agentModeEnabled: true,
         promptCacheKey: 'askpage:test'
-    }).prompt_cache_key, undefined);
+    }).prompt_cache_key, 'askpage:test');
     assert.deepStrictEqual(toPlainValue(applyPromptCacheRequestOptions({}, {
         providerType: 'anthropic',
-        agentModeEnabled: false
+        agentModeEnabled: true
     }).cache_control), { type: 'ephemeral' });
     assert.strictEqual(applyPromptCacheRequestOptions({}, {
         providerType: 'openai-compatible',
         agentModeEnabled: false,
         promptCacheKey: 'askpage:test'
     }).prompt_cache_key, undefined);
+    assert.strictEqual(applyPromptCacheRequestOptions({}, {
+        providerType: 'azure',
+        agentModeEnabled: false,
+        promptCacheKey: 'askpage:test'
+    }).prompt_cache_key, 'askpage:test');
+    assert.strictEqual(applyPromptCacheRequestOptions({}, {
+        providerType: 'openrouter',
+        agentModeEnabled: false,
+        promptCacheKey: 'askpage:test'
+    }).prompt_cache_key, 'askpage:test');
+
+    const geminiCacheRequest = toPlainValue(buildGeminiCachedContentRequest('gemini-3.7-flash', {
+        systemPrompt: 'system prompt',
+        conversationContextText: 'stable page context'
+    }));
+    assert.deepStrictEqual(geminiCacheRequest, {
+        model: 'models/gemini-3.7-flash',
+        systemInstruction: {
+            parts: [{ text: 'system prompt' }]
+        },
+        contents: [{
+            role: 'user',
+            parts: [{ text: 'stable page context' }]
+        }],
+        ttl: '3600s'
+    });
+
+    assert.strictEqual(doesOpenRouterModelNeedExplicitCacheControl('anthropic/claude-sonnet-4.6'), true);
+    assert.strictEqual(doesOpenRouterModelNeedExplicitCacheControl('qwen/qwen3.7-max'), true);
+    assert.strictEqual(doesOpenRouterModelNeedExplicitCacheControl('openai/gpt-5.6-sol'), false);
+    const openRouterRequest = {
+        messages: [
+            { role: 'system', content: 'stable context' },
+            { role: 'user', content: 'question' }
+        ]
+    };
+    assert.deepStrictEqual(toPlainValue(applyOpenRouterCacheControl(
+        openRouterRequest,
+        'anthropic/claude-sonnet-4.6'
+    ).messages[0].content), [{
+        type: 'text',
+        text: 'stable context',
+        cache_control: { type: 'ephemeral' }
+    }]);
 
     const geminiInquiryTools = toPlainValue(buildGeminiRequestTools());
     assert.deepStrictEqual(geminiInquiryTools, [{ google_search: {} }]);
@@ -268,6 +334,20 @@ function toPlainValue(value) {
     });
     assert.strictEqual(usageSummary.fields.inputCachedTokens, 80);
     assert.strictEqual(usageSummary.fields.inputCacheCreationTokens, 40);
+    const deepSeekUsageSummary = createApiTokenUsageSummary('DeepSeek', {
+        prompt_tokens: 120,
+        prompt_cache_hit_tokens: 96,
+        prompt_cache_miss_tokens: 24
+    });
+    assert.strictEqual(deepSeekUsageSummary.fields.inputCachedTokens, 96);
+
+    assert.match(contentScript, /v1beta\/cachedContents\?key=/);
+    assert.match(contentScript, /requestBody\.cachedContent = explicitCacheName/);
+    assert.match(contentScript, /geminiCacheEntries = new Map\(\)/);
+    assert.match(contentScript, /isGeminiCachedContentReferenceError\(error\)/);
+    assert.match(contentScript, /const contents = explicitCacheName\s*\n\s*\? buildGeminiConversationContents\(\)/);
+    assert.match(contentScript, /contents\.unshift\(\{\s*role: 'user',\s*parts: \[\{ text: pageConversationContext\.conversationContextText \}\]/);
+    assert.match(contentScript, /delete fallbackRequestBody\.prompt_cache_key/);
 
     const inquirySystemPrompt = buildSystemPrompt({
         pageContextFormat: 'semantic-tree'

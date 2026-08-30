@@ -96,7 +96,7 @@ const geminiLoopSection = contentScript.slice(
     contentScript.indexOf('async function runGeminiToolLoop'),
     contentScript.indexOf('async function askGemini')
 );
-assert.match(geminiLoopSection, /const responseData = streamingEnabled\s*\n\s*\? await fetchGeminiStream/);
+assert.match(geminiLoopSection, /responseData = streamingEnabled\s*\n\s*\? await fetchGeminiStream/);
 
 [
     ['askOpenAI', 'askAzureOpenAI', /isStreamingSupported\('openai'/],
