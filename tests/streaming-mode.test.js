@@ -69,7 +69,7 @@ assert.deepStrictEqual(Object.keys(STREAMING_PROVIDER_CAPABILITIES).sort(), [
 ]);
 
 [
-    ['gemini', 'gemini-3.7-flash'],
+    ['gemini', 'gemini-3.8-flash'],
     ['openai', 'gpt-5.6-sol'],
     ['azure', 'production-gpt-5.6'],
     ['anthropic', 'claude-sonnet-4-6'],

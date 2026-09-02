@@ -111,7 +111,8 @@ assert.deepStrictEqual(Array.from(Object.keys(GEMINI_REASONING_CAPABILITIES)).so
     'gemini-3.5-flash',
     'gemini-3.5-flash-lite',
     'gemini-3.6-flash',
-    'gemini-3.7-flash'
+    'gemini-3.7-flash',
+    'gemini-3.8-flash'
 ]);
 
 assert.deepStrictEqual(Array.from(Object.keys(OPENAI_REASONING_CAPABILITIES)).sort(), [
@@ -136,6 +137,7 @@ assert.deepStrictEqual(Array.from(Object.keys(OPENAI_REASONING_CAPABILITIES)).so
 ]);
 
 // Gemini 3.x exposes only the thinking levels documented for each exact model.
+assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.8-flash'), ['minimal', 'low', 'medium', 'high']);
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.7-flash'), ['minimal', 'low', 'medium', 'high']);
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.6-flash'), ['minimal', 'low', 'medium', 'high']);
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.5-flash-lite'), ['minimal', 'low', 'medium', 'high']);

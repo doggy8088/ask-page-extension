@@ -209,6 +209,7 @@ const BUILT_IN_COMMANDS = [
 
 const PREDEFINED_MODELS = {
     gemini: [
+        'gemini-3.8-flash',
         'gemini-3.7-flash',
         'gemini-3.6-flash',
         'gemini-3.5-flash-lite',
