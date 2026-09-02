@@ -24,6 +24,8 @@ vm.runInContext(`${settingsScript}\nglobalThis.__metaModels = PREDEFINED_MODELS[
 });
 
 const expectedModels = [
+    'muse-spark-1.3-contributor',
+    'muse-spark-1.3',
     'muse-spark-1.2-contributor',
     'muse-spark-1.2',
     'muse-spark-1.1'

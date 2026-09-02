@@ -91,6 +91,8 @@ const OPENAI_STYLE_MODEL_MAX_OUTPUT_TOKENS = {
     'o3-mini': 100000,
     'o3-pro': 100000,
     'o4-mini': 100000,
+    'muse-spark-1.3-contributor': 32768,
+    'muse-spark-1.3': 32768,
     'muse-spark-1.2-contributor': 32768,
     'muse-spark-1.2': 32768,
     'muse-spark-1.1': 32768
