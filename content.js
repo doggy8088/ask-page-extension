@@ -90,7 +90,10 @@ const OPENAI_STYLE_MODEL_MAX_OUTPUT_TOKENS = {
     'o3': 100000,
     'o3-mini': 100000,
     'o3-pro': 100000,
-    'o4-mini': 100000
+    'o4-mini': 100000,
+    'muse-spark-1.2-contributor': 32768,
+    'muse-spark-1.2': 32768,
+    'muse-spark-1.1': 32768
 };
 const DIALOG_HOST_ID = 'askpage-dialog-host';
 const DIALOG_OVERLAY_ID = 'gemini-qna-overlay';
@@ -1331,6 +1334,7 @@ const STREAMING_PROVIDER_CAPABILITIES = {
     openrouter: { scope: 'provider' },
     groq: { scope: 'provider' },
     mistral: { scope: 'provider' },
+    meta: { scope: 'provider' },
     ollama: { scope: 'provider' },
     'ollama-cloud': { scope: 'provider' }
 };
@@ -2044,7 +2048,7 @@ async function getEnabledProviderModelOptions() {
 
     const options = [];
     for (const p of providers) {
-        if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
+        if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'meta', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
             const models = p.models || [];
             if (models.length > 0) {
                 for (const model of models) {
@@ -2058,7 +2062,8 @@ async function getEnabledProviderModelOptions() {
                                             p.type === 'openrouter' ? 'OpenRouter' :
                                                 p.type === 'groq' ? 'Groq' :
                                                     p.type === 'mistral' ? 'Mistral AI' :
-                                                        p.type === 'ollama-cloud' ? 'Ollama Cloud' : 'OpenAI Compatible'
+                                                        p.type === 'meta' ? 'Meta AI' :
+                                                            p.type === 'ollama-cloud' ? 'Ollama Cloud' : 'OpenAI Compatible'
                         ),
                         type: p.type,
                         model: model
@@ -2128,6 +2133,7 @@ const PROVIDER_LABEL_KEYS = Object.freeze({
     openrouter: 'providerOpenRouter',
     groq: 'providerGroq',
     mistral: 'providerMistral',
+    meta: 'providerMeta',
     ollama: 'providerOllamaLocal',
     'ollama-cloud': 'providerOllamaCloud',
     'openai-compatible': 'providerOpenAICompatible'
@@ -12348,6 +12354,8 @@ async function createDialog() {
                 endpoint = 'https://api.groq.com/openai/v1';
             } else if (providerType === 'mistral') {
                 endpoint = 'https://api.mistral.ai/v1';
+            } else if (providerType === 'meta') {
+                endpoint = 'https://api.meta.ai/v1';
             } else if (providerType === 'ollama') {
                 endpoint = activeConfig?.ollamaEndpoint || 'http://localhost:11434/v1';
             } else if (providerType === 'ollama-cloud') {
@@ -12872,7 +12880,7 @@ async function createDialog() {
                 await askAzureOpenAI(capturedSelectedText, screenshotDataUrl, inputImageDataUrls, taskContext);
             } else if (activeConfig.type === 'anthropic') {
                 await askAnthropic(capturedSelectedText, screenshotDataUrl, inputImageDataUrls, taskContext);
-            } else if (['openai-compatible', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama', 'ollama-cloud'].includes(activeConfig.type)) {
+            } else if (['openai-compatible', 'deepseek', 'openrouter', 'groq', 'mistral', 'meta', 'ollama', 'ollama-cloud'].includes(activeConfig.type)) {
                 await askOpenAICompatible(capturedSelectedText, screenshotDataUrl, inputImageDataUrls, taskContext);
             } else {
                 await askGemini(question, capturedSelectedText, screenshotDataUrl, inputImageDataUrls, taskContext);

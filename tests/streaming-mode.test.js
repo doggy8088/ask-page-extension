@@ -61,6 +61,7 @@ assert.deepStrictEqual(Object.keys(STREAMING_PROVIDER_CAPABILITIES).sort(), [
     'deepseek',
     'gemini',
     'groq',
+    'meta',
     'mistral',
     'ollama',
     'ollama-cloud',
@@ -77,6 +78,7 @@ assert.deepStrictEqual(Object.keys(STREAMING_PROVIDER_CAPABILITIES).sort(), [
     ['openrouter', 'qwen/qwen3.7-max'],
     ['groq', 'llama-3.3-70b-versatile'],
     ['mistral', 'mistral-large-latest'],
+    ['meta', 'muse-spark-1.2'],
     ['ollama', 'llama3.2'],
     ['ollama-cloud', 'gpt-oss:120b']
 ].forEach(([providerType, model]) => {

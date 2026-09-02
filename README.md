@@ -1,10 +1,10 @@
 # AskPage (頁問) 擴充功能
 
-使用 Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama 或 OpenAI Compatible API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
+使用 Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Meta AI、Ollama 或 OpenAI Compatible API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
 
 ## ✨ 功能特色
 
-- 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Ollama Local、Ollama Cloud 與 OpenAI Compatible，可自由切換
+- 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Meta AI、Ollama Local、Ollama Cloud 與 OpenAI Compatible，可自由切換
 - **Gemini Google Search Grounding** - Gemini 提供者設定可選啟用 Google Search Grounding（預設關閉）；啟用後詢問模式與 Gemini 3 代理模式可使用網路搜尋（代理模式可同時使用頁面工具），勾選時會顯示免費方案不支援的警示
 - **完整詢問上下文** - 詢問模式會建立近似無障礙樹並固定第一問的頁面快照，完整保留後續文字、圖片與多輪對話
 - 💬 **多輪對話脈絡延續** - 追問時會自動帶入前文，切換不同 AI Provider 也能延續同一段對話
@@ -244,6 +244,12 @@
   - Endpoint URL (例如：`https://your-resource.openai.azure.com`)
   - Deployment Name (您在 Azure 中建立的部署名稱)
   - API Version (預設：`2024-10-21`)
+
+#### Meta AI
+
+- muse-spark-1.2-contributor
+- muse-spark-1.2
+- muse-spark-1.1
 
 #### Ollama Cloud
 

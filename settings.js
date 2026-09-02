@@ -122,6 +122,7 @@ const PROVIDER_LABEL_KEYS = Object.freeze({
     openrouter: 'providerOpenRouter',
     groq: 'providerGroq',
     mistral: 'providerMistral',
+    meta: 'providerMeta',
     ollama: 'providerOllamaLocal',
     'ollama-cloud': 'providerOllamaCloud',
     'openai-compatible': 'providerOpenAICompatible'
@@ -135,6 +136,7 @@ const PROVIDER_DEFAULT_NAMES = Object.freeze({
     openrouter: 'OpenRouter',
     groq: 'Groq',
     mistral: 'Mistral AI',
+    meta: 'Meta AI',
     ollama: 'Ollama (Local)',
     'ollama-cloud': 'Ollama Cloud',
     'openai-compatible': 'OpenAI Compatible'
@@ -169,16 +171,16 @@ let agentGlowEffectEnabledCheckbox;
 let providersList, addProviderBtn, providerModal, providerModalTitle, modalProviderName, modalProviderType;
 let modalProviderCancel, modalProviderSave, modalProviderTest, modalProviderTestResult;
 let modalGeminiFields, modalOpenaiFields, modalAzureFields, modalOpenaiCompatibleFields;
-let modalAnthropicFields, modalDeepseekFields, modalOpenrouterFields, modalGroqFields, modalMistralFields, modalOllamaFields, modalOllamaCloudFields;
+let modalAnthropicFields, modalDeepseekFields, modalOpenrouterFields, modalGroqFields, modalMistralFields, modalMetaFields, modalOllamaFields, modalOllamaCloudFields;
 let modalGeminiApiKey, modalOpenaiApiKey, modalAzureApiKey, modalAzureEndpoint, modalAzureDeployment, modalAzureApiVersion;
 let modalOpenaiCompatibleEndpoint, modalOpenaiCompatibleApiKey, modalOpenaiCompatibleModel;
 let modalOpenaiCompatibleModelInputGroup, modalOpenaiCompatibleModelsListGroup, modalOpenaiCompatibleModelsList;
-let modalAnthropicApiKey, modalDeepseekApiKey, modalOpenrouterApiKey, modalGroqApiKey, modalMistralApiKey, modalOllamaCloudApiKey;
+let modalAnthropicApiKey, modalDeepseekApiKey, modalOpenrouterApiKey, modalGroqApiKey, modalMistralApiKey, modalMetaApiKey, modalOllamaCloudApiKey;
 let modalOllamaEndpoint, modalOllamaModel;
 let modalGeminiModelsList, modalOpenaiModelsList;
 let modalGeminiGoogleSearch, modalGeminiGoogleSearchWarning;
 let modalOllamaCloudWebSearch;
-let modalAnthropicModelsList, modalDeepseekModelsList, modalOpenrouterModelsList, modalGroqModelsList, modalMistralModelsList, modalOllamaCloudModelsList;
+let modalAnthropicModelsList, modalDeepseekModelsList, modalOpenrouterModelsList, modalGroqModelsList, modalMistralModelsList, modalMetaModelsList, modalOllamaCloudModelsList;
 let currentEditingProvider = null;
 let providers = [];
 let activeProviderId = '';
@@ -274,6 +276,11 @@ const PREDEFINED_MODELS = {
         'codestral-latest',
         'devstral-latest'
     ],
+    meta: [
+        'muse-spark-1.2-contributor',
+        'muse-spark-1.2',
+        'muse-spark-1.1'
+    ],
     'ollama-cloud': [
         'glm-5.3-flash',
         'deepseek-v4-flash',
@@ -320,6 +327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalOpenrouterFields = document.getElementById('modal-openrouter-fields');
     modalGroqFields = document.getElementById('modal-groq-fields');
     modalMistralFields = document.getElementById('modal-mistral-fields');
+    modalMetaFields = document.getElementById('modal-meta-fields');
     modalOllamaFields = document.getElementById('modal-ollama-fields');
     modalOllamaCloudFields = document.getElementById('modal-ollama-cloud-fields');
 
@@ -342,6 +350,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalOpenrouterApiKey = document.getElementById('modalOpenrouterApiKey');
     modalGroqApiKey = document.getElementById('modalGroqApiKey');
     modalMistralApiKey = document.getElementById('modalMistralApiKey');
+    modalMetaApiKey = document.getElementById('modalMetaApiKey');
     modalOllamaCloudApiKey = document.getElementById('modalOllamaCloudApiKey');
 
     modalOllamaEndpoint = document.getElementById('modalOllamaEndpoint');
@@ -357,6 +366,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalOpenrouterModelsList = document.getElementById('modalOpenrouterModelsList');
     modalGroqModelsList = document.getElementById('modalGroqModelsList');
     modalMistralModelsList = document.getElementById('modalMistralModelsList');
+    modalMetaModelsList = document.getElementById('modalMetaModelsList');
     modalOllamaCloudModelsList = document.getElementById('modalOllamaCloudModelsList');
 
     resetButton = document.getElementById('reset');
@@ -1216,6 +1226,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (p.type === 'mistral') {
                 borderColor = '#f35f22';
                 typeLabel = t('providerMistral');
+            } else if (p.type === 'meta') {
+                borderColor = '#0081fb';
+                typeLabel = t('providerMeta');
             } else if (p.type === 'ollama') {
                 borderColor = '#374151';
                 typeLabel = t('providerOllamaLocal');
@@ -1229,7 +1242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             div.style.borderLeft = `4px solid ${borderColor}`;
 
             let modelsHtml = '';
-            if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
+            if (['gemini', 'openai', 'anthropic', 'deepseek', 'openrouter', 'groq', 'mistral', 'meta', 'ollama-cloud', 'openai-compatible'].includes(p.type)) {
                 const models = p.models || [];
                 modelsHtml = models.map(m => {
                     const isActive = (p.id === activeProviderId && m === activeModel);
@@ -1312,6 +1325,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalOpenrouterApiKey.value = '';
         modalGroqApiKey.value = '';
         modalMistralApiKey.value = '';
+        modalMetaApiKey.value = '';
         modalOllamaCloudApiKey.value = '';
         modalOllamaEndpoint.value = 'http://localhost:11434/v1';
         modalOllamaModel.value = '';
@@ -1324,6 +1338,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalOpenrouterModelsList.innerHTML = '';
         modalGroqModelsList.innerHTML = '';
         modalMistralModelsList.innerHTML = '';
+        modalMetaModelsList.innerHTML = '';
         modalOllamaCloudModelsList.innerHTML = '';
         modalOpenaiCompatibleModelsList.innerHTML = '';
 
@@ -1391,6 +1406,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (provider.type === 'mistral') {
                 modalMistralApiKey.value = decryptedKey;
                 renderModalModelsList(modalMistralModelsList, combinedModels, configuredModels);
+            } else if (provider.type === 'meta') {
+                modalMetaApiKey.value = decryptedKey;
+                renderModalModelsList(modalMetaModelsList, combinedModels, configuredModels);
             } else if (provider.type === 'ollama') {
                 modalOllamaEndpoint.value = provider.ollamaEndpoint || 'http://localhost:11434/v1';
                 modalOllamaModel.value = provider.ollamaModel || '';
@@ -1431,6 +1449,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const mistralModels = [...(PREDEFINED_MODELS['mistral'] || [])];
             renderModalModelsList(modalMistralModelsList, mistralModels, [mistralModels[0]]);
 
+            // Set Meta AI defaults
+            const metaModels = [...(PREDEFINED_MODELS['meta'] || [])];
+            renderModalModelsList(modalMetaModelsList, metaModels, [metaModels[0]]);
+
             // Set Ollama Cloud defaults
             const ollamaCloudModels = [...(PREDEFINED_MODELS['ollama-cloud'] || [])];
             renderModalModelsList(modalOllamaCloudModelsList, ollamaCloudModels, [ollamaCloudModels[0]]);
@@ -1450,6 +1472,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalOpenrouterFields.style.display = type === 'openrouter' ? 'block' : 'none';
         modalGroqFields.style.display = type === 'groq' ? 'block' : 'none';
         modalMistralFields.style.display = type === 'mistral' ? 'block' : 'none';
+        modalMetaFields.style.display = type === 'meta' ? 'block' : 'none';
         modalOllamaFields.style.display = type === 'ollama' ? 'block' : 'none';
         modalOllamaCloudFields.style.display = type === 'ollama-cloud' ? 'block' : 'none';
         modalOpenaiCompatibleFields.style.display = type === 'openai-compatible' ? 'block' : 'none';
@@ -1639,6 +1662,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
             providerData.models = selectedModels;
+        } else if (type === 'meta') {
+            apiKeyRaw = modalMetaApiKey.value.trim();
+            if (!apiKeyRaw) {
+                alert(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
+                return;
+            }
+            const selectedModels = [];
+            modalMetaModelsList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                selectedModels.push(cb.value);
+            });
+            if (selectedModels.length === 0) {
+                alert(t('providerModelRequired', { provider: getProviderTypeLabel(type) }));
+                return;
+            }
+            providerData.models = selectedModels;
         } else if (type === 'ollama') {
             const endpoint = modalOllamaEndpoint.value.trim();
             const model = modalOllamaModel.value.trim();
@@ -1786,6 +1824,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
                 }
                 url = 'https://api.mistral.ai/v1/models';
+                headers['Authorization'] = `Bearer ${apiKey}`;
+            } else if (type === 'meta') {
+                const apiKey = modalMetaApiKey.value.trim();
+                if (!apiKey) {
+                    throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(type) }));
+                }
+                url = 'https://api.meta.ai/v1/models';
                 headers['Authorization'] = `Bearer ${apiKey}`;
             } else if (type === 'ollama-cloud') {
                 const apiKey = modalOllamaCloudApiKey.value.trim();
@@ -2100,6 +2145,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
             url = 'https://api.mistral.ai/v1/models';
             headers['Authorization'] = `Bearer ${apiKey}`;
+        } else if (providerType === 'meta') {
+            apiKey = modalMetaApiKey.value.trim();
+            if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
+            url = 'https://api.meta.ai/v1/models';
+            headers['Authorization'] = `Bearer ${apiKey}`;
         } else if (providerType === 'ollama-cloud') {
             apiKey = modalOllamaCloudApiKey.value.trim();
             if (!apiKey) {throw new Error(t('providerApiKeyRequired', { provider: getProviderTypeLabel(providerType) }));}
@@ -2123,7 +2173,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .filter(m => m.name)
                     .map(m => m.name.replace(/^models\//, ''));
             }
-        } else if (['openai', 'deepseek', 'openrouter', 'groq', 'anthropic', 'mistral', 'ollama-cloud'].includes(providerType)) {
+        } else if (['openai', 'deepseek', 'openrouter', 'groq', 'anthropic', 'mistral', 'meta', 'ollama-cloud'].includes(providerType)) {
             const list = data.data || data.models || [];
             if (Array.isArray(list)) {
                 models = list.map(m => m.id || m.name).filter(Boolean);
@@ -2306,6 +2356,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (providerType === 'openrouter') {return modalOpenrouterModelsList;}
         if (providerType === 'groq') {return modalGroqModelsList;}
         if (providerType === 'mistral') {return modalMistralModelsList;}
+        if (providerType === 'meta') {return modalMetaModelsList;}
         if (providerType === 'ollama-cloud') {return modalOllamaCloudModelsList;}
         if (providerType === 'openai-compatible') {return modalOpenaiCompatibleModelsList;}
         return null;

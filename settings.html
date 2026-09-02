@@ -909,6 +909,7 @@
           <option value="openrouter" data-i18n="providerOpenRouter">OpenRouter</option>
           <option value="groq" data-i18n="providerGroq">Groq</option>
           <option value="mistral" data-i18n="providerMistral">Mistral AI</option>
+          <option value="meta" data-i18n="providerMeta">Meta AI</option>
           <option value="ollama" data-i18n="providerOllamaLocal">Ollama (Local)</option>
           <option value="ollama-cloud" data-i18n="providerOllamaCloud">Ollama Cloud</option>
           <option value="openai-compatible" data-i18n="providerOpenAICompatible">OpenAI 相容端點</option>
@@ -1118,6 +1119,26 @@
             </div>
           </div>
           <div id="modalMistralModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
+            <!-- 動態載入 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Meta AI Settings Fields -->
+      <div id="modal-meta-fields" class="provider-fields" style="display: none; margin-top: 12px;">
+        <div class="form-group">
+          <label for="modalMetaApiKey" data-i18n="apiKey">API Key</label>
+          <input id="modalMetaApiKey" type="password" data-i18n-placeholder="metaApiKeyPlaceholder" placeholder="請輸入您的 Meta API Key">
+        </div>
+        <div class="form-group" style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label style="margin-bottom: 0;" data-i18n="enabledModels">啟用模型 (可複選，最少選一個)</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="meta" data-action="fetch-models" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;"><span aria-hidden="true">🔍</span> <span data-i18n="loadAllModels">載入所有可用模型</span></button>
+              <button type="button" class="btn-secondary btn-small btn-action-models" data-provider-type="meta" data-action="add-custom-model" style="padding: 4px 8px; min-width: auto; font-size: 11px; margin-top: 0;"><span aria-hidden="true">✏️</span> <span data-i18n="enterModelManually">手動輸入模型名稱</span></button>
+            </div>
+          </div>
+          <div id="modalMetaModelsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 8px;">
             <!-- 動態載入 -->
           </div>
         </div>

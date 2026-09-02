@@ -63,6 +63,7 @@ assert.strictEqual(getProviderTypeLabel('deepseek'), 'DeepSeek');
 assert.strictEqual(getProviderTypeLabel('openrouter'), 'OpenRouter');
 assert.strictEqual(getProviderTypeLabel('groq'), 'Groq');
 assert.strictEqual(getProviderTypeLabel('mistral'), 'Mistral AI');
+assert.strictEqual(getProviderTypeLabel('meta'), 'Meta AI');
 assert.strictEqual(getProviderTypeLabel('ollama'), 'Ollama (Local)');
 assert.strictEqual(getProviderTypeLabel('ollama-cloud'), 'Ollama Cloud');
 assert.strictEqual(getProviderTypeLabel('openai-compatible'), 'OpenAI-compatible endpoint');
