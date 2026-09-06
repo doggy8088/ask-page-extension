@@ -34,7 +34,7 @@ const sandbox = {
 sandbox.globalThis = sandbox;
 
 vm.createContext(sandbox);
-vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {\n    tokenizeSnippetTemplate,\n    extractTemplateVariables,\n    expandSnippetTemplate,\n    mapSnippetDisplayOffsetToPrompt,\n    deriveSnippetPlaceholderReplacement,\n    isCompleteTextareaSelection,\n    resolveSnippetUndoStep,\n    createDeferredCustomCommandExecution,\n    getSnippetExecution\n};`, sandbox, {
+vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {\n    tokenizeSnippetTemplate,\n    extractTemplateVariables,\n    expandSnippetTemplate,\n    mapSnippetDisplayOffsetToPrompt,\n    deriveSnippetPlaceholderReplacement,\n    isCompleteTextareaSelection,\n    resolveSnippetUndoStep,\n    createDeferredCustomCommandExecution,\n    getSnippetExecution,\n    getMissingBuiltinTemplateVariables,\n    resolveBuiltinTemplate\n};`, sandbox, {
     filename: 'content.js'
 });
 
@@ -47,7 +47,9 @@ const {
     isCompleteTextareaSelection,
     resolveSnippetUndoStep,
     createDeferredCustomCommandExecution,
-    getSnippetExecution
+    getSnippetExecution,
+    getMissingBuiltinTemplateVariables,
+    resolveBuiltinTemplate
 } = sandbox.__askPageTestExports;
 
 // vm context 與測試程序為不同 realm，陣列 prototype 不一致，
@@ -592,3 +594,61 @@ assert.strictEqual(
 );
 
 console.log('custom-command-arguments: ok');
+
+// ---- 內建保留變數 ${SELECTED_TEXT}：tokenize 階段直接轉成 literal，不進入填空流程 ----
+const selected = { SELECTED_TEXT: 'x' };
+assert.deepStrictEqual(json(tokenizeSnippetTemplate('A ${SELECTED_TEXT} B', selected)), [
+    { type: 'literal', text: 'A ' },
+    { type: 'literal', text: 'x' },
+    { type: 'literal', text: ' B' }
+]);
+
+// 值本身含 ${...} 也不會被再解析（注入安全）
+assert.deepStrictEqual(json(tokenizeSnippetTemplate('${SELECTED_TEXT}', { SELECTED_TEXT: '${name}' })), [
+    { type: 'literal', text: '${name}' }
+]);
+assert.deepStrictEqual(json(namesOf(extractTemplateVariables('${SELECTED_TEXT}', { SELECTED_TEXT: '${name}' }))), []);
+
+// 備用值：值為空時用該次出現的預設值；有值時忽略預設值；都沒有就不產生 token
+assert.deepStrictEqual(json(tokenizeSnippetTemplate('${SELECTED_TEXT:none}', { SELECTED_TEXT: '' })), [
+    { type: 'literal', text: 'none' }
+]);
+assert.deepStrictEqual(json(tokenizeSnippetTemplate('${SELECTED_TEXT:none}', selected)), [
+    { type: 'literal', text: 'x' }
+]);
+assert.deepStrictEqual(json(tokenizeSnippetTemplate('${SELECTED_TEXT}', { SELECTED_TEXT: '' })), []);
+
+// 保留變數不算使用者變數；不帶 map 時維持舊行為（向後相容）
+assert.deepStrictEqual(json(namesOf(extractTemplateVariables('${SELECTED_TEXT} ${lang}', selected))), ['lang']);
+assert.deepStrictEqual(json(namesOf(extractTemplateVariables('${SELECTED_TEXT} ${lang}'))), ['SELECTED_TEXT', 'lang']);
+
+// 大小寫敏感：小寫仍是使用者變數；hasOwnProperty 判斷讓 ${toString} 不被誤判為保留變數
+assert.deepStrictEqual(json(namesOf(extractTemplateVariables('${selected_text}', selected))), ['selected_text']);
+assert.deepStrictEqual(json(namesOf(extractTemplateVariables('${toString}', { SELECTED_TEXT: '' }))), ['toString']);
+
+// 混合範本展開：保留變數內嵌為 literal，使用者變數仍是佔位欄位
+const mixed = expandSnippetTemplate('Q: ${SELECTED_TEXT} -> ${lang}', { lang: '' }, false, { SELECTED_TEXT: 'abc' });
+assert.strictEqual(mixed.display, 'Q: abc -> lang');
+assert.strictEqual(mixed.prompt, 'Q: abc -> ');
+assert.deepStrictEqual(json(mixed.positions), [
+    { name: 'lang', start: 10, end: 14, hasDefault: false, hintStart: null, hintEnd: null, isPlaceholder: true }
+]);
+
+// 位移對應：帶 map 時 abc 內 1:1；不帶 map 會把 ${SELECTED_TEXT} 當空佔位而漂移
+assert.strictEqual(mapSnippetDisplayOffsetToPrompt('Q: ${SELECTED_TEXT} -> ${lang}', { lang: '' }, 5, false, { SELECTED_TEXT: 'abc' }), 5);
+assert.strictEqual(mapSnippetDisplayOffsetToPrompt('Q: ${SELECTED_TEXT} -> ${lang}', { lang: '' }, 12, false, { SELECTED_TEXT: 'abc' }), 10);
+assert.notStrictEqual(mapSnippetDisplayOffsetToPrompt('Q: ${SELECTED_TEXT} -> ${lang}', { lang: '' }, 5, false), 5);
+
+// 缺少選取文字的偵測
+assert.deepStrictEqual(json(getMissingBuiltinTemplateVariables('沒有用到', { SELECTED_TEXT: '' })), []);
+assert.deepStrictEqual(json(getMissingBuiltinTemplateVariables('${SELECTED_TEXT}', { SELECTED_TEXT: '' })), ['SELECTED_TEXT']);
+assert.deepStrictEqual(json(getMissingBuiltinTemplateVariables('${SELECTED_TEXT:fb}', { SELECTED_TEXT: '' })), []);
+assert.deepStrictEqual(json(getMissingBuiltinTemplateVariables('${SELECTED_TEXT}', selected)), []);
+assert.deepStrictEqual(json(getMissingBuiltinTemplateVariables('${SELECTED_TEXT} ${SELECTED_TEXT:x}', { SELECTED_TEXT: '' })), ['SELECTED_TEXT']);
+assert.deepStrictEqual(json(getMissingBuiltinTemplateVariables('${toString} ${lang}', { SELECTED_TEXT: '' })), []);
+
+// 直接送出路徑的替換
+assert.strictEqual(resolveBuiltinTemplate('${SELECTED_TEXT:fb}!', { SELECTED_TEXT: '' }), 'fb!');
+assert.strictEqual(resolveBuiltinTemplate('解釋 ${SELECTED_TEXT}', { SELECTED_TEXT: "海勒姆定律 (Hyrum's Law)" }), "解釋 海勒姆定律 (Hyrum's Law)");
+
+console.log('custom-command-arguments.test.js passed');

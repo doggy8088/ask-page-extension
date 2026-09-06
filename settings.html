@@ -848,9 +848,10 @@
 
       <div class="form-group">
         <label for="modalCommandPrompt" data-i18n="promptContent">提示內容</label>
-        <textarea id="modalCommandPrompt" data-i18n-placeholder="promptContentPlaceholder" aria-describedby="modalCommandPromptError modalCommandPromptHelp" placeholder="請輸入執行此技能時要傳送給 AI 的提示內容。使用 ${變數名} 產生填空，例如：Hi, I'm ${name} from ${country:TW}。"></textarea>
+        <textarea id="modalCommandPrompt" data-i18n-placeholder="promptContentPlaceholder" aria-describedby="modalCommandPromptError modalCommandPromptHelp modalCommandPromptBuiltinHelp" placeholder="請輸入執行此技能時要傳送給 AI 的提示內容。使用 ${變數名} 產生填空，例如：Hi, I'm ${name} from ${country:TW}。"></textarea>
         <small id="modalCommandPromptError" class="field-error"></small>
         <small id="modalCommandPromptHelp" style="color: var(--text-secondary);" data-i18n="promptContentHelp">在提示內容中以 ${變數名} 產生填空，使用者執行技能後可逐一填寫；用 ${變數名:預設值} 設預設值。同名變數會同步填寫，最多只能有一組預設值。</small>
+        <small id="modalCommandPromptBuiltinHelp" style="color: var(--text-secondary);" data-i18n="promptContentBuiltinVariablesHelp">${SELECTED_TEXT} 是內建變數，執行時自動替換成開啟對話框時選取的文字，不會變成填空欄位；可用 ${SELECTED_TEXT:備用文字} 在沒有選取文字時改用備用文字。</small>
       </div>
 
       <div class="form-group">

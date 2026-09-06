@@ -43,6 +43,8 @@ globalThis.__askPageSettingsTestExports = { validateTemplateVariables };`,
 const { validateTemplateVariables } = sandbox.__askPageSettingsTestExports;
 
 assert.strictEqual(validateTemplateVariables('${name:English}'), '');
+assert.strictEqual(validateTemplateVariables('${SELECTED_TEXT}'), '');
+assert.strictEqual(validateTemplateVariables('${SELECTED_TEXT:fallback}'), '');
 assert.strictEqual(validateTemplateVariables('${語言:中文}'), '');
 assert.strictEqual(validateTemplateVariables('${éclair:français}'), '');
 assert.strictEqual(validateTemplateVariables('${name１:value}'), '');

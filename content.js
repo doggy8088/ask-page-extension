@@ -1072,9 +1072,18 @@ function getTopCustomCommands(customCommands, usageMap, limit = 2) {
 }
 
 const TEMPLATE_VARIABLE_PATTERN = /\$\{([^}]*)\}/g;
+// 系統保留變數：執行時由程式自動填值，不進入使用者填空流程。
+const BUILTIN_TEMPLATE_VARIABLE_SELECTED_TEXT = 'SELECTED_TEXT';
+
+// 以 hasOwnProperty 判斷，避免 ${toString} 之類名稱誤中 Object 原型鏈。
+function isBuiltinTemplateVariable(builtinValues, name) {
+    return Boolean(builtinValues) && Object.prototype.hasOwnProperty.call(builtinValues, name);
+}
 
 // 單一來源掃描 ${...}，並以第一個 : 切出變數名與預設值，供下方三個函式共用。
-function tokenizeSnippetTemplate(template) {
+// builtinValues 提供時，保留變數會在此階段直接轉成 literal token：值為空則改用該次出現的
+// 預設值，仍為空就不產生 token。因為替換發生在解析之後，值本身含 ${...} 也不會被再解析。
+function tokenizeSnippetTemplate(template, builtinValues = null) {
     const promptTemplate = String(template || '');
     const tokens = [];
     const pattern = new RegExp(TEMPLATE_VARIABLE_PATTERN.source, 'g');
@@ -1093,7 +1102,14 @@ function tokenizeSnippetTemplate(template) {
         if (name) {
             const hasDefault = colonIndex !== -1;
             const defaultValue = hasDefault ? inner.slice(colonIndex + 1) : '';
-            tokens.push({ type: 'variable', name, hasDefault, defaultValue });
+            if (isBuiltinTemplateVariable(builtinValues, name)) {
+                const text = String(builtinValues[name] ?? '') || (hasDefault ? defaultValue : '');
+                if (text) {
+                    tokens.push({ type: 'literal', text });
+                }
+            } else {
+                tokens.push({ type: 'variable', name, hasDefault, defaultValue });
+            }
         } else {
             tokens.push({ type: 'literal', text: match[0] });
         }
@@ -1107,8 +1123,8 @@ function tokenizeSnippetTemplate(template) {
     return tokens;
 }
 
-function extractTemplateVariables(template = '') {
-    const tokens = tokenizeSnippetTemplate(template);
+function extractTemplateVariables(template = '', builtinValues = null) {
+    const tokens = tokenizeSnippetTemplate(template, builtinValues);
     const variables = [];
     const seen = new Map();
     tokens.forEach((token) => {
@@ -1140,8 +1156,8 @@ function extractTemplateVariables(template = '') {
 // 一旦填入內容即消失；為 true 時維持 name 標籤恆常顯示的展開方式，標籤固定以「: 」
 // （冒號加一個空格）結尾，這個空格純屬畫面排版，不計入送出內容。範本中作者自行寫的
 // 標點符號一律照樣顯示，不做任何隱藏。
-function expandSnippetTemplate(template, values, showVariableLabels) {
-    const tokens = tokenizeSnippetTemplate(template);
+function expandSnippetTemplate(template, values, showVariableLabels, builtinValues = null) {
+    const tokens = tokenizeSnippetTemplate(template, builtinValues);
     const valueMap = values || {};
     const positions = [];
     let display = '';
@@ -1174,11 +1190,33 @@ function expandSnippetTemplate(template, values, showVariableLabels) {
     return { display, prompt, positions };
 }
 
+// 找出範本中「有用到保留變數、目前值為空、且該次出現沒有預設值」的名稱，供送出前擋下。
+// 刻意不帶 builtinValues 做 tokenize，才看得到原始的 variable token。
+function getMissingBuiltinTemplateVariables(template, builtinValues) {
+    const missing = [];
+    tokenizeSnippetTemplate(template).forEach((token) => {
+        if (token.type !== 'variable' || !isBuiltinTemplateVariable(builtinValues, token.name)) {
+            return;
+        }
+        const value = String(builtinValues[token.name] ?? '');
+        if (!value && !token.hasDefault && !missing.includes(token.name)) {
+            missing.push(token.name);
+        }
+    });
+    return missing;
+}
+
+// 沒有使用者變數時直接把保留變數替換掉，得到可送出的提示詞。
+function resolveBuiltinTemplate(template, builtinValues) {
+    return expandSnippetTemplate(template, {}, false, builtinValues).prompt;
+}
+
 // 重用 expandSnippetTemplate 已算出的 hint/value 邊界，避免重新解析變數語意。
 // showVariableLabels 必須與產生該 displayOffset 的畫面採用同一顯示模式，偏移量才不會偏移。
-function mapSnippetDisplayOffsetToPrompt(template, values, displayOffset, showVariableLabels) {
-    const tokens = tokenizeSnippetTemplate(template);
-    const { prompt, positions } = expandSnippetTemplate(template, values, showVariableLabels);
+// builtinValues 必須與產生畫面時相同，否則保留變數展開長度不一致會讓偏移量漂移。
+function mapSnippetDisplayOffsetToPrompt(template, values, displayOffset, showVariableLabels, builtinValues = null) {
+    const tokens = tokenizeSnippetTemplate(template, builtinValues);
+    const { prompt, positions } = expandSnippetTemplate(template, values, showVariableLabels, builtinValues);
     const targetOffset = Math.max(0, Number(displayOffset) || 0);
     let positionIndex = 0;
     let displayCursor = 0;
@@ -5353,6 +5391,24 @@ async function createDialog() {
     Object.assign(inputRow.style, { position: 'relative' });
 
     // Dynamic intelliCommands based on screenshot state and custom commands
+    // 保留變數的值一律從這裡取得，確保 intellisense、snippet 展開與直接送出看到同一份選取文字。
+    function getTemplateBuiltinValues() {
+        return { [BUILTIN_TEMPLATE_VARIABLE_SELECTED_TEXT]: getActiveSelectedText(capturedSelectedText) };
+    }
+
+    function templateRequiresMissingSelectedText(template) {
+        return getMissingBuiltinTemplateVariables(template, getTemplateBuiltinValues()).length > 0;
+    }
+
+    // 沒有選取文字時的處理政策集中在此：目前是擋下並提示，不送出。
+    function rejectForMissingSelectedText(command) {
+        appendMessage('user', command);
+        appendMessage('assistant', getLocalizedText('customCommandSelectedTextRequired', { command }));
+        clearInputContextImages();
+        setInputValue('', { resetToSingleLine: true });
+        input.focus();
+    }
+
     async function getIntelliCommands() {
         if (typeof AskPageI18n !== 'undefined') {
             await AskPageI18n.ready;
@@ -5363,10 +5419,11 @@ async function createDialog() {
         const builtInSummaryPrompt = await getValue(CUSTOM_SUMMARY_PROMPT_STORAGE, '');
         const summaryShowVariableLabels = await getValue(CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE, false);
         const summaryTemplate = builtInSummaryPrompt || getLocalizedText('summaryPrompt');
+        const builtinValues = getTemplateBuiltinValues();
 
         const builtInCommands = [
             { cmd: '/clear', desc: getLocalizedText('commandClearHistory') },
-            { cmd: '/summary', desc: getLocalizedText('commandSummaryPage'), template: summaryTemplate, hasVariables: extractTemplateVariables(summaryTemplate).length > 0, showVariableLabels: summaryShowVariableLabels === true },
+            { cmd: '/summary', desc: getLocalizedText('commandSummaryPage'), template: summaryTemplate, hasVariables: extractTemplateVariables(summaryTemplate, builtinValues).length > 0, showVariableLabels: summaryShowVariableLabels === true },
             { cmd: '/screenshot', desc: screenshotEnabled ? getLocalizedText('disableScreenshot') : getLocalizedText('enableScreenshot') },
             { cmd: '/agent', desc: agentModeEnabled ? getLocalizedText('switchToInquiryMode') : getLocalizedText('switchToAgentMode') }
         ];
@@ -5375,7 +5432,7 @@ async function createDialog() {
             cmd: cmd.cmd,
             desc: cmd.prompt ? cmd.prompt.substring(0, 50) + (cmd.prompt.length > 50 ? '...' : '') : getLocalizedText('customCommand'),
             template: cmd.prompt || '',
-            hasVariables: extractTemplateVariables(cmd.prompt || '').length > 0,
+            hasVariables: extractTemplateVariables(cmd.prompt || '', builtinValues).length > 0,
             mode: cmd.mode,
             screenshotEnabled: cmd.screenshotEnabled === true,
             showVariableLabels: cmd.showVariableLabels === true
@@ -6864,7 +6921,12 @@ async function createDialog() {
                 }
                 const customPrompt = await getValue(CUSTOM_SUMMARY_PROMPT_STORAGE, '');
                 const summaryPromptTemplate = customPrompt || getLocalizedText('summaryPrompt');
-                if (extractTemplateVariables(summaryPromptTemplate).length > 0) {
+                if (templateRequiresMissingSelectedText(summaryPromptTemplate)) {
+                    rejectForMissingSelectedText(question);
+                    return;
+                }
+                const summaryBuiltinValues = getTemplateBuiltinValues();
+                if (extractTemplateVariables(summaryPromptTemplate, summaryBuiltinValues).length > 0) {
                 // 有變數的範本應由 snippet 流程展開，不應直接以 /summary 送出
                     appendMessage('user', question);
                     appendMessage('assistant', getLocalizedText('summaryTemplateVariablesError'));
@@ -6873,7 +6935,7 @@ async function createDialog() {
                     input.focus();
                     return;
                 }
-                question = summaryPromptTemplate;
+                question = resolveBuiltinTemplate(summaryPromptTemplate, summaryBuiltinValues);
                 displayedQuestion = question;
             }
 
@@ -6903,7 +6965,13 @@ async function createDialog() {
                 const customCommand = customCommands.find(cmd => cmd.cmd === question);
 
                 if (customCommand) {
-                    if (extractTemplateVariables(customCommand.prompt || '').length > 0) {
+                    const customPromptTemplate = customCommand.prompt || '';
+                    if (templateRequiresMissingSelectedText(customPromptTemplate)) {
+                        rejectForMissingSelectedText(question);
+                        return;
+                    }
+                    const customBuiltinValues = getTemplateBuiltinValues();
+                    if (extractTemplateVariables(customPromptTemplate, customBuiltinValues).length > 0) {
                         appendMessage('user', question);
                         appendMessage('assistant', getLocalizedText('customCommandTemplateVariablesError', { command: question }));
                         clearInputContextImages();
@@ -6913,8 +6981,8 @@ async function createDialog() {
                     }
                     await applyCustomCommandExecutionMode(customCommand);
                     await incrementCustomCommandUsage(customCommand.cmd);
-                    // Replace the command with its prompt
-                    question = customCommand.prompt;
+                    // Replace the command with its prompt, resolving built-in variables such as ${SELECTED_TEXT}
+                    question = resolveBuiltinTemplate(customPromptTemplate, customBuiltinValues);
                     displayedQuestion = question;
                 // Continue with AI processing using the custom prompt
                 }
@@ -6985,6 +7053,10 @@ async function createDialog() {
     }
     function completeIntelliCommand(item) {
         hideIntelliBox();
+        if (item.template && templateRequiresMissingSelectedText(item.template)) {
+            rejectForMissingSelectedText(item.cmd);
+            return;
+        }
         if (item.hasVariables && item.template) {
             const origin = {
                 value: input.value,
@@ -7000,7 +7072,8 @@ async function createDialog() {
 
     function startSnippetMode(item, origin) {
         const template = item.template;
-        const variables = extractTemplateVariables(template);
+        const builtinValues = getTemplateBuiltinValues();
+        const variables = extractTemplateVariables(template, builtinValues);
         if (!variables.length) {
             return;
         }
@@ -7024,6 +7097,7 @@ async function createDialog() {
             undoStack: [],
             redoStack: [],
             showVariableLabels: item.showVariableLabels === true,
+            builtinValues,
             origin: origin ?? null,
             executeCustomCommand
         };
@@ -7047,7 +7121,7 @@ async function createDialog() {
         if (!snippetState) {
             return;
         }
-        const { display, prompt, positions } = expandSnippetTemplate(snippetState.template, snippetState.values, snippetState.showVariableLabels);
+        const { display, prompt, positions } = expandSnippetTemplate(snippetState.template, snippetState.values, snippetState.showVariableLabels, snippetState.builtinValues);
         snippetState.displayValue = display;
         snippetState.promptValue = prompt;
         snippetState.positions = positions;
@@ -7233,13 +7307,15 @@ async function createDialog() {
             snippetState.template,
             snippetState.values,
             replacement.start,
-            snippetState.showVariableLabels
+            snippetState.showVariableLabels,
+            snippetState.builtinValues
         );
         const promptEnd = mapSnippetDisplayOffsetToPrompt(
             snippetState.template,
             snippetState.values,
             replacement.end,
-            snippetState.showVariableLabels
+            snippetState.showVariableLabels,
+            snippetState.builtinValues
         );
         const promptValue = snippetState.promptValue ?? '';
         const nextPrompt = promptValue.slice(0, promptStart)
