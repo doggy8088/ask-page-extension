@@ -5248,6 +5248,140 @@ function getAgentSnapshotPageContext(container, tokenBudget = DEFAULT_AGENT_SNAP
     };
 }
 
+// 供 find 工具使用：把快照樹攤平成候選清單，附上祖先路徑方便模型定位。
+function collectAgentSnapshotCandidates(root, options = {}) {
+    const tree = collectAgentSnapshotTree(root, options);
+    const candidates = [];
+    const visit = (node, path) => {
+        if (node.kind !== 'element') {
+            return;
+        }
+        const label = node.name ? `${node.role} "${node.name.slice(0, 40)}"` : node.role;
+        candidates.push({
+            node,
+            path: path.join(' > '),
+            preview: getAgentSnapshotNodeTextPreview(node, 80)
+        });
+        node.children.forEach((child) => visit(child, [...path, label]));
+    };
+    tree.forEach((node) => visit(node, []));
+    return candidates;
+}
+
+// 依深度裁切的過濾後 HTML：超過深度的子節點以註解取代，避免整棵子樹灌進模型。
+function getDepthLimitedFilteredHtml(element, maxDepth = Infinity) {
+    if (!element || element.nodeType !== 1) {
+        return '';
+    }
+    const filteredClone = createFilteredHtmlContextContainer(element);
+    if (Number.isFinite(maxDepth) && maxDepth > 0) {
+        const prune = (node, depth) => {
+            if (depth >= maxDepth) {
+                const childElementCount = node.children ? node.children.length : 0;
+                if (childElementCount > 0) {
+                    const ownerDocument = node.ownerDocument || document;
+                    node.textContent = '';
+                    node.appendChild(ownerDocument.createComment(` ${childElementCount} child elements omitted; use read_page with a deeper depth `));
+                }
+                return;
+            }
+            Array.from(node.children || []).forEach((child) => prune(child, depth + 1));
+        };
+        prune(filteredClone, 0);
+    }
+    return filteredClone.outerHTML;
+}
+
+function getElementPlainText(element) {
+    if (!element) {
+        return '';
+    }
+    const rawText = typeof element.innerText === 'string' && element.innerText
+        ? element.innerText
+        : (element.textContent || '');
+    return rawText.replace(/[ \t\f\v]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function truncateTextToLimit(text, maxChars) {
+    const value = String(text || '');
+    if (!Number.isFinite(maxChars) || maxChars <= 0 || value.length <= maxChars) {
+        return { text: value, truncated: false, totalChars: value.length };
+    }
+    return {
+        text: `${value.slice(0, maxChars)}\n… [truncated: ${value.length - maxChars} more characters; call read_page with a larger max_chars or a narrower ref]`,
+        truncated: true,
+        totalChars: value.length
+    };
+}
+
+function normalizeReadPageMaxChars(value, defaultValue = AGENT_READ_PAGE_DEFAULT_MAX_CHARS) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return defaultValue;
+    }
+    return Math.max(200, Math.min(AGENT_READ_PAGE_MAX_CHARS_LIMIT, Math.round(numericValue)));
+}
+
+function normalizePositiveInteger(value, defaultValue, maxValue = Infinity) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return defaultValue;
+    }
+    return Math.min(maxValue, Math.floor(numericValue));
+}
+
+// 在 run_js 執行前，把程式碼字串常值中引用到的 ref 暫時標成 data-askpage-ref 屬性，
+// 讓主世界的 askpage.ref('e12') 能以 querySelector 找到元素；執行後一律移除，不留下永久 DOM 汙染。
+const AGENT_REF_DATA_ATTRIBUTE = 'data-askpage-ref';
+
+function tagAgentSnapshotRefsForMainWorld(code) {
+    const referencedIds = new Set();
+    const literalPattern = /(['"`])\s*#?(e\d+)\s*\1/gi;
+    let match;
+    while ((match = literalPattern.exec(String(code || ''))) !== null) {
+        const id = normalizeAgentSnapshotRefId(match[2]);
+        if (id) {
+            referencedIds.add(id);
+        }
+    }
+
+    const taggedElements = [];
+    const missingRefs = [];
+    referencedIds.forEach((id) => {
+        const resolved = resolveAgentSnapshotRef(id);
+        if (!resolved || resolved.stale) {
+            missingRefs.push(id);
+            return;
+        }
+        resolved.elements.forEach((element) => {
+            if (typeof element.setAttribute !== 'function') {
+                return;
+            }
+            const previousValue = element.getAttribute(AGENT_REF_DATA_ATTRIBUTE);
+            element.setAttribute(AGENT_REF_DATA_ATTRIBUTE, id);
+            taggedElements.push({ element, previousValue });
+        });
+    });
+
+    return {
+        referencedIds: Array.from(referencedIds),
+        missingRefs,
+        cleanup() {
+            taggedElements.forEach(({ element, previousValue }) => {
+                try {
+                    if (previousValue === null || previousValue === undefined) {
+                        element.removeAttribute(AGENT_REF_DATA_ATTRIBUTE);
+                    } else {
+                        element.setAttribute(AGENT_REF_DATA_ATTRIBUTE, previousValue);
+                    }
+                } catch (error) {
+                    console.warn('[AskPage] Failed to clean up ref attribute:', error);
+                }
+            });
+        }
+    };
+}
+
 function getInquiryPageContext(container, root = document.body, semanticContextBuilder = buildApproximateAccessibilityTree) {
     try {
         const semanticContext = semanticContextBuilder(root);
@@ -9651,7 +9785,24 @@ async function createDialog() {
 
     function getJsonPreview(value) {
         const text = JSON.stringify(value, null, 2);
-        return text.length > 6000 ? `${text.slice(0, 6000)}...` : text;
+        return text.length > TOOL_RESULT_PREVIEW_MAX_CHARS
+            ? `${text.slice(0, TOOL_RESULT_PREVIEW_MAX_CHARS)}...`
+            : text;
+    }
+
+    // 送回模型的工具結果一律受同一個長度上限控制；Gemini 需要物件，超長時改包成 preview 字串。
+    function buildModelToolResultPayload(result) {
+        const text = JSON.stringify(result, null, 2) || '';
+        if (text.length <= TOOL_RESULT_PREVIEW_MAX_CHARS) {
+            return result;
+        }
+        return {
+            success: result?.success,
+            message: result?.message,
+            truncated: true,
+            preview: `${text.slice(0, TOOL_RESULT_PREVIEW_MAX_CHARS)}...`,
+            note: `工具結果過長（${text.length} 字元），已截斷為 ${TOOL_RESULT_PREVIEW_MAX_CHARS} 字元。請縮小查詢範圍或改用 read_page 指定 ref 分段讀取。`
+        };
     }
 
     function escapeSelectorValue(value) {
@@ -10001,6 +10152,7 @@ async function createDialog() {
     function serializeFieldDescriptor(descriptor) {
         const serialized = {
             key: descriptor.key,
+            ref: registerAgentSnapshotRef(descriptor.element),
             fieldType: descriptor.fieldType,
             inputType: descriptor.inputType,
             selector: descriptor.selector,
@@ -10021,6 +10173,7 @@ async function createDialog() {
 
         if (descriptor.options) {
             serialized.options = descriptor.options.map((option) => ({
+                ...(option.element ? { ref: registerAgentSnapshotRef(option.element) } : {}),
                 text: option.text,
                 value: option.value,
                 selected: Boolean(option.selected || option.checked),
@@ -10088,7 +10241,23 @@ async function createDialog() {
         ))) || null;
     }
 
+    function resolveFieldByRef(refValue, descriptors) {
+        const resolved = resolveAgentSnapshotRef(refValue);
+        if (!resolved || resolved.stale || !resolved.element) {
+            return null;
+        }
+        const matchedElement = resolved.element;
+        return descriptors.find((descriptor) => descriptor.elements.some((element) => (
+            element === matchedElement || element.contains(matchedElement) || matchedElement.contains(element)
+        ))) || null;
+    }
+
     function resolveFieldDescriptor(instruction, descriptors) {
+        const refMatch = resolveFieldByRef(instruction.ref, descriptors);
+        if (refMatch) {
+            return { descriptor: refMatch, score: 1200 };
+        }
+
         const selectorMatch = resolveFieldBySelector(instruction.selector, descriptors);
         if (selectorMatch) {
             return { descriptor: selectorMatch, score: 1000 };
@@ -10506,8 +10675,73 @@ async function createDialog() {
                 }
             },
             {
+                name: 'read_page',
+                description: '按需讀取頁面或指定 ref 的子樹內容。mode 為 ax（預設）回傳帶 ref 的精簡 accessibility 快照，可展開快照中標示 [collapsed] 的區段；mode 為 text 回傳純文字，適合閱讀、摘要、擷取資料；mode 為 html 回傳過濾後的 HTML，只有在需要知道 class、id 或 DOM 結構以修改頁面樣式或結構時才使用，且應指定最小的 ref 與 depth。連結的 URL 預設不在快照中，需要時以 ax 或 html 模式讀取該連結的 ref。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        ref: {
+                            type: 'string',
+                            description: '快照中的 ref（例如 e12）。省略時讀取整個主要內容容器。'
+                        },
+                        mode: {
+                            type: 'string',
+                            enum: ['ax', 'text', 'html'],
+                            description: '回傳格式：ax（帶 ref 的快照，預設）、text（純文字）、html（過濾後 HTML，僅在要修改 DOM/CSS 時使用）。'
+                        },
+                        depth: {
+                            type: 'integer',
+                            description: '最多往下展開幾層，超過的子樹會折疊。ax 與 html 模式適用；省略表示不限制。'
+                        },
+                        max_chars: {
+                            type: 'integer',
+                            description: `回傳內容的字元上限，預設 ${AGENT_READ_PAGE_DEFAULT_MAX_CHARS}，最大 ${AGENT_READ_PAGE_MAX_CHARS_LIMIT}。超過會截斷並標注。`
+                        }
+                    }
+                }
+            },
+            {
+                name: 'find',
+                description: '以文字或角色描述在目前頁面搜尋元素，回傳最相符的 ref 清單與所在路徑。成本極低，適合「找到登入按鈕」、「找含訂單編號的欄位」、「哪裡有下載連結」這類定位需求；找到 ref 後再用 click、type、select_option 或 read_page 操作。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        query: {
+                            type: 'string',
+                            description: '要搜尋的文字、標籤、名稱或描述，例如「登入」、「搜尋框」、「Download ZIP」。'
+                        },
+                        role: {
+                            type: 'string',
+                            description: '可選，限制角色，例如 button、link、textbox、heading、checkbox。'
+                        },
+                        limit: {
+                            type: 'integer',
+                            description: `最多回傳幾筆，預設 ${AGENT_FIND_DEFAULT_LIMIT}，最大 ${AGENT_FIND_MAX_LIMIT}。`
+                        }
+                    },
+                    required: ['query']
+                }
+            },
+            {
+                name: 'get_page_text',
+                description: '取得整頁主要內容或指定 ref 的純文字，不含任何標記。適合摘要、翻譯、問答與資料擷取，是最省 Token 的閱讀方式。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        ref: {
+                            type: 'string',
+                            description: '快照中的 ref。省略時取主要內容容器的文字。'
+                        },
+                        max_chars: {
+                            type: 'integer',
+                            description: `回傳字元上限，預設 ${AGENT_READ_PAGE_DEFAULT_MAX_CHARS}，最大 ${AGENT_READ_PAGE_MAX_CHARS_LIMIT}。`
+                        }
+                    }
+                }
+            },
+            {
                 name: 'inspect_form_fields',
-                description: '列出目前頁面的可編輯表單欄位，包含 label、name、id、placeholder、型別與選項。填表前優先使用。',
+                description: '列出目前頁面的可編輯表單欄位，包含 ref、label、name、id、placeholder、型別與選項。填表前優先使用，之後可直接以 ref 呼叫 fill_form_fields、type 或 select_option。',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -10538,7 +10772,8 @@ async function createDialog() {
                             items: {
                                 type: 'object',
                                 properties: {
-                                    selector: { type: 'string', description: '（強烈推薦提供）精準定位此欄位的 CSS Selector。' },
+                                    ref: { type: 'string', description: '（最推薦）快照或 inspect_form_fields 回傳的欄位 ref，例如 e12。' },
+                                    selector: { type: 'string', description: '精準定位此欄位的 CSS Selector；有 ref 時不需要。' },
                                     field: { type: 'string', description: '欄位名稱、Label 標籤、Placeholder、或 ID 的模糊比對關鍵字。' },
                                     label: { type: 'string', description: '欄位的標籤文字（Label text），用於模糊比對。' },
                                     name: { type: 'string', description: '欄位的 name 屬性。' },
@@ -10560,13 +10795,13 @@ async function createDialog() {
             },
             {
                 name: 'run_js',
-                description: '在目前頁面的主世界執行通用 JavaScript。可用來讀取 DOM、查詢頁面資料、點擊元素、修改內容、注入 CSS、調整網頁排版、呼叫頁面腳本，並支援 await。當使用者要求修改、重排、套用樣式或操作目前網頁時，請直接使用此工具執行，不要只提供程式碼或建議。頁問對話框是擴充功能 UI，不是網頁內容；不可選取、讀取、修改或套用樣式到 #askpage-dialog-host 或其 shadow DOM，也不要用 html/body 的 filter、transform、opacity 等祖先效果影響擴充功能 UI。若要把結果回傳給模型，請使用 return。',
+                description: '在目前頁面的主世界執行通用 JavaScript。可用來讀取 DOM、查詢頁面資料、修改內容、注入 CSS、調整網頁排版、呼叫頁面腳本，並支援 await。一般的點擊、輸入與選取請優先使用 click、type、select_option、fill_form_fields；只有批次操作或非標準互動才用 run_js。程式碼中可用 askpage.ref(\'e12\') 取得快照中的元素、askpage.refs(\'e12\') 取得折疊區段內的所有元素，不必自行推導 selector。當使用者要求修改、重排、套用樣式或操作目前網頁時，請直接使用此工具執行，不要只提供程式碼或建議。頁問對話框是擴充功能 UI，不是網頁內容；不可選取、讀取、修改或套用樣式到 #askpage-dialog-host 或其 shadow DOM，也不要用 html/body 的 filter、transform、opacity 等祖先效果影響擴充功能 UI。若要把結果回傳給模型，請使用 return，並只回傳必要的摘要資料，不要回傳整段 HTML。',
                 parameters: {
                     type: 'object',
                     properties: {
                         code: {
                             type: 'string',
-                            description: '要執行的 JavaScript 程式碼。可以使用 document、window、selection、console 與 buildElementSelector。'
+                            description: '要執行的 JavaScript 程式碼。可以使用 document、window、selection、console、buildElementSelector 與 askpage.ref(ref) / askpage.refs(ref)。'
                         }
                     },
                     required: ['code']
@@ -10644,6 +10879,182 @@ async function createDialog() {
         );
     }
 
+    // ===== 代理模式 L2 讀取工具：read_page / find / get_page_text =====
+
+    function describeSnapshotTarget(element) {
+        if (!element || element.nodeType !== 1) {
+            return '';
+        }
+        const role = getSemanticRole(element);
+        const name = getSemanticAccessibleName(element, role);
+        return `${role || element.tagName.toLowerCase()}${name ? ` "${truncateToolText(name, 60)}"` : ''}`;
+    }
+
+    // 解析工具的 ref 參數；省略 ref 時退回主要內容容器。回傳 { elements, ref, isRange } 或 { error }。
+    function resolveToolTargetElements(refValue, { allowEmpty = true } = {}) {
+        const rawRef = String(refValue ?? '').trim();
+        if (!rawRef) {
+            if (!allowEmpty) {
+                return { error: 'ref 參數不可為空。請先從快照、find 或 read_page 取得 ref。' };
+            }
+            return { elements: [getPageContextContainer()], ref: '', isRange: false };
+        }
+
+        const normalizedRef = normalizeAgentSnapshotRefId(rawRef);
+        if (!normalizedRef) {
+            return { error: `ref 格式不正確：${truncateToolText(rawRef, 40)}。ref 應為快照行尾的 e 加數字，例如 e12。` };
+        }
+
+        const resolved = resolveAgentSnapshotRef(normalizedRef);
+        if (!resolved) {
+            return { error: `ref ${normalizedRef} 不存在。請先呼叫 find 或 read_page 取得目前頁面的 ref。` };
+        }
+        if (resolved.stale) {
+            return { error: `ref ${normalizedRef} 已失效（元素已從頁面移除）。請呼叫 read_page 重新取得快照。` };
+        }
+
+        return { elements: resolved.elements, ref: normalizedRef, isRange: Boolean(resolved.isRange) };
+    }
+
+    function executeReadPageTool(toolArgs) {
+        const target = resolveToolTargetElements(toolArgs.ref);
+        if (target.error) {
+            return createToolResult(false, target.error);
+        }
+
+        const mode = ['ax', 'text', 'html'].includes(String(toolArgs.mode || '').toLowerCase())
+            ? String(toolArgs.mode).toLowerCase()
+            : 'ax';
+        const maxChars = normalizeReadPageMaxChars(toolArgs.max_chars ?? toolArgs.maxChars);
+        const depth = normalizePositiveInteger(toolArgs.depth, Infinity, 50);
+        const isWholePage = !target.ref;
+
+        let content = '';
+        if (mode === 'ax') {
+            if (isWholePage) {
+                const snapshot = buildAgentSnapshot(document.body, {
+                    container: target.elements[0],
+                    tokenBudget: Math.max(MIN_AGENT_SNAPSHOT_TOKEN_BUDGET, Math.round(maxChars / 2.5)),
+                    maxDepth: depth,
+                    selectionAnchor: getAgentSnapshotSelectionAnchor()
+                });
+                content = snapshot.content;
+            } else {
+                content = target.elements.map((element) => buildAgentSnapshot(element, {
+                    includeDocumentLine: false,
+                    collapseLandmarks: false,
+                    maxDepth: depth,
+                    tokenBudget: Math.max(MIN_AGENT_SNAPSHOT_TOKEN_BUDGET, Math.round(maxChars / 2.5))
+                }).content).join('\n');
+            }
+        } else if (mode === 'text') {
+            content = target.elements.map(getElementPlainText).filter(Boolean).join('\n\n');
+        } else {
+            content = target.elements.map((element) => getDepthLimitedFilteredHtml(element, depth)).join('\n');
+        }
+
+        const limited = truncateTextToLimit(content, maxChars);
+        const targetDescription = isWholePage
+            ? '主要內容容器'
+            : (target.isRange ? `範圍 ${target.ref}（${target.elements.length} 個元素）` : `${target.ref} ${describeSnapshotTarget(target.elements[0])}`);
+
+        return createToolResult(true, `已以 ${mode} 模式讀取 ${targetDescription}${limited.truncated ? '（內容已截斷）' : ''}。`, {
+            ref: target.ref,
+            mode,
+            depth: Number.isFinite(depth) ? depth : null,
+            totalChars: limited.totalChars,
+            returnedChars: limited.text.length,
+            truncated: limited.truncated,
+            content: limited.text
+        }, limited.truncated ? [`內容超過 ${maxChars} 字元已截斷；可提高 max_chars、指定更小的 ref 或加上 depth。`] : []);
+    }
+
+    function executeGetPageTextTool(toolArgs) {
+        const target = resolveToolTargetElements(toolArgs.ref);
+        if (target.error) {
+            return createToolResult(false, target.error);
+        }
+        const maxChars = normalizeReadPageMaxChars(toolArgs.max_chars ?? toolArgs.maxChars);
+        const text = target.elements.map(getElementPlainText).filter(Boolean).join('\n\n');
+        const limited = truncateTextToLimit(text, maxChars);
+        return createToolResult(true, `已取得${target.ref ? ` ${target.ref} 的` : '主要內容的'}純文字（${limited.totalChars} 字元${limited.truncated ? '，已截斷' : ''}）。`, {
+            ref: target.ref,
+            totalChars: limited.totalChars,
+            returnedChars: limited.text.length,
+            truncated: limited.truncated,
+            text: limited.text
+        });
+    }
+
+    function executeFindTool(toolArgs) {
+        const query = String(toolArgs.query || '').trim();
+        if (!query) {
+            return createToolResult(false, 'query 參數不可為空。');
+        }
+        const roleFilter = String(toolArgs.role || '').trim().toLowerCase();
+        const limit = normalizePositiveInteger(toolArgs.limit, AGENT_FIND_DEFAULT_LIMIT, AGENT_FIND_MAX_LIMIT);
+        const candidates = collectAgentSnapshotCandidates(document.body);
+
+        const scored = candidates.map((candidate) => {
+            const { node } = candidate;
+            if (roleFilter && node.role !== roleFilter) {
+                return null;
+            }
+            const propertyValues = node.properties.map(([, value]) => value);
+            const textCandidates = [node.name, candidate.preview, ...propertyValues].filter(Boolean);
+            let score = 0;
+            textCandidates.forEach((text) => {
+                score = Math.max(score, scoreMatchCandidate(text, query));
+            });
+            if (!roleFilter && normalizeMatchText(node.role) === normalizeMatchText(query)) {
+                score = Math.max(score, 70);
+            }
+            if (score <= 0) {
+                return null;
+            }
+            if (AGENT_SNAPSHOT_ACTIONABLE_ROLES.has(node.role)) {
+                score += 5;
+            } else if (isAgentSnapshotRefRole(node.role)) {
+                score += 2;
+            }
+            return { candidate, score };
+        }).filter(Boolean);
+
+        scored.sort((first, second) => second.score - first.score);
+        const results = scored.slice(0, limit).map(({ candidate, score }) => {
+            const { node } = candidate;
+            const ref = registerAgentSnapshotRef(node.element);
+            return {
+                ref,
+                role: node.role,
+                name: truncateToolText(node.name || candidate.preview, 120),
+                properties: Object.fromEntries(node.properties),
+                path: truncateToolText(candidate.path, 200),
+                score,
+                line: formatAgentSnapshotLine(0, node.role, node.name || candidate.preview, node.properties, ref)
+            };
+        });
+
+        if (!results.length) {
+            return createToolResult(false, `找不到符合「${truncateToolText(query, 60)}」${roleFilter ? `且角色為 ${roleFilter}` : ''} 的元素。可嘗試更短的關鍵字、移除 role 限制，或用 read_page 檢視頁面結構。`, {
+                query,
+                role: roleFilter,
+                total: 0,
+                results: []
+            });
+        }
+
+        return createToolResult(true, `找到 ${scored.length} 個符合「${truncateToolText(query, 60)}」的元素，回傳前 ${results.length} 筆。`, {
+            query,
+            role: roleFilter,
+            total: scored.length,
+            results
+        }, [], results.map((result) => ({
+            ref: result.ref,
+            description: result.line
+        })));
+    }
+
     async function executeToolCall({ id = '', name = '', args = {} }, toolContext = {}) {
         const cancellationContext = toolContext.task || toolContext.signal;
         throwIfAskTaskCancelled(cancellationContext);
@@ -10705,6 +11116,7 @@ async function createDialog() {
                         total: descriptors.length,
                         fields: descriptors.map(serializeFieldDescriptor)
                     }, [], descriptors.map((descriptor) => ({
+                        ref: registerAgentSnapshotRef(descriptor.element),
                         selector: descriptor.selector,
                         description: `${descriptor.fieldType}:${descriptor.labels[0] || descriptor.name || descriptor.id || descriptor.selector}`
                     })))
@@ -10858,6 +11270,18 @@ async function createDialog() {
                 };
             }
 
+            if (name === 'read_page') {
+                return { id, name, result: executeReadPageTool(toolArgs) };
+            }
+
+            if (name === 'find') {
+                return { id, name, result: executeFindTool(toolArgs) };
+            }
+
+            if (name === 'get_page_text') {
+                return { id, name, result: executeGetPageTextTool(toolArgs) };
+            }
+
             if (name === 'run_js') {
                 const code = String(toolArgs.code || '');
                 if (!code.trim()) {
@@ -10869,6 +11293,7 @@ async function createDialog() {
                 }
 
                 const restoreDialogHost = detachActiveDialogHostForPageTool();
+                const refTagging = tagAgentSnapshotRefsForMainWorld(code);
                 let response;
                 try {
                     response = await awaitWithAskTaskCancellation(chrome.runtime.sendMessage({
@@ -10877,8 +11302,13 @@ async function createDialog() {
                     }), toolContext.signal);
                     throwIfAskTaskCancelled(cancellationContext);
                 } finally {
+                    refTagging.cleanup();
                     restoreDialogHost();
                 }
+
+                const refWarnings = refTagging.missingRefs.length
+                    ? [`下列 ref 不存在或已失效，askpage.ref() 會回傳 null：${refTagging.missingRefs.join(', ')}。請先呼叫 find 或 read_page 取得最新 ref。`]
+                    : [];
 
                 if (!response?.success) {
                     return {
@@ -10895,7 +11325,7 @@ async function createDialog() {
                         response.result?.success !== false,
                         response.result?.message || '已執行 JavaScript。',
                         response.result?.data || {},
-                        response.result?.warnings || [],
+                        [...(response.result?.warnings || []), ...refWarnings],
                         response.result?.matchedTargets || []
                     )
                 };
@@ -12611,7 +13041,7 @@ async function createDialog() {
                     functionResponse: {
                         name: toolResult.name,
                         id: toolResult.id,
-                        response: { result: toolResult.result }
+                        response: { result: buildModelToolResultPayload(toolResult.result) }
                     }
                 }))
             });
