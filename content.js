@@ -11259,11 +11259,21 @@ async function createDialog() {
         return { affected: snapshot.content, affectedRef: registerAgentSnapshotRef(root) };
     }
 
+    // pageChanged 同時採納兩種訊號：MutationObserver 觀察到的 DOM 變化，以及各工具自行回報的 actionOutcome
+    // （type / select_option 主要改 value / checked / selectedIndex，這類變更不會產生 attributes 紀錄）。
     function buildActionToolResult(success, message, { ref, element, observed, extraData = {}, warnings = [] }) {
         const { mutations } = observed;
-        const pageChanged = mutations.addedNodes + mutations.removedNodes + mutations.attributeChanges > 0 || observed.urlChanged;
+        const actionOutcome = observed.actionOutcome && typeof observed.actionOutcome === 'object' ? observed.actionOutcome : {};
+        const domChanged = mutations.addedNodes + mutations.removedNodes + mutations.attributeChanges > 0 || observed.urlChanged;
+        const pageChanged = domChanged || actionOutcome.pageChanged === true;
         const { affected, affectedRef } = buildActionAffectedSnapshot(element, observed);
         const hints = [];
+        if (actionOutcome.pageChanged === true && !domChanged) {
+            hints.push('欄位值已更新（此類變更不會產生 DOM 節點或屬性變化，屬正常現象）。');
+        }
+        if (actionOutcome.pageChanged === false && actionOutcome.reason) {
+            hints.push(actionOutcome.reason);
+        }
         if (observed.urlChanged) {
             hints.push(`頁面網址已由 ${truncateToolText(observed.urlBefore, 120)} 變為 ${truncateToolText(observed.urlAfter, 120)}；舊 ref 可能已失效，請先呼叫 read_page 重新取得快照。`);
         }
@@ -11280,6 +11290,7 @@ async function createDialog() {
         return createToolResult(success, message, {
             ref,
             pageChanged,
+            domChanged,
             urlChanged: observed.urlChanged,
             url: observed.urlAfter,
             titleChanged: observed.titleChanged,
@@ -11442,8 +11453,10 @@ async function createDialog() {
         const submit = coerceBooleanValue(toolArgs.submit, false);
         scrollElementIntoViewForAction(editable);
 
+        const isRichTextTarget = editable.isContentEditable && editable.tagName !== 'INPUT' && editable.tagName !== 'TEXTAREA';
         const observed = await performObservedPageAction(async () => {
-            if (editable.isContentEditable && editable.tagName !== 'INPUT' && editable.tagName !== 'TEXTAREA') {
+            let expectedValue = '';
+            if (isRichTextTarget) {
                 editable.focus?.();
                 let inserted = false;
                 try {
@@ -11458,9 +11471,10 @@ async function createDialog() {
                     editable.textContent = clear ? text : `${editable.textContent || ''}${text}`;
                     editable.dispatchEvent(new Event('input', { bubbles: true }));
                 }
+                expectedValue = text;
             } else {
-                const nextValue = clear ? text : `${editable.value || ''}${text}`;
-                setNativeProperty(editable, 'value', nextValue);
+                expectedValue = clear ? text : `${editable.value || ''}${text}`;
+                setNativeProperty(editable, 'value', expectedValue);
                 dispatchFieldEvents(editable);
             }
 
@@ -11476,22 +11490,36 @@ async function createDialog() {
                     }
                 }
             }
+
+            // 以欄位實際值回報結果：value 變更不會被 MutationObserver 記錄，需由工具自行判斷。
+            const appliedValue = isRichTextTarget ? (editable.innerText || editable.textContent || '') : (editable.value || '');
+            const valueApplied = isRichTextTarget ? appliedValue.includes(text) : appliedValue === expectedValue;
+            return {
+                pageChanged: valueApplied || submit,
+                valueApplied,
+                reason: valueApplied ? '' : '欄位值在輸入後未保留，可能被頁面框架重設；可改用 run_js 直接操作或先點擊該欄位再輸入。'
+            };
         }, toolContext);
 
-        const currentValue = editable.isContentEditable && editable.tagName !== 'INPUT' && editable.tagName !== 'TEXTAREA'
+        const valueApplied = observed.actionOutcome?.valueApplied !== false;
+        const currentValue = isRichTextTarget
             ? (editable.innerText || editable.textContent || '')
             : (editable.value || '');
         const isPassword = editable.tagName === 'INPUT' && String(editable.type).toLowerCase() === 'password';
 
-        return buildActionToolResult(true, `已在 ${target.ref} ${describeSnapshotTarget(editable)} 輸入 ${isPassword ? '（密碼內容不顯示）' : `「${truncateToolText(text, 80)}」`}${submit ? '並送出' : ''}。`, {
+        return buildActionToolResult(valueApplied, valueApplied
+            ? `已在 ${target.ref} ${describeSnapshotTarget(editable)} 輸入 ${isPassword ? '（密碼內容不顯示）' : `「${truncateToolText(text, 80)}」`}${submit ? '並送出' : ''}。`
+            : `已嘗試在 ${target.ref} ${describeSnapshotTarget(editable)} 輸入，但欄位值未保留。`, {
             ref: target.ref,
             element: editable,
             observed,
             extraData: {
                 value: isPassword ? '' : truncateToolText(currentValue, 400),
+                valueApplied,
                 cleared: clear,
                 submitted: submit
-            }
+            },
+            warnings: valueApplied ? [] : ['欄位值未保留，可能被頁面框架重設。']
         });
     }
 
@@ -11553,17 +11581,32 @@ async function createDialog() {
                     dispatchFieldEvents(matchedOption.element);
                 }
             }
+
+            // value / selectedIndex / checked 的變更不會被 MutationObserver 記錄，以實際狀態回報。
+            const selectionApplied = descriptor.fieldType === 'select'
+                ? element.value === matchedOption.value
+                : Boolean(matchedOption.element?.checked);
+            return {
+                pageChanged: selectionApplied,
+                valueApplied: selectionApplied,
+                reason: selectionApplied ? '' : '選項未成功套用，可能被頁面框架重設；可改用 click 點擊選項或 run_js 直接操作。'
+            };
         }, toolContext);
 
-        return buildActionToolResult(true, `已在 ${target.ref} ${describeSnapshotTarget(element)} 選取「${matchedOption.text}」。`, {
+        const selectionApplied = observed.actionOutcome?.valueApplied !== false;
+        return buildActionToolResult(selectionApplied, selectionApplied
+            ? `已在 ${target.ref} ${describeSnapshotTarget(element)} 選取「${matchedOption.text}」。`
+            : `已嘗試在 ${target.ref} ${describeSnapshotTarget(element)} 選取「${matchedOption.text}」，但選項未套用。`, {
             ref: target.ref,
             element: descriptor.fieldType === 'radio' && matchedOption.element ? matchedOption.element : element,
             observed,
             extraData: {
                 fieldType: descriptor.fieldType,
                 value: matchedOption.value,
-                displayValue: matchedOption.text
-            }
+                displayValue: matchedOption.text,
+                valueApplied: selectionApplied
+            },
+            warnings: selectionApplied ? [] : ['選項未成功套用，可能被頁面框架重設。']
         });
     }
 

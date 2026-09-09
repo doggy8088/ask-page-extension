@@ -173,7 +173,7 @@ Ollama Cloud 另有可選的 `web_search` 工具。使用者在 Ollama Cloud pro
 
 - **用途**：點擊指定 ref 的元素（連結、按鈕、選單項目、核取方塊等）
 - **行為**：先捲動到可見位置，依序派發 `pointerdown` / `mousedown` / `pointerup` / `mouseup` 再呼叫原生 `click()`；disabled 或不可見時回報失敗
-- **回傳**：不重送整頁，只回傳 `affected`（受影響子樹的快照，從目標往上找最近的 dialog / menu / form / list / table / landmark 作為根，預算約 1500 tokens）、`pageChanged`、`urlChanged`、`mutations`（新增／移除／屬性變更數與新對話框數）與 `hint`（網址改變時提示重新 `read_page`）
+- **回傳**：不重送整頁，只回傳 `affected`（受影響子樹的快照，從目標往上找最近的 dialog / menu / form / list / table / landmark 作為根，預算約 1500 tokens）、`pageChanged`（DOM 變化或工具自行回報的值變更）、`domChanged`、`urlChanged`、`mutations`（新增／移除／屬性變更數與新對話框數）與 `hint`（網址改變時提示重新 `read_page`）
 
 | 參數 | 型別 | 說明 |
 | --- | --- | --- |
@@ -183,7 +183,7 @@ Ollama Cloud 另有可選的 `web_search` 工具。使用者在 Ollama Cloud pro
 
 - **用途**：在文字欄位、textarea 或 contenteditable 中輸入文字
 - **行為**：以原生 setter 設值並派發 focus / input / change / blur 事件（重用 `setNativeProperty` 與 `dispatchFieldEvents`）；contenteditable 走 `execCommand('insertText')`；`submit` 為 true 時派發 Enter 鍵事件，若未被 `preventDefault` 且欄位屬於表單則呼叫 `requestSubmit()`
-- **回傳**：同 `click` 的受影響子樹格式，另含 `value`（密碼欄位不回傳）、`cleared`、`submitted`
+- **回傳**：同 `click` 的受影響子樹格式，另含 `value`（密碼欄位不回傳）、`valueApplied`、`cleared`、`submitted`；`pageChanged` 除 DOM 變化外也採納欄位實際值是否套用（value 變更不會被 MutationObserver 記錄），值未保留時 `success` 為 false 並附警告
 
 | 參數 | 型別 | 說明 |
 | --- | --- | --- |
@@ -196,7 +196,7 @@ Ollama Cloud 另有可選的 `web_search` 工具。使用者在 Ollama Cloud pro
 
 - **用途**：在 `select` 或 radio 群組中選取選項
 - **行為**：以 `resolveOptionMatch()` 對顯示文字或 value 模糊比對；ref 指向 `option` 時直接選取該選項；找不到時回傳可用選項清單。自訂 listbox/combobox 元件請改用 `click`
-- **回傳**：同 `click` 的受影響子樹格式，另含 `fieldType`、`value`、`displayValue`
+- **回傳**：同 `click` 的受影響子樹格式，另含 `fieldType`、`value`、`displayValue`、`valueApplied`；以 select 的實際 `value` 或 radio 的 `checked` 判斷是否套用，未套用時 `success` 為 false
 
 | 參數 | 型別 | 說明 |
 | --- | --- | --- |
