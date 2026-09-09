@@ -36,6 +36,21 @@ const MAX_LLM_API_SERVICE_RETRIES = 5;
 const LLM_API_RETRY_BASE_DELAY_MS = 1000;
 const LLM_API_RETRY_MAX_DELAY_MS = 16000;
 const HTML_CONTEXT_NOISE_SELECTOR = 'script, style, noscript, template';
+const AGENT_CONTEXT_FORMAT_STORAGE = 'AGENT_CONTEXT_FORMAT';
+const AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE = 'AGENT_SNAPSHOT_TOKEN_BUDGET';
+const AGENT_CONTEXT_FORMAT_SNAPSHOT = 'snapshot';
+const AGENT_CONTEXT_FORMAT_HTML = 'html';
+const DEFAULT_AGENT_SNAPSHOT_TOKEN_BUDGET = 8000;
+const MIN_AGENT_SNAPSHOT_TOKEN_BUDGET = 2000;
+const MAX_AGENT_SNAPSHOT_TOKEN_BUDGET = 60000;
+const AGENT_SNAPSHOT_REPEATED_CHILD_LIMIT = 25;
+const AGENT_AFFECTED_SUBTREE_TOKEN_BUDGET = 1500;
+const AGENT_READ_PAGE_DEFAULT_MAX_CHARS = 12000;
+const AGENT_READ_PAGE_MAX_CHARS_LIMIT = 60000;
+const AGENT_FIND_DEFAULT_LIMIT = 10;
+const AGENT_FIND_MAX_LIMIT = 40;
+const AGENT_ACTION_SETTLE_DELAY_MS = 400;
+const TOOL_RESULT_PREVIEW_MAX_CHARS = 6000;
 
 function getLocalizedText(key, substitutions) {
     if (typeof AskPageI18n !== 'undefined' && typeof AskPageI18n.t === 'function') {
@@ -4529,6 +4544,707 @@ function getFilteredHtmlPageContext(container) {
         content,
         isFiltered: true,
         isTruncated: false
+    };
+}
+
+// ===== 代理模式精簡 Accessibility 快照（帶 ref、可折疊、受 Token 預算控制） =====
+
+const AGENT_SNAPSHOT_COLLAPSIBLE_LANDMARK_ROLES = new Set(['banner', 'navigation', 'contentinfo', 'complementary']);
+const AGENT_SNAPSHOT_REF_ROLES = new Set([
+    'link', 'button', 'textbox', 'searchbox', 'checkbox', 'radio', 'combobox', 'listbox', 'option',
+    'slider', 'spinbutton', 'switch', 'tab', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'treeitem',
+    'heading', 'main', 'banner', 'navigation', 'contentinfo', 'complementary', 'form', 'search', 'region',
+    'table', 'grid', 'list', 'tree', 'menu', 'menubar', 'tablist', 'tabpanel', 'dialog', 'alertdialog',
+    'article', 'figure', 'group', 'image', 'iframe', 'progressbar', 'meter', 'status', 'alert'
+]);
+const AGENT_SNAPSHOT_TEXT_PREVIEW_ROLES = new Set([
+    'heading', 'paragraph', 'blockquote', 'listitem', 'cell', 'rowheader', 'columnheader', 'term', 'definition',
+    'caption', 'article', 'figure', 'group', 'region'
+]);
+const AGENT_SNAPSHOT_ACTIONABLE_ROLES = new Set([
+    'link', 'button', 'textbox', 'searchbox', 'checkbox', 'radio', 'combobox', 'listbox', 'option',
+    'slider', 'spinbutton', 'switch', 'tab', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'treeitem'
+]);
+
+function estimateTokenCount(text) {
+    const value = String(text || '');
+    if (!value) {
+        return 0;
+    }
+    const cjkMatches = value.match(/[぀-ヿ㐀-鿿가-힯]/g);
+    const cjkCount = cjkMatches ? cjkMatches.length : 0;
+    return Math.ceil(cjkCount + (value.length - cjkCount) / 4);
+}
+
+function normalizeAgentSnapshotTokenBudget(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+        return DEFAULT_AGENT_SNAPSHOT_TOKEN_BUDGET;
+    }
+    return Math.max(MIN_AGENT_SNAPSHOT_TOKEN_BUDGET, Math.min(MAX_AGENT_SNAPSHOT_TOKEN_BUDGET, Math.round(numericValue)));
+}
+
+function createWeakElementRef(element) {
+    if (typeof WeakRef === 'function') {
+        return new WeakRef(element);
+    }
+    return { deref: () => element };
+}
+
+// ref 只是 e + 遞增整數，不含任何頁面資訊；同一頁面生命週期內單調遞增，不重複使用，
+// 因此舊對話回合中的 ref 在元素仍存在時仍可正確解析。
+const agentSnapshotRefRegistry = {
+    nextIndex: 1,
+    idsByElement: new WeakMap(),
+    rangeIdsByAnchor: new WeakMap(),
+    entriesById: new Map()
+};
+
+function resetAgentSnapshotRefRegistry() {
+    agentSnapshotRefRegistry.nextIndex = 1;
+    agentSnapshotRefRegistry.idsByElement = new WeakMap();
+    agentSnapshotRefRegistry.rangeIdsByAnchor = new WeakMap();
+    agentSnapshotRefRegistry.entriesById.clear();
+}
+
+function registerAgentSnapshotRef(element) {
+    if (!element || element.nodeType !== 1) {
+        return '';
+    }
+    const existingId = agentSnapshotRefRegistry.idsByElement.get(element);
+    if (existingId) {
+        return existingId;
+    }
+    const id = `e${agentSnapshotRefRegistry.nextIndex++}`;
+    agentSnapshotRefRegistry.idsByElement.set(element, id);
+    agentSnapshotRefRegistry.entriesById.set(id, {
+        kind: 'element',
+        element: createWeakElementRef(element)
+    });
+    return id;
+}
+
+function registerAgentSnapshotRangeRef(elements) {
+    const validElements = (elements || []).filter((element) => element && element.nodeType === 1);
+    if (!validElements.length) {
+        return '';
+    }
+    if (validElements.length === 1) {
+        return registerAgentSnapshotRef(validElements[0]);
+    }
+    const anchor = validElements[0];
+    const existingId = agentSnapshotRefRegistry.rangeIdsByAnchor.get(anchor);
+    if (existingId) {
+        const existingEntry = agentSnapshotRefRegistry.entriesById.get(existingId);
+        if (existingEntry && existingEntry.elements.length === validElements.length) {
+            return existingId;
+        }
+    }
+    const id = `e${agentSnapshotRefRegistry.nextIndex++}`;
+    agentSnapshotRefRegistry.rangeIdsByAnchor.set(anchor, id);
+    agentSnapshotRefRegistry.entriesById.set(id, {
+        kind: 'range',
+        elements: validElements.map(createWeakElementRef)
+    });
+    return id;
+}
+
+function normalizeAgentSnapshotRefId(value) {
+    const text = String(value ?? '').trim().toLowerCase();
+    const match = text.match(/^#?e?(\d+)$/);
+    return match ? `e${Number(match[1])}` : '';
+}
+
+function isElementStillConnected(element) {
+    if (!element) {
+        return false;
+    }
+    if (typeof element.isConnected === 'boolean') {
+        return element.isConnected;
+    }
+    return true;
+}
+
+function resolveAgentSnapshotRef(value) {
+    const id = normalizeAgentSnapshotRefId(value);
+    if (!id) {
+        return null;
+    }
+    const entry = agentSnapshotRefRegistry.entriesById.get(id);
+    if (!entry) {
+        return null;
+    }
+    if (entry.kind === 'element') {
+        const element = entry.element.deref();
+        if (!isElementStillConnected(element)) {
+            return { id, stale: true, element: null, elements: [] };
+        }
+        return { id, stale: false, element, elements: [element] };
+    }
+    const elements = entry.elements
+        .map((weakElement) => weakElement.deref())
+        .filter(isElementStillConnected);
+    if (!elements.length) {
+        return { id, stale: true, element: null, elements: [] };
+    }
+    return { id, stale: false, element: elements[0], elements, isRange: true };
+}
+
+function pruneAgentSnapshotRefRegistry() {
+    agentSnapshotRefRegistry.entriesById.forEach((entry, id) => {
+        const resolved = resolveAgentSnapshotRef(id);
+        if (!resolved || resolved.stale) {
+            agentSnapshotRefRegistry.entriesById.delete(id);
+        }
+    });
+}
+
+function isAgentSnapshotRefRole(role) {
+    return AGENT_SNAPSHOT_REF_ROLES.has(role);
+}
+
+function isAgentSnapshotElementInViewport(element) {
+    if (!element || typeof element.getBoundingClientRect !== 'function') {
+        return false;
+    }
+    const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
+    const viewportWidth = window.innerWidth || document.documentElement?.clientWidth || 0;
+    if (!viewportHeight || !viewportWidth) {
+        return false;
+    }
+    const rect = element.getBoundingClientRect();
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+        return false;
+    }
+    return rect.bottom > 0 && rect.top < viewportHeight && rect.right > 0 && rect.left < viewportWidth;
+}
+
+function elementContainsNode(element, node) {
+    if (!element || !node) {
+        return false;
+    }
+    if (typeof element.contains === 'function') {
+        try {
+            return element === node || element.contains(node);
+        } catch (error) {
+            return false;
+        }
+    }
+    let current = node;
+    while (current) {
+        if (current === element) {
+            return true;
+        }
+        current = current.parentElement || current.parentNode || null;
+    }
+    return false;
+}
+
+function collectAgentSnapshotTree(root, options = {}) {
+    const getComputedStyleImpl = options.getComputedStyle ||
+        (typeof window.getComputedStyle === 'function' ? window.getComputedStyle.bind(window) : null);
+    const includeUrls = options.includeUrls === true;
+    const visitedNodes = new WeakSet();
+
+    const createTextNode = (text) => ({ kind: 'text', text, descendantCount: 1 });
+
+    const appendChildNode = (children, childNode) => {
+        if (!childNode) {
+            return;
+        }
+        if (childNode.kind === 'text') {
+            const lastChild = children[children.length - 1];
+            if (lastChild && lastChild.kind === 'text') {
+                lastChild.text = normalizeSemanticContextText(`${lastChild.text} ${childNode.text}`);
+                return;
+            }
+        }
+        children.push(childNode);
+    };
+
+    const visitInto = (node, children) => {
+        if (!node || visitedNodes.has(node)) {
+            return;
+        }
+        if ((typeof node === 'object' || typeof node === 'function') && node !== null) {
+            visitedNodes.add(node);
+        }
+
+        if (node.nodeType === 3) {
+            const text = normalizeSemanticContextText(node.textContent);
+            if (text) {
+                appendChildNode(children, createTextNode(text));
+            }
+            return;
+        }
+        if (node.nodeType !== 1) {
+            return;
+        }
+
+        const element = node;
+        if (isSemanticElementHidden(element, getComputedStyleImpl)) {
+            return;
+        }
+
+        let role = getSemanticRole(element);
+        const name = getSemanticAccessibleName(element, role);
+        if (role === 'region' && !name) {
+            role = '';
+        }
+
+        if (!role) {
+            // 沒有語意的泛用容器直接攤平，子節點併入父層。
+            getSemanticChildNodes(element).forEach((childNode) => visitInto(childNode, children));
+            return;
+        }
+
+        const properties = getSemanticProperties(element, role)
+            .filter(([propertyName]) => includeUrls || propertyName !== 'url' || role === 'iframe');
+        const snapshotNode = {
+            kind: 'element',
+            role,
+            name,
+            properties,
+            element,
+            children: [],
+            descendantCount: 1
+        };
+
+        if (!isAtomicSemanticRole(role)) {
+            getSemanticChildNodes(element).forEach((childNode) => visitInto(childNode, snapshotNode.children));
+            snapshotNode.descendantCount += snapshotNode.children.reduce((total, child) => total + child.descendantCount, 0);
+        }
+
+        // 只有單一文字子節點且沒有可存取名稱的元素（heading、paragraph、listitem、cell…）
+        // 直接把文字內嵌成名稱，一行取代兩行，明顯節省 Token。
+        if (!snapshotNode.name && snapshotNode.children.length === 1 && snapshotNode.children[0].kind === 'text') {
+            snapshotNode.name = snapshotNode.children[0].text;
+            snapshotNode.children = [];
+            snapshotNode.inlineText = true;
+        }
+
+        appendChildNode(children, snapshotNode);
+    };
+
+    const nodes = [];
+    visitInto(root, nodes);
+    return nodes;
+}
+
+function getAgentSnapshotNodeTextPreview(node, maxLength = 60) {
+    if (!node || node.kind !== 'element') {
+        return '';
+    }
+    if (node.name) {
+        return node.name.length > maxLength ? `${node.name.slice(0, maxLength)}…` : node.name;
+    }
+    const collectText = (currentNode, parts) => {
+        if (parts.join(' ').length >= maxLength) {
+            return;
+        }
+        if (currentNode.kind === 'text') {
+            parts.push(currentNode.text);
+            return;
+        }
+        if (currentNode.name) {
+            parts.push(currentNode.name);
+        }
+        currentNode.children.forEach((child) => collectText(child, parts));
+    };
+    const parts = [];
+    node.children.forEach((child) => collectText(child, parts));
+    const preview = normalizeSemanticContextText(parts.join(' '));
+    return preview.length > maxLength ? `${preview.slice(0, maxLength)}…` : preview;
+}
+
+function countAgentSnapshotLinks(node) {
+    if (!node || node.kind !== 'element') {
+        return 0;
+    }
+    const ownCount = node.role === 'link' ? 1 : 0;
+    return ownCount + node.children.reduce((total, child) => total + countAgentSnapshotLinks(child), 0);
+}
+
+function formatAgentSnapshotLine(depth, role, name = '', properties = [], ref = '') {
+    const baseLine = formatSemanticContextLine(depth, role, name, properties);
+    return ref ? `${baseLine} ${ref}` : baseLine;
+}
+
+function buildAgentSnapshot(root, options = {}) {
+    const documentRef = root?.ownerDocument || options.document || document;
+    const tokenBudget = Number.isFinite(Number(options.tokenBudget)) && Number(options.tokenBudget) > 0
+        ? Number(options.tokenBudget)
+        : Infinity;
+    const collapseLandmarks = options.collapseLandmarks !== false;
+    const includeDocumentLine = options.includeDocumentLine !== false;
+    const maxDepth = Number.isFinite(Number(options.maxDepth)) && Number(options.maxDepth) > 0
+        ? Number(options.maxDepth)
+        : Infinity;
+    const repeatedChildLimit = Number.isFinite(Number(options.repeatedChildLimit)) && Number(options.repeatedChildLimit) > 0
+        ? Number(options.repeatedChildLimit)
+        : AGENT_SNAPSHOT_REPEATED_CHILD_LIMIT;
+    const containerElement = options.container || null;
+    const selectionAnchor = options.selectionAnchor || null;
+    const isInViewport = typeof options.isInViewport === 'function'
+        ? options.isInViewport
+        : isAgentSnapshotElementInViewport;
+    const collapsedPlaceholderCost = 24;
+    const minimumUsefulBudget = 60;
+
+    const tree = collectAgentSnapshotTree(root, options);
+    let collapsedLandmarkCount = 0;
+    let collapsedByBudgetCount = 0;
+
+    const assignRef = (element) => registerAgentSnapshotRef(element);
+
+    const collapsedProperties = (node, extraProperties = []) => {
+        const properties = node.properties.filter(([propertyName]) => propertyName === 'level');
+        const linkCount = countAgentSnapshotLinks(node);
+        properties.push(['collapsed', `${node.descendantCount} nodes${linkCount ? `, ${linkCount} links` : ''}`]);
+        return [...properties, ...extraProperties];
+    };
+
+    const shouldCollapseLandmark = (node) => {
+        if (!collapseLandmarks || !AGENT_SNAPSHOT_COLLAPSIBLE_LANDMARK_ROLES.has(node.role)) {
+            return false;
+        }
+        if (containerElement && (node.element === containerElement || elementContainsNode(node.element, containerElement))) {
+            return false;
+        }
+        return true;
+    };
+
+    const collapsedNodeName = (node) => (
+        AGENT_SNAPSHOT_TEXT_PREVIEW_ROLES.has(node.role) ? getAgentSnapshotNodeTextPreview(node) : node.name
+    );
+
+    const renderCollapsedNodeLine = (node, depth) => formatAgentSnapshotLine(
+        depth, node.role, collapsedNodeName(node), collapsedProperties(node), assignRef(node.element)
+    );
+
+    const renderNodeHeadLine = (node, depth) => formatAgentSnapshotLine(
+        depth, node.role, node.name, node.properties, isAgentSnapshotRefRole(node.role) ? assignRef(node.element) : ''
+    );
+
+    // 完整輸出一個節點（含 landmark 折疊、深度上限與重複子節點抽樣）。
+    const renderNodeLines = (node, depth, lines) => {
+        if (node.kind === 'text') {
+            lines.push(formatSemanticContextLine(depth, 'text', node.text));
+            return;
+        }
+
+        if (shouldCollapseLandmark(node)) {
+            collapsedLandmarkCount++;
+            lines.push(renderCollapsedNodeLine(node, depth));
+            return;
+        }
+
+        if (depth >= maxDepth && node.children.length) {
+            lines.push(renderCollapsedNodeLine(node, depth));
+            return;
+        }
+
+        lines.push(renderNodeHeadLine(node, depth));
+        renderChildrenLines(node, depth, lines, (child, childDepth) => renderNodeLines(child, childDepth, lines));
+    };
+
+    const renderChildrenLines = (node, depth, lines, renderChild) => {
+        const childNodes = node.children;
+        const visibleChildren = childNodes.length > repeatedChildLimit
+            ? childNodes.slice(0, repeatedChildLimit)
+            : childNodes;
+        visibleChildren.forEach((child) => renderChild(child, depth + 1));
+        if (visibleChildren.length < childNodes.length) {
+            const omittedCount = childNodes.length - visibleChildren.length;
+            lines.push(formatAgentSnapshotLine(depth + 1, `… ${omittedCount} more children omitted`, '', [['collapsed', 'use read_page to expand']], assignRef(node.element)));
+        }
+    };
+
+    const renderNodeFully = (node, depth) => {
+        const lines = [];
+        renderNodeLines(node, depth, lines);
+        return lines;
+    };
+
+    const linesCost = (lines) => estimateTokenCount(lines.join('\n'));
+
+    // 將同一層節點以 heading 為界切成區段。
+    const buildSections = (nodes, depth) => {
+        const sections = [];
+        let currentSection = null;
+        const startSection = (headingNode) => {
+            currentSection = {
+                heading: headingNode,
+                nodes: [],
+                depth,
+                order: sections.length,
+                containsSelection: false,
+                inViewport: false
+            };
+            sections.push(currentSection);
+        };
+
+        nodes.forEach((node) => {
+            if (node.kind === 'element' && node.role === 'heading') {
+                startSection(node);
+            } else if (!currentSection) {
+                startSection(null);
+            }
+            currentSection.nodes.push(node);
+        });
+
+        sections.forEach((section) => {
+            section.lines = [];
+            section.nodes.forEach((node) => renderNodeLines(node, depth, section.lines));
+            section.tokenCost = linesCost(section.lines);
+            section.nodes.forEach((node) => {
+                if (node.kind !== 'element') {
+                    return;
+                }
+                if (selectionAnchor && elementContainsNode(node.element, selectionAnchor)) {
+                    section.containsSelection = true;
+                }
+                if (!section.inViewport && isInViewport(node.element)) {
+                    section.inViewport = true;
+                }
+            });
+        });
+
+        return sections;
+    };
+
+    const sectionPriority = (section) => (section.containsSelection ? 0 : (section.inViewport ? 1 : 2));
+
+    const renderCollapsedSectionLine = (section) => {
+        const elementNodes = section.nodes.filter((node) => node.kind === 'element');
+        const descendantCount = section.nodes.reduce((total, node) => total + node.descendantCount, 0);
+        const linkCount = section.nodes.reduce((total, node) => total + countAgentSnapshotLinks(node), 0);
+        const rangeRef = registerAgentSnapshotRangeRef(elementNodes.map((node) => node.element));
+        const collapsedProperty = ['collapsed', `${descendantCount} nodes${linkCount ? `, ${linkCount} links` : ''}`];
+        const leadNode = section.heading || (elementNodes.length === 1 ? elementNodes[0] : null);
+        if (leadNode) {
+            const levelProperty = leadNode.properties.filter(([propertyName]) => propertyName === 'level');
+            return formatAgentSnapshotLine(section.depth, leadNode.role, collapsedNodeName(leadNode), [...levelProperty, collapsedProperty], rangeRef);
+        }
+        const textPreview = normalizeSemanticContextText(
+            section.nodes.map((node) => (node.kind === 'text' ? node.text : node.name)).filter(Boolean).join(' ')
+        ).slice(0, 60);
+        return formatAgentSnapshotLine(section.depth, 'group', textPreview, [collapsedProperty], rangeRef);
+    };
+
+    const renderTruncatedTextLine = (node, depth, budget) => {
+        const maxChars = Math.max(20, Math.floor(budget * 2));
+        const sourceText = node.kind === 'text' ? node.text : node.name;
+        const text = sourceText.length > maxChars ? `${sourceText.slice(0, maxChars)}…` : sourceText;
+        if (node.kind === 'text') {
+            return formatSemanticContextLine(depth, 'text', text);
+        }
+        return formatAgentSnapshotLine(depth, node.role, text, node.properties,
+            isAgentSnapshotRefRole(node.role) ? assignRef(node.element) : '');
+    };
+
+    // 遞迴地在預算內排版一層節點：先嘗試整層完整輸出；不行則依優先順序展開，
+    // 放不下的區段再往子層遞迴或折疊成單行。輸出仍維持 DOM 順序。
+    const layoutNodes = (nodes, depth, budget) => {
+        if (!nodes.length) {
+            return [];
+        }
+        const sections = buildSections(nodes, depth);
+        const totalCost = sections.reduce((total, section) => total + section.tokenCost, 0);
+        if (!Number.isFinite(budget) || totalCost <= budget) {
+            return sections.flatMap((section) => section.lines);
+        }
+
+        const prioritized = [...sections].sort((first, second) => {
+            const priorityDifference = sectionPriority(first) - sectionPriority(second);
+            return priorityDifference !== 0 ? priorityDifference : first.order - second.order;
+        });
+        const placed = new Map();
+        let remaining = Math.max(0, budget);
+
+        // 依優先順序單次走訪：高優先區段先取得預算（放不下就部分展開），低優先區段不得先搶走預算。
+        prioritized.forEach((section) => {
+            const reserve = (sections.length - placed.size - 1) * collapsedPlaceholderCost;
+            const available = remaining - Math.max(0, reserve);
+            if (section.tokenCost <= available) {
+                placed.set(section, section.lines);
+                remaining -= section.tokenCost;
+                return;
+            }
+            if (available < minimumUsefulBudget) {
+                collapsedByBudgetCount++;
+                const collapsedLine = renderCollapsedSectionLine(section);
+                placed.set(section, [collapsedLine]);
+                remaining -= linesCost([collapsedLine]);
+                return;
+            }
+            const partialLines = renderSectionPartially(section, available);
+            placed.set(section, partialLines);
+            remaining -= linesCost(partialLines);
+        });
+
+        return sections.flatMap((section) => placed.get(section) || []);
+    };
+
+    const renderSectionPartially = (section, available) => {
+        const lines = [];
+        let used = 0;
+        section.nodes.forEach((node, index) => {
+            const reserveRest = (section.nodes.length - index - 1) * collapsedPlaceholderCost;
+            const nodeBudget = available - used - Math.max(0, reserveRest);
+
+            if (node.kind === 'text' || (node.inlineText && !node.children.length)) {
+                const fullLine = node.kind === 'text'
+                    ? formatSemanticContextLine(section.depth, 'text', node.text)
+                    : renderNodeHeadLine(node, section.depth);
+                const fullCost = linesCost([fullLine]);
+                if (fullCost <= nodeBudget) {
+                    lines.push(fullLine);
+                    used += fullCost;
+                } else {
+                    collapsedByBudgetCount++;
+                    const truncatedLine = renderTruncatedTextLine(node, section.depth, Math.max(0, nodeBudget));
+                    lines.push(truncatedLine);
+                    used += linesCost([truncatedLine]);
+                }
+                return;
+            }
+
+            const fullLines = renderNodeFully(node, section.depth);
+            const fullCost = linesCost(fullLines);
+            if (fullCost <= nodeBudget) {
+                lines.push(...fullLines);
+                used += fullCost;
+                return;
+            }
+
+            const canDescend = node.children.length && !isAtomicSemanticRole(node.role) && !shouldCollapseLandmark(node) &&
+                section.depth < maxDepth;
+            if (canDescend) {
+                const headLine = renderNodeHeadLine(node, section.depth);
+                const headCost = linesCost([headLine]);
+                if (nodeBudget - headCost >= minimumUsefulBudget) {
+                    const childLines = layoutNodes(node.children, section.depth + 1, nodeBudget - headCost);
+                    lines.push(headLine, ...childLines);
+                    used += headCost + linesCost(childLines);
+                    return;
+                }
+            }
+
+            collapsedByBudgetCount++;
+            const collapsedLine = renderCollapsedNodeLine(node, section.depth);
+            lines.push(collapsedLine);
+            used += linesCost([collapsedLine]);
+        });
+        return lines;
+    };
+
+    // 找出容器節點與其祖先，容器之外的節點固定輸出（landmark 折疊後通常很短），容器內依預算排版。
+    const locatePath = (nodes, target, path) => {
+        for (const node of nodes) {
+            if (node.kind !== 'element') {
+                continue;
+            }
+            if (node.element === target) {
+                return [...path, node];
+            }
+            const found = locatePath(node.children, target, [...path, node]);
+            if (found) {
+                return found;
+            }
+        }
+        return null;
+    };
+
+    const baseDepth = includeDocumentLine ? 1 : 0;
+    const lines = [];
+
+    if (includeDocumentLine) {
+        const documentTitle = normalizeSemanticContextText(documentRef?.title);
+        const documentUrl = normalizeSemanticContextText(documentRef?.location?.href);
+        const documentLanguage = normalizeSemanticContextText(documentRef?.documentElement?.lang);
+        const documentProperties = [];
+        if (documentUrl) {
+            documentProperties.push(['url', documentUrl]);
+        }
+        if (documentLanguage) {
+            documentProperties.push(['lang', documentLanguage]);
+        }
+        lines.push(formatSemanticContextLine(0, 'document', documentTitle, documentProperties));
+    }
+
+    const containerPath = containerElement ? locatePath(tree, containerElement, []) : null;
+    if (!containerPath) {
+        lines.push(...layoutNodes(tree, baseDepth, tokenBudget - linesCost(lines)));
+    } else {
+        const beforeLines = [];
+        const afterLines = [];
+        let currentLevelNodes = tree;
+        containerPath.forEach((ancestorNode, index) => {
+            const depth = baseDepth + index;
+            const targetIndex = currentLevelNodes.indexOf(ancestorNode);
+            currentLevelNodes.slice(0, targetIndex).forEach((sibling) => renderNodeLines(sibling, depth, beforeLines));
+            const trailingLines = [];
+            currentLevelNodes.slice(targetIndex + 1).forEach((sibling) => renderNodeLines(sibling, depth, trailingLines));
+            afterLines.unshift(...trailingLines);
+            beforeLines.push(renderNodeHeadLine(ancestorNode, depth));
+            currentLevelNodes = ancestorNode.children;
+        });
+
+        lines.push(...beforeLines);
+        const fixedCost = linesCost(lines) + linesCost(afterLines);
+        lines.push(...layoutNodes(currentLevelNodes, baseDepth + containerPath.length, tokenBudget - fixedCost));
+        lines.push(...afterLines);
+    }
+
+    const content = lines.join('\n');
+    const refCount = new Set((content.match(/ e\d+$/gm) || []).map((match) => match.trim())).size;
+    return {
+        content,
+        isTruncated: collapsedByBudgetCount > 0,
+        tokenEstimate: estimateTokenCount(content),
+        refCount,
+        collapsedLandmarkCount,
+        collapsedByBudgetCount
+    };
+}
+
+
+function getAgentSnapshotSelectionAnchor() {
+    try {
+        const selection = window.getSelection?.();
+        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+            return null;
+        }
+        const range = selection.getRangeAt(0);
+        let anchor = range.commonAncestorContainer;
+        if (anchor && anchor.nodeType !== 1) {
+            anchor = anchor.parentElement;
+        }
+        if (!anchor || anchor.id === DIALOG_HOST_ID || anchor.closest?.(`#${DIALOG_HOST_ID}`)) {
+            return null;
+        }
+        return anchor;
+    } catch (error) {
+        return null;
+    }
+}
+
+function getAgentSnapshotPageContext(container, tokenBudget = DEFAULT_AGENT_SNAPSHOT_TOKEN_BUDGET) {
+    pruneAgentSnapshotRefRegistry();
+    const snapshot = buildAgentSnapshot(document.body, {
+        container,
+        tokenBudget: normalizeAgentSnapshotTokenBudget(tokenBudget),
+        selectionAnchor: getAgentSnapshotSelectionAnchor()
+    });
+
+    return {
+        content: snapshot.content,
+        format: 'agent-snapshot',
+        isFiltered: true,
+        isTruncated: snapshot.isTruncated,
+        tokenEstimate: snapshot.tokenEstimate,
+        refCount: snapshot.refCount
     };
 }
 
