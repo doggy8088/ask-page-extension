@@ -49,11 +49,35 @@ assert.strictEqual(normalizePositiveInteger(3.7, 10), 3);
 assert.strictEqual(normalizePositiveInteger(500, 10, 40), 40);
 
 const shortLimit = truncateTextToLimit('abc', 10);
-assert.deepStrictEqual(plain(shortLimit), { text: 'abc', truncated: false, totalChars: 3 });
-const longLimit = truncateTextToLimit('x'.repeat(50), 10);
+assert.deepStrictEqual(plain(shortLimit), { text: 'abc', truncated: false, totalChars: 3, omittedChars: 0, note: '' });
+const longLimit = truncateTextToLimit('x'.repeat(50), 20);
 assert.strictEqual(longLimit.truncated, true);
 assert.strictEqual(longLimit.totalChars, 50);
-assert.ok(longLimit.text.startsWith('xxxxxxxxxx\n… [truncated: 40 more characters'));
+assert.ok(longLimit.text.length <= 20, `截斷後總長度必須不超過 max_chars，實際 ${longLimit.text.length}`);
+assert.ok(longLimit.text.endsWith('… [truncated]'), '截斷字串應以固定標記結尾');
+assert.strictEqual(longLimit.omittedChars, 50 - longLimit.text.replace('\n… [truncated]', '').length, 'omittedChars 應等於被省略的原文字元數');
+assert.match(longLimit.note, /已省略 \d+ 個字元/);
+const tinyLimit = truncateTextToLimit('y'.repeat(50), 5);
+assert.ok(tinyLimit.text.length <= 5, 'max_chars 小於標記長度時仍不得超過上限');
+
+// ===== 快照選取錨點：優先使用開框時擷取的範圍 =====
+const {
+    setAgentSnapshotSelectionRange,
+    getAgentSnapshotSelectionAnchor
+} = createContentScriptSandbox(documentRef, `{ setAgentSnapshotSelectionRange, getAgentSnapshotSelectionAnchor }`);
+const anchorParagraph = createElement('p', {}, [createTextNode('被選取的段落')]);
+const anchorTextNode = anchorParagraph.childNodes[0];
+appendChild(body, anchorParagraph);
+const fakeRange = { collapsed: false, commonAncestorContainer: anchorTextNode, cloneRange() { return { ...this }; } };
+setAgentSnapshotSelectionRange(fakeRange);
+assert.strictEqual(getAgentSnapshotSelectionAnchor(), anchorParagraph, '應以開框時擷取的範圍決定錨點元素，文字節點需上溯到父元素');
+anchorParagraph.isConnected = false;
+assert.strictEqual(getAgentSnapshotSelectionAnchor(), null, '擷取的範圍失效且沒有 live selection 時回傳 null');
+anchorParagraph.isConnected = true;
+setAgentSnapshotSelectionRange(null);
+assert.strictEqual(getAgentSnapshotSelectionAnchor(), null, '清除後不再有錨點');
+setAgentSnapshotSelectionRange({ collapsed: true, commonAncestorContainer: anchorTextNode, cloneRange() { return { ...this }; } });
+assert.strictEqual(getAgentSnapshotSelectionAnchor(), null, 'collapsed 的範圍不應作為錨點');
 
 // ===== find 候選清單 =====
 const loginButton = createElement('button', {}, [createTextNode('登入')]);

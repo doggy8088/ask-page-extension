@@ -5216,21 +5216,42 @@ function buildAgentSnapshot(root, options = {}) {
 }
 
 
+// 與 capturedSelectedText 同源：對話框開啟時擷取的 selection range，由 createDialog() 登錄。
+let agentSnapshotSelectionRange = null;
+
+function setAgentSnapshotSelectionRange(range) {
+    agentSnapshotSelectionRange = range && typeof range.cloneRange === 'function' && !range.collapsed
+        ? range.cloneRange()
+        : null;
+}
+
+function getAnchorElementFromRange(range) {
+    if (!range || range.collapsed) {
+        return null;
+    }
+    let anchor = range.commonAncestorContainer;
+    if (anchor && anchor.nodeType !== 1) {
+        anchor = anchor.parentElement;
+    }
+    if (!anchor || !isElementStillConnected(anchor) || anchor.id === DIALOG_HOST_ID || anchor.closest?.(`#${DIALOG_HOST_ID}`)) {
+        return null;
+    }
+    return anchor;
+}
+
 function getAgentSnapshotSelectionAnchor() {
     try {
+        // 優先使用開框當下擷取的範圍，確保快照優先展開的區段與 prompt 內的 Selected text 一致；
+        // 該範圍已失效（例如 DOM 重繪）時才退回目前的 live selection。
+        const capturedAnchor = getAnchorElementFromRange(agentSnapshotSelectionRange);
+        if (capturedAnchor) {
+            return capturedAnchor;
+        }
         const selection = window.getSelection?.();
         if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
             return null;
         }
-        const range = selection.getRangeAt(0);
-        let anchor = range.commonAncestorContainer;
-        if (anchor && anchor.nodeType !== 1) {
-            anchor = anchor.parentElement;
-        }
-        if (!anchor || anchor.id === DIALOG_HOST_ID || anchor.closest?.(`#${DIALOG_HOST_ID}`)) {
-            return null;
-        }
-        return anchor;
+        return getAnchorElementFromRange(selection.getRangeAt(0));
     } catch (error) {
         return null;
     }
@@ -5311,11 +5332,12 @@ function getDepthLimitedFilteredHtml(element, maxDepth = Infinity) {
     if (Number.isFinite(maxDepth) && maxDepth > 0) {
         const prune = (node, depth) => {
             if (depth >= maxDepth) {
-                const childElementCount = node.children ? node.children.length : 0;
-                if (childElementCount > 0) {
+                // 只移除子元素、保留節點自身的文字節點，避免把仍在深度內的可見文字一起裁掉。
+                const childElements = Array.from(node.children || []);
+                if (childElements.length > 0) {
                     const ownerDocument = node.ownerDocument || document;
-                    node.textContent = '';
-                    node.appendChild(ownerDocument.createComment(` ${childElementCount} child elements omitted; use read_page with a deeper depth `));
+                    childElements.forEach((child) => child.remove());
+                    node.appendChild(ownerDocument.createComment(` ${childElements.length} child elements omitted; use read_page with a deeper depth `));
                 }
                 return;
             }
@@ -5336,15 +5358,23 @@ function getElementPlainText(element) {
     return rawText.replace(/[ \t\f\v]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+const TRUNCATED_TEXT_SUFFIX = '\n… [truncated]';
+
+// 回傳字串總長度保證不超過 maxChars（含截斷標記），省略字元數與建議放在 note 供工具結果引用。
 function truncateTextToLimit(text, maxChars) {
     const value = String(text || '');
     if (!Number.isFinite(maxChars) || maxChars <= 0 || value.length <= maxChars) {
-        return { text: value, truncated: false, totalChars: value.length };
+        return { text: value, truncated: false, totalChars: value.length, omittedChars: 0, note: '' };
     }
+    const keptChars = Math.max(0, maxChars - TRUNCATED_TEXT_SUFFIX.length);
+    const truncatedText = `${value.slice(0, keptChars)}${TRUNCATED_TEXT_SUFFIX}`.slice(0, maxChars);
+    const omittedChars = value.length - keptChars;
     return {
-        text: `${value.slice(0, maxChars)}\n… [truncated: ${value.length - maxChars} more characters; call read_page with a larger max_chars or a narrower ref]`,
+        text: truncatedText,
         truncated: true,
-        totalChars: value.length
+        totalChars: value.length,
+        omittedChars,
+        note: `內容超過 ${maxChars} 字元，已省略 ${omittedChars} 個字元；可提高 max_chars、指定更小的 ref 或加上 depth。`
     };
 }
 
@@ -5893,6 +5923,7 @@ function clearConversationHistory() {
     clearInquiryConversationContext();
     // 對話已清空，舊 ref 不會再被引用；重新編號也讓相同頁面的快照內容一致，有利提示詞快取。
     resetAgentSnapshotRefRegistry();
+    setAgentSnapshotSelectionRange(null);
 }
 
 function requestOpenOptionsPage(targetTab = '') {
@@ -5917,6 +5948,10 @@ async function createDialog() {
         ? initialSelection.getRangeAt(0).cloneRange()
         : null;
     let capturedSelectedText = initialSelection.toString().trim();
+    if (capturedSelectedText) {
+        // 讓代理快照的區段優先依據與 capturedSelectedText 同一份 selection range，避免兩者脫鉤。
+        setAgentSnapshotSelectionRange(initialSelectionRange);
+    }
     const dialogStylesText = await getDialogStylesText();
     const modeToggleButtonBaseStyle = `
         color: #c7d7ec;
@@ -11075,9 +11110,10 @@ async function createDialog() {
             depth: Number.isFinite(depth) ? depth : null,
             totalChars: limited.totalChars,
             returnedChars: limited.text.length,
+            omittedChars: limited.omittedChars,
             truncated: limited.truncated,
             content: limited.text
-        }, limited.truncated ? [`內容超過 ${maxChars} 字元已截斷；可提高 max_chars、指定更小的 ref 或加上 depth。`] : []);
+        }, limited.truncated ? [limited.note] : []);
     }
 
     function executeGetPageTextTool(toolArgs) {
@@ -11094,7 +11130,7 @@ async function createDialog() {
             returnedChars: limited.text.length,
             truncated: limited.truncated,
             text: limited.text
-        });
+        }, limited.truncated ? [limited.note] : []);
     }
 
     function executeFindTool(toolArgs) {
