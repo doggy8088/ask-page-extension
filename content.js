@@ -4635,8 +4635,14 @@ function registerAgentSnapshotRangeRef(elements) {
     const anchor = validElements[0];
     const existingId = agentSnapshotRefRegistry.rangeIdsByAnchor.get(anchor);
     if (existingId) {
+        // 只有既有範圍的每一個元素都與新範圍逐一相同時才重用；內容變動但數量相同必須配發新 ref，
+        // 否則 read_page(ref) 會展開到舊的元素集合。
         const existingEntry = agentSnapshotRefRegistry.entriesById.get(existingId);
-        if (existingEntry && existingEntry.elements.length === validElements.length) {
+        const isSameRange = Boolean(existingEntry) &&
+            existingEntry.kind === 'range' &&
+            existingEntry.elements.length === validElements.length &&
+            existingEntry.elements.every((weakElement, index) => weakElement.deref() === validElements[index]);
+        if (isSameRange) {
             return existingId;
         }
     }

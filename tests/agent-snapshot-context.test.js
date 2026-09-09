@@ -182,6 +182,21 @@ assert.strictEqual(resolvedSection.isRange, true, '折疊區段應是範圍 ref'
 assert.strictEqual(resolvedSection.elements.length, 3, `範圍 ref 應涵蓋整個區段的 3 個元素，實際 ${resolvedSection.elements.map((element) => element.tagName).join(',')}`);
 assert.ok(resolvedSection.elements[0] === settingsHeading && resolvedSection.elements[1] === settingsParagraph && resolvedSection.elements[2] === settingsButton, '範圍 ref 應依序對應 heading、paragraph、button');
 
+// ===== 範圍 ref：內容變動但元素數量相同時必須配發新 ref =====
+const {
+    registerAgentSnapshotRangeRef
+} = createContentScriptSandbox(documentRef, `{ registerAgentSnapshotRangeRef }`);
+const rangeAnchor = createElement('h2', {}, [createTextNode('範圍錨點')]);
+const rangeFirst = createElement('p', {}, [createTextNode('第一段')]);
+const rangeSecond = createElement('p', {}, [createTextNode('第二段')]);
+const rangeReplacement = createElement('p', {}, [createTextNode('替換段')]);
+const firstRangeRef = registerAgentSnapshotRangeRef([rangeAnchor, rangeFirst, rangeSecond]);
+assert.strictEqual(registerAgentSnapshotRangeRef([rangeAnchor, rangeFirst, rangeSecond]), firstRangeRef, '完全相同的範圍應重用 ref');
+const changedRangeRef = registerAgentSnapshotRangeRef([rangeAnchor, rangeFirst, rangeReplacement]);
+assert.notStrictEqual(changedRangeRef, firstRangeRef, '同一 anchor、相同數量但元素不同的範圍必須配發新 ref');
+assert.strictEqual(registerAgentSnapshotRangeRef([rangeAnchor, rangeFirst, rangeReplacement]), changedRangeRef, '新範圍再次註冊應重用新 ref');
+assert.notStrictEqual(registerAgentSnapshotRangeRef([rangeAnchor, rangeFirst]), changedRangeRef, '數量不同的範圍必須配發新 ref');
+
 const selectionSnapshot = buildAgentSnapshot(body, {
     ...snapshotOptions,
     tokenBudget: 700,
