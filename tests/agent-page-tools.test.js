@@ -148,3 +148,28 @@ vm.runInContext(generatedScript, mainWorldSandbox).then((executionResult) => {
     console.error(error);
     process.exitCode = 1;
 });
+
+// ===== 動作工具的受影響子樹根 =====
+const {
+    getAgentActionAffectedRoot,
+    isAgentExtensionNode
+} = createContentScriptSandbox(documentRef, `{
+    getAgentActionAffectedRoot,
+    isAgentExtensionNode
+}`);
+
+const menuItem = createElement('div', { role: 'menuitem' }, [createTextNode('Clone')]);
+const menu = createElement('div', { role: 'menu' }, [menuItem]);
+const wrapper = createElement('div', {}, [menu]);
+const shellMain = createElement('main', {}, [wrapper]);
+const shellBody = createElement('body', {}, [shellMain]);
+createDocument(shellBody, '動作測試頁');
+
+assert.strictEqual(getAgentActionAffectedRoot(menuItem), menu, '應回傳最近的 menu 祖先作為受影響子樹根');
+assert.strictEqual(getAgentActionAffectedRoot(menu), shellMain, 'menu 自身的受影響子樹根應是上層 main');
+assert.strictEqual(getAgentActionAffectedRoot(shellMain), shellBody, '直接位於 body 下的 landmark 退回 body');
+assert.strictEqual(getAgentActionAffectedRoot(null), null);
+
+const orphan = createElement('button', {}, [createTextNode('孤立')]);
+assert.strictEqual(getAgentActionAffectedRoot(orphan), orphan, '沒有父層時回傳自身');
+assert.strictEqual(isAgentExtensionNode(menuItem), false, '模擬 DOM 沒有 closest 時視為非擴充功能節點');

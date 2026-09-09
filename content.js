@@ -5248,6 +5248,34 @@ function getAgentSnapshotPageContext(container, tokenBudget = DEFAULT_AGENT_SNAP
     };
 }
 
+// 動作工具執行後只回傳「受影響子樹」：從目標元素往上找最近的這些角色作為子樹根。
+const AGENT_ACTION_AFFECTED_ROOT_ROLES = new Set([
+    'dialog', 'alertdialog', 'menu', 'menubar', 'listbox', 'form', 'search', 'tablist', 'tabpanel', 'tree',
+    'table', 'grid', 'list', 'article', 'group', 'region', 'navigation', 'complementary', 'banner', 'contentinfo', 'main'
+]);
+
+function getAgentActionAffectedRoot(element) {
+    if (!element || element.nodeType !== 1) {
+        return null;
+    }
+    let current = element.parentElement;
+    while (current && current.tagName !== 'BODY' && current.tagName !== 'HTML') {
+        if (AGENT_ACTION_AFFECTED_ROOT_ROLES.has(getSemanticRole(current))) {
+            return current;
+        }
+        current = current.parentElement;
+    }
+    return element.parentElement && element.parentElement.tagName !== 'HTML' ? element.parentElement : element;
+}
+
+function isAgentExtensionNode(node) {
+    const element = node && node.nodeType === 1 ? node : node?.parentElement;
+    if (!element || typeof element.closest !== 'function') {
+        return false;
+    }
+    return Boolean(element.closest(`#${DIALOG_HOST_ID}, #${AGENT_GLOW_OVERLAY_ID}, #${AGENT_GLOW_STYLE_ELEMENT_ID}`));
+}
+
 // 供 find 工具使用：把快照樹攤平成候選清單，附上祖先路徑方便模型定位。
 function collectAgentSnapshotCandidates(root, options = {}) {
     const tree = collectAgentSnapshotTree(root, options);
@@ -10833,6 +10861,44 @@ async function createDialog() {
                 }
             },
             {
+                name: 'click',
+                description: '點擊快照中指定 ref 的元素（連結、按鈕、選單項目、核取方塊等）。會先捲動到可見位置，依序派發 pointer/mouse 事件再觸發原生 click。執行後只回傳受影響的子樹與頁面變更摘要，不重送整頁；若網址改變或出現新對話框會提示重新讀取快照。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        ref: { type: 'string', description: '要點擊的元素 ref，例如 e12。' }
+                    },
+                    required: ['ref']
+                }
+            },
+            {
+                name: 'type',
+                description: '在指定 ref 的文字欄位、textarea 或 contenteditable 中輸入文字，以原生 setter 與 input/change 事件讓 React、Vue 等框架正確感知。預設先清空再輸入；submit 為 true 時會在輸入後送出 Enter 並提交所屬表單。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        ref: { type: 'string', description: '欄位的 ref。若 ref 指向包含單一輸入欄位的容器，會自動找到其中的欄位。' },
+                        text: { type: 'string', description: '要輸入的文字。' },
+                        clear: { type: 'boolean', description: '是否先清空既有內容，預設 true；false 時附加在既有內容之後。' },
+                        submit: { type: 'boolean', description: '輸入後是否按 Enter 並提交表單，預設 false。' }
+                    },
+                    required: ['ref', 'text']
+                }
+            },
+            {
+                name: 'select_option',
+                description: '在指定 ref 的下拉選單（select）或單選按鈕群組中選取選項，以顯示文字或 value 比對。自訂的 listbox/combobox 元件請改用 click 點擊選項的 ref。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        ref: { type: 'string', description: 'select、radio 或 option 元素的 ref。' },
+                        option_text: { type: 'string', description: '要選取的選項顯示文字（模糊比對）。' },
+                        option_value: { type: 'string', description: '要選取的選項 value。' }
+                    },
+                    required: ['ref']
+                }
+            },
+            {
                 name: 'run_js',
                 description: '在目前頁面的主世界執行通用 JavaScript。可用來讀取 DOM、查詢頁面資料、修改內容、注入 CSS、調整網頁排版、呼叫頁面腳本，並支援 await。一般的點擊、輸入與選取請優先使用 click、type、select_option、fill_form_fields；只有批次操作或非標準互動才用 run_js。程式碼中可用 askpage.ref(\'e12\') 取得快照中的元素、askpage.refs(\'e12\') 取得折疊區段內的所有元素，不必自行推導 selector。當使用者要求修改、重排、套用樣式或操作目前網頁時，請直接使用此工具執行，不要只提供程式碼或建議。頁問對話框是擴充功能 UI，不是網頁內容；不可選取、讀取、修改或套用樣式到 #askpage-dialog-host 或其 shadow DOM，也不要用 html/body 的 filter、transform、opacity 等祖先效果影響擴充功能 UI。若要把結果回傳給模型，請使用 return，並只回傳必要的摘要資料，不要回傳整段 HTML。',
                 parameters: {
@@ -11094,6 +11160,413 @@ async function createDialog() {
         })));
     }
 
+    // ===== 代理模式 L3 動作工具：click / type / select_option =====
+
+    function waitForActionSettle(delayMs, signal) {
+        return awaitWithAskTaskCancellation(new Promise((resolve) => setTimeout(resolve, delayMs)), signal);
+    }
+
+    // 在觀察 DOM 變化的情況下執行動作，回傳變更摘要；只回報頁面本身的變化，忽略擴充功能自己的節點。
+    async function performObservedPageAction(action, toolContext = {}) {
+        const urlBefore = window.location.href;
+        const titleBefore = document.title;
+        const summary = { addedNodes: 0, removedNodes: 0, attributeChanges: 0, newDialogs: [] };
+        const dialogSelector = 'dialog[open], [role="dialog"], [role="alertdialog"], [role="alert"], [role="menu"], [role="listbox"]';
+
+        const noteAddedNode = (node) => {
+            if (!node || node.nodeType !== 1 || isAgentExtensionNode(node)) {
+                return;
+            }
+            summary.addedNodes++;
+            if (typeof node.matches === 'function' && node.matches(dialogSelector)) {
+                summary.newDialogs.push(node);
+            } else if (typeof node.querySelector === 'function') {
+                const nestedDialog = node.querySelector(dialogSelector);
+                if (nestedDialog) {
+                    summary.newDialogs.push(nestedDialog);
+                }
+            }
+        };
+
+        const observer = typeof MutationObserver === 'function'
+            ? new MutationObserver((records) => {
+                records.forEach((record) => {
+                    if (isAgentExtensionNode(record.target)) {
+                        return;
+                    }
+                    if (record.type === 'attributes') {
+                        summary.attributeChanges++;
+                        if (record.target.nodeType === 1 && typeof record.target.matches === 'function' &&
+                            record.target.matches(dialogSelector) && !summary.newDialogs.includes(record.target) &&
+                            ['open', 'hidden', 'aria-hidden', 'style', 'class'].includes(record.attributeName) && isElementVisible(record.target)) {
+                            summary.newDialogs.push(record.target);
+                        }
+                        return;
+                    }
+                    record.addedNodes.forEach(noteAddedNode);
+                    record.removedNodes.forEach((node) => {
+                        if (node.nodeType === 1 && !isAgentExtensionNode(node)) {
+                            summary.removedNodes++;
+                        }
+                    });
+                });
+            })
+            : null;
+
+        if (observer) {
+            observer.observe(document.documentElement, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['open', 'hidden', 'aria-hidden', 'aria-expanded', 'aria-selected', 'aria-checked', 'aria-pressed', 'class', 'style', 'disabled', 'value']
+            });
+        }
+
+        let actionOutcome;
+        try {
+            actionOutcome = await action();
+            await waitForActionSettle(AGENT_ACTION_SETTLE_DELAY_MS, toolContext.signal);
+        } finally {
+            observer?.disconnect();
+        }
+
+        return {
+            actionOutcome,
+            mutations: summary,
+            urlBefore,
+            urlAfter: window.location.href,
+            urlChanged: window.location.href !== urlBefore,
+            titleChanged: document.title !== titleBefore
+        };
+    }
+
+    function buildActionAffectedSnapshot(targetElement, observed) {
+        const candidates = [
+            observed.mutations.newDialogs.find((dialog) => dialog.isConnected && isElementVisible(dialog)),
+            getAgentActionAffectedRoot(targetElement),
+            targetElement
+        ].filter((element) => element && element.isConnected);
+        const root = candidates[0];
+        if (!root) {
+            return { affected: '', affectedRef: '' };
+        }
+        const snapshot = buildAgentSnapshot(root, {
+            includeDocumentLine: false,
+            collapseLandmarks: false,
+            maxDepth: 3,
+            tokenBudget: AGENT_AFFECTED_SUBTREE_TOKEN_BUDGET
+        });
+        return { affected: snapshot.content, affectedRef: registerAgentSnapshotRef(root) };
+    }
+
+    function buildActionToolResult(success, message, { ref, element, observed, extraData = {}, warnings = [] }) {
+        const { mutations } = observed;
+        const pageChanged = mutations.addedNodes + mutations.removedNodes + mutations.attributeChanges > 0 || observed.urlChanged;
+        const { affected, affectedRef } = buildActionAffectedSnapshot(element, observed);
+        const hints = [];
+        if (observed.urlChanged) {
+            hints.push(`頁面網址已由 ${truncateToolText(observed.urlBefore, 120)} 變為 ${truncateToolText(observed.urlAfter, 120)}；舊 ref 可能已失效，請先呼叫 read_page 重新取得快照。`);
+        }
+        if (mutations.newDialogs.length) {
+            hints.push('動作後出現新的對話框、選單或提示，其內容已列於 affected。');
+        }
+        if (mutations.addedNodes || mutations.removedNodes) {
+            hints.push(`頁面新增 ${mutations.addedNodes} 個、移除 ${mutations.removedNodes} 個元素；affected 只列出受影響子樹，需要完整頁面請呼叫 read_page。`);
+        }
+        if (!pageChanged) {
+            hints.push('動作後未觀察到頁面變化；若預期應有反應，請確認目標是否正確或改用 run_js。');
+        }
+
+        return createToolResult(success, message, {
+            ref,
+            pageChanged,
+            urlChanged: observed.urlChanged,
+            url: observed.urlAfter,
+            titleChanged: observed.titleChanged,
+            mutations: {
+                addedNodes: mutations.addedNodes,
+                removedNodes: mutations.removedNodes,
+                attributeChanges: mutations.attributeChanges,
+                newDialogs: mutations.newDialogs.length
+            },
+            affectedRef,
+            affected,
+            hint: hints.join(' '),
+            ...extraData
+        }, warnings, [{ ref, description: message }]);
+    }
+
+    function resolveSingleActionTarget(refValue) {
+        const target = resolveToolTargetElements(refValue, { allowEmpty: false });
+        if (target.error) {
+            return target;
+        }
+        if (target.isRange) {
+            return { error: `ref ${target.ref} 是折疊區段而不是單一元素。請先用 read_page 展開該區段，再對其中的元素 ref 操作。` };
+        }
+        return target;
+    }
+
+    function scrollElementIntoViewForAction(element) {
+        try {
+            if (typeof element.scrollIntoView === 'function') {
+                element.scrollIntoView({ block: 'center', inline: 'nearest' });
+            }
+        } catch (error) {
+            console.warn('[AskPage] scrollIntoView failed:', error);
+        }
+    }
+
+    function dispatchSyntheticClickSequence(element) {
+        const rect = typeof element.getBoundingClientRect === 'function' ? element.getBoundingClientRect() : null;
+        const clientX = rect ? rect.left + rect.width / 2 : 0;
+        const clientY = rect ? rect.top + rect.height / 2 : 0;
+        const eventInit = { bubbles: true, cancelable: true, composed: true, clientX, clientY, button: 0, buttons: 1 };
+        const dispatch = (EventConstructor, eventName, init) => {
+            try {
+                if (typeof EventConstructor === 'function') {
+                    return element.dispatchEvent(new EventConstructor(eventName, init));
+                }
+            } catch (error) {
+                console.warn(`[AskPage] Failed to dispatch ${eventName}:`, error);
+            }
+            return true;
+        };
+
+        try {
+            if (typeof element.focus === 'function') {
+                element.focus({ preventScroll: true });
+            }
+        } catch (error) {
+            console.warn('[AskPage] focus failed:', error);
+        }
+        dispatch(window.PointerEvent, 'pointerdown', { ...eventInit, pointerId: 1, pointerType: 'mouse', isPrimary: true });
+        dispatch(window.MouseEvent, 'mousedown', eventInit);
+        dispatch(window.PointerEvent, 'pointerup', { ...eventInit, pointerId: 1, pointerType: 'mouse', isPrimary: true, buttons: 0 });
+        dispatch(window.MouseEvent, 'mouseup', { ...eventInit, buttons: 0 });
+        if (typeof element.click === 'function') {
+            element.click();
+        } else {
+            dispatch(window.MouseEvent, 'click', { ...eventInit, buttons: 0 });
+        }
+    }
+
+    async function executeClickTool(toolArgs, toolContext) {
+        const target = resolveSingleActionTarget(toolArgs.ref);
+        if (target.error) {
+            return createToolResult(false, target.error);
+        }
+        const element = target.element;
+        const description = describeSnapshotTarget(element);
+        if (element.disabled || element.getAttribute?.('aria-disabled') === 'true') {
+            return createToolResult(false, `${target.ref} ${description} 目前是 disabled，無法點擊。`);
+        }
+
+        scrollElementIntoViewForAction(element);
+        if (!isElementVisible(element)) {
+            return createToolResult(false, `${target.ref} ${description} 目前不可見（display:none、visibility:hidden 或尺寸為 0），無法點擊。可先展開其父層或改點其他 ref。`);
+        }
+
+        const observed = await performObservedPageAction(async () => {
+            dispatchSyntheticClickSequence(element);
+        }, toolContext);
+
+        return buildActionToolResult(true, `已點擊 ${target.ref} ${description}。`, {
+            ref: target.ref,
+            element,
+            observed
+        });
+    }
+
+    function findEditableTarget(element) {
+        const isTextInput = (candidate) => {
+            if (!candidate || candidate.nodeType !== 1) {
+                return false;
+            }
+            const tagName = candidate.tagName;
+            if (tagName === 'TEXTAREA') {
+                return true;
+            }
+            if (tagName === 'INPUT') {
+                const inputType = String(candidate.type || 'text').toLowerCase();
+                return !['checkbox', 'radio', 'button', 'submit', 'reset', 'image', 'file', 'hidden', 'range', 'color'].includes(inputType);
+            }
+            return Boolean(candidate.isContentEditable);
+        };
+        if (isTextInput(element)) {
+            return element;
+        }
+        if (typeof element.querySelectorAll === 'function') {
+            const nested = Array.from(element.querySelectorAll('input, textarea, [contenteditable=""], [contenteditable="true"]')).filter(isTextInput);
+            if (nested.length === 1) {
+                return nested[0];
+            }
+        }
+        return null;
+    }
+
+    function dispatchEnterKeySequence(element) {
+        const keyInit = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true };
+        let defaultPrevented = false;
+        ['keydown', 'keypress', 'keyup'].forEach((eventName) => {
+            try {
+                const accepted = element.dispatchEvent(new KeyboardEvent(eventName, keyInit));
+                if (eventName === 'keydown' && !accepted) {
+                    defaultPrevented = true;
+                }
+            } catch (error) {
+                console.warn(`[AskPage] Failed to dispatch ${eventName}:`, error);
+            }
+        });
+        return defaultPrevented;
+    }
+
+    async function executeTypeTool(toolArgs, toolContext) {
+        const target = resolveSingleActionTarget(toolArgs.ref);
+        if (target.error) {
+            return createToolResult(false, target.error);
+        }
+        if (typeof toolArgs.text !== 'string') {
+            return createToolResult(false, 'text 參數必須是字串。');
+        }
+        const editable = findEditableTarget(target.element);
+        if (!editable) {
+            return createToolResult(false, `${target.ref} ${describeSnapshotTarget(target.element)} 不是可輸入文字的欄位。請改用 find 或 inspect_form_fields 找到 textbox 的 ref；checkbox/radio 請用 click 或 select_option。`);
+        }
+        if (editable.disabled || editable.readOnly) {
+            return createToolResult(false, `${target.ref} ${describeSnapshotTarget(editable)} 目前是 ${editable.disabled ? 'disabled' : 'readonly'}，無法輸入。`);
+        }
+
+        const text = toolArgs.text;
+        const clear = coerceBooleanValue(toolArgs.clear, true);
+        const submit = coerceBooleanValue(toolArgs.submit, false);
+        scrollElementIntoViewForAction(editable);
+
+        const observed = await performObservedPageAction(async () => {
+            if (editable.isContentEditable && editable.tagName !== 'INPUT' && editable.tagName !== 'TEXTAREA') {
+                editable.focus?.();
+                let inserted = false;
+                try {
+                    if (clear) {
+                        document.execCommand('selectAll', false, null);
+                    }
+                    inserted = document.execCommand('insertText', false, text);
+                } catch (error) {
+                    inserted = false;
+                }
+                if (!inserted) {
+                    editable.textContent = clear ? text : `${editable.textContent || ''}${text}`;
+                    editable.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            } else {
+                const nextValue = clear ? text : `${editable.value || ''}${text}`;
+                setNativeProperty(editable, 'value', nextValue);
+                dispatchFieldEvents(editable);
+            }
+
+            if (submit) {
+                editable.focus?.();
+                const defaultPrevented = dispatchEnterKeySequence(editable);
+                const form = editable.form || (typeof editable.closest === 'function' ? editable.closest('form') : null);
+                if (!defaultPrevented && form) {
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                    } else {
+                        form.submit();
+                    }
+                }
+            }
+        }, toolContext);
+
+        const currentValue = editable.isContentEditable && editable.tagName !== 'INPUT' && editable.tagName !== 'TEXTAREA'
+            ? (editable.innerText || editable.textContent || '')
+            : (editable.value || '');
+        const isPassword = editable.tagName === 'INPUT' && String(editable.type).toLowerCase() === 'password';
+
+        return buildActionToolResult(true, `已在 ${target.ref} ${describeSnapshotTarget(editable)} 輸入 ${isPassword ? '（密碼內容不顯示）' : `「${truncateToolText(text, 80)}」`}${submit ? '並送出' : ''}。`, {
+            ref: target.ref,
+            element: editable,
+            observed,
+            extraData: {
+                value: isPassword ? '' : truncateToolText(currentValue, 400),
+                cleared: clear,
+                submitted: submit
+            }
+        });
+    }
+
+    async function executeSelectOptionTool(toolArgs, toolContext) {
+        const target = resolveSingleActionTarget(toolArgs.ref);
+        if (target.error) {
+            return createToolResult(false, target.error);
+        }
+        const optionText = typeof toolArgs.option_text === 'string' ? toolArgs.option_text : (typeof toolArgs.optionText === 'string' ? toolArgs.optionText : '');
+        const optionValue = typeof toolArgs.option_value === 'string' ? toolArgs.option_value : (typeof toolArgs.optionValue === 'string' ? toolArgs.optionValue : '');
+
+        let element = target.element;
+        let instruction = { optionText, optionValue };
+
+        if (element.tagName === 'OPTION') {
+            const parentSelect = typeof element.closest === 'function' ? element.closest('select') : null;
+            if (!parentSelect) {
+                return createToolResult(false, `${target.ref} 是 option，但找不到所屬的 select。`);
+            }
+            instruction = { optionValue: element.value, optionText: (element.textContent || '').trim() };
+            element = parentSelect;
+        } else if (!optionText && !optionValue) {
+            return createToolResult(false, 'option_text 或 option_value 至少要提供一個。');
+        }
+
+        const isSelect = element.tagName === 'SELECT';
+        const isRadio = element.tagName === 'INPUT' && String(element.type).toLowerCase() === 'radio';
+        if (!isSelect && !isRadio) {
+            const nestedSelect = typeof element.querySelector === 'function' ? element.querySelector('select') : null;
+            if (nestedSelect) {
+                element = nestedSelect;
+            } else {
+                return createToolResult(false, `${target.ref} ${describeSnapshotTarget(element)} 不是 select 或 radio。自訂的下拉元件請先 click 展開，再 click 目標選項的 ref。`);
+            }
+        }
+        if (element.disabled) {
+            return createToolResult(false, `${target.ref} ${describeSnapshotTarget(element)} 目前是 disabled，無法選取。`);
+        }
+
+        const descriptor = buildFieldDescriptor(element, 0);
+        const matchedOption = resolveOptionMatch(descriptor.options || [], instruction);
+        if (!matchedOption) {
+            const available = (descriptor.options || []).slice(0, 20).map((option) => `${option.text}${option.value && option.value !== option.text ? ` (${option.value})` : ''}`).join('、');
+            return createToolResult(false, `找不到符合「${truncateToolText(optionText || optionValue, 60)}」的選項。可用選項：${available || '無'}`, {
+                options: (descriptor.options || []).map((option) => ({ text: option.text, value: option.value }))
+            });
+        }
+
+        scrollElementIntoViewForAction(element);
+        const observed = await performObservedPageAction(async () => {
+            if (descriptor.fieldType === 'select') {
+                setNativeProperty(element, 'value', matchedOption.value);
+                element.selectedIndex = matchedOption.index;
+                dispatchFieldEvents(element);
+            } else if (matchedOption.element) {
+                if (!matchedOption.element.checked) {
+                    matchedOption.element.click();
+                } else {
+                    dispatchFieldEvents(matchedOption.element);
+                }
+            }
+        }, toolContext);
+
+        return buildActionToolResult(true, `已在 ${target.ref} ${describeSnapshotTarget(element)} 選取「${matchedOption.text}」。`, {
+            ref: target.ref,
+            element: descriptor.fieldType === 'radio' && matchedOption.element ? matchedOption.element : element,
+            observed,
+            extraData: {
+                fieldType: descriptor.fieldType,
+                value: matchedOption.value,
+                displayValue: matchedOption.text
+            }
+        });
+    }
+
     async function executeToolCall({ id = '', name = '', args = {} }, toolContext = {}) {
         const cancellationContext = toolContext.task || toolContext.signal;
         throwIfAskTaskCancelled(cancellationContext);
@@ -11319,6 +11792,18 @@ async function createDialog() {
 
             if (name === 'get_page_text') {
                 return { id, name, result: executeGetPageTextTool(toolArgs) };
+            }
+
+            if (name === 'click') {
+                return { id, name, result: await executeClickTool(toolArgs, toolContext) };
+            }
+
+            if (name === 'type') {
+                return { id, name, result: await executeTypeTool(toolArgs, toolContext) };
+            }
+
+            if (name === 'select_option') {
+                return { id, name, result: await executeSelectOptionTool(toolArgs, toolContext) };
             }
 
             if (name === 'run_js') {

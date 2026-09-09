@@ -169,7 +169,42 @@ Ollama Cloud 另有可選的 `web_search` 工具。使用者在 Ollama Cloud pro
 | `valueKey` | `string` | select/radio 的 key 或 value |
 | `valueText` | `string` | select/radio 的顯示文字 |
 
-### 8. `run_js`
+### 8. `click`
+
+- **用途**：點擊指定 ref 的元素（連結、按鈕、選單項目、核取方塊等）
+- **行為**：先捲動到可見位置，依序派發 `pointerdown` / `mousedown` / `pointerup` / `mouseup` 再呼叫原生 `click()`；disabled 或不可見時回報失敗
+- **回傳**：不重送整頁，只回傳 `affected`（受影響子樹的快照，從目標往上找最近的 dialog / menu / form / list / table / landmark 作為根，預算約 1500 tokens）、`pageChanged`、`urlChanged`、`mutations`（新增／移除／屬性變更數與新對話框數）與 `hint`（網址改變時提示重新 `read_page`）
+
+| 參數 | 型別 | 說明 |
+| --- | --- | --- |
+| `ref` | `string` | 必填，要點擊的元素 ref |
+
+### 9. `type`
+
+- **用途**：在文字欄位、textarea 或 contenteditable 中輸入文字
+- **行為**：以原生 setter 設值並派發 focus / input / change / blur 事件（重用 `setNativeProperty` 與 `dispatchFieldEvents`）；contenteditable 走 `execCommand('insertText')`；`submit` 為 true 時派發 Enter 鍵事件，若未被 `preventDefault` 且欄位屬於表單則呼叫 `requestSubmit()`
+- **回傳**：同 `click` 的受影響子樹格式，另含 `value`（密碼欄位不回傳）、`cleared`、`submitted`
+
+| 參數 | 型別 | 說明 |
+| --- | --- | --- |
+| `ref` | `string` | 必填；若指向只包含一個輸入欄位的容器會自動下探 |
+| `text` | `string` | 必填，要輸入的文字 |
+| `clear` | `boolean` | 是否先清空，預設 `true` |
+| `submit` | `boolean` | 輸入後是否送出 Enter 並提交表單，預設 `false` |
+
+### 10. `select_option`
+
+- **用途**：在 `select` 或 radio 群組中選取選項
+- **行為**：以 `resolveOptionMatch()` 對顯示文字或 value 模糊比對；ref 指向 `option` 時直接選取該選項；找不到時回傳可用選項清單。自訂 listbox/combobox 元件請改用 `click`
+- **回傳**：同 `click` 的受影響子樹格式，另含 `fieldType`、`value`、`displayValue`
+
+| 參數 | 型別 | 說明 |
+| --- | --- | --- |
+| `ref` | `string` | 必填，select、radio 或 option 的 ref |
+| `option_text` | `string` | 選項顯示文字 |
+| `option_value` | `string` | 選項 value |
+
+### 11. `run_js`
 
 - **用途**：在目前頁面的主世界執行通用 JavaScript
 - **適用情境**：標準工具不夠用，或需要直接完成 DOM 查詢、讀取頁面資料、點擊元素、修改內容、呼叫頁面腳本等操作
@@ -186,7 +221,7 @@ Ollama Cloud 另有可選的 `web_search` 工具。使用者在 Ollama Cloud pro
 | --- | --- | --- |
 | `code` | `string` | 要執行的 JavaScript 程式碼，必填 |
 
-### 9. 已移除的舊工具
+### 12. 已移除的舊工具
 
 以下工具目前已從內建工具集合中移除，若要達成相同行為，請改用 `run_js`：
 
@@ -195,7 +230,7 @@ Ollama Cloud 另有可選的 `web_search` 工具。使用者在 Ollama Cloud pro
 | `get_page_title` | 在 `run_js` 中讀取 `document.title` 與 `window.location.href` |
 | `replace_dom_content` | 在 `run_js` 中直接操作 `innerHTML`、`outerHTML` 或 `Range` |
 | `get_element_content` | 在 `run_js` 中使用 `document.querySelector()` 讀取文字或 HTML |
-| `click_element` | 在 `run_js` 中自行查找元素並呼叫 `.click()` |
+| `click_element` | 改用以 ref 為參數的 `click` 工具 |
 | `run_javascript` | 改用新名稱 `run_js` |
 
 ## 三、工具使用原則
