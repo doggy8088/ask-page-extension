@@ -264,6 +264,7 @@ assert.strictEqual(isAgentPageContextFormat('agent-snapshot'), true);
 assert.strictEqual(isAgentPageContextFormat('html'), true);
 assert.strictEqual(isAgentPageContextFormat('semantic-tree'), false);
 
+let htmlSystemPrompt = null;
 const snapshotSystemPrompt = buildSystemPrompt({ pageContextFormat: 'agent-snapshot', pageContextIsTruncated: true });
 assert.match(snapshotSystemPrompt, /You are in agent mode/, '快照格式應啟用代理模式指令');
 assert.match(snapshotSystemPrompt, /accessibility snapshot/, '應說明快照格式');
@@ -271,10 +272,14 @@ assert.match(snapshotSystemPrompt, /trimmed to a token budget/, '截斷時應告
 assert.match(snapshotSystemPrompt, /Tool ladder, cheapest first/, '應包含工具使用階梯');
 assert.match(snapshotSystemPrompt, /read_page with mode html only when/, '應限制 HTML 讀取的使用時機');
 assert.match(snapshotSystemPrompt, /askpage\.ref/, '應提示 run_js 可用 askpage.ref');
+assert.doesNotMatch(snapshotSystemPrompt, /always call run_js directly/, '快照模式不應再一律要求 run_js，避免與工具階梯矛盾');
+assert.match(snapshotSystemPrompt, /always perform the update with the page tools/, '快照模式應改為以頁面工具執行更新');
+assert.match(snapshotSystemPrompt, /Prefer the ref-based tools/, '快照模式應優先使用 ref 動作工具');
+assert.match(htmlSystemPrompt = buildSystemPrompt({ pageContextFormat: 'html' }), /always call run_js directly/, 'HTML 模式維持原本的 run_js 指令');
 assert.match(snapshotSystemPrompt, /Never claim that a page change succeeded/, '既有代理模式規則仍應保留');
 assert.doesNotMatch(snapshotSystemPrompt, /in inquiry mode/);
 
-const htmlSystemPrompt = buildSystemPrompt({ pageContextFormat: 'html' });
+htmlSystemPrompt = buildSystemPrompt({ pageContextFormat: 'html' });
 assert.match(htmlSystemPrompt, /You are in agent mode/, 'HTML 格式仍為代理模式');
 assert.doesNotMatch(htmlSystemPrompt, /Tool ladder/, 'HTML 格式不加入快照專屬的工具階梯');
 
