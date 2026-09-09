@@ -1,8 +1,8 @@
 ---
 goal: 代理模式改以「帶 ref 的精簡 Accessibility Tree」為預設頁面上下文，HTML 改為按需取得，大幅降低 Token 耗用
 version: 1.0
-date_created: 2026-09-10
-last_updated: 2026-09-10
+date_created: 2026-09-09
+last_updated: 2026-09-09
 owner: ask-page-extension-maintainers
 status: 'Proposed'
 tags: [architecture, agent-mode, token-efficiency, accessibility-tree, tools]
