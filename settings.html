@@ -823,6 +823,31 @@
               <small style="color: var(--text-secondary);" data-i18n="enableAgentGlowEffectHelp">啟用後，從送出問題到代理模式回覆完成前，網頁四周會顯示琥珀色背光動畫，提示 AskPage 正在頁面上工作。</small>
             </div>
           </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">
+                <span class="icon">🧭</span>
+                <span data-i18n="agentContextTitle">代理模式頁面上下文</span>
+              </h2>
+              <p class="card-description" data-i18n="agentContextDescription">決定代理模式送給模型的頁面內容格式與大小。精簡快照可大幅節省 Token，模型需要細節時會再用工具按需讀取。</p>
+            </div>
+
+            <div class="form-group">
+              <label for="agentContextFormat" data-i18n="agentContextFormatLabel">頁面上下文格式</label>
+              <select id="agentContextFormat">
+                <option value="snapshot" data-i18n="agentContextFormatSnapshot">精簡 Accessibility 快照（建議，省 Token）</option>
+                <option value="html" data-i18n="agentContextFormatHtml">完整過濾後 HTML（舊行為，耗 Token）</option>
+              </select>
+              <small style="color: var(--text-secondary);" data-i18n="agentContextFormatHelp">快照只保留角色、名稱、狀態與可操作元素的 ref，並折疊導覽、頁尾等區域；模型可用 read_page 展開或改讀 HTML。若遇到快照無法處理的網站，可暫時切回完整 HTML。</small>
+            </div>
+
+            <div class="form-group">
+              <label for="agentSnapshotTokenBudget" data-i18n="agentSnapshotBudgetLabel">快照 Token 預算</label>
+              <input type="number" id="agentSnapshotTokenBudget" min="2000" max="60000" step="500" value="8000" />
+              <small style="color: var(--text-secondary);" data-i18n="agentSnapshotBudgetHelp">快照的估算 Token 上限（2000～60000，預設 8000）。超出時會優先保留選取範圍與視窗內的內容，其餘區段折疊成可展開的標題行。</small>
+            </div>
+          </div>
         </div>
       </div>
 

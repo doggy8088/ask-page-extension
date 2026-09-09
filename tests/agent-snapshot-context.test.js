@@ -233,3 +233,47 @@ assert.ok(rootLevelSnapshot.tokenEstimate <= 500 + 120, `無容器時估算 toke
 assert.match(rootLevelSnapshot.content, /main e\d+/, '無容器資訊時 main 仍應被遞迴展開而非整塊折疊');
 
 console.log('agent-snapshot-context.test.js passed');
+
+// ===== 系統提示詞與上下文文字：agent-snapshot 格式視為代理模式 =====
+const {
+    buildSystemPrompt,
+    buildConversationContextText,
+    isAgentPageContextFormat
+} = createContentScriptSandbox(documentRef, `{
+    buildSystemPrompt,
+    buildConversationContextText,
+    isAgentPageContextFormat
+}`);
+
+assert.strictEqual(isAgentPageContextFormat('agent-snapshot'), true);
+assert.strictEqual(isAgentPageContextFormat('html'), true);
+assert.strictEqual(isAgentPageContextFormat('semantic-tree'), false);
+
+const snapshotSystemPrompt = buildSystemPrompt({ pageContextFormat: 'agent-snapshot', pageContextIsTruncated: true });
+assert.match(snapshotSystemPrompt, /You are in agent mode/, '快照格式應啟用代理模式指令');
+assert.match(snapshotSystemPrompt, /accessibility snapshot/, '應說明快照格式');
+assert.match(snapshotSystemPrompt, /trimmed to a token budget/, '截斷時應告知模型');
+assert.match(snapshotSystemPrompt, /Tool ladder, cheapest first/, '應包含工具使用階梯');
+assert.match(snapshotSystemPrompt, /read_page with mode html only when/, '應限制 HTML 讀取的使用時機');
+assert.match(snapshotSystemPrompt, /askpage\.ref/, '應提示 run_js 可用 askpage.ref');
+assert.match(snapshotSystemPrompt, /Never claim that a page change succeeded/, '既有代理模式規則仍應保留');
+assert.doesNotMatch(snapshotSystemPrompt, /in inquiry mode/);
+
+const htmlSystemPrompt = buildSystemPrompt({ pageContextFormat: 'html' });
+assert.match(htmlSystemPrompt, /You are in agent mode/, 'HTML 格式仍為代理模式');
+assert.doesNotMatch(htmlSystemPrompt, /Tool ladder/, 'HTML 格式不加入快照專屬的工具階梯');
+
+const inquirySystemPrompt = buildSystemPrompt({ pageContextFormat: 'semantic-tree' });
+assert.match(inquirySystemPrompt, /in inquiry mode/);
+assert.doesNotMatch(inquirySystemPrompt, /Tool ladder/);
+
+const snapshotContextText = buildConversationContextText({
+    content: 'document "x"\n  main e1',
+    format: 'agent-snapshot',
+    isTruncated: true
+}, '選取內容');
+assert.match(snapshotContextText, /Page accessibility snapshot \(compact, with refs\):/);
+assert.match(snapshotContextText, /collapsed to fit the token budget/);
+assert.match(snapshotContextText, /Selected text \(plain text, main focus\):\n選取內容$/);
+
+console.log('agent-snapshot-context.test.js system prompt assertions passed');
