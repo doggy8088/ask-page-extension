@@ -190,5 +190,48 @@ const autoRenderIndex = contentScripts.indexOf('lib/katex/auto-render.min.js');
 assert.ok(katexIndex >= 0);
 assert.ok(autoRenderIndex > katexIndex);
 assert.ok(contentScripts.indexOf('content.js') > autoRenderIndex);
+const quirksWarnings = [];
+const quirksDoc = {
+    compatMode: 'BackCompat',
+    createElement(tag) {
+        return {
+            tagName: tag.toUpperCase(),
+            className: '',
+            style: {},
+            setAttribute() {},
+            appendChild() {},
+            textContent: ''
+        };
+    },
+    createElementNS(_ns, tag) {
+        return this.createElement(tag);
+    },
+    createTextNode(text) {
+        return { textContent: text };
+    }
+};
+const quirksSandbox = {
+    console: {
+        warn(...args) {
+            quirksWarnings.push(args.join(' '));
+        },
+        error() {},
+        log() {}
+    },
+    document: quirksDoc
+};
+quirksSandbox.window = quirksSandbox;
+quirksSandbox.globalThis = quirksSandbox;
+
+vm.createContext(quirksSandbox);
+const katexSource = fs.readFileSync(path.join(rootDir, 'lib', 'katex', 'katex.min.js'), 'utf8');
+vm.runInContext(katexSource, quirksSandbox, { filename: 'katex.min.js' });
+
+assert.strictEqual(quirksWarnings.length, 0);
+assert.doesNotThrow(() => {
+    quirksSandbox.katex.render('x^2', quirksDoc.createElement('div'), {
+        throwOnError: false
+    });
+});
 
 console.log('render-markdown-latex: ok');
