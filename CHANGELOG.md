@@ -6,6 +6,21 @@
 
 ## [Unreleased]
 
+### 新增 / 改進
+
+- **代理模式改以帶 ref 的精簡 Accessibility 快照為預設頁面上下文**（#27）：不再每次把整包過濾後 HTML 塞進系統訊息。快照只保留角色、名稱、狀態與可操作元素的 `eN` ref，折疊導覽、頁尾等 landmark，省略連結 URL，並受可設定的 Token 預算（預設 8000）控制；超出預算時優先保留含選取範圍與視窗內的區段，其餘折疊成可展開的標題行。實測 GitHub 儲存庫頁首輪輸入由約 68K tokens 降至數千 tokens。
+- **新增按需讀取工具 `read_page`、`find`、`get_page_text`**：模型可展開折疊區段、以文字或角色搜尋元素取得 ref、讀取純文字；只有要修改樣式或 DOM 結構時才對最小子樹讀取 HTML（`read_page(mode='html')` 並可限制 `depth` 與 `max_chars`）。
+- **新增以 ref 為參數的動作工具 `click`、`type`、`select_option`**：一般點擊、輸入、選取不再需要模型撰寫 JavaScript；動作後以 `MutationObserver` 觀察約 400 ms，只回傳受影響子樹（最近的 dialog / menu / form / list / landmark，預算約 1500 tokens）、頁面變更旗標與新對話框提示，網址改變時提示重新讀取快照，不重送整頁。
+- **`inspect_form_fields` / `fill_form_fields` 支援 ref**：欄位與選項描述附上 ref，填表可直接以 ref 指定欄位，不必再靠 CSS selector 或模糊比對。
+- **`run_js` 可用 `askpage.ref('e12')` / `askpage.refs('e12')` 取得快照元素**：執行前暫時標記、執行後一律清除，不留下 DOM 汙染。
+- **設定頁新增「代理模式頁面上下文」**：可切換精簡快照 / 完整 HTML（回退用）並調整快照 Token 預算；五種語系同步更新。
+- **系統提示詞加入工具使用階梯**：由便宜到昂貴引導模型先用快照與 `find`，再用 ref 動作，最後才取 HTML；並說明 ref 的有效期與失效處理。
+
+### 修正
+
+- **Gemini 工具回傳未截斷**：`functionResponse` 現在與 OpenAI 路徑一致，超過 6000 字元時改包成 `{ truncated, preview, note }`，避免 `run_js` 回傳整段 HTML 灌爆上下文。
+- **`docs/TOOLS.md` 補上 `get_page_metadata` 與 Anthropic 無工具支援的說明**。
+
 ## [0.44.10] - 2026-09-07
 
 ### 新增 / 改進（v0.44.10）

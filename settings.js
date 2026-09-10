@@ -166,6 +166,7 @@ let modalCommandModeAgent, modalCommandModeInquiry, modalCommandModeUnspecified,
 let modalSave, modalCancel, modalCommandNameError, modalCommandPromptError;
 let customSystemPromptTextarea, customSystemPromptCount;
 let agentGlowEffectEnabledCheckbox;
+let agentContextFormatSelect, agentSnapshotTokenBudgetInput;
 
 // Multi-provider UI elements
 let providersList, addProviderBtn, providerModal, providerModalTitle, modalProviderName, modalProviderType;
@@ -194,6 +195,19 @@ const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
 const LAST_ACTIVE_TAB_STORAGE = 'LAST_ACTIVE_TAB';
 const PENDING_OPTIONS_TAB_STORAGE = 'PENDING_OPTIONS_TAB';
 const AGENT_GLOW_EFFECT_ENABLED_STORAGE = 'AGENT_GLOW_EFFECT_ENABLED';
+const AGENT_CONTEXT_FORMAT_STORAGE = 'AGENT_CONTEXT_FORMAT';
+const AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE = 'AGENT_SNAPSHOT_TOKEN_BUDGET';
+const DEFAULT_AGENT_SNAPSHOT_TOKEN_BUDGET = 8000;
+const MIN_AGENT_SNAPSHOT_TOKEN_BUDGET = 2000;
+const MAX_AGENT_SNAPSHOT_TOKEN_BUDGET = 60000;
+
+function normalizeAgentSnapshotTokenBudget(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+        return DEFAULT_AGENT_SNAPSHOT_TOKEN_BUDGET;
+    }
+    return Math.max(MIN_AGENT_SNAPSHOT_TOKEN_BUDGET, Math.min(MAX_AGENT_SNAPSHOT_TOKEN_BUDGET, Math.round(numericValue)));
+}
 
 const CUSTOM_COMMAND_MODE_AGENT = 'agent';
 const CUSTOM_COMMAND_MODE_INQUIRY = 'inquiry';
@@ -414,6 +428,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     customSystemPromptTextarea = document.getElementById('customSystemPrompt');
     customSystemPromptCount = document.getElementById('customSystemPromptCount');
     agentGlowEffectEnabledCheckbox = document.getElementById('agentGlowEffectEnabled');
+    agentContextFormatSelect = document.getElementById('agentContextFormat');
+    agentSnapshotTokenBudgetInput = document.getElementById('agentSnapshotTokenBudget');
 
     if (localePreferenceSelect) {
         localePreferenceSelect.value = window.AskPageI18n?.preference || 'auto';
@@ -520,6 +536,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (agentGlowEffectEnabledCheckbox) {
         agentGlowEffectEnabledCheckbox.addEventListener('change', async () => {
             await chrome.storage.local.set({ [AGENT_GLOW_EFFECT_ENABLED_STORAGE]: agentGlowEffectEnabledCheckbox.checked });
+            showLocalizedStatus('settingsAutoSaved', undefined, 'success');
+        });
+    }
+
+    if (agentContextFormatSelect) {
+        agentContextFormatSelect.addEventListener('change', async () => {
+            const format = agentContextFormatSelect.value === 'html' ? 'html' : 'snapshot';
+            await chrome.storage.local.set({ [AGENT_CONTEXT_FORMAT_STORAGE]: format });
+            showLocalizedStatus('settingsAutoSaved', undefined, 'success');
+        });
+    }
+
+    if (agentSnapshotTokenBudgetInput) {
+        agentSnapshotTokenBudgetInput.addEventListener('change', async () => {
+            const budget = normalizeAgentSnapshotTokenBudget(agentSnapshotTokenBudgetInput.value);
+            agentSnapshotTokenBudgetInput.value = String(budget);
+            await chrome.storage.local.set({ [AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE]: budget });
             showLocalizedStatus('settingsAutoSaved', undefined, 'success');
         });
     }
@@ -1126,7 +1159,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         'PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL',
         CUSTOM_SUMMARY_PROMPT_STORAGE, CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE,
         CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
-        LAST_ACTIVE_TAB_STORAGE, PENDING_OPTIONS_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE
+        LAST_ACTIVE_TAB_STORAGE, PENDING_OPTIONS_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE,
+        AGENT_CONTEXT_FORMAT_STORAGE, AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE
     ], async (result) => {
         activeProviderId = result.ACTIVE_PROVIDER_ID || '';
         activeModel = result.ACTIVE_MODEL || '';
@@ -1163,6 +1197,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (agentGlowEffectEnabledCheckbox) {
             agentGlowEffectEnabledCheckbox.checked = result[AGENT_GLOW_EFFECT_ENABLED_STORAGE] !== false;
+        }
+
+        if (agentContextFormatSelect) {
+            agentContextFormatSelect.value = result[AGENT_CONTEXT_FORMAT_STORAGE] === 'html' ? 'html' : 'snapshot';
+        }
+
+        if (agentSnapshotTokenBudgetInput) {
+            agentSnapshotTokenBudgetInput.value = String(normalizeAgentSnapshotTokenBudget(result[AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE]));
         }
 
         // 優先切換到呼叫端指定的頁籤，其次還原上次使用的頁籤
