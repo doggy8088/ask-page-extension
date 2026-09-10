@@ -694,6 +694,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('[AskPage] Background received message:', request);
     console.log('[AskPage] From sender:', sender);
 
+    if (request.action === 'get-locale-catalog') {
+        (async () => {
+            try {
+                const supportedLocales = ['zh_TW', 'en', 'zh_CN', 'ja', 'ko'];
+                const locale = String(request.locale || '');
+                if (!supportedLocales.includes(locale)) {
+                    throw new Error('不支援的語系。');
+                }
+
+                const response = await fetch(chrome.runtime.getURL(`_locales/${locale}/messages.json`));
+                if (!response.ok) {
+                    throw new Error(`語系檔請求失敗：${response.status}`);
+                }
+                const catalog = await response.json();
+                if (!catalog || typeof catalog !== 'object' || Object.keys(catalog).length === 0) {
+                    throw new Error('語系檔為空或格式不正確。');
+                }
+                sendResponse({ success: true, catalog });
+            } catch (error) {
+                console.warn('[AskPage] Failed to serve locale catalog:', error);
+                sendResponse({ success: false, error: error?.message || '語系檔讀取失敗。' });
+            }
+        })();
+
+        return true;
+    }
+
     if (request.action === 'open-codepen') {
         chrome.tabs.create({ url: chrome.runtime.getURL('codepen.html') });
         sendResponse({ success: true });

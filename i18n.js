@@ -79,6 +79,8 @@
             : normalizedPreference;
     }
 
+    const LOCALE_CATALOG_REQUEST_ACTION = 'get-locale-catalog';
+
     function getLocalePath(locale) {
         return `_locales/${locale}/messages.json`;
     }
@@ -94,6 +96,51 @@
         ]));
     }
 
+    async function fetchCatalogDirectly(locale) {
+        if (typeof fetch !== 'function' || typeof chrome.runtime?.getURL !== 'function') {
+            throw new Error('Locale catalog loading is unavailable in this context.');
+        }
+
+        const response = await fetch(chrome.runtime.getURL(getLocalePath(locale)));
+        if (!response.ok) {
+            throw new Error(`Locale catalog request failed: ${response.status}`);
+        }
+        const catalog = normalizeCatalog(await response.json());
+        if (!catalog || Object.keys(catalog).length === 0) {
+            throw new Error('Locale catalog is empty or invalid.');
+        }
+        return catalog;
+    }
+
+    async function requestCatalogFromBackground(locale) {
+        try {
+            if (typeof chrome === 'undefined' || typeof chrome.runtime?.sendMessage !== 'function') {
+                return null;
+            }
+            if (!SUPPORTED_LOCALES.includes(locale)) {
+                return null;
+            }
+
+            const response = await chrome.runtime.sendMessage({
+                action: LOCALE_CATALOG_REQUEST_ACTION,
+                locale
+            });
+            if (!response || typeof response !== 'object' || response.success !== true) {
+                return null;
+            }
+            const catalog = normalizeCatalog(response.catalog);
+            if (!catalog || Object.keys(catalog).length === 0) {
+                return null;
+            }
+            return catalog;
+        } catch (error) {
+            if (typeof console?.debug === 'function') {
+                console.debug(`[AskPage] Locale catalog background request failed for ${locale}:`, error);
+            }
+            return null;
+        }
+    }
+
     async function loadCatalog(locale) {
         if (catalogCache.has(locale)) {
             return catalogCache.get(locale);
@@ -101,20 +148,17 @@
 
         let catalog = null;
         try {
-            if (typeof fetch !== 'function' || typeof chrome.runtime?.getURL !== 'function') {
-                throw new Error('Locale catalog loading is unavailable in this context.');
+            catalog = await fetchCatalogDirectly(locale);
+        } catch (directError) {
+            if (typeof console?.debug === 'function') {
+                console.debug(`[AskPage] Direct locale catalog fetch failed for ${locale}, trying background:`, directError);
             }
 
-            const response = await fetch(chrome.runtime.getURL(getLocalePath(locale)));
-            if (!response.ok) {
-                throw new Error(`Locale catalog request failed: ${response.status}`);
+            catalog = await requestCatalogFromBackground(locale);
+
+            if (!catalog) {
+                console.warn(`[AskPage] Failed to load locale catalog ${locale}:`, directError);
             }
-            catalog = normalizeCatalog(await response.json());
-            if (!catalog || Object.keys(catalog).length === 0) {
-                throw new Error('Locale catalog is empty or invalid.');
-            }
-        } catch (error) {
-            console.warn(`[AskPage] Failed to load locale catalog ${locale}:`, error);
         }
 
         catalogCache.set(locale, catalog);
