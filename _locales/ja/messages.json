@@ -443,6 +443,7 @@
     "usageToolInput": { "message": "ツール入力" },
     "usageTotal": { "message": "合計" },
     "usageCache": { "message": "キャッシュ $count$", "placeholders": { "count": { "content": "$1" } } },
+    "usageCacheCreated": { "message": "キャッシュ（新規） $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageCacheWrite": { "message": "キャッシュ書き込み $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageReasoning": { "message": "推論 $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageAcceptedPrediction": { "message": "受け入れた予測 $count$", "placeholders": { "count": { "content": "$1" } } },

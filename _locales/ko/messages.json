@@ -443,6 +443,7 @@
     "usageToolInput": { "message": "도구 입력" },
     "usageTotal": { "message": "합계" },
     "usageCache": { "message": "캐시 $count$", "placeholders": { "count": { "content": "$1" } } },
+    "usageCacheCreated": { "message": "캐시(신규) $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageCacheWrite": { "message": "캐시 쓰기 $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageReasoning": { "message": "추론 $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageAcceptedPrediction": { "message": "허용된 예측 $count$", "placeholders": { "count": { "content": "$1" } } },

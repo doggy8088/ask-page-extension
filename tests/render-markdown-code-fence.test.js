@@ -337,6 +337,17 @@ assert.strictEqual(
     'Token 用量統計：\n- 輸入：3,300（快取 830、快取寫入 50）\n- 輸出：1,090（推理 160、已接受預測 30、已否決預測 10）\n- 總計：4,040'
 );
 assert.strictEqual(createApiTokenUsageSummary('Unknown', { foo: 'bar' }), null);
+
+const createdCacheUsage = createApiTokenUsageAccumulator();
+mergeApiTokenUsageSummary(createdCacheUsage, createApiTokenUsageSummary('Gemini', {
+    promptTokenCount: 1000,
+    cachedContentTokenCount: 250,
+    totalTokenCount: 1000
+}, { cacheCreated: true }));
+assert.strictEqual(
+    formatApiTokenUsageSummary(createdCacheUsage),
+    'Token 用量統計：\n- 輸入：1,000（快取（新建） 250）\n- 總計：1,000'
+);
 assert.strictEqual(formatApiTokenUsageSummary(createApiTokenUsageAccumulator()), '');
 
 assert.strictEqual(getResponsesApiOutputTextFromResponse({

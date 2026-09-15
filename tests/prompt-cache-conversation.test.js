@@ -72,7 +72,6 @@ vm.runInContext(`${contentScript}\nglobalThis.__promptCacheConversationTestExpor
     doesGeminiModelSupportCombinedTools,
     getConversationHistory: () => conversationHistory,
     getConversationMessagesForTextProviders,
-    getInquiryPromptCacheKey,
     getPromptCacheKeyForContext,
     getPageConversationContext
 };`, sandbox, { filename: 'content.js' });
@@ -92,7 +91,6 @@ const {
     doesGeminiModelSupportCombinedTools,
     getConversationHistory,
     getConversationMessagesForTextProviders,
-    getInquiryPromptCacheKey,
     getPromptCacheKeyForContext,
     getPageConversationContext
 } = sandbox.__promptCacheConversationTestExports;
@@ -116,7 +114,11 @@ function toPlainValue(value) {
     const firstContext = await getPageConversationContext('第一次選取', {
         includeScreenshot: true
     }, false, contextBuilder);
-    const firstCacheKey = getInquiryPromptCacheKey();
+    const inquiryCacheOptions = {
+        providerType: 'openai-compatible',
+        model: 'deepseek-v4.1-flash'
+    };
+    const firstCacheKey = getPromptCacheKeyForContext(firstContext, false, inquiryCacheOptions);
     const repeatedContext = await getPageConversationContext('第二次選取', {
         includeScreenshot: true
     }, false, contextBuilder);
@@ -124,8 +126,22 @@ function toPlainValue(value) {
     assert.strictEqual(contextBuildCount, 1);
     assert.strictEqual(repeatedContext, firstContext);
     assert.strictEqual(firstContext.conversationContextText, 'page-1:第一次選取');
-    assert.match(firstCacheKey, /^askpage:/);
-    assert.strictEqual(getInquiryPromptCacheKey(), firstCacheKey);
+    assert.match(firstCacheKey, /^askpage:inquiry:[a-z0-9]{14}$/);
+    // 詢問模式以內容雜湊當親和鍵：同一頁面重新載入後仍沿用同一條路由。
+    assert.strictEqual(getPromptCacheKeyForContext(toPlainValue(repeatedContext), false, inquiryCacheOptions), firstCacheKey);
+    assert.notStrictEqual(getPromptCacheKeyForContext(firstContext, false, {
+        providerType: 'openai',
+        model: 'deepseek-v4.1-flash'
+    }), firstCacheKey);
+    assert.notStrictEqual(getPromptCacheKeyForContext(firstContext, false, {
+        providerType: 'openai-compatible',
+        model: 'gpt-5.6-luna'
+    }), firstCacheKey);
+    assert.notStrictEqual(getPromptCacheKeyForContext(firstContext, false), firstCacheKey);
+    assert.notStrictEqual(getPromptCacheKeyForContext({
+        ...toPlainValue(firstContext),
+        conversationContextText: `${firstContext.conversationContextText}-changed`
+    }, false, inquiryCacheOptions), firstCacheKey);
 
     const agentContext = await getPageConversationContext('代理模式選取', {
         includeScreenshot: true
@@ -133,7 +149,11 @@ function toPlainValue(value) {
     assert.strictEqual(contextBuildCount, 2);
     assert.strictEqual(agentContext.conversationContextText, 'page-2:代理模式選取');
     assert.strictEqual(agentContext.contextMode, 'screenshot');
-    assert.strictEqual(getInquiryPromptCacheKey(), firstCacheKey);
+    // 代理模式的鍵只由快照內容決定，與供應商／模型無關。
+    assert.strictEqual(
+        getPromptCacheKeyForContext(agentContext, true, inquiryCacheOptions),
+        getPromptCacheKeyForContext(agentContext, true, { providerType: 'openai', model: 'gpt-5.6-luna' })
+    );
     const firstAgentCacheKey = getPromptCacheKeyForContext(agentContext, true);
     assert.match(firstAgentCacheKey, /^askpage:agent:[a-z0-9]{14}$/);
     assert.strictEqual(getPromptCacheKeyForContext({
@@ -153,7 +173,7 @@ function toPlainValue(value) {
     const resetContext = await getPageConversationContext('清除後選取', {}, false, contextBuilder);
     assert.strictEqual(contextBuildCount, 3);
     assert.strictEqual(resetContext.conversationContextText, 'page-3:清除後選取');
-    assert.notStrictEqual(getInquiryPromptCacheKey(), firstCacheKey);
+    assert.notStrictEqual(getPromptCacheKeyForContext(resetContext, false, inquiryCacheOptions), firstCacheKey);
 
     clearConversationHistory();
     let concurrentBuildCount = 0;
@@ -186,7 +206,9 @@ function toPlainValue(value) {
         contextMode: 'page'
     });
     await staleContextPromise;
-    assert.strictEqual(getInquiryPromptCacheKey(), '');
+    const afterStaleContext = await getPageConversationContext('', {}, false, contextBuilder);
+    assert.strictEqual(contextBuildCount, 4);
+    assert.strictEqual(afterStaleContext.conversationContextText, 'page-4:');
 
     clearConversationHistory();
     for (let index = 0; index < 205; index++) {
@@ -253,6 +275,16 @@ function toPlainValue(value) {
     }).cache_control), { type: 'ephemeral' });
     assert.strictEqual(applyPromptCacheRequestOptions({}, {
         providerType: 'openai-compatible',
+        agentModeEnabled: false,
+        promptCacheKey: 'askpage:test'
+    }).prompt_cache_key, 'askpage:test');
+    assert.strictEqual(applyPromptCacheRequestOptions({}, {
+        providerType: 'deepseek',
+        agentModeEnabled: false,
+        promptCacheKey: 'askpage:test'
+    }).prompt_cache_key, 'askpage:test');
+    assert.strictEqual(applyPromptCacheRequestOptions({}, {
+        providerType: 'mistral',
         agentModeEnabled: false,
         promptCacheKey: 'askpage:test'
     }).prompt_cache_key, undefined);
@@ -362,6 +394,57 @@ function toPlainValue(value) {
         prompt_cache_miss_tokens: 24
     });
     assert.strictEqual(deepSeekUsageSummary.fields.inputCachedTokens, 96);
+
+    // 閘道常同時回一個 0 值欄位與真正命中的欄位，取最大值才不會把命中顯示成 0。
+    const gatewayUsageSummary = createApiTokenUsageSummary('LLMShare', {
+        prompt_tokens: 120,
+        prompt_tokens_details: {
+            cached_tokens: 0
+        },
+        prompt_cache_hit_tokens: 96
+    });
+    assert.strictEqual(gatewayUsageSummary.fields.inputCachedTokens, 96);
+
+    // Gemini 的 explicit 快取若在本輪新建，cached 用量要歸在「新建」而不是「命中」。
+    const createdCacheUsageSummary = createApiTokenUsageSummary('Gemini', {
+        promptTokenCount: 120,
+        cachedContentTokenCount: 96
+    }, { cacheCreated: true });
+    assert.strictEqual(createdCacheUsageSummary.fields.inputCacheCreatedTokens, 96);
+    assert.strictEqual(createdCacheUsageSummary.fields.inputCachedTokens, undefined);
+
+    const reusedCacheUsageSummary = createApiTokenUsageSummary('Gemini', {
+        promptTokenCount: 120,
+        cachedContentTokenCount: 96
+    });
+    assert.strictEqual(reusedCacheUsageSummary.fields.inputCachedTokens, 96);
+    assert.strictEqual(reusedCacheUsageSummary.fields.inputCacheCreatedTokens, undefined);
+
+    // 追問時送出的前綴必須逐位元相同：第二輪只是在第一輪後面追加助理回覆與新問題。
+    clearConversationHistory();
+    const stableContextBuilder = async () => ({
+        systemPrompt: 'stable-system',
+        conversationContextText: 'stable-page',
+        contextMode: 'page'
+    });
+    const turnOneContext = await getPageConversationContext('', {}, false, stableContextBuilder);
+    addConversationTurn('user', '第一輪問題');
+    const turnOneMessages = getConversationMessagesForTextProviders();
+    addConversationTurn('assistant', '第一輪回答');
+    addConversationTurn('user', '第二輪追問');
+    const turnTwoContext = await getPageConversationContext('第二輪追問選取', {}, false, stableContextBuilder);
+    const turnTwoMessages = getConversationMessagesForTextProviders();
+
+    assert.strictEqual(turnTwoContext, turnOneContext);
+    assert.deepStrictEqual(
+        toPlainValue(turnTwoMessages.slice(0, turnOneMessages.length)),
+        toPlainValue(turnOneMessages)
+    );
+    assert.strictEqual(turnTwoMessages.length, turnOneMessages.length + 2);
+    assert.strictEqual(
+        getPromptCacheKeyForContext(turnTwoContext, false, inquiryCacheOptions),
+        getPromptCacheKeyForContext(turnOneContext, false, inquiryCacheOptions)
+    );
 
     assert.match(contentScript, /v1beta\/cachedContents\?key=/);
     assert.match(contentScript, /requestBody\.cachedContent = explicitCacheName/);

@@ -443,6 +443,7 @@
     "usageToolInput": { "message": "Tool input" },
     "usageTotal": { "message": "Total" },
     "usageCache": { "message": "cache $count$", "placeholders": { "count": { "content": "$1" } } },
+    "usageCacheCreated": { "message": "cache (new) $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageCacheWrite": { "message": "cache write $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageReasoning": { "message": "reasoning $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageAcceptedPrediction": { "message": "accepted prediction $count$", "placeholders": { "count": { "content": "$1" } } },

@@ -13,7 +13,6 @@ let conversationHistory = [];
 let conversationSelectedText = '';
 let inquiryConversationContext = null;
 let inquiryConversationContextPromise = null;
-let inquiryPromptCacheKey = '';
 const geminiCacheEntries = new Map();
 const geminiCachePromises = new Map();
 let activeDialogState = null;
@@ -3490,6 +3489,20 @@ function getFirstFiniteTokenUsageValue(...values) {
     return null;
 }
 
+// 同一個數量在不同供應商／閘道會放在不同欄位，而且常一併補上 0 值欄位；
+// 取最大值才不會讓 0 蓋掉真正有命中的那個欄位。
+function getMaxFiniteTokenUsageValue(...values) {
+    let maxValue = null;
+    for (const value of values) {
+        const tokenCount = getFiniteTokenUsageValue(value);
+        if (tokenCount !== null && (maxValue === null || tokenCount > maxValue)) {
+            maxValue = tokenCount;
+        }
+    }
+
+    return maxValue;
+}
+
 function sumTokenUsageDetails(details) {
     if (!Array.isArray(details)) {
         return null;
@@ -3530,7 +3543,7 @@ function addApiTokenUsageField(target, fieldName, value) {
     return true;
 }
 
-function createApiTokenUsageSummary(providerLabel, usageData) {
+function createApiTokenUsageSummary(providerLabel, usageData, options = {}) {
     if (!usageData || typeof usageData !== 'object') {
         return null;
     }
@@ -3539,7 +3552,7 @@ function createApiTokenUsageSummary(providerLabel, usageData) {
     summary.providerLabel = String(providerLabel || '').trim();
     const inputDetails = usageData.input_tokens_details || usageData.prompt_tokens_details || {};
     const outputDetails = usageData.output_tokens_details || usageData.completion_tokens_details || {};
-    const cachedInputTokens = getFirstFiniteTokenUsageValue(
+    const cachedInputTokens = getMaxFiniteTokenUsageValue(
         inputDetails.cached_tokens,
         usageData.cachedContentTokenCount,
         sumTokenUsageDetails(usageData.cacheTokensDetails),
@@ -3552,8 +3565,9 @@ function createApiTokenUsageSummary(providerLabel, usageData) {
         usageData.prompt_tokens,
         usageData.promptTokenCount
     ));
-    addApiTokenUsageField(summary, 'inputCachedTokens', cachedInputTokens);
-    addApiTokenUsageField(summary, 'inputCacheCreationTokens', getFirstFiniteTokenUsageValue(
+    // Gemini 的 explicit 快取是「新建」還是「沿用」，只有客戶端知道，因此分開統計才看得出假命中。
+    addApiTokenUsageField(summary, options.cacheCreated ? 'inputCacheCreatedTokens' : 'inputCachedTokens', cachedInputTokens);
+    addApiTokenUsageField(summary, 'inputCacheCreationTokens', getMaxFiniteTokenUsageValue(
         inputDetails.cache_write_tokens,
         usageData.cache_write_tokens,
         usageData.cache_creation_input_tokens
@@ -3636,6 +3650,9 @@ function formatApiTokenUsageSummary(tokenUsage) {
 
     if (hasApiTokenUsageField(fields, 'inputCachedTokens')) {
         inputExtras.push(getLocalizedText('usageCache', { count: formatTokenUsageNumber(fields.inputCachedTokens) }));
+    }
+    if (hasApiTokenUsageField(fields, 'inputCacheCreatedTokens')) {
+        inputExtras.push(getLocalizedText('usageCacheCreated', { count: formatTokenUsageNumber(fields.inputCacheCreatedTokens) }));
     }
     if (hasApiTokenUsageField(fields, 'inputCacheCreationTokens')) {
         inputExtras.push(getLocalizedText('usageCacheWrite', { count: formatTokenUsageNumber(fields.inputCacheCreationTokens) }));
@@ -5679,18 +5696,9 @@ async function preparePageConversationContext(capturedSelectedText = '', options
     };
 }
 
-function createInquiryPromptCacheKey() {
-    if (typeof globalThis.crypto?.randomUUID === 'function') {
-        return `askpage:${globalThis.crypto.randomUUID()}`;
-    }
-
-    return `askpage:${Date.now().toString(36)}:${Math.random().toString(36).slice(2)}`;
-}
-
 function clearInquiryConversationContext() {
     inquiryConversationContext = null;
     inquiryConversationContextPromise = null;
-    inquiryPromptCacheKey = '';
     geminiCacheEntries.clear();
     geminiCachePromises.clear();
 }
@@ -5699,10 +5707,6 @@ if (typeof AskPageI18n !== 'undefined' && typeof AskPageI18n.onLocaleChanged ===
     AskPageI18n.onLocaleChanged(() => {
         clearInquiryConversationContext();
     });
-}
-
-function getInquiryPromptCacheKey() {
-    return inquiryPromptCacheKey;
 }
 
 function hashPromptCacheContext(value) {
@@ -5721,16 +5725,20 @@ function hashPromptCacheContext(value) {
         .join('');
 }
 
-function getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled) {
-    if (!agentModeEnabled) {
-        return getInquiryPromptCacheKey();
-    }
-
-    const snapshotIdentity = [
+function getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled, options = {}) {
+    const contextIdentity = [
         pageConversationContext?.systemPrompt || '',
         pageConversationContext?.conversationContextText || ''
     ].join('\u0000');
-    return `askpage:agent:${hashPromptCacheContext(snapshotIdentity)}`;
+
+    if (agentModeEnabled) {
+        return `askpage:agent:${hashPromptCacheContext(contextIdentity)}`;
+    }
+
+    // 詢問模式的頁面內容在整個對話期間不變，因此親和鍵改用內容雜湊而非隨機識別碼：
+    // 同一頁面重新載入（content script 重跑）後仍沿用同一條路徑，供應商端才不會每一輪都被路由到冷後端。
+    const providerIdentity = [options.providerType || '', options.model || ''].join('\u0000');
+    return `askpage:inquiry:${hashPromptCacheContext(`${contextIdentity}\u0000${providerIdentity}`)}`;
 }
 
 async function getPageConversationContext(
@@ -5757,7 +5765,6 @@ async function getPageConversationContext(
             .then((context) => {
                 if (inquiryConversationContextPromise === contextPromise) {
                     inquiryConversationContext = context;
-                    inquiryPromptCacheKey = createInquiryPromptCacheKey();
                 }
                 return context;
             })
@@ -5765,7 +5772,6 @@ async function getPageConversationContext(
                 if (inquiryConversationContextPromise === contextPromise) {
                     inquiryConversationContext = null;
                     inquiryConversationContextPromise = null;
-                    inquiryPromptCacheKey = '';
                 }
                 throw error;
             });
@@ -5903,14 +5909,51 @@ function applyOpenRouterCacheControl(requestBody, model = '') {
     return requestBody;
 }
 
+// 只有會把請求轉送到多個後端（或本身支援 prompt_cache_key）的供應商才帶親和鍵，
+// 其餘供應商不吃這個欄位，硬帶可能被當成未知參數而整輪失敗。
+const OPENAI_STYLE_CACHE_KEY_PROVIDER_TYPES = new Set([
+    'openai',
+    'azure',
+    'openrouter',
+    'openai-compatible',
+    'deepseek'
+]);
+
 function applyPromptCacheRequestOptions(requestBody, options = {}) {
-    if (['openai', 'azure', 'openrouter'].includes(options.providerType) && options.promptCacheKey) {
+    if (OPENAI_STYLE_CACHE_KEY_PROVIDER_TYPES.has(options.providerType) && options.promptCacheKey) {
         requestBody.prompt_cache_key = options.promptCacheKey;
     } else if (options.providerType === 'anthropic') {
         requestBody.cache_control = { type: 'ephemeral' };
     }
 
     return requestBody;
+}
+
+function isPromptCacheKeyUnsupportedError(error) {
+    if (Number(error?.status) !== 400) {
+        return false;
+    }
+
+    const errorText = `${error?.apiMessage || ''}\n${error?.body || ''}\n${error?.message || ''}`.toLowerCase();
+    return errorText.includes('prompt_cache_key')
+        && ['unknown', 'unsupported', 'unrecognized', 'not allowed', 'extra field']
+            .some((fragment) => errorText.includes(fragment));
+}
+
+// 供應商拒收 prompt_cache_key 時拔掉欄位重送一次，讓親和鍵不會反過來弄壞請求。
+async function sendRequestWithPromptCacheKeyFallback(sendRequest, requestBody, onRetry, streamHandlers = {}) {
+    try {
+        return await sendRequest(requestBody, onRetry, streamHandlers);
+    } catch (error) {
+        if (!requestBody?.prompt_cache_key || !isPromptCacheKeyUnsupportedError(error)) {
+            throw error;
+        }
+
+        console.warn('[AskPage] Provider rejected prompt_cache_key; retrying without it.', error?.apiMessage || error?.message);
+        const fallbackRequestBody = { ...requestBody };
+        delete fallbackRequestBody.prompt_cache_key;
+        return await sendRequest(fallbackRequestBody, onRetry, streamHandlers);
+    }
 }
 
 function addConversationTurn(role, content, displayContent = content, options = {}) {
@@ -9154,8 +9197,8 @@ async function createDialog() {
                     appendAgentTraceMessage(resultTrace.text, 'tool-result', { renderedHtml: resultTrace.renderedHtml });
                 });
             },
-            reportUsage(providerLabel, usageData) {
-                mergeApiTokenUsageSummary(tokenUsage, createApiTokenUsageSummary(providerLabel, usageData));
+            reportUsage(providerLabel, usageData, options = {}) {
+                mergeApiTokenUsageSummary(tokenUsage, createApiTokenUsageSummary(providerLabel, usageData, options));
             },
             reportCompletion(message) {
                 storeStreamedReasoning();
@@ -9233,7 +9276,9 @@ async function createDialog() {
         }
 
         if (traceEvent.type === 'usage') {
-            traceReporter.reportUsage(providerLabel, traceEvent.usage);
+            traceReporter.reportUsage(providerLabel, traceEvent.usage, {
+                cacheCreated: traceEvent.cacheCreated === true
+            });
             return;
         }
 
@@ -12553,13 +12598,13 @@ async function createDialog() {
 
         const existingEntry = geminiCacheEntries.get(cacheIdentity);
         if (isGeminiCacheEntryUsable(existingEntry)) {
-            return existingEntry.name;
+            return { name: existingEntry.name, created: false };
         }
         geminiCacheEntries.delete(cacheIdentity);
 
         const existingPromise = geminiCachePromises.get(cacheIdentity);
         if (existingPromise) {
-            return await existingPromise;
+            return { name: await existingPromise, created: false };
         }
 
         const cacheRequest = buildGeminiCachedContentRequest(selectedModel, pageConversationContext, {
@@ -12620,7 +12665,8 @@ async function createDialog() {
         });
 
         geminiCachePromises.set(cacheIdentity, cachePromise);
-        return await cachePromise;
+        const cachedContentName = await cachePromise;
+        return { name: cachedContentName, created: Boolean(cachedContentName) };
     }
 
     function formatGeminiUsageMetadataSummary(usageMetadata) {
@@ -13272,7 +13318,8 @@ async function createDialog() {
             ));
             let responseData;
             try {
-                responseData = await sendRequest(
+                responseData = await sendRequestWithPromptCacheKeyFallback(
+                    sendRequest,
                     buildRequestBody(messages, useTools, maxOutputTokens),
                     (retryInfo) => reportStatus(formatRoundStatus(
                         round,
@@ -13439,8 +13486,11 @@ async function createDialog() {
         const systemInstructionText = enableTools
             ? pageConversationContext.systemPrompt
             : `${pageConversationContext.systemPrompt}\n\n${pageConversationContext.conversationContextText}`;
-        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, enableTools);
-        let explicitCacheName = await getOrCreateGeminiExplicitCache({
+        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, enableTools, {
+            providerType: 'gemini',
+            model: selectedModel
+        });
+        const explicitCache = await getOrCreateGeminiExplicitCache({
             apiKey,
             selectedModel,
             pageConversationContext,
@@ -13450,6 +13500,8 @@ async function createDialog() {
             providerLabel,
             signal
         });
+        let explicitCacheName = explicitCache.name;
+        let explicitCacheCreated = explicitCache.created;
         throwIfAskTaskCancelled(cancellationContext);
         const contents = explicitCacheName
             ? buildGeminiConversationContents()
@@ -13557,7 +13609,7 @@ async function createDialog() {
                 if (!cacheRecoveryAttempted && explicitCacheName && isGeminiCachedContentReferenceError(error)) {
                     cacheRecoveryAttempted = true;
                     invalidateGeminiCacheName(explicitCacheName);
-                    explicitCacheName = await getOrCreateGeminiExplicitCache({
+                    const refreshedCache = await getOrCreateGeminiExplicitCache({
                         apiKey,
                         selectedModel,
                         pageConversationContext,
@@ -13567,6 +13619,8 @@ async function createDialog() {
                         providerLabel,
                         signal
                     });
+                    explicitCacheName = refreshedCache.name;
+                    explicitCacheCreated = explicitCacheCreated || refreshedCache.created;
                     if (!explicitCacheName && enableTools && !pageContextIncludedInContents) {
                         contents.unshift({
                             role: 'user',
@@ -13581,7 +13635,12 @@ async function createDialog() {
             }
             throwIfAskTaskCancelled(cancellationContext);
             logGeminiUsageMetadata(responseData);
-            onTrace({ type: 'usage', round, usage: responseData?.usageMetadata || null });
+            onTrace({
+                type: 'usage',
+                round,
+                usage: responseData?.usageMetadata || null,
+                cacheCreated: explicitCacheCreated && Boolean(explicitCacheName)
+            });
             const responseCandidate = getGeminiPrimaryCandidate(responseData);
             const responseContent = responseCandidate?.content;
             const parts = responseContent?.parts || [];
@@ -13799,7 +13858,10 @@ async function createDialog() {
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
         throwIfAskTaskCancelled(taskContext);
-        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled);
+        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled, {
+            providerType: 'openai',
+            model: selectedModel
+        });
         const streamingEnabled = isStreamingSupported('openai', selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const usesMaxCompletionTokens = isReasoningModel(selectedModel);
@@ -14001,7 +14063,10 @@ async function createDialog() {
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
         throwIfAskTaskCancelled(taskContext);
-        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled);
+        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled, {
+            providerType: 'azure',
+            model: deployment
+        });
         const streamingEnabled = isStreamingSupported('azure', deployment);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const isReasoning = Boolean(getReasoningCapability('azure', deployment));
@@ -14122,22 +14187,7 @@ async function createDialog() {
                         });
                     };
 
-                    try {
-                        return await sendAzureRequest(requestBody);
-                    } catch (error) {
-                        const errorText = `${error?.apiMessage || ''}\n${error?.body || ''}\n${error?.message || ''}`.toLowerCase();
-                        const cacheKeyUnsupported = Number(error?.status) === 400
-                            && errorText.includes('prompt_cache_key')
-                            && ['unknown', 'unsupported', 'unrecognized', 'not allowed', 'extra field']
-                                .some((fragment) => errorText.includes(fragment));
-                        if (!requestBody.prompt_cache_key || !cacheKeyUnsupported) {
-                            throw error;
-                        }
-
-                        const fallbackRequestBody = { ...requestBody };
-                        delete fallbackRequestBody.prompt_cache_key;
-                        return await sendAzureRequest(fallbackRequestBody);
-                    }
+                    return await sendAzureRequest(requestBody);
                 },
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
@@ -14233,7 +14283,10 @@ async function createDialog() {
             inputImageDataUrls: normalizedInputImages
         }, agentModeEnabled);
         throwIfAskTaskCancelled(taskContext);
-        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled);
+        const promptCacheKey = getPromptCacheKeyForContext(pageConversationContext, agentModeEnabled, {
+            providerType,
+            model: selectedModel
+        });
         const streamingEnabled = isStreamingSupported(providerType, selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         const cleanEndpoint = endpoint.replace(/\/$/, '');

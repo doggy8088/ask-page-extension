@@ -443,6 +443,7 @@
     "usageToolInput": { "message": "工具輸入" },
     "usageTotal": { "message": "總計" },
     "usageCache": { "message": "快取 $count$", "placeholders": { "count": { "content": "$1" } } },
+    "usageCacheCreated": { "message": "快取（新建） $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageCacheWrite": { "message": "快取寫入 $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageReasoning": { "message": "推理 $count$", "placeholders": { "count": { "content": "$1" } } },
     "usageAcceptedPrediction": { "message": "已接受預測 $count$", "placeholders": { "count": { "content": "$1" } } },
