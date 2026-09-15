@@ -289,6 +289,17 @@
 - 2025-03-01-preview
 - 2025-04-01-preview
 
+### 提示詞快取與命中率
+
+AskPage 會盡量讓同一個對話重複使用供應商端的提示詞快取，但命中與否取決於供應商：
+
+- **Gemini**：使用 explicit `cachedContents`（TTL 1 小時）。統計中的「快取（新建）」代表這一輪其實是重新建立快取，「快取」才是沿用既有快取。
+- **OpenAI、Azure、OpenRouter、OpenAI 相容端點（含 DeepSeek）**：送出 `prompt_cache_key` 親和鍵，鍵值為「系統提示＋頁面內容＋供應商＋模型」的內容雜湊，同一頁面重新整理後仍沿用同一條路由。供應商若拒收這個欄位，AskPage 會自動拔掉欄位重送一次。
+- **Anthropic**：使用 `cache_control` 自動快取。
+- 各家快取壽命不同：OpenAI 約 5～10 分鐘、Anthropic 預設 5 分鐘、Gemini 的 explicit 快取為 1 小時，間隔太久再追問本來就會重新建立快取。
+- 若 endpoint 是會在多個帳號／後端之間輪替的閘道（例如 LiteLLM），相同前綴可能每次落到不同後端，命中率由供應商路由決定，AskPage 無法保證。
+- 統計中的「快取」讀數取供應商回報欄位的最大值，避免部分閘道同時回傳 `cached_tokens: 0` 時，把實際命中顯示成 0。
+
 ## 🛠️ 開發
 
 ### 本機開發環境設定

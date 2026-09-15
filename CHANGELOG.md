@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [0.45.2] - 2026-09-16
+
+### 修正 / 更新（v0.45.2）
+
+- **追問時的提示詞快取親和鍵改以內容雜湊穩定沿用**：非代理模式的 `prompt_cache_key` 原本是每次對話產生的隨機 UUID，內容腳本一重載（整頁重載、SPA 換頁）就更換，即使頁面內容完全相同也會被供應商重新路由到沒有快取的後端，追問時命中率因此飄移。現在改用「系統提示＋頁面內容＋`providerType`＋模型」的內容雜湊（`askpage:inquiry:`），同一頁面重新整理後仍沿用同一條路由；代理模式維持原本只依快照內容計算的 `askpage:agent:` 鍵。
+- **`prompt_cache_key` 覆蓋 `openai-compatible` 與 `deepseek`，並新增供應商拒收時的自動回退**：這兩種供應商型別過去完全沒有送出親和鍵，經過會輪替後端的閘道時命中與否只能靠運氣。現在與 OpenAI、Azure、OpenRouter 走同一條路徑；並新增 `sendRequestWithPromptCacheKeyFallback`，當供應商以 400 表明不接受 `prompt_cache_key`（`unknown`／`unsupported`／`unrecognized`／`not allowed`／`extra field`）時，會自動拔掉該欄位重送一次。原本只有 Azure 具備的回退行為，現在所有 OpenAI 相容工具迴圈共用同一個包裝。
+- **修正實際命中卻顯示成 0 的 Token 統計**：cached tokens 過去採「取第一個有限值」，因此閘道同時回傳 `prompt_tokens_details.cached_tokens: 0` 與 `prompt_cache_hit_tokens` 時，真正命中的數字會被 0 蓋掉，統計上看起來像命中遺失。現在改取候選欄位（`cached_tokens`、`cachedContentTokenCount`、`cacheTokensDetails` 合計、`cache_read_input_tokens`、`prompt_cache_hit_tokens`）的最大值，快取寫入欄位同樣處理。
+- **Gemini 快取區分「新建」與「命中」**：Gemini 的 explicit `cachedContents` 即使每一輪重新建立，回應仍會回報 cached tokens，統計上無從分辨真假命中。現在 `getOrCreateGeminiExplicitCache` 會回報本輪是否真的建立快取，該輪 cached 用量改列為「快取（新建）」，與既有的「快取」命中分開顯示；五種語系同步新增 `usageCacheCreated`。
+- **README 補充提示詞快取的已知限制**：說明各家快取壽命差異、親和鍵行為，以及 endpoint 若在多個帳號／後端之間輪替（例如 LiteLLM 之類的閘道）時，命中率由供應商路由決定。
+
 ## [0.45.1] - 2026-09-11
 
 ### 修正 / 更新（v0.45.1）
