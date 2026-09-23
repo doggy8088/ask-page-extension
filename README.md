@@ -17,7 +17,7 @@
 - 🔐 **加密安全儲存** - API 金鑰使用 AES-256-GCM 加密保護
 - 🎯 **智慧模型選擇** - 支援 Gemini 全系列模型、多種 OpenAI 模型和 Azure OpenAI 部署
 - 📝 支援選取文字進行針對性提問
-- ⌨️ 快速鍵支援 (Ctrl+Shift+Y 開啟對話，Ctrl+Shift+S 切換提供者，Ctrl+L 清除對話)
+- ⌨️ 快速鍵支援 (Ctrl+Shift+Y 開啟對話，Ctrl+Shift+S 切換提供者，Ctrl+L 清除對話，Ctrl+S 總結頁面)
 - 🎨 黑藍高對比的深色對話與偏好設定介面，搭配武打意象品牌圖示，標題列會即時顯示目前使用的 AI 提供者與模型
 - ⚡ 技能系統 - 新增、編輯、刪除個人專屬技能
 - 📚 技能快速提示 - 內建與自訂技能的自動完成功能
@@ -102,7 +102,7 @@
 ### 內建技能
 
 - `/clear` - 清除提問歷史記錄（對話框開啟時也可按 `Ctrl+L`）
-- `/summary` - 總結整個頁面內容（可在設定中自訂提示語）
+- `/summary` - 總結整個頁面內容（對話框開啟時也可按 `Ctrl+S`，可在設定中自訂提示語）
 - `/screenshot` - 切換截圖功能狀態
 - `/agent` - 切換詢問模式 / 代理模式；代理模式會改用頁面 HTML、允許工具調用，且開放手動附圖上下文
 
@@ -150,6 +150,7 @@
 - `Ctrl+Shift+Y` (Windows/Linux) / `Command+Shift+Y` (Mac) - 開啟 / 關閉對話框
 - `Ctrl+Shift+S` (Windows/Linux) / `MacCtrl+Shift+S` (Mac) - 切換 AI 提供者
 - `Ctrl+L` - 對話框開啟時執行 `/clear`，清除目前對話與提問歷史
+- `Ctrl+S` - 對話框開啟時執行 `/summary`，總結目前頁面
 - `Escape` - 關閉對話框
 - `↑/↓` 方向鍵 - 瀏覽提問歷史
 
