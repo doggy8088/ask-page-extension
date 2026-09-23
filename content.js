@@ -1503,6 +1503,7 @@ const GEMMA_4_REASONING_CAPABILITY = {
 };
 
 const OPENAI_REASONING_CAPABILITIES = {
+    'gpt-6-luna': { options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
     'gpt-5.6': { options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
     'gpt-5.6-sol': { options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
     'gpt-5.6-terra': { options: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'medium' },
@@ -1862,6 +1863,11 @@ function isGpt5FamilyModel(model = '') {
     return normalized.startsWith('gpt-5') || normalized.includes('gpt-5');
 }
 
+function isGpt6FamilyModel(model = '') {
+    const normalized = normalizeModelIdentifier(model);
+    return normalized.startsWith('gpt-6') || normalized.includes('gpt-6');
+}
+
 function isGpt41FamilyModel(model = '') {
     const normalized = normalizeModelIdentifier(model);
     return normalized.startsWith('gpt-4.1') || normalized.includes('gpt-4.1');
@@ -1869,13 +1875,13 @@ function isGpt41FamilyModel(model = '') {
 
 function isReasoningModel(model = '') {
     const normalized = normalizeModelIdentifier(model);
-    return isGpt5FamilyModel(model) ||
+    return isGpt5FamilyModel(model) || isGpt6FamilyModel(model) ||
            normalized.startsWith('o3') || normalized.includes('o3') ||
            normalized.startsWith('o4') || normalized.includes('o4');
 }
 
 function shouldUseResponsesApi(model = '') {
-    return isGpt5FamilyModel(model) || isGpt41FamilyModel(model);
+    return isGpt5FamilyModel(model) || isGpt6FamilyModel(model) || isGpt41FamilyModel(model);
 }
 
 function isGpt56FamilyModel(model = '') {
@@ -1921,7 +1927,7 @@ function getOpenAIStyleMaxOutputTokens(model = '') {
     }
 
     if (isReasoningModel(normalizedModel)) {
-        return isGpt5FamilyModel(normalizedModel) ? 128000 : 100000;
+        return isGpt5FamilyModel(normalizedModel) || isGpt6FamilyModel(normalizedModel) ? 128000 : 100000;
     }
 
     return DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS;

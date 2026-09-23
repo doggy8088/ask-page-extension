@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+- **新增 GPT-6 的 OpenAI Responses API 支援**：GPT-6 系列請求改走 Responses API，使用 `max_output_tokens`；GPT-6 Luna 加入官方支援的推理強度 `none`、`low`、`medium`、`high`、`xhigh`、`max`，預設 `medium`，最大輸出 128K Token。
+
 ## [0.45.2] - 2026-09-16
 
 ### 修正 / 更新（v0.45.2）
