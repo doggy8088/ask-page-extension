@@ -21,56 +21,10 @@ jobs:
         cache: 'npm'
 
     - name: 安裝相依套件
-      run: |
-        # 建立基本的 package.json 用於開發工具
-        cat > package.json << 'EOF'
-        {
-          "name": "ask-page-extension",
-          "version": "1.0.0",
-          "description": "使用 Gemini API 詢問關於目前頁面的問題",
-          "scripts": {
-            "lint": "eslint *.js",
-            "lint:fix": "eslint *.js --fix",
-            "test": "echo '暫無測試' && exit 0"
-          },
-          "devDependencies": {
-            "eslint": "^8.57.0"
-          }
-        }
-        EOF
-
-        # 建立 ESLint 設定檔
-        cat > .eslintrc.js << 'EOF'
-        module.exports = {
-          env: {
-            browser: true,
-            es2021: true,
-            webextensions: true
-          },
-          extends: ['eslint:recommended'],
-          parserOptions: {
-            ecmaVersion: 'latest',
-            sourceType: 'module'
-          },
-          globals: {
-            chrome: 'readonly',
-            marked: 'readonly',
-            DOMPurify: 'readonly'
-          },
-          rules: {
-            'no-unused-vars': 'warn',
-            'no-console': 'off',
-            'quotes': ['error', 'single'],
-            'semi': ['error', 'always']
-          }
-        };
-        EOF
-
-        npm install
+      run: npm ci
 
     - name: 檢查程式碼風格 (ESLint)
       run: npm run lint
-      continue-on-error: true
 
     - name: 驗證擴充功能 (基本檢查，無 web-ext)
       run: |
