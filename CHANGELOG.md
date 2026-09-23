@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.45.3] - 2026-09-24
+
+### 新增 / 改進（v0.45.3）
+
+- **OpenAI 預設模型改為 GPT-6 Astra／Sol／Luna**：OpenAI 提供者預設模型清單最前方新增 `gpt-6-astra`、`gpt-6-sol` 與 `gpt-6-luna`，並移除 `gpt-5.5`、`gpt-5.4` 與 `gpt-5.3`；已勾選這三個舊模型的使用者仍會保留並可繼續使用。GPT-6 家族一律改走 Responses API 並採推理模型參數（`max_completion_tokens`、不送 `temperature`），避免被當成非推理模型送往 Chat Completions，代理模式的工具呼叫也可正常運作；最大輸出 128000 Token。推理強度控制方面，`gpt-6-sol` 與 `gpt-6-luna` 提供 `none` 至 `max`，`gpt-6-astra` 提供 `low` 至 `max`（官方不支援 `none`，因此沒有「關閉」選項），三者預設皆為 `medium`；以 `gpt-6-*` 開頭的 Azure OpenAI Deployment 也會套用對應能力。
+- **DeepSeek 預設模型改為 `deepseek-flash` 與 `deepseek-v4-pro`**：DeepSeek 已推出 DeepSeek-V4.1-Flash（模型名稱 `deepseek-flash`）並退役 V4-Flash，提供者預設清單以 `deepseek-flash` 取代 `deepseek-v4-flash`；`deepseek-flash` 支援串流回應與推理強度控制（`none`／`low`／`high`／`max`，預設 `high`）。已勾選 `deepseek-v4-flash` 的使用者不受影響，DeepSeek 官方目前仍暫時將其轉送至 V4.1-Flash；另依官方公告，自 2026-09-14 起 `deepseek-v4-pro` 在 V4.1-Pro 推出前實際由 V4.1-Flash 回應。
+- **文件同步更新**：README 支援模型清單、目前推理強度對應表與串流回應邏輯文件同步更新上述模型與官方依據。
+
 ## [0.45.2] - 2026-09-16
 
 ### 修正 / 更新（v0.45.2）
