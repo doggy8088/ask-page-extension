@@ -66,7 +66,10 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     buildAnthropicThinkingConfig,
     getAnthropicMaxOutputTokens,
     applyOpenAIReasoningEffort,
-    applyDeepSeekReasoningConfig
+    applyDeepSeekReasoningConfig,
+    isReasoningModel,
+    shouldUseResponsesApi,
+    getOpenAIStyleMaxOutputTokens
 };`, sandbox, {
     filename: 'content.js'
 });
@@ -92,7 +95,10 @@ const {
     buildAnthropicThinkingConfig,
     getAnthropicMaxOutputTokens,
     applyOpenAIReasoningEffort,
-    applyDeepSeekReasoningConfig
+    applyDeepSeekReasoningConfig,
+    isReasoningModel,
+    shouldUseResponsesApi,
+    getOpenAIStyleMaxOutputTokens
 } = sandbox.__askPageTestExports;
 
 function capabilityOptions(providerType, model) {
@@ -131,6 +137,9 @@ assert.deepStrictEqual(Array.from(Object.keys(OPENAI_REASONING_CAPABILITIES)).so
     'gpt-5.6-luna',
     'gpt-5.6-sol',
     'gpt-5.6-terra',
+    'gpt-6-astra',
+    'gpt-6-luna',
+    'gpt-6-sol',
     'o3',
     'o3-mini',
     'o4-mini'
@@ -198,6 +207,9 @@ assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, 511), 0);
 assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, 24576), 24576);
 
 // OpenAI options follow the model-specific subsets documented by OpenAI.
+assert.deepStrictEqual(capabilityOptions('openai', 'gpt-6-astra'), ['low', 'medium', 'high', 'xhigh', 'max']);
+assert.deepStrictEqual(capabilityOptions('openai', 'gpt-6-sol'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+assert.deepStrictEqual(capabilityOptions('openai', 'gpt-6-luna'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
 assert.deepStrictEqual(capabilityOptions('openai', 'gpt-5.6-sol'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
 assert.deepStrictEqual(capabilityOptions('openai', 'gpt-5.5'), ['none', 'low', 'medium', 'high', 'xhigh']);
 assert.deepStrictEqual(capabilityOptions('openai', 'gpt-5.4-nano'), ['none', 'low', 'medium', 'high', 'xhigh']);
@@ -211,6 +223,10 @@ Object.entries(OPENAI_REASONING_CAPABILITIES).forEach(([model, capability]) => {
 });
 assert.strictEqual(
     normalizeReasoningValue(getReasoningCapability('openai', 'gpt-5.5'), 'max'),
+    'medium'
+);
+assert.strictEqual(
+    normalizeReasoningValue(getReasoningCapability('openai', 'gpt-6-astra'), 'none'),
     'medium'
 );
 
@@ -244,6 +260,8 @@ assert.deepStrictEqual(
 assert.deepStrictEqual(capabilityOptions('azure', 'gpt-5.6'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
 assert.deepStrictEqual(capabilityOptions('azure', 'gpt-5.6-luna'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
 assert.deepStrictEqual(capabilityOptions('azure', 'gpt-5.6-luna-production'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+assert.deepStrictEqual(capabilityOptions('azure', 'gpt-6-sol-production'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+assert.deepStrictEqual(capabilityOptions('azure', 'gpt-6-astra'), ['low', 'medium', 'high', 'xhigh', 'max']);
 assert.deepStrictEqual(capabilityOptions('azure', 'gpt-5.5-pro-production'), ['medium', 'high', 'xhigh']);
 assert.strictEqual(getReasoningCapability('azure', 'gpt-5.4').defaultValue, 'medium');
 assert.strictEqual(getReasoningCapability('azure', 'gpt-5.4-2026-08-02').defaultValue, 'medium');
@@ -260,6 +278,15 @@ assert.deepStrictEqual(capabilityOptions('deepseek', 'deepseek-v4-pro'), ['none'
 assert.strictEqual(getReasoningCapability('deepseek', 'deepseek-chat'), null);
 assert.match(settingsScript, /deepseek:\s*\[\s*'deepseek-v4-flash',\s*'deepseek-v4-pro'\s*\]/);
 assert.doesNotMatch(settingsScript, /'deepseek-chat'|'deepseek-reasoner'/);
+assert.match(settingsScript, /openai:\s*\[\s*'gpt-6-astra',\s*'gpt-6-sol',\s*'gpt-6-luna',\s*'gpt-5\.6-sol',/);
+assert.doesNotMatch(settingsScript, /openai:\s*\[[^\]]*'gpt-5\.[345]'/);
+
+// GPT-6 models must use the Responses API and reasoning-model request parameters.
+['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-6-sol-production'].forEach((model) => {
+    assert.strictEqual(shouldUseResponsesApi(model), true, `${model} should use the Responses API`);
+    assert.strictEqual(isReasoningModel(model), true, `${model} should be treated as a reasoning model`);
+    assert.strictEqual(getOpenAIStyleMaxOutputTokens(model), 128000, `${model} should allow 128K output tokens`);
+});
 
 // OpenRouter model metadata explicitly declares the effort values that include none.
 assert.deepStrictEqual(Array.from(Object.keys(OPENROUTER_REASONING_CAPABILITIES)).sort(), [
