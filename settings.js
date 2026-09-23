@@ -51,13 +51,18 @@ function isGpt5FamilyModel(model = '') {
     return normalized.startsWith('gpt-5') || normalized.includes('gpt-5');
 }
 
+function isGpt6FamilyModel(model = '') {
+    const normalized = normalizeModelIdentifier(model);
+    return normalized.startsWith('gpt-6') || normalized.includes('gpt-6');
+}
+
 function isGpt41FamilyModel(model = '') {
     const normalized = normalizeModelIdentifier(model);
     return normalized.startsWith('gpt-4.1') || normalized.includes('gpt-4.1');
 }
 
 function shouldUseResponsesApi(model = '') {
-    return isGpt5FamilyModel(model) || isGpt41FamilyModel(model);
+    return isGpt5FamilyModel(model) || isGpt6FamilyModel(model) || isGpt41FamilyModel(model);
 }
 
 function getAzureResponsesApiVersion(apiVersion = '') {

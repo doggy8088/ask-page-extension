@@ -9,6 +9,16 @@ const rootDir = path.resolve(__dirname, '..');
 const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
 const settingsScript = fs.readFileSync(path.join(rootDir, 'settings.js'), 'utf8');
 const styleSheet = fs.readFileSync(path.join(rootDir, 'style.css'), 'utf8');
+const settingsRoutingStart = settingsScript.indexOf('function normalizeModelIdentifier');
+const settingsRoutingEnd = settingsScript.indexOf('function getAzureResponsesApiVersion', settingsRoutingStart);
+const settingsRoutingSandbox = {};
+vm.createContext(settingsRoutingSandbox);
+vm.runInContext([
+    settingsScript.slice(settingsRoutingStart, settingsRoutingEnd),
+    'globalThis.__shouldUseResponsesApi = shouldUseResponsesApi;'
+].join('\n'), settingsRoutingSandbox, {
+    filename: 'settings.js'
+});
 
 const sandbox = {
     console,
@@ -65,6 +75,10 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     buildGeminiThinkingConfig,
     buildAnthropicThinkingConfig,
     getAnthropicMaxOutputTokens,
+    getOpenAIStyleMaxOutputTokens,
+    isGpt6FamilyModel,
+    isReasoningModel,
+    shouldUseResponsesApi,
     applyOpenAIReasoningEffort,
     applyDeepSeekReasoningConfig
 };`, sandbox, {
@@ -91,6 +105,10 @@ const {
     buildGeminiThinkingConfig,
     buildAnthropicThinkingConfig,
     getAnthropicMaxOutputTokens,
+    getOpenAIStyleMaxOutputTokens,
+    isGpt6FamilyModel,
+    isReasoningModel,
+    shouldUseResponsesApi,
     applyOpenAIReasoningEffort,
     applyDeepSeekReasoningConfig
 } = sandbox.__askPageTestExports;
@@ -131,6 +149,7 @@ assert.deepStrictEqual(Array.from(Object.keys(OPENAI_REASONING_CAPABILITIES)).so
     'gpt-5.6-luna',
     'gpt-5.6-sol',
     'gpt-5.6-terra',
+    'gpt-6-luna',
     'o3',
     'o3-mini',
     'o4-mini'
@@ -198,6 +217,19 @@ assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, 511), 0);
 assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, 24576), 24576);
 
 // OpenAI options follow the model-specific subsets documented by OpenAI.
+assert.strictEqual(isGpt6FamilyModel('gpt-6-luna'), true);
+assert.strictEqual(isReasoningModel('gpt-6-luna'), true);
+assert.strictEqual(shouldUseResponsesApi('gpt-6-luna'), true);
+assert.strictEqual(shouldUseResponsesApi('gpt-6-sol'), true);
+assert.strictEqual(shouldUseResponsesApi('gpt-6-astra'), true);
+assert.strictEqual(settingsRoutingSandbox.__shouldUseResponsesApi('gpt-6-luna-production'), true);
+assert.deepStrictEqual(capabilityOptions('openai', 'gpt-6-luna'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+assert.strictEqual(getReasoningCapability('openai', 'gpt-6-luna').defaultValue, 'medium');
+assert.strictEqual(getOpenAIStyleMaxOutputTokens('gpt-6-luna'), 128000);
+assert.deepStrictEqual(capabilityOptions('azure', 'gpt-6-luna-production'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+assert.match(contentScript, /max_output_tokens: options\.maxOutputTokens/);
+assert.strictEqual(shouldUseResponsesApi('gpt-5.6-luna'), true);
+assert.strictEqual(getOpenAIStyleMaxOutputTokens('gpt-5.6-luna'), 128000);
 assert.deepStrictEqual(capabilityOptions('openai', 'gpt-5.6-sol'), ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
 assert.deepStrictEqual(capabilityOptions('openai', 'gpt-5.5'), ['none', 'low', 'medium', 'high', 'xhigh']);
 assert.deepStrictEqual(capabilityOptions('openai', 'gpt-5.4-nano'), ['none', 'low', 'medium', 'high', 'xhigh']);
@@ -369,6 +401,11 @@ const responsesBody = applyOpenAIReasoningEffort({ model: 'gpt-5.6-sol' }, 'xhig
 assert.deepStrictEqual(JSON.parse(JSON.stringify(responsesBody)), {
     model: 'gpt-5.6-sol',
     reasoning: { effort: 'xhigh' }
+});
+const gpt6ResponsesBody = applyOpenAIReasoningEffort({ model: 'gpt-6-luna' }, 'medium', true);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(gpt6ResponsesBody)), {
+    model: 'gpt-6-luna',
+    reasoning: { effort: 'medium' }
 });
 const chatBody = applyOpenAIReasoningEffort({ model: 'o3' }, 'high', false);
 assert.deepStrictEqual(JSON.parse(JSON.stringify(chatBody)), {
