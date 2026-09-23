@@ -6949,7 +6949,7 @@ async function createDialog() {
                     <div class="askpage-usage-subtitle">${escapeHtml(getLocalizedText('builtin'))}</div>
                     <ul class="askpage-usage-command-list">
                         ${createUsageCommandHtml('/clear', getLocalizedText('clearHistoryShortcut'))}
-                        ${createUsageCommandHtml('/summary', getLocalizedText('commandSummaryPage'))}
+                        ${createUsageCommandHtml('/summary', getLocalizedText('summaryPageShortcut'))}
                     </ul>
                 </div>
                 ${customCommandItems}
@@ -7199,17 +7199,17 @@ async function createDialog() {
     };
     window.addEventListener('keydown', escapeKeyListener, true);
 
-    function isClearShortcutEvent(e) {
+    function isDialogShortcutEvent(e, key) {
         return e.ctrlKey &&
             !e.shiftKey &&
             !e.altKey &&
             !e.metaKey &&
             typeof e.key === 'string' &&
-            e.key.toLowerCase() === 'l';
+            e.key.toLowerCase() === key;
     }
 
     const clearShortcutListener = (e) => {
-        if (!host.isConnected || e.repeat || !isClearShortcutEvent(e)) {
+        if (!host.isConnected || e.repeat || !isDialogShortcutEvent(e, 'l')) {
             return;
         }
 
@@ -7219,6 +7219,18 @@ async function createDialog() {
         handleAsk();
     };
     window.addEventListener('keydown', clearShortcutListener, true);
+
+    const summaryShortcutListener = (e) => {
+        if (!host.isConnected || e.repeat || !isDialogShortcutEvent(e, 's')) {
+            return;
+        }
+
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setInputValue('/summary');
+        handleAsk();
+    };
+    window.addEventListener('keydown', summaryShortcutListener, true);
 
     const promptHistory = JSON.parse(await getValue(PROMPT_HISTORY_STORAGE, '[]'));
     let historyIndex = promptHistory.length;
