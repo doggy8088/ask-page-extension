@@ -7,7 +7,59 @@ on:
   workflow_dispatch:
 
 jobs:
+  check-release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    outputs:
+      should_publish: ${{ steps.check.outputs.should_publish }}
+
+    steps:
+    - name: 取出程式碼
+      uses: actions/checkout@v7
+
+    - name: 檢查版本是否已發布
+      id: check
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}
+      run: |
+        version=$(jq -r '.version' manifest.json)
+        tag="v$version"
+
+        # 手動觸發或重新執行時一律發布，保留補救失敗發布的途徑
+        if [ "$EVENT_NAME" != "push" ] || [ "$RUN_ATTEMPT" != "1" ]; then
+          echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        set +e
+        git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null
+        status=$?
+        set -e
+
+        case "$status" in
+          0)
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "## 略過發布" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "標籤 $tag 已存在，表示 manifest.json 版本 $version 已發布過，本次推送不重新建立 Release 或上傳 Chrome Web Store。" >> "$GITHUB_STEP_SUMMARY"
+            echo "若需重新發布此版本，請重新執行此 workflow 或以 workflow_dispatch 手動觸發。" >> "$GITHUB_STEP_SUMMARY"
+            ;;
+          2)
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            ;;
+          *)
+            echo "::error::無法查詢遠端標籤 $tag（git ls-remote exit code $status）"
+            exit 1
+            ;;
+        esac
+
   publish:
+    needs: check-release
+    if: needs.check-release.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
 
     permissions:
