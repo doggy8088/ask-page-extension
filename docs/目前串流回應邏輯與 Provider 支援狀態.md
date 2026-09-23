@@ -16,7 +16,7 @@
 | OpenAI | 10 | 串流 | Provider API 已查證，依模型使用 Chat Completions 或 Responses API |
 | Azure OpenAI | 動態 Deployment | 串流 | Azure API 已查證，依 Deployment 使用 Chat Completions 或 Responses API |
 | Anthropic | 3 | 串流 | Provider API 已查證，使用 Messages API SSE |
-| DeepSeek | 2 | 串流 | 僅對已確認的 `deepseek-v4-flash` 與 `deepseek-v4-pro` 開啟 |
+| DeepSeek | 2 | 串流 | 僅對已確認的 `deepseek-flash`、`deepseek-v4-pro` 與舊名稱 `deepseek-v4-flash` 開啟 |
 | OpenRouter | 16 | 串流 | Provider 文件宣告可對任意模型串流 |
 | Groq | 3 | 串流 | Provider API 已查證，使用 OpenAI 相容 Chat Completions SSE |
 | Mistral | 5 | 串流 | Provider API 已查證，使用 Chat Completions SSE |
@@ -68,14 +68,14 @@
 
 1. Provider 必須在 `STREAMING_PROVIDER_CAPABILITIES` 中。
 2. 模型名稱不可為空。
-3. `deepseek` 只接受已確認的兩個模型名稱。
+3. `deepseek` 只接受已確認的三個模型名稱（`deepseek-flash`、`deepseek-v4-pro` 與舊名稱 `deepseek-v4-flash`）。
 4. 其他已列入的固定 Provider 以 Provider API 能力判定，不要求維護一份重複的模型名稱清單。
 5. `openai-compatible` 不在能力表中，因此預設回傳 `false`。
 
 這個設計區分兩種情況：
 
 - **Provider 層已確認**：OpenAI、Azure OpenAI、Anthropic、OpenRouter、Groq、Mistral、Ollama 與 Gemini 的官方端點本身提供串流介面。模型名稱仍必須是該端點實際可用的模型或 Deployment。
-- **模型名稱已確認**：DeepSeek 目前只對文件與設定中確認的 `deepseek-v4-flash`、`deepseek-v4-pro` 開啟串流；其他自訂名稱不會因為同一個 Provider 就被推定支援。
+- **模型名稱已確認**：DeepSeek 目前只對文件與設定中確認的 `deepseek-flash`、`deepseek-v4-pro` 與舊名稱 `deepseek-v4-flash` 開啟串流；其他自訂名稱不會因為同一個 Provider 就被推定支援。
 
 因此，**API 文件確認 Provider 支援串流，不等於每個自訂 Deployment、反向代理或模型別名都保證能成功串流。** 若 Azure Deployment 或 Ollama 模型本身不存在，請求仍會由 API 回傳錯誤；這不是串流判定可以取代的模型可用性檢查。
 

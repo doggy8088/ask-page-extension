@@ -268,15 +268,18 @@ assert.strictEqual(getReasoningCapability('azure', 'gpt-5.4-2026-08-02').default
 assert.strictEqual(getReasoningCapability('azure', 'production-gpt-5.6'), null);
 assert.strictEqual(getReasoningCapability('azure', 'gpt-5.6luna'), null);
 
-// Current DeepSeek V4 models expose explicit non-thinking mode.
+// Current DeepSeek models expose explicit non-thinking mode; the legacy V4 Flash name stays for saved configs.
 assert.deepStrictEqual(Array.from(Object.keys(DEEPSEEK_REASONING_CAPABILITIES)).sort(), [
+    'deepseek-flash',
     'deepseek-v4-flash',
     'deepseek-v4-pro'
 ]);
+assert.deepStrictEqual(capabilityOptions('deepseek', 'deepseek-flash'), ['none', 'low', 'high', 'max']);
+assert.strictEqual(getReasoningCapability('deepseek', 'deepseek-flash').defaultValue, 'high');
 assert.deepStrictEqual(capabilityOptions('deepseek', 'deepseek-v4-flash'), ['none', 'low', 'high', 'max']);
 assert.deepStrictEqual(capabilityOptions('deepseek', 'deepseek-v4-pro'), ['none', 'high', 'max']);
 assert.strictEqual(getReasoningCapability('deepseek', 'deepseek-chat'), null);
-assert.match(settingsScript, /deepseek:\s*\[\s*'deepseek-v4-flash',\s*'deepseek-v4-pro'\s*\]/);
+assert.match(settingsScript, /deepseek:\s*\[\s*'deepseek-flash',\s*'deepseek-v4-pro'\s*\]/);
 assert.doesNotMatch(settingsScript, /'deepseek-chat'|'deepseek-reasoner'/);
 assert.match(settingsScript, /openai:\s*\[\s*'gpt-6-astra',\s*'gpt-6-sol',\s*'gpt-6-luna',\s*'gpt-5\.6-sol',/);
 assert.doesNotMatch(settingsScript, /openai:\s*\[[^\]]*'gpt-5\.[345]'/);

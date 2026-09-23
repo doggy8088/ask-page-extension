@@ -1386,7 +1386,7 @@ const STREAMING_PROVIDER_CAPABILITIES = {
     azure: { scope: 'provider' },
     anthropic: { scope: 'provider' },
     deepseek: {
-        models: new Set(['deepseek-v4-flash', 'deepseek-v4-pro'])
+        models: new Set(['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-pro'])
     },
     openrouter: { scope: 'provider' },
     groq: { scope: 'provider' },
@@ -1560,6 +1560,11 @@ const ANTHROPIC_REASONING_CAPABILITIES = {
 const AZURE_REASONING_MODEL_IDS = new Set(Object.keys(OPENAI_REASONING_CAPABILITIES));
 
 const DEEPSEEK_REASONING_CAPABILITIES = {
+    'deepseek-flash': {
+        kind: 'level',
+        options: ['none', 'low', 'high', 'max'],
+        defaultValue: 'high'
+    },
     'deepseek-v4-flash': {
         kind: 'level',
         options: ['none', 'low', 'high', 'max'],

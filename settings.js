@@ -257,7 +257,7 @@ const PREDEFINED_MODELS = {
         'claude-haiku-4-5'
     ],
     deepseek: [
-        'deepseek-v4-flash',
+        'deepseek-flash',
         'deepseek-v4-pro'
     ],
     openrouter: [

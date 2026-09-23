@@ -74,6 +74,7 @@ assert.deepStrictEqual(Object.keys(STREAMING_PROVIDER_CAPABILITIES).sort(), [
     ['openai', 'gpt-5.6-sol'],
     ['azure', 'production-gpt-5.6'],
     ['anthropic', 'claude-sonnet-4-6'],
+    ['deepseek', 'deepseek-flash'],
     ['deepseek', 'deepseek-v4-flash'],
     ['openrouter', 'qwen/qwen3.7-max'],
     ['groq', 'llama-3.3-70b-versatile'],
