@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.45.4] - 2026-09-24
+
+### 修正 / 更新（v0.45.4）
+
+- **品質檢查改用專案既有 ESLint 設定**：`.github/workflows/quality-check.yml` 過去會在 CI 中以內嵌的精簡設定覆寫專案的 `package.json` 與 `.eslintrc.js`，缺少 `hljs`、`renderMathInElement` 全域變數與大部分專案規則，導致 `content.js` 出現 4 個 `no-undef` 誤報，且因 `continue-on-error: true` 使 lint 失敗時 job 仍顯示成功。現改以 `npm ci` 安裝並直接使用已提交的設定，lint 錯誤會讓品質檢查失敗。
+- **發布流程略過已發布的版本**：`.github/workflows/release.yml` 在每次推送 `main` 時都會執行，版本號未提升時會重複上傳同一版本，並因 Chrome Web Store 回傳 `ITEM_NOT_UPDATABLE` 而顯示失敗。新增 `check-release` job，若 `v<version>` 標籤已存在就略過發布；重新執行 workflow 或以 `workflow_dispatch` 手動觸發時仍會發布，保留補救失敗發布的途徑。
+- 本版僅調整 CI/CD 流程，擴充功能本身的行為沒有變更。
+
 ## [0.45.3] - 2026-09-24
 
 ### 新增 / 改進（v0.45.3）
