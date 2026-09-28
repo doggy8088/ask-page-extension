@@ -2362,7 +2362,15 @@
   #gemini-qna-dialog,
   .askpage-toolbar-btn,
   #gemini-qna-btn,
-  #gemini-qna-input {
+  #gemini-qna-input,
+  #gemini-qna-messages .gemini-msg-assistant .askpage-tool-trace summary,
+  #gemini-qna-messages .gemini-msg-assistant .askpage-tool-trace-chevron {
     transition: none;
+  }
+
+  #gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-status:last-child::after,
+  #gemini-qna-messages .gemini-msg-assistant .askpage-tool-trace[data-state="pending"] .askpage-tool-trace-icon,
+  #gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-reasoning:last-child .askpage-tool-trace-icon {
+    animation: none;
   }
 }

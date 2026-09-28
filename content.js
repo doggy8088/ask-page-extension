@@ -9155,7 +9155,7 @@ async function createDialog() {
         let lastReasoningText = '';
         let streamedReasoningText = '';
         let streamedReasoningElement = null;
-        let streamedReasoningStored = false;
+        let streamedReasoningTurn = null;
         let streamedReasoningRenderFrame = 0;
         let stepCount = 0;
         let toolTraceCount = 0;
@@ -9193,16 +9193,25 @@ async function createDialog() {
                 return;
             }
 
-            streamedReasoningElement = appendMessage('assistant', `🧠 ${streamedReasoningText}`, {
+            const reasoningTraceText = `🧠 ${streamedReasoningText}`;
+            const reasoningTraceOptions = {
                 renderedHtml: buildReasoningTraceHtml(streamedReasoningText),
                 suppressCopyButton: true,
                 extraClassName: 'askpage-agent-trace askpage-agent-trace-reasoning'
+            };
+            streamedReasoningElement = appendMessage('assistant', reasoningTraceText, reasoningTraceOptions);
+            // 建立元素時就推入對話紀錄、結束時再改寫內容；最後一輪的回答會先存入紀錄，
+            // 若等到完成才推入，重新開啟對話框時思考列會跑到回答下方。
+            addConversationTurn('assistant', reasoningTraceText, reasoningTraceText, {
+                ...reasoningTraceOptions,
+                includeInModelContext: false
             });
+            streamedReasoningTurn = conversationHistory[conversationHistory.length - 1];
             stepCount++;
         };
         const storeStreamedReasoning = () => {
             const reasoningText = streamedReasoningText.trim();
-            if (!reasoningText || streamedReasoningStored) {
+            if (!reasoningText || !streamedReasoningTurn) {
                 return;
             }
 
@@ -9212,12 +9221,10 @@ async function createDialog() {
                 renderStreamedReasoning();
             }
 
-            streamedReasoningStored = true;
-            addConversationTurn('assistant', `🧠 ${reasoningText}`, `🧠 ${reasoningText}`, {
-                renderedHtml: buildReasoningTraceHtml(reasoningText),
-                includeInModelContext: false,
-                suppressCopyButton: true,
-                extraClassName: 'askpage-agent-trace askpage-agent-trace-reasoning'
+            Object.assign(streamedReasoningTurn, {
+                content: `🧠 ${reasoningText}`,
+                displayContent: `🧠 ${reasoningText}`,
+                renderedHtml: buildReasoningTraceHtml(reasoningText)
             });
         };
         // 每一輪的思考各自成為時間軸上的一列，下一輪的串流內容才不會接回工具列上方的舊列。
@@ -9225,7 +9232,9 @@ async function createDialog() {
             storeStreamedReasoning();
             streamedReasoningText = '';
             streamedReasoningElement = null;
-            streamedReasoningStored = false;
+            streamedReasoningTurn = null;
+            // 去重只用於同一輪的串流內容與最終摘要；下一輪即使思考內容相同，也要成為新的一列。
+            lastReasoningText = '';
         };
         return {
             reportStatus(status) {

@@ -106,4 +106,55 @@ const dialogGuardSource = sliceSource('function guardActiveDialogHostForPageTool
 assert.doesNotMatch(dialogGuardSource, /removeChild/, 'run_js 執行期間不可把對話框移出 DOM，否則會閃爍且捲動位置歸零');
 assert.match(dialogGuardSource, /!host\.isConnected && activeDialogState\?\.host === host/, '使用者已關閉的對話框不可被放回頁面');
 
+// 以真正的 createExecutionTraceReporter() 模擬兩輪執行，驗證對話紀錄的順序與每輪思考列。
+const history = [];
+const traceSandbox = {
+    ...sandbox,
+    performance,
+    conversationHistory: history,
+    messagesEl: null,
+    containsLocalizedMessageTemplate: () => false,
+    isCompletionTraceMessage: (text) => text.startsWith('✅'),
+    createApiTokenUsageAccumulator: () => ({}),
+    getActiveMessagesElement: () => null,
+    scrollActiveMessagesToBottom() {},
+    requestAnimationFrame: () => 1,
+    cancelAnimationFrame() {},
+    renderAssistantMessageElement() {},
+    appendMessage: () => ({ querySelector: () => ({ open: false }) }),
+    addConversationTurn(role, content, displayContent, options = {}) {
+        history.push({ role, content, displayContent, ...options });
+    }
+};
+traceSandbox.appendPersistentMessage = (role, text, options = {}, historyOptions = {}) => {
+    traceSandbox.addConversationTurn(role, text, text, { ...historyOptions, extraClassName: options.extraClassName });
+};
+vm.createContext(traceSandbox);
+vm.runInContext(`
+${sliceSource('function escapeHtml(', 'function getSafeMarkdownCodeLanguageClass(')}
+${sliceSource('    function appendAgentTraceMessage(', '    function formatElapsedDuration(')}
+${sliceSource('    function formatConversationStyleStatus(', '    const TOOL_TRACE_ICON_PATHS')}
+${sliceSource('    const TOOL_TRACE_ICON_PATHS', '    function createExecutionTraceReporter(')}
+${sliceSource('    function createExecutionTraceReporter()', '    function logAgentExecutionCompletion(')}
+this.createExecutionTraceReporter = createExecutionTraceReporter;
+`, traceSandbox);
+
+const reporter = traceSandbox.createExecutionTraceReporter();
+reporter.reportStatus('正在請 Google 規劃任務...');
+reporter.reportReasoningDelta('先計算專案數量');
+reporter.reportReasoning(['先計算專案數量']);
+reporter.reportToolCalls([{ id: 'c1', name: 'run_js', args: { code: 'return 12' } }]);
+reporter.reportToolResults([{ id: 'c1', name: 'run_js', result: { success: true, message: '已執行。' }, durationMs: 5 }]);
+reporter.reportReasoningDelta('先計算專案數量');
+traceSandbox.addConversationTurn('assistant', '共有 12 個專案。', '共有 12 個專案。');
+reporter.reportCompletion('頁問已經打完收工');
+
+assert.deepStrictEqual(
+    history.map((turn) => turn.extraClassName?.match(/askpage-agent-trace-(\w+)$/)?.[1] || turn.content),
+    ['status', 'reasoning', 'tool', 'reasoning', '共有 12 個專案。', 'completion'],
+    '每輪各有一列思考（即使內容相同），且最後一輪的思考要排在回答之前'
+);
+assert.match(history[1].renderedHtml, /先計算專案數量/);
+assert.match(history[2].renderedHtml, /data-state="success"/, '工具列在收到結果後就地改寫對話紀錄');
+
 console.log('agent-tool-trace: ok');
