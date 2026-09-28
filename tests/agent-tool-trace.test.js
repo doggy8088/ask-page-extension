@@ -51,7 +51,7 @@ assert.strictEqual(formatToolArgumentsPreview({ mode: 'text', ref: 'e12' }), 'mo
 
 const pending = buildToolTraceMessage('tool-a-1', runJsCall);
 assert.match(pending.renderedHtml, /data-state="pending"/);
-assert.match(pending.renderedHtml, /data-askpage-tool-trace-id="tool-a-1"/);
+assert.match(pending.renderedHtml, /data-askpage-trace-id="tool-a-1"/);
 assert.match(pending.renderedHtml, /querySelectorAll\(&quot;\.project&quot;\)/, '執行中應顯示參數預覽');
 assert.doesNotMatch(pending.renderedHtml, /askpage-tool-trace-duration/);
 assert.strictEqual((pending.renderedHtml.match(/askpage-tool-trace-section/g) || []).length, 1, '執行中只有參數區段');
@@ -78,8 +78,8 @@ const stopped = buildToolTraceMessage('tool-a-3', runJsCall, null, 'stopped');
 assert.match(stopped.renderedHtml, /data-state="stopped"/);
 assert.match(stopped.renderedHtml, /已中止/);
 
-const reasoningHtml = buildReasoningTraceHtml('先找出專案清單，\n\n再確認分頁。');
-assert.match(reasoningHtml, /^<details class="askpage-tool-trace askpage-reasoning-trace" data-state="reasoning">/, '思考過程預設收合');
+const reasoningHtml = buildReasoningTraceHtml('trace-r-1', '先找出專案清單，\n\n再確認分頁。');
+assert.match(reasoningHtml, /^<details class="askpage-tool-trace askpage-reasoning-trace" data-state="reasoning" data-askpage-trace-id="trace-r-1">/, '思考過程預設收合');
 assert.match(reasoningHtml, />思考過程</);
 assert.match(reasoningHtml, /<span class="askpage-tool-trace-summary">先找出專案清單， 再確認分頁。<\/span>/, '摘要壓成一行');
 assert.match(reasoningHtml, /<div class="askpage-reasoning-trace-body"><p>先找出專案清單，/, '展開區保留完整的 Markdown 內容');
@@ -90,13 +90,18 @@ assert.match(reportToolResultsSource, /updateToolTraceMessage\(entry, toolResult
 assert.doesNotMatch(reportToolResultsSource, /appendAgentTraceMessage/, '工具結果不可再另外新增一則訊息');
 assert.match(reporterSource, /pendingToolTraces\.splice\(0\)\.forEach\(\(entry\) => updateToolTraceMessage\(entry, null, 'stopped'\)\)/);
 
-assert.match(
-    sliceSource('    async function executeToolCalls(', '    function getAssistantMessageText('),
-    /durationMs: performance\.now\(\) - startedAt/
+const executeToolCallsSource = sliceSource('    async function executeToolCalls(', '    function getAssistantMessageText(');
+assert.match(executeToolCallsSource, /durationMs: performance\.now\(\) - startedAt/);
+assert.match(executeToolCallsSource, /results\.push\(timedToolResult\);\s*onToolResult\(timedToolResult\);/, '每個工具完成就要回報結果');
+assert.strictEqual(
+    (contentScript.match(/\(toolResult\) => onTrace\(\{ type: 'tool-result', round, toolResults: \[toolResult\] \}\)/g) || []).length,
+    2,
+    '兩個 tool loop 都要逐一回報工具結果'
 );
+assert.doesNotMatch(contentScript, /onTrace\(\{ type: 'tool-result', round, toolResults \}\)/, '不可等整批工具結束才回報');
 assert.match(reporterSource, /reportToolCalls\(toolCalls\) \{[\s\S]*?finishStreamedReasoning\(\);/, '每輪工具呼叫前要結束這一輪的思考列');
 assert.match(reporterSource, /reportCompletion\(message\) \{\s*finishStreamedReasoning\(\);/);
-assert.match(reporterSource, /appendAgentTraceMessage\(`🧠 \$\{reasoningText\}`, 'reasoning', \{\s*renderedHtml: buildReasoningTraceHtml\(reasoningText\)/);
+assert.match(reporterSource, /appendAgentTraceMessage\(`🧠 \$\{reasoningText\}`, 'reasoning', \{\s*renderedHtml: buildReasoningTraceHtml\(createTraceId\(\), reasoningText\)/);
 
 assert.match(contentScript, /if \(!useTools \|\| round === 0\) \{/, '第二輪起不再顯示規劃狀態');
 assert.match(contentScript, /if \(!enableTools \|\| round === 0\) \{/);
@@ -106,8 +111,23 @@ const dialogGuardSource = sliceSource('function guardActiveDialogHostForPageTool
 assert.doesNotMatch(dialogGuardSource, /removeChild/, 'run_js 執行期間不可把對話框移出 DOM，否則會閃爍且捲動位置歸零');
 assert.match(dialogGuardSource, /!host\.isConnected && activeDialogState\?\.host === host/, '使用者已關閉的對話框不可被放回頁面');
 
-// 以真正的 createExecutionTraceReporter() 模擬兩輪執行，驗證對話紀錄的順序與每輪思考列。
+// 以真正的 createExecutionTraceReporter() 模擬執行流程。訊息區以假物件代替：依 data-askpage-trace-id
+// 查到的列會記錄每次重畫，藉此確認重畫的是「目前」的對話框，而不是舊的 DOM 參照。
+function createFakeMessages() {
+    const renders = [];
+    return {
+        renders,
+        querySelector(selector) {
+            const traceId = selector.match(/data-askpage-trace-id="([^"]+)"/)?.[1];
+            const messageElement = { traceId, renders, querySelector: () => ({ open: false }) };
+            return traceId ? { closest: () => messageElement } : null;
+        }
+    };
+}
+
 const history = [];
+const pendingFrames = new Map();
+let activeMessages = null;
 const traceSandbox = {
     ...sandbox,
     performance,
@@ -116,12 +136,20 @@ const traceSandbox = {
     containsLocalizedMessageTemplate: () => false,
     isCompletionTraceMessage: (text) => text.startsWith('✅'),
     createApiTokenUsageAccumulator: () => ({}),
-    getActiveMessagesElement: () => null,
+    getActiveMessagesElement: () => activeMessages,
     scrollActiveMessagesToBottom() {},
-    requestAnimationFrame: () => 1,
-    cancelAnimationFrame() {},
-    renderAssistantMessageElement() {},
-    appendMessage: () => ({ querySelector: () => ({ open: false }) }),
+    requestAnimationFrame(callback) {
+        const frameId = pendingFrames.size + 1;
+        pendingFrames.set(frameId, callback);
+        return frameId;
+    },
+    cancelAnimationFrame(frameId) {
+        pendingFrames.delete(frameId);
+    },
+    renderAssistantMessageElement(element, text) {
+        element.renders.push({ traceId: element.traceId, text });
+    },
+    appendMessage() {},
     addConversationTurn(role, content, displayContent, options = {}) {
         history.push({ role, content, displayContent, ...options });
     }
@@ -129,6 +157,12 @@ const traceSandbox = {
 traceSandbox.appendPersistentMessage = (role, text, options = {}, historyOptions = {}) => {
     traceSandbox.addConversationTurn(role, text, text, { ...historyOptions, extraClassName: options.extraClassName });
 };
+const flushFrames = () => {
+    const callbacks = [...pendingFrames.values()];
+    pendingFrames.clear();
+    callbacks.forEach((callback) => callback());
+};
+const traceKinds = () => history.map((turn) => turn.extraClassName?.match(/askpage-agent-trace-(\w+)$/)?.[1] || turn.content);
 vm.createContext(traceSandbox);
 vm.runInContext(`
 ${sliceSource('function escapeHtml(', 'function getSafeMarkdownCodeLanguageClass(')}
@@ -139,6 +173,7 @@ ${sliceSource('    function createExecutionTraceReporter()', '    function logAg
 this.createExecutionTraceReporter = createExecutionTraceReporter;
 `, traceSandbox);
 
+// 情境一：兩輪產生相同的思考內容，最後一輪的回答先存入紀錄。
 const reporter = traceSandbox.createExecutionTraceReporter();
 reporter.reportStatus('正在請 Google 規劃任務...');
 reporter.reportReasoningDelta('先計算專案數量');
@@ -150,11 +185,39 @@ traceSandbox.addConversationTurn('assistant', '共有 12 個專案。', '共有 
 reporter.reportCompletion('頁問已經打完收工');
 
 assert.deepStrictEqual(
-    history.map((turn) => turn.extraClassName?.match(/askpage-agent-trace-(\w+)$/)?.[1] || turn.content),
+    traceKinds(),
     ['status', 'reasoning', 'tool', 'reasoning', '共有 12 個專案。', 'completion'],
     '每輪各有一列思考（即使內容相同），且最後一輪的思考要排在回答之前'
 );
 assert.match(history[1].renderedHtml, /先計算專案數量/);
 assert.match(history[2].renderedHtml, /data-state="success"/, '工具列在收到結果後就地改寫對話紀錄');
+
+// 情境二：思考串流途中關閉再開啟對話框，後續內容要畫到新對話框中的那一列，對話紀錄也要是最新內容。
+history.length = 0;
+const firstDialog = createFakeMessages();
+activeMessages = firstDialog;
+const streamingReporter = traceSandbox.createExecutionTraceReporter();
+streamingReporter.reportReasoningDelta('第一段');
+flushFrames();
+const reopenedDialog = createFakeMessages();
+activeMessages = reopenedDialog;
+streamingReporter.reportReasoningDelta('，第二段');
+flushFrames();
+assert.ok(firstDialog.renders.every((render) => !render.text.includes('第二段')), '不可再畫到已關閉的舊對話框');
+assert.match(reopenedDialog.renders.at(-1)?.text || '', /第一段，第二段/, '重新開啟後的思考列要繼續更新');
+assert.match(history[0].renderedHtml, /第一段，第二段/, '對話紀錄要隨串流保持最新');
+
+// 情境三：同一批工具中途取消，已完成的工具保留結果，只有未完成的標為已中止。
+history.length = 0;
+activeMessages = null;
+const cancelledReporter = traceSandbox.createExecutionTraceReporter();
+cancelledReporter.reportToolCalls([
+    { id: 'c1', name: 'read_page', args: { mode: 'text' } },
+    { id: 'c2', name: 'run_js', args: { code: 'await new Promise(() => {})' } }
+]);
+cancelledReporter.reportToolResults([{ id: 'c1', name: 'read_page', result: { success: true, message: '已讀取。' }, durationMs: 8 }]);
+cancelledReporter.reportCompletion('頁問提早收工');
+assert.match(history[0].renderedHtml, /data-state="success"/, '已完成的工具不可被標為已中止');
+assert.match(history[1].renderedHtml, /data-state="stopped"/);
 
 console.log('agent-tool-trace: ok');

@@ -9095,7 +9095,7 @@ async function createDialog() {
         return {
             text: `${toolName} · ${summaryText}`,
             renderedHtml: `
-            <details class="askpage-tool-trace" data-state="${state}" data-askpage-tool-trace-id="${escapeHtml(traceId)}">
+            <details class="askpage-tool-trace" data-state="${state}" data-askpage-trace-id="${escapeHtml(traceId)}">
                 <summary>
                     <span class="askpage-tool-trace-icon" aria-hidden="true">${iconHtml}</span>
                     <span class="askpage-tool-trace-name">${escapeHtml(toolName)}</span>
@@ -9111,10 +9111,10 @@ async function createDialog() {
     }
 
     // 思考過程和工具列一樣預設收合，只露出一行摘要，展開後才顯示完整內容。
-    function buildReasoningTraceHtml(reasoningText) {
+    function buildReasoningTraceHtml(traceId, reasoningText) {
         const previewText = truncateToolText(reasoningText.replace(/\s+/g, ' ').trim(), 240);
         return `
-            <details class="askpage-tool-trace askpage-reasoning-trace" data-state="reasoning">
+            <details class="askpage-tool-trace askpage-reasoning-trace" data-state="reasoning" data-askpage-trace-id="${escapeHtml(traceId)}">
                 <summary>
                     <span class="askpage-tool-trace-icon" aria-hidden="true"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3l1.2 3.8L13 8l-3.8 1.2L8 13l-1.2-3.8L3 8l3.8-1.2z"/></svg></span>
                     <span class="askpage-tool-trace-name">${escapeHtml(getLocalizedText('reasoningTraceLabel'))}</span>
@@ -9126,6 +9126,25 @@ async function createDialog() {
         `.trim();
     }
 
+    // 執行途中對話框可能被關閉再開啟而由對話紀錄重新渲染，所以每次都依 id 找畫面上現存的那一列，
+    // 並保留使用者的展開狀態，不保留舊的 DOM 參照。
+    function renderTraceMessage(traceId, text, renderedHtml) {
+        const messageElement = getActiveMessagesElement(messagesEl)
+            ?.querySelector(`[data-askpage-trace-id="${traceId}"]`)
+            ?.closest('.gemini-msg-assistant');
+        if (!messageElement) {
+            return false;
+        }
+
+        const wasOpen = messageElement.querySelector('.askpage-tool-trace')?.open === true;
+        renderAssistantMessageElement(messageElement, text, {
+            renderedHtml,
+            suppressCopyButton: true
+        });
+        messageElement.querySelector('.askpage-tool-trace').open = wasOpen;
+        return true;
+    }
+
     function updateToolTraceMessage(entry, toolResult, state) {
         const toolTrace = buildToolTraceMessage(entry.traceId, entry.toolCall, toolResult, state);
         Object.assign(entry.turn, {
@@ -9133,50 +9152,40 @@ async function createDialog() {
             displayContent: toolTrace.text,
             renderedHtml: toolTrace.renderedHtml
         });
-
-        // 執行途中對話框可能被關閉再開啟而重新渲染，所以每次都依 id 找畫面上現存的那一列，不保留舊的 DOM 參照。
-        const traceElement = getActiveMessagesElement(messagesEl)
-            ?.querySelector(`[data-askpage-tool-trace-id="${entry.traceId}"]`);
-        const messageElement = traceElement?.closest('.gemini-msg-assistant');
-        if (!messageElement) {
-            return;
-        }
-
-        const wasOpen = traceElement.open;
-        renderAssistantMessageElement(messageElement, toolTrace.text, {
-            renderedHtml: toolTrace.renderedHtml,
-            suppressCopyButton: true
-        });
-        messageElement.querySelector('.askpage-tool-trace').open = wasOpen;
+        renderTraceMessage(entry.traceId, toolTrace.text, toolTrace.renderedHtml);
     }
 
     function createExecutionTraceReporter() {
         let lastStatus = '';
         let lastReasoningText = '';
         let streamedReasoningText = '';
-        let streamedReasoningElement = null;
+        let streamedReasoningTraceId = '';
         let streamedReasoningTurn = null;
         let streamedReasoningRenderFrame = 0;
         let stepCount = 0;
-        let toolTraceCount = 0;
-        // 同一輪的工具結果會依呼叫順序一次回報，因此以佇列對應回尚未完成的工具列。
+        let traceCount = 0;
+        // 工具結果依呼叫順序逐一回報，因此以佇列對應回尚未完成的工具列。
         const pendingToolTraces = [];
-        const toolTraceIdPrefix = `tool-${Date.now().toString(36)}`;
+        const traceIdPrefix = `trace-${Date.now().toString(36)}`;
+        const createTraceId = () => `${traceIdPrefix}-${++traceCount}`;
         const tokenUsage = createApiTokenUsageAccumulator();
         const startedAt = performance.now();
         const renderStreamedReasoning = () => {
-            if (!streamedReasoningElement) {
+            if (!streamedReasoningTurn) {
                 return;
             }
 
-            // 串流中每一格都會重畫，必須保留使用者展開的狀態。
-            const wasOpen = streamedReasoningElement.querySelector('.askpage-reasoning-trace')?.open === true;
-            renderAssistantMessageElement(streamedReasoningElement, `🧠 ${streamedReasoningText}`, {
-                renderedHtml: buildReasoningTraceHtml(streamedReasoningText),
-                suppressCopyButton: true
+            const reasoningTraceText = `🧠 ${streamedReasoningText}`;
+            const renderedHtml = buildReasoningTraceHtml(streamedReasoningTraceId, streamedReasoningText);
+            // 對話紀錄隨時保持最新內容，串流途中重新開啟對話框時才能渲染出目前的思考。
+            Object.assign(streamedReasoningTurn, {
+                content: reasoningTraceText,
+                displayContent: reasoningTraceText,
+                renderedHtml
             });
-            streamedReasoningElement.querySelector('.askpage-reasoning-trace').open = wasOpen;
-            scrollActiveMessagesToBottom(messagesEl);
+            if (renderTraceMessage(streamedReasoningTraceId, reasoningTraceText, renderedHtml)) {
+                scrollActiveMessagesToBottom(messagesEl);
+            }
         };
         const scheduleStreamedReasoningRender = () => {
             if (streamedReasoningRenderFrame) {
@@ -9189,17 +9198,18 @@ async function createDialog() {
             });
         };
         const ensureStreamedReasoningElement = () => {
-            if (streamedReasoningElement) {
+            if (streamedReasoningTurn) {
                 return;
             }
 
+            streamedReasoningTraceId = createTraceId();
             const reasoningTraceText = `🧠 ${streamedReasoningText}`;
             const reasoningTraceOptions = {
-                renderedHtml: buildReasoningTraceHtml(streamedReasoningText),
+                renderedHtml: buildReasoningTraceHtml(streamedReasoningTraceId, streamedReasoningText),
                 suppressCopyButton: true,
                 extraClassName: 'askpage-agent-trace askpage-agent-trace-reasoning'
             };
-            streamedReasoningElement = appendMessage('assistant', reasoningTraceText, reasoningTraceOptions);
+            appendMessage('assistant', reasoningTraceText, reasoningTraceOptions);
             // 建立元素時就推入對話紀錄、結束時再改寫內容；最後一輪的回答會先存入紀錄，
             // 若等到完成才推入，重新開啟對話框時思考列會跑到回答下方。
             addConversationTurn('assistant', reasoningTraceText, reasoningTraceText, {
@@ -9224,14 +9234,14 @@ async function createDialog() {
             Object.assign(streamedReasoningTurn, {
                 content: `🧠 ${reasoningText}`,
                 displayContent: `🧠 ${reasoningText}`,
-                renderedHtml: buildReasoningTraceHtml(reasoningText)
+                renderedHtml: buildReasoningTraceHtml(streamedReasoningTraceId, reasoningText)
             });
         };
         // 每一輪的思考各自成為時間軸上的一列，下一輪的串流內容才不會接回工具列上方的舊列。
         const finishStreamedReasoning = () => {
             storeStreamedReasoning();
             streamedReasoningText = '';
-            streamedReasoningElement = null;
+            streamedReasoningTraceId = '';
             streamedReasoningTurn = null;
             // 去重只用於同一輪的串流內容與最終摘要；下一輪即使思考內容相同，也要成為新的一列。
             lastReasoningText = '';
@@ -9256,7 +9266,7 @@ async function createDialog() {
                 }
                 lastReasoningText = reasoningText;
                 stepCount++;
-                if (streamedReasoningElement) {
+                if (streamedReasoningTurn) {
                     streamedReasoningText = reasoningText;
                     renderStreamedReasoning();
                     storeStreamedReasoning();
@@ -9264,7 +9274,7 @@ async function createDialog() {
                 }
 
                 appendAgentTraceMessage(`🧠 ${reasoningText}`, 'reasoning', {
-                    renderedHtml: buildReasoningTraceHtml(reasoningText)
+                    renderedHtml: buildReasoningTraceHtml(createTraceId(), reasoningText)
                 });
             },
             reportReasoningDelta(delta) {
@@ -9282,7 +9292,7 @@ async function createDialog() {
                 lastStatus = '';
                 finishStreamedReasoning();
                 toolCalls.forEach((toolCall) => {
-                    const traceId = `${toolTraceIdPrefix}-${++toolTraceCount}`;
+                    const traceId = createTraceId();
                     const toolTrace = buildToolTraceMessage(traceId, toolCall);
                     stepCount++;
                     const turn = appendAgentTraceMessage(toolTrace.text, 'tool', { renderedHtml: toolTrace.renderedHtml });
@@ -12150,7 +12160,8 @@ async function createDialog() {
         }
     }
 
-    async function executeToolCalls(toolCalls, onToolStatus = () => {}, toolContext = {}) {
+    // 每個工具完成就透過 onToolResult 回報，中途取消時已完成的工具才不會被當成未執行。
+    async function executeToolCalls(toolCalls, onToolStatus = () => {}, toolContext = {}, onToolResult = () => {}) {
         const results = [];
         const cancellationContext = toolContext.task || toolContext.signal;
         for (const [index, toolCall] of toolCalls.entries()) {
@@ -12162,7 +12173,9 @@ async function createDialog() {
             });
             const startedAt = performance.now();
             const toolResult = await executeToolCall(toolCall, toolContext);
-            results.push({ ...toolResult, durationMs: performance.now() - startedAt });
+            const timedToolResult = { ...toolResult, durationMs: performance.now() - startedAt };
+            results.push(timedToolResult);
+            onToolResult(timedToolResult);
         }
         return results;
     }
@@ -13495,12 +13508,12 @@ async function createDialog() {
                     ...toolContext,
                     signal,
                     task
-                }
+                },
+                (toolResult) => onTrace({ type: 'tool-result', round, toolResults: [toolResult] })
             );
             throwIfAskTaskCancelled(cancellationContext);
 
             const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
-            onTrace({ type: 'tool-result', round, toolResults });
             reportStatus(formatRoundStatus(round, getLocalizedText('statusToolResults', {
                 tools: toolNames,
                 provider: providerLabel
@@ -13777,12 +13790,12 @@ async function createDialog() {
                     ...toolContext,
                     signal,
                     task
-                }
+                },
+                (toolResult) => onTrace({ type: 'tool-result', round, toolResults: [toolResult] })
             );
             throwIfAskTaskCancelled(cancellationContext);
 
             const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
-            onTrace({ type: 'tool-result', round, toolResults });
             reportStatus(formatRoundStatus(round, getLocalizedText('statusToolResults', {
                 tools: toolNames,
                 provider: 'Gemini'
