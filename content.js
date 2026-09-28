@@ -572,7 +572,9 @@ function getDialogHostMountParent() {
     return document.documentElement || document.body;
 }
 
-function detachActiveDialogHostForPageTool() {
+// run_js 執行期間讓對話框留在原位：移出 DOM 會讓對話框閃爍，訊息區的捲動位置也會歸零。
+// 執行後若頁面程式碼移除了 host 或改寫了它的樣式，再放回原位並重新套用隔離樣式。
+function guardActiveDialogHostForPageTool() {
     const host = getActiveDialogHost();
     if (!host?.isConnected || !host.parentNode) {
         return () => applyDialogHostIsolationStyles(host);
@@ -580,10 +582,10 @@ function detachActiveDialogHostForPageTool() {
 
     const parent = host.parentNode;
     const nextSibling = host.nextSibling;
-    parent.removeChild(host);
 
     return () => {
-        if (!host.isConnected) {
+        // 使用者在執行期間關閉對話框時 activeDialogState 會被清空，這時不可再把它放回頁面。
+        if (!host.isConnected && activeDialogState?.host === host) {
             if (parent.isConnected && nextSibling?.parentNode === parent) {
                 parent.insertBefore(host, nextSibling);
             } else if (parent.isConnected) {
@@ -9002,10 +9004,8 @@ async function createDialog() {
             renderedHtml: options.renderedHtml || '',
             includeInModelContext: false
         });
-    }
-
-    function formatTracePayload(value) {
-        return `\`\`\`json\n${getJsonPreview(value)}\n\`\`\``;
+        // appendPersistentMessage 會同步推入一筆對話紀錄；回傳它讓工具列在收到結果後就地改寫。
+        return conversationHistory[conversationHistory.length - 1];
     }
 
     function formatElapsedDuration(milliseconds) {
@@ -9014,20 +9014,6 @@ async function createDialog() {
         const seconds = String(Math.floor((totalMilliseconds % 60000) / 1000)).padStart(2, '0');
         const fractional = String(totalMilliseconds % 1000).padStart(3, '0');
         return `${minutes}:${seconds}.${fractional}`;
-    }
-
-    function buildCollapsibleTraceHtml(summaryText, payloadText, summaryHtml = '') {
-        return `
-            <details class="askpage-trace-disclosure">
-                <summary>
-                    <span class="askpage-trace-disclosure-summary">${summaryHtml || escapeHtml(summaryText)}</span>
-                    <span class="askpage-trace-expand-button" aria-hidden="true"></span>
-                </summary>
-                <div class="askpage-trace-disclosure-body">
-                    <pre><code class="language-json">${escapeHtml(payloadText)}</code></pre>
-                </div>
-            </details>
-        `.trim();
     }
 
     function formatConversationStyleStatus(status) {
@@ -9052,52 +9038,116 @@ async function createDialog() {
         return `${roundBadge}${baseStatus}`;
     }
 
-    function buildToolCallTraceMessage(toolCall) {
+    const TOOL_TRACE_ICON_PATHS = {
+        success: 'M4.5 8.4l2.3 2.3 4.7-5',
+        failure: 'M5.5 5.5l5 5m0-5l-5 5',
+        stopped: 'M5.5 8h5'
+    };
+
+    function formatToolDuration(milliseconds) {
+        return milliseconds < 1000
+            ? `${Math.round(milliseconds)}ms`
+            : `${(milliseconds / 1000).toFixed(1)}s`;
+    }
+
+    // 單一字串參數（例如 run_js 的 code）直接顯示內容，其餘以 key: value 串成一行。
+    function formatToolArgumentsPreview(args = {}) {
+        const entries = Object.entries(args || {});
+        const preview = entries.length === 1 && typeof entries[0][1] === 'string'
+            ? entries[0][1]
+            : entries.map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join(', ');
+        return truncateToolText(preview.replace(/\s+/g, ' ').trim(), 240);
+    }
+
+    function getToolTraceState(toolResult) {
+        if (!toolResult) {
+            return 'pending';
+        }
+        return toolResult.result?.success === false ? 'failure' : 'success';
+    }
+
+    // 工具的呼叫與回傳共用同一列：執行中顯示參數預覽，回傳後改成結果摘要與耗時，完整 JSON 收在展開區。
+    function buildToolTraceMessage(traceId, toolCall, toolResult = null, state = getToolTraceState(toolResult)) {
         const toolName = formatToolDisplayName(toolCall.name);
-        const summaryText = getLocalizedText('toolCallInProgress', { tool: toolName });
-        const summaryHtml = escapeHtml(summaryText).replace(
-            escapeHtml(toolName),
-            `<span class="askpage-tool-name">${escapeHtml(toolName)}</span>`
-        );
+        const argsPreview = formatToolArgumentsPreview(toolCall.args);
+        const resultMessage = truncateToolText(toolResult?.result?.message || '', 240);
+        const summaryText = {
+            pending: argsPreview,
+            success: resultMessage || argsPreview,
+            failure: resultMessage || getLocalizedText('failure'),
+            stopped: getLocalizedText('toolTraceStopped')
+        }[state];
+        const iconHtml = TOOL_TRACE_ICON_PATHS[state]
+            ? `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${TOOL_TRACE_ICON_PATHS[state]}"/></svg>`
+            : '';
+        const durationHtml = Number.isFinite(toolResult?.durationMs)
+            ? `<span class="askpage-tool-trace-duration">${formatToolDuration(toolResult.durationMs)}</span>`
+            : '';
+        const sections = [[getLocalizedText('toolTraceArguments'), toolCall.args || {}]];
+        if (toolResult) {
+            sections.push([getLocalizedText('toolTraceResult'), toolResult.result]);
+        }
+        const sectionsHtml = sections.map(([label, value]) => `
+                    <div class="askpage-tool-trace-section">
+                        <div class="askpage-tool-trace-label">${escapeHtml(label)}</div>
+                        <pre><code class="language-json">${escapeHtml(getJsonPreview(value))}</code></pre>
+                    </div>`).join('');
         return {
-            text: `${summaryText}\n\n${formatTracePayload({ arguments: toolCall.args || {} })}`,
-            renderedHtml: buildCollapsibleTraceHtml(summaryText, getJsonPreview({ arguments: toolCall.args || {} }), summaryHtml)
+            text: `${toolName} · ${summaryText}`,
+            renderedHtml: `
+            <details class="askpage-tool-trace" data-state="${state}" data-askpage-tool-trace-id="${escapeHtml(traceId)}">
+                <summary>
+                    <span class="askpage-tool-trace-icon" aria-hidden="true">${iconHtml}</span>
+                    <span class="askpage-tool-trace-name">${escapeHtml(toolName)}</span>
+                    <span class="askpage-tool-trace-summary" title="${escapeHtml(summaryText)}">${escapeHtml(summaryText)}</span>
+                    ${durationHtml}
+                    <span class="askpage-tool-trace-chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="askpage-tool-trace-body">${sectionsHtml}
+                </div>
+            </details>
+        `.trim()
         };
     }
 
-    function buildToolResultTraceMessage(toolResult) {
-        const toolName = formatToolDisplayName(toolResult.name);
-        const resultStatusSuffix = toolResult.result?.success === false
-            ? getLocalizedText('toolResultFailure')
-            : '';
-        const resultSummary = toolResult.result?.message
-            ? getLocalizedText('toolResultSummary', {
-                message: truncateToolText(toolResult.result.message, 240)
-            })
-            : '';
-        const messageSuffix = toolResult.result?.message
-            ? getLocalizedText('toolResultMessageSuffix', {
-                message: truncateToolText(toolResult.result.message, 120)
-            })
-            : '';
-        const summaryText = getLocalizedText('toolResultReceived', {
-            tool: toolName,
-            status: resultStatusSuffix,
-            message: messageSuffix
+    // 思考過程和工具列一樣預設收合，只露出一行摘要，展開後才顯示完整內容。
+    function buildReasoningTraceHtml(reasoningText) {
+        const previewText = truncateToolText(reasoningText.replace(/\s+/g, ' ').trim(), 240);
+        return `
+            <details class="askpage-tool-trace askpage-reasoning-trace" data-state="reasoning">
+                <summary>
+                    <span class="askpage-tool-trace-icon" aria-hidden="true"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3l1.2 3.8L13 8l-3.8 1.2L8 13l-1.2-3.8L3 8l3.8-1.2z"/></svg></span>
+                    <span class="askpage-tool-trace-name">${escapeHtml(getLocalizedText('reasoningTraceLabel'))}</span>
+                    <span class="askpage-tool-trace-summary">${escapeHtml(previewText)}</span>
+                    <span class="askpage-tool-trace-chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="askpage-reasoning-trace-body">${renderMarkdown(reasoningText)}</div>
+            </details>
+        `.trim();
+    }
+
+    function updateToolTraceMessage(entry, toolResult, state) {
+        const toolTrace = buildToolTraceMessage(entry.traceId, entry.toolCall, toolResult, state);
+        Object.assign(entry.turn, {
+            content: toolTrace.text,
+            displayContent: toolTrace.text,
+            renderedHtml: toolTrace.renderedHtml
         });
-        const summaryHtml = escapeHtml(summaryText).replace(
-            escapeHtml(toolName),
-            `<span class="askpage-tool-name">${escapeHtml(toolName)}</span>`
-        );
-        return {
-            text: getLocalizedText('toolResultTraceText', {
-                tool: toolName,
-                status: resultStatusSuffix,
-                summary: resultSummary,
-                payload: formatTracePayload(toolResult.result)
-            }),
-            renderedHtml: buildCollapsibleTraceHtml(summaryText, getJsonPreview(toolResult.result), summaryHtml)
-        };
+
+        // 執行途中對話框可能被關閉再開啟而重新渲染，所以每次都依 id 找畫面上現存的那一列，不保留舊的 DOM 參照。
+        const traceElement = getActiveMessagesElement(messagesEl)
+            ?.querySelector(`[data-askpage-tool-trace-id="${entry.traceId}"]`);
+        const messageElement = traceElement?.closest('.gemini-msg-assistant');
+        if (!messageElement) {
+            return;
+        }
+
+        const wasOpen = traceElement.open;
+        renderAssistantMessageElement(messageElement, toolTrace.text, {
+            renderedHtml: toolTrace.renderedHtml,
+            suppressCopyButton: true
+        });
+        messageElement.querySelector('.askpage-tool-trace').open = wasOpen;
     }
 
     function createExecutionTraceReporter() {
@@ -9108,6 +9158,10 @@ async function createDialog() {
         let streamedReasoningStored = false;
         let streamedReasoningRenderFrame = 0;
         let stepCount = 0;
+        let toolTraceCount = 0;
+        // 同一輪的工具結果會依呼叫順序一次回報，因此以佇列對應回尚未完成的工具列。
+        const pendingToolTraces = [];
+        const toolTraceIdPrefix = `tool-${Date.now().toString(36)}`;
         const tokenUsage = createApiTokenUsageAccumulator();
         const startedAt = performance.now();
         const renderStreamedReasoning = () => {
@@ -9115,9 +9169,13 @@ async function createDialog() {
                 return;
             }
 
+            // 串流中每一格都會重畫，必須保留使用者展開的狀態。
+            const wasOpen = streamedReasoningElement.querySelector('.askpage-reasoning-trace')?.open === true;
             renderAssistantMessageElement(streamedReasoningElement, `🧠 ${streamedReasoningText}`, {
+                renderedHtml: buildReasoningTraceHtml(streamedReasoningText),
                 suppressCopyButton: true
             });
+            streamedReasoningElement.querySelector('.askpage-reasoning-trace').open = wasOpen;
             scrollActiveMessagesToBottom(messagesEl);
         };
         const scheduleStreamedReasoningRender = () => {
@@ -9136,8 +9194,9 @@ async function createDialog() {
             }
 
             streamedReasoningElement = appendMessage('assistant', `🧠 ${streamedReasoningText}`, {
+                renderedHtml: buildReasoningTraceHtml(streamedReasoningText),
                 suppressCopyButton: true,
-                extraClassName: 'askpage-agent-trace askpage-agent-trace-status'
+                extraClassName: 'askpage-agent-trace askpage-agent-trace-reasoning'
             });
             stepCount++;
         };
@@ -9155,10 +9214,18 @@ async function createDialog() {
 
             streamedReasoningStored = true;
             addConversationTurn('assistant', `🧠 ${reasoningText}`, `🧠 ${reasoningText}`, {
+                renderedHtml: buildReasoningTraceHtml(reasoningText),
                 includeInModelContext: false,
                 suppressCopyButton: true,
-                extraClassName: 'askpage-agent-trace askpage-agent-trace-status'
+                extraClassName: 'askpage-agent-trace askpage-agent-trace-reasoning'
             });
+        };
+        // 每一輪的思考各自成為時間軸上的一列，下一輪的串流內容才不會接回工具列上方的舊列。
+        const finishStreamedReasoning = () => {
+            storeStreamedReasoning();
+            streamedReasoningText = '';
+            streamedReasoningElement = null;
+            streamedReasoningStored = false;
         };
         return {
             reportStatus(status) {
@@ -9168,7 +9235,7 @@ async function createDialog() {
                 }
                 lastStatus = conversationalStatus;
                 stepCount++;
-                appendAgentTraceMessage(`⏳ ${conversationalStatus}`, 'status');
+                appendAgentTraceMessage(conversationalStatus, 'status');
             },
             reportReasoning(summaries) {
                 const reasoningText = summaries
@@ -9187,7 +9254,9 @@ async function createDialog() {
                     return;
                 }
 
-                appendAgentTraceMessage(`🧠 ${reasoningText}`, 'status');
+                appendAgentTraceMessage(`🧠 ${reasoningText}`, 'reasoning', {
+                    renderedHtml: buildReasoningTraceHtml(reasoningText)
+                });
             },
             reportReasoningDelta(delta) {
                 if (!delta) {
@@ -9200,24 +9269,33 @@ async function createDialog() {
                 scheduleStreamedReasoningRender();
             },
             reportToolCalls(toolCalls) {
+                // 工具列把每一輪隔開，下一輪出現相同的狀態（例如重試）也要能再次顯示。
+                lastStatus = '';
+                finishStreamedReasoning();
                 toolCalls.forEach((toolCall) => {
-                    const toolTrace = buildToolCallTraceMessage(toolCall);
+                    const traceId = `${toolTraceIdPrefix}-${++toolTraceCount}`;
+                    const toolTrace = buildToolTraceMessage(traceId, toolCall);
                     stepCount++;
-                    appendAgentTraceMessage(toolTrace.text, 'tool-call', { renderedHtml: toolTrace.renderedHtml });
+                    const turn = appendAgentTraceMessage(toolTrace.text, 'tool', { renderedHtml: toolTrace.renderedHtml });
+                    pendingToolTraces.push({ traceId, toolCall, turn });
                 });
             },
             reportToolResults(toolResults) {
                 toolResults.forEach((toolResult) => {
-                    const resultTrace = buildToolResultTraceMessage(toolResult);
+                    const entry = pendingToolTraces.shift();
                     stepCount++;
-                    appendAgentTraceMessage(resultTrace.text, 'tool-result', { renderedHtml: resultTrace.renderedHtml });
+                    if (entry) {
+                        updateToolTraceMessage(entry, toolResult);
+                    }
                 });
             },
             reportUsage(providerLabel, usageData, options = {}) {
                 mergeApiTokenUsageSummary(tokenUsage, createApiTokenUsageSummary(providerLabel, usageData, options));
             },
             reportCompletion(message) {
-                storeStreamedReasoning();
+                finishStreamedReasoning();
+                // 任務被中止時，尚未收到結果的工具列不能一直停在執行中。
+                pendingToolTraces.splice(0).forEach((entry) => updateToolTraceMessage(entry, null, 'stopped'));
                 appendAgentTraceMessage(`✅ ${message}`, 'completion');
             },
             getStats() {
@@ -10782,39 +10860,6 @@ async function createDialog() {
         });
     }
 
-    function buildToolExecutionSummary(toolResults = []) {
-        if (!toolResults.length) {
-            return '';
-        }
-
-        const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
-        const successCount = toolResults.filter((toolResult) => toolResult.result?.success).length;
-        const failureCount = toolResults.length - successCount;
-
-        if (toolResults.length === 1) {
-            return getLocalizedText('toolExecutionSingle', {
-                tools: toolNames,
-                result: successCount === 1
-                    ? getLocalizedText('success')
-                    : getLocalizedText('failure')
-            });
-        }
-
-        if (failureCount === 0) {
-            return getLocalizedText('toolExecutionAllSuccess', { tools: toolNames });
-        }
-
-        if (successCount === 0) {
-            return getLocalizedText('toolExecutionAllFailure', { tools: toolNames });
-        }
-
-        return getLocalizedText('toolExecutionMixed', {
-            tools: toolNames,
-            successCount,
-            failureCount
-        });
-    }
-
     function getWebSearchToolDefinition() {
         return {
             name: 'web_search',
@@ -11975,7 +12020,7 @@ async function createDialog() {
                     };
                 }
 
-                const restoreDialogHost = detachActiveDialogHostForPageTool();
+                const restoreDialogHost = guardActiveDialogHostForPageTool();
                 const refTagging = tagAgentSnapshotRefsForMainWorld(code);
                 let response;
                 try {
@@ -12106,7 +12151,9 @@ async function createDialog() {
                 index: index + 1,
                 total: toolCalls.length
             });
-            results.push(await executeToolCall(toolCall, toolContext));
+            const startedAt = performance.now();
+            const toolResult = await executeToolCall(toolCall, toolContext);
+            results.push({ ...toolResult, durationMs: performance.now() - startedAt });
         }
         return results;
     }
@@ -13313,7 +13360,6 @@ async function createDialog() {
         const messages = initialMessages.map((message) => ({ ...message }));
         let useTools = initialUseTools;
         let fallbackUsed = false;
-        let previousToolSummary = '';
         let maxOutputTokens = initialMaxOutputTokens;
         let emptyResponseRetryCount = 0;
         const cancellationContext = task || signal;
@@ -13325,13 +13371,15 @@ async function createDialog() {
 
         for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round++) {
             throwIfAskTaskCancelled(cancellationContext);
-            const roundPrefix = previousToolSummary ? `${previousToolSummary}，` : '';
-            reportStatus(formatRoundStatus(
-                round,
-                useTools
-                    ? `${roundPrefix}${getLocalizedText('statusPlanningWithProvider', { provider: providerLabel })}`
-                    : getLocalizedText('statusAnsweringWithProvider', { provider: providerLabel })
-            ));
+            // 第二輪起工具結果已顯示在時間軸上，不再重複顯示規劃狀態。
+            if (!useTools || round === 0) {
+                reportStatus(formatRoundStatus(
+                    round,
+                    useTools
+                        ? getLocalizedText('statusPlanningWithProvider', { provider: providerLabel })
+                        : getLocalizedText('statusAnsweringWithProvider', { provider: providerLabel })
+                ));
+            }
             let responseData;
             try {
                 responseData = await sendRequestWithPromptCacheKeyFallback(
@@ -13442,7 +13490,6 @@ async function createDialog() {
             );
             throwIfAskTaskCancelled(cancellationContext);
 
-            previousToolSummary = buildToolExecutionSummary(toolResults);
             const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
             onTrace({ type: 'tool-result', round, toolResults });
             reportStatus(formatRoundStatus(round, getLocalizedText('statusToolResults', {
@@ -13490,7 +13537,6 @@ async function createDialog() {
         throwIfAskTaskCancelled(cancellationContext);
         console.log('[AskPage] Gemini context mode:', pageConversationContext.contextMode);
         console.log('[AskPage] Conversation history messages:', conversationHistory.length);
-        let previousToolSummary = '';
         const maxOutputTokens = getGeminiMaxOutputTokens(selectedModel);
         let emptyResponseRetryCount = 0;
         const reportStatus = (status) => {
@@ -13535,13 +13581,15 @@ async function createDialog() {
 
         for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round++) {
             throwIfAskTaskCancelled(cancellationContext);
-            const roundPrefix = previousToolSummary ? `${previousToolSummary}，` : '';
-            reportStatus(formatRoundStatus(
-                round,
-                enableTools
-                    ? `${roundPrefix}${getLocalizedText('statusPlanningWithProvider', { provider: providerLabel })}`
-                    : getLocalizedText('statusAnsweringWithProvider', { provider: providerLabel })
-            ));
+            // 第二輪起工具結果已顯示在時間軸上，不再重複顯示規劃狀態。
+            if (!enableTools || round === 0) {
+                reportStatus(formatRoundStatus(
+                    round,
+                    enableTools
+                        ? getLocalizedText('statusPlanningWithProvider', { provider: providerLabel })
+                        : getLocalizedText('statusAnsweringWithProvider', { provider: providerLabel })
+                ));
+            }
             const requestBody = {
                 contents,
                 generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens }
@@ -13724,7 +13772,6 @@ async function createDialog() {
             );
             throwIfAskTaskCancelled(cancellationContext);
 
-            previousToolSummary = buildToolExecutionSummary(toolResults);
             const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
             onTrace({ type: 'tool-result', round, toolResults });
             reportStatus(formatRoundStatus(round, getLocalizedText('statusToolResults', {
