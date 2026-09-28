@@ -109,7 +109,11 @@ assert.doesNotMatch(contentScript, /previousToolSummary|statusPlanningNextStep/)
 
 const dialogGuardSource = sliceSource('function guardActiveDialogHostForPageTool()', 'async function getDialogStylesText()');
 assert.doesNotMatch(dialogGuardSource, /removeChild/, 'run_js 執行期間不可把對話框移出 DOM，否則會閃爍且捲動位置歸零');
-assert.match(dialogGuardSource, /!host\.isConnected && activeDialogState\?\.host === host/, '使用者已關閉的對話框不可被放回頁面');
+assert.match(
+    dialogGuardSource,
+    /const isHostMisplaced = !host\.isConnected \|\| host\.parentNode !== parent;\s*if \(isHostMisplaced && activeDialogState\?\.host === host\)/,
+    'host 被移除或被搬到其他父元素時要放回原位，但使用者已關閉的對話框不可被放回頁面'
+);
 assert.match(
     contentScript,
     /const shadowRoot = host\.attachShadow\(\{ mode: 'closed' \}\);/,
@@ -124,14 +128,24 @@ assert.doesNotMatch(
 
 // 以真正的 createExecutionTraceReporter() 模擬執行流程。訊息區以假物件代替：依 data-askpage-trace-id
 // 查到的列會記錄每次重畫，藉此確認重畫的是「目前」的對話框，而不是舊的 DOM 參照。
+// 每一列保留自己的 <details>；重畫時換成新的收合狀態物件，模擬 innerHTML 被整個改寫。
 function createFakeMessages() {
     const renders = [];
+    const rows = new Map();
+    const getRow = (traceId) => {
+        if (!rows.has(traceId)) {
+            const row = { traceId, renders, details: { open: false } };
+            row.querySelector = () => row.details;
+            rows.set(traceId, row);
+        }
+        return rows.get(traceId);
+    };
     return {
         renders,
+        getRow,
         querySelector(selector) {
             const traceId = selector.match(/data-askpage-trace-id="([^"]+)"/)?.[1];
-            const messageElement = { traceId, renders, querySelector: () => ({ open: false }) };
-            return traceId ? { closest: () => messageElement } : null;
+            return traceId ? { closest: () => getRow(traceId) } : null;
         }
     };
 }
@@ -159,6 +173,7 @@ const traceSandbox = {
     },
     renderAssistantMessageElement(element, text) {
         element.renders.push({ traceId: element.traceId, text });
+        element.details = { open: false };
     },
     appendMessage() {},
     addConversationTurn(role, content, displayContent, options = {}) {
@@ -230,5 +245,25 @@ cancelledReporter.reportToolResults([{ id: 'c1', name: 'read_page', result: { su
 cancelledReporter.reportCompletion('頁問提早收工');
 assert.match(history[0].renderedHtml, /data-state="success"/, '已完成的工具不可被標為已中止');
 assert.match(history[1].renderedHtml, /data-state="stopped"/);
+
+// 情境四：使用者展開的列在重畫後仍維持展開（工具收到結果、思考持續串流）。
+history.length = 0;
+const expandDialog = createFakeMessages();
+activeMessages = expandDialog;
+const expandReporter = traceSandbox.createExecutionTraceReporter();
+expandReporter.reportReasoningDelta('先想一下');
+flushFrames();
+const reasoningTraceId = expandDialog.renders.at(-1).traceId;
+expandDialog.getRow(reasoningTraceId).details.open = true;
+expandReporter.reportReasoningDelta('，再動手');
+flushFrames();
+assert.strictEqual(expandDialog.getRow(reasoningTraceId).details.open, true, '串流重畫後思考列仍要維持展開');
+expandReporter.reportToolCalls([{ id: 'c1', name: 'run_js', args: { code: 'return 1' } }]);
+const toolTraceId = history[1].renderedHtml.match(/data-askpage-trace-id="([^"]+)"/)[1];
+expandDialog.getRow(toolTraceId).details.open = true;
+expandReporter.reportToolResults([{ id: 'c1', name: 'run_js', result: { success: true, message: '完成' }, durationMs: 3 }]);
+assert.ok(expandDialog.renders.some((render) => render.traceId === toolTraceId), '工具列收到結果時要重畫');
+assert.strictEqual(expandDialog.getRow(toolTraceId).details.open, true, '工具列收到結果後仍要維持展開');
+assert.strictEqual(expandDialog.getRow('never-opened').details.open, false);
 
 console.log('agent-tool-trace: ok');

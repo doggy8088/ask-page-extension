@@ -574,7 +574,7 @@ function getDialogHostMountParent() {
 
 // run_js 執行期間讓對話框留在原位：移出 DOM 會讓對話框閃爍，訊息區的捲動位置也會歸零。
 // 對話內容由 closed shadow root 隔離；主世界程式碼只碰得到 host 本身，
-// 因此執行後若 host 被移除或樣式被改寫，再放回原位並重新套用隔離樣式。
+// 因此執行後若 host 被移除、被搬到其他父元素或樣式被改寫，再放回原位並重新套用隔離樣式。
 function guardActiveDialogHostForPageTool() {
     const host = getActiveDialogHost();
     if (!host?.isConnected || !host.parentNode) {
@@ -586,7 +586,9 @@ function guardActiveDialogHostForPageTool() {
 
     return () => {
         // 使用者在執行期間關閉對話框時 activeDialogState 會被清空，這時不可再把它放回頁面。
-        if (!host.isConnected && activeDialogState?.host === host) {
+        // 被搬進其他元素時即使仍在 DOM 中也要放回，否則祖先的 transform、filter 等會改變 fixed 定位與外觀。
+        const isHostMisplaced = !host.isConnected || host.parentNode !== parent;
+        if (isHostMisplaced && activeDialogState?.host === host) {
             if (parent.isConnected && nextSibling?.parentNode === parent) {
                 parent.insertBefore(host, nextSibling);
             } else if (parent.isConnected) {
