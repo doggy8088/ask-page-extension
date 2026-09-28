@@ -110,6 +110,17 @@ assert.doesNotMatch(contentScript, /previousToolSummary|statusPlanningNextStep/)
 const dialogGuardSource = sliceSource('function guardActiveDialogHostForPageTool()', 'async function getDialogStylesText()');
 assert.doesNotMatch(dialogGuardSource, /removeChild/, 'run_js 執行期間不可把對話框移出 DOM，否則會閃爍且捲動位置歸零');
 assert.match(dialogGuardSource, /!host\.isConnected && activeDialogState\?\.host === host/, '使用者已關閉的對話框不可被放回頁面');
+assert.match(
+    contentScript,
+    /const shadowRoot = host\.attachShadow\(\{ mode: 'closed' \}\);/,
+    '對話框必須使用 closed shadow root，主世界的 run_js 與頁面腳本才無法讀取或竄改對話內容'
+);
+assert.doesNotMatch(contentScript, /attachShadow\(\{ mode: 'open' \}\)/);
+assert.doesNotMatch(
+    sliceSource('function getActiveDialogShadowRoot()', 'function getActiveDialogElementById('),
+    /host\?\.shadowRoot/,
+    'closed shadow root 無法從 host.shadowRoot 取得，只能使用保留的參照'
+);
 
 // 以真正的 createExecutionTraceReporter() 模擬執行流程。訊息區以假物件代替：依 data-askpage-trace-id
 // 查到的列會記錄每次重畫，藉此確認重畫的是「目前」的對話框，而不是舊的 DOM 參照。

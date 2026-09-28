@@ -573,7 +573,8 @@ function getDialogHostMountParent() {
 }
 
 // run_js 執行期間讓對話框留在原位：移出 DOM 會讓對話框閃爍，訊息區的捲動位置也會歸零。
-// 執行後若頁面程式碼移除了 host 或改寫了它的樣式，再放回原位並重新套用隔離樣式。
+// 對話內容由 closed shadow root 隔離；主世界程式碼只碰得到 host 本身，
+// 因此執行後若 host 被移除或樣式被改寫，再放回原位並重新套用隔離樣式。
 function guardActiveDialogHostForPageTool() {
     const host = getActiveDialogHost();
     if (!host?.isConnected || !host.parentNode) {
@@ -626,13 +627,9 @@ function getActiveDialogHost() {
     return document.getElementById(DIALOG_HOST_ID);
 }
 
+// shadow root 為 closed，無法再從 host.shadowRoot 取得，只能使用建立時保留的參照。
 function getActiveDialogShadowRoot() {
-    if (activeDialogState?.shadowRoot) {
-        return activeDialogState.shadowRoot;
-    }
-
-    const host = getActiveDialogHost();
-    return host?.shadowRoot || null;
+    return activeDialogState?.shadowRoot || null;
 }
 
 function getActiveDialogElementById(id) {
@@ -6108,7 +6105,9 @@ async function createDialog() {
     const host = document.createElement('div');
     host.id = DIALOG_HOST_ID;
     applyDialogHostIsolationStyles(host);
-    const shadowRoot = host.attachShadow({ mode: 'open' });
+    // 使用 closed shadow root：頁面腳本與 run_js 在主世界執行的程式碼取得的 host.shadowRoot 為 null，
+    // 無法讀取或竄改對話內容；只有 content script 透過 activeDialogState.shadowRoot 持有參照。
+    const shadowRoot = host.attachShadow({ mode: 'closed' });
     const katexStylesheet = document.createElement('link');
     katexStylesheet.rel = 'stylesheet';
     katexStylesheet.href = chrome.runtime.getURL(KATEX_STYLESHEET_PATH);
