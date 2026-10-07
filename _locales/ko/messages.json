@@ -216,6 +216,7 @@
     "inquiryEnabledState": { "message": "질문 모드" },
     "modeToggleAria": { "message": "$label$: 현재 $current$, 클릭하여 $next$(으)로 전환", "placeholders": { "label": { "content": "$1" }, "current": { "content": "$2" }, "next": { "content": "$3" } } },
     "reasoningDynamic": { "message": "동적" },
+    "reasoningModelDefault": { "message": "모델 기본값" },
     "reasoningOff": { "message": "끔" },
     "reasoningMinimal": { "message": "최소" },
     "reasoningLow": { "message": "낮음" },

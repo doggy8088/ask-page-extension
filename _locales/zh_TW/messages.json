@@ -216,6 +216,7 @@
     "inquiryEnabledState": { "message": "詢問模式" },
     "modeToggleAria": { "message": "$label$：目前為$current$，點擊切換為$next$", "placeholders": { "label": { "content": "$1" }, "current": { "content": "$2" }, "next": { "content": "$3" } } },
     "reasoningDynamic": { "message": "動態" },
+    "reasoningModelDefault": { "message": "模型預設" },
     "reasoningOff": { "message": "關閉" },
     "reasoningMinimal": { "message": "最低" },
     "reasoningLow": { "message": "低" },

@@ -216,6 +216,7 @@
     "inquiryEnabledState": { "message": "質問モード" },
     "modeToggleAria": { "message": "$label$：現在は$current$。クリックして$next$に切り替え", "placeholders": { "label": { "content": "$1" }, "current": { "content": "$2" }, "next": { "content": "$3" } } },
     "reasoningDynamic": { "message": "動的" },
+    "reasoningModelDefault": { "message": "モデルの既定値" },
     "reasoningOff": { "message": "オフ" },
     "reasoningMinimal": { "message": "最低" },
     "reasoningLow": { "message": "低" },

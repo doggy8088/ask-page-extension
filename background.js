@@ -493,7 +493,15 @@ const OLLAMA_CLOUD_ALLOWED_ENDPOINTS = new Set([
 ]);
 const ANTHROPIC_API_BASE_URL = 'https://api.anthropic.com/v1';
 const ANTHROPIC_ALLOWED_ENDPOINTS = new Set(['messages']);
+const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+const GEMINI_API_REVISION = '2026-05-20';
+const GEMINI_ALLOWED_ENDPOINTS = new Set(['interactions']);
 const SERVICE_WORKER_PROVIDER_CONFIG = {
+    gemini: {
+        baseUrl: GEMINI_API_BASE_URL,
+        allowedEndpoints: GEMINI_ALLOWED_ENDPOINTS,
+        label: 'Gemini'
+    },
     'ollama-cloud': {
         baseUrl: OLLAMA_CLOUD_API_BASE_URL,
         allowedEndpoints: OLLAMA_CLOUD_ALLOWED_ENDPOINTS,
@@ -548,6 +556,13 @@ function getOllamaCloudProxyRequest(message) {
 }
 
 function getServiceWorkerRequestHeaders(providerType, apiKey) {
+    if (providerType === 'gemini') {
+        return {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+            'Api-Revision': GEMINI_API_REVISION
+        };
+    }
     if (providerType === 'anthropic') {
         return {
             'Content-Type': 'application/json',

@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+### 修正 / 更新
+
+- **修正 Gemini Interactions CORS 預檢 403**：串流與非串流請求改由擴充功能背景服務工作者送出，重用現有 Port 通道傳遞回應；背景通道僅允許 Gemini `interactions` 端點，保留 API revision、HTTP 狀態與取消請求。回歸測試模擬頁面直接 fetch 被 CORS 攔截，並經實際背景通道驗證完整工具迴圈與回應儲存。
+- **Gemini 遷移至 Interactions API**：詢問與代理模式使用 `/v1beta/interactions`（`Api-Revision: 2026-05-20`），支援 step SSE 與非串流回應；思考摘要、回答、分段工具參數分開處理，工具結果以 `function_result` 回傳。stateless 對話保留完整 thought、內建工具與 function steps，包括沒有摘要的 signature，後續提問與切換模型皆原樣重送，清除對話時一併刪除。
+- **更新 Gemini thinking 控制與用量**：3.8／3.7 Flash 移除不支援的 `minimal`，舊值轉為 `low`；2.5 改用等級控制，舊 Token 預算轉成近似等級，Flash-Lite 的「模型預設」省略等級。詢問與代理皆啟用可用的摘要，新增五種語系標籤；用量支援 Interactions 的思考、輸出、工具與快取 tokens。`incomplete`、失敗與串流中斷不當作完整答案。
+- **Gemini 快取改用隱式快取**：Interactions API 不支援 explicit `cachedContents`，移除快取物件建立與過期重試，固定頁面前綴供供應商快取重用。同步更新 README、推理／串流／提示詞文件並補上回歸測試。
+
 ## [0.45.5] - 2026-09-28
 
 ### 修正 / 更新（v0.45.5）

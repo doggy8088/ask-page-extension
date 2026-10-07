@@ -92,6 +92,8 @@
 > 完整的 Provider 判定範圍、API 端點、模型清單與限制請參閱[目前串流回應邏輯與 Provider 支援狀態](<docs/目前串流回應邏輯與 Provider 支援狀態.md>)。
 >
 > 串流輸出期間，對話框會預設跟著最新的 thinking / answer 內容自動捲動到底部；如果您手動捲動對話內容，自動捲動會暫停，直到下一次送出提示才恢復。
+
+> Gemini 使用 Interactions API（`Api-Revision: 2026-05-20`），詢問與代理模式皆啟用可用的思考摘要。對話採 `store: false`，在本機保留並重送完整 thought、內建工具與 function steps，包含原始 signature；`/clear` 會一併清除。Gemini 2.5 改用 `low`／`medium`／`high` 等級，Flash-Lite 另有「模型預設」（省略等級，官方預設 Off）；Gemini 3.8／3.7 Flash 不提供 `minimal`。
 >
 > `run_js` 現在會透過 `chrome.userScripts.execute(..., { world: 'MAIN' })` 在頁面主世界執行任意 JavaScript，專門用來處理 GitHub 這類會阻擋 `unsafe-eval` 與 `data:` script 的網站。這項功能需要：
 >
@@ -293,10 +295,10 @@
 
 AskPage 會盡量讓同一個對話重複使用供應商端的提示詞快取，但命中與否取決於供應商：
 
-- **Gemini**：使用 explicit `cachedContents`（TTL 1 小時）。統計中的「新快取」代表這一輪其實是重新建立快取，「快取」才是沿用既有快取。
+- **Gemini**：使用 Interactions API 的隱式快取，固定頁面上下文放在歷史前綴。命中數量依 `usage.total_cached_tokens` 顯示；此 API 不支援 explicit `cachedContents`。
 - **OpenAI、Azure、OpenRouter、OpenAI 相容端點（含 DeepSeek）**：送出 `prompt_cache_key` 親和鍵，鍵值為「系統提示＋頁面內容＋供應商＋模型」的內容雜湊，同一頁面重新整理後仍沿用同一條路由。供應商若拒收這個欄位，AskPage 會自動拔掉欄位重送一次。
 - **Anthropic**：使用 `cache_control` 自動快取。
-- 各家快取壽命不同：OpenAI 約 5～10 分鐘、Anthropic 預設 5 分鐘、Gemini 的 explicit 快取為 1 小時，間隔太久再追問本來就會重新建立快取。
+- 各家快取壽命不同：OpenAI 約 5～10 分鐘、Anthropic 預設 5 分鐘；Gemini 隱式快取由供應商管理，沒有 AskPage 可設定的 TTL。
 - 若 endpoint 是會在多個帳號／後端之間輪替的閘道（例如 LiteLLM），相同前綴可能每次落到不同後端，命中率由供應商路由決定，AskPage 無法保證。
 - 統計中的「快取」讀數取供應商回報欄位的最大值，避免部分閘道同時回傳 `cached_tokens: 0` 時，把實際命中顯示成 0。
 

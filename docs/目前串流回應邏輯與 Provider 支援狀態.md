@@ -12,7 +12,7 @@
 
 | Provider | 固定模型數 | 詢問模式預設傳輸 | 判定方式 |
 | --- | ---: | --- | --- |
-| Gemini | 11 | 串流 | Provider API 已查證，使用 `streamGenerateContent` |
+| Gemini | 11 | 串流 | Provider API 已查證，使用 Interactions API 的 `stream: true` |
 | OpenAI | 10 | 串流 | Provider API 已查證，依模型使用 Chat Completions 或 Responses API |
 | Azure OpenAI | 動態 Deployment | 串流 | Azure API 已查證，依 Deployment 使用 Chat Completions 或 Responses API |
 | Anthropic | 3 | 串流 | Provider API 已查證，使用 Messages API SSE |
@@ -24,7 +24,7 @@
 | Ollama Cloud | 7 | 串流 | Ollama Cloud OpenAI 相容端點已查證支援串流 |
 | OpenAI Compatible | 動態模型 | 非串流 | Endpoint 與模型由使用者自訂，無法安全推定 |
 
-固定模型的數量計算為 11 + 10 + 3 + 2 + 16 + 3 + 5 + 7，合計 57 個。Gemini 的串流不是在 JSON body 加入 `stream: true`，而是改用 `:streamGenerateContent` 端點，因此不能只用搜尋 `stream: true` 的方式盤點所有串流請求。
+固定模型的數量計算為 11 + 10 + 3 + 2 + 16 + 3 + 5 + 7，合計 57 個。Gemini 的串流會在 Interactions API 的 JSON body 加入 `stream: true`，與非串流共用 `/v1beta/interactions` 端點。
 
 * * *
 
@@ -34,7 +34,7 @@
 
 | Provider | 官方串流方式 | 查證結果 |
 | --- | --- | --- |
-| Gemini | `models.streamGenerateContent` 以 SSE 傳送增量回應 | 已確認支援 |
+| Gemini | `interactions.create` 以 SSE 傳送 step 事件 | 已確認支援 |
 | OpenAI | Responses API 使用 `stream: true` 傳送 SSE；Chat Completions 也提供串流欄位 | 已確認支援 |
 | Azure OpenAI | Chat Completions 與 Responses API 都提供串流回應 | 已確認支援 |
 | Anthropic | Messages API 使用 `stream: true` 傳送 SSE 事件 | 已確認支援 |
@@ -46,7 +46,7 @@
 
 官方參考文件：
 
-- [Gemini GenerateContent API](https://ai.google.dev/api)
+- [Gemini Interactions API](https://ai.google.dev/api/interactions-api)
 - [OpenAI Responses API streaming](https://platform.openai.com/docs/api-reference/responses-streaming)
 - [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat)
 - [Azure OpenAI content streaming](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/content-streaming)
@@ -105,8 +105,16 @@
 
 `runGeminiToolLoop()` 會依 `streamingEnabled` 選擇：
 
-- 串流：`fetchGeminiStream()`，呼叫 `models/{model}:streamGenerateContent?alt=sse`。
-- 非串流：`fetchJsonWithRetry()`，呼叫 `models/{model}:generateContent`。
+- 串流：`fetchGeminiStream()`，呼叫 `/v1beta/interactions` 並送出 `stream: true`。
+- 非串流：`fetchJsonWithRetry()`，呼叫同一端點並取得完整 `steps`。
+
+兩種傳輸皆透過 `createGeminiServiceWorkerFetch()` 使用既有 Port 通道，由背景服務工作者送出 API 請求，避免內容腳本受頁面來源的 CORS 預檢限制；HTTP 狀態、串流 chunk 與取消操作會沿通道傳遞。背景通道只允許 `/v1beta/interactions`。
+
+兩種傳輸皆以 `x-goog-api-key` 驗證，帶入 `Api-Revision: 2026-05-20`，使用 `store: false`。`generation_config.thinking_summaries: "auto"` 讓可取得的摘要進入思考區塊；`step.start` 的初始摘要／回答與 `step.delta` 的 `thought_summary`、`text` 都會顯示。`thought_signature` 只保存，不顯示。
+
+工具參數以 `arguments_delta.arguments` 累積到 `step.stop` 後才解析與執行；結果使用 `function_result` steps 與 `call_id` 回傳。所有 thought、內建工具及 function steps 保留於本機歷史，後續請求原樣重送。沒有摘要的 thought step 仍會保留 signature。
+
+`interaction.completed` 的 status 可能為 `requires_action`；此時處理工具呼叫後繼續請求。`incomplete`、`failed`、`cancelled` 與串流中斷都不會當成完整答案。Token 統計讀取 `usage.total_input_tokens`、`total_output_tokens`、`total_thought_tokens`、`total_cached_tokens`、`total_tool_use_tokens` 與 `total_tokens`。
 
 `enableTools` 仍只控制是否加入頁面工具與工具呼叫流程，不再決定 Gemini 是否使用串流。這使詢問模式也能從第一個文字增量開始更新回答區塊。
 

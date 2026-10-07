@@ -61,10 +61,8 @@ vm.runInContext(`${contentScript}\nglobalThis.__promptCacheConversationTestExpor
     addConversationTurn,
     applyOpenRouterCacheControl,
     applyPromptCacheRequestOptions,
-    buildGeminiCachedContentRequest,
     buildGeminiRequestTools,
-    buildGeminiToolConfig,
-    buildGeminiConversationContents,
+    buildGeminiConversationSteps,
     buildSystemPrompt,
     clearConversationHistory,
     createApiTokenUsageSummary,
@@ -80,10 +78,8 @@ const {
     addConversationTurn,
     applyOpenRouterCacheControl,
     applyPromptCacheRequestOptions,
-    buildGeminiCachedContentRequest,
     buildGeminiRequestTools,
-    buildGeminiToolConfig,
-    buildGeminiConversationContents,
+    buildGeminiConversationSteps,
     buildSystemPrompt,
     clearConversationHistory,
     createApiTokenUsageSummary,
@@ -240,22 +236,12 @@ function toPlainValue(value) {
     assert.strictEqual(multimodalMessages[0].content[1].image_url.url, inputImage);
     assert.strictEqual(multimodalMessages[0].content[2].image_url.url, screenshot);
 
-    const geminiContents = toPlainValue(buildGeminiConversationContents());
-    assert.deepStrictEqual(geminiContents.map((content) => content.role), ['user', 'model']);
-    assert.strictEqual(geminiContents[0].parts[0].text, '含圖片的問題');
-    assert.deepStrictEqual(geminiContents[0].parts.slice(1), [
-        {
-            inline_data: {
-                mime_type: 'image/png',
-                data: 'aW5wdXQ='
-            }
-        },
-        {
-            inline_data: {
-                mime_type: 'image/jpeg',
-                data: 'c2NyZWVuc2hvdA=='
-            }
-        }
+    const geminiSteps = toPlainValue(buildGeminiConversationSteps());
+    assert.deepStrictEqual(geminiSteps.map((step) => step.type), ['user_input', 'model_output']);
+    assert.strictEqual(geminiSteps[0].content[0].text, '含圖片的問題');
+    assert.deepStrictEqual(geminiSteps[0].content.slice(1), [
+        { type: 'image', mime_type: 'image/png', data: 'aW5wdXQ=' },
+        { type: 'image', mime_type: 'image/jpeg', data: 'c2NyZWVuc2hvdA==' }
     ]);
 
     const openAIRequest = applyPromptCacheRequestOptions({}, {
@@ -299,44 +285,6 @@ function toPlainValue(value) {
         promptCacheKey: 'askpage:test'
     }).prompt_cache_key, 'askpage:test');
 
-    const geminiCacheRequest = toPlainValue(buildGeminiCachedContentRequest('gemini-3.7-flash', {
-        systemPrompt: 'system prompt',
-        conversationContextText: 'stable page context'
-    }));
-    assert.deepStrictEqual(geminiCacheRequest, {
-        model: 'models/gemini-3.7-flash',
-        systemInstruction: {
-            parts: [{ text: 'system prompt' }]
-        },
-        contents: [{
-            role: 'user',
-            parts: [{ text: 'stable page context' }]
-        }],
-        ttl: '3600s'
-    });
-
-    const geminiCacheRequestWithTools = toPlainValue(buildGeminiCachedContentRequest('gemini-3.5-flash-lite', {
-        systemPrompt: 'system prompt',
-        conversationContextText: 'stable page context'
-    }, {
-        tools: [{ google_search: {} }],
-        toolConfig: { includeServerSideToolInvocations: true },
-        ttl: '1800s'
-    }));
-    assert.deepStrictEqual(geminiCacheRequestWithTools, {
-        model: 'models/gemini-3.5-flash-lite',
-        systemInstruction: {
-            parts: [{ text: 'system prompt' }]
-        },
-        contents: [{
-            role: 'user',
-            parts: [{ text: 'stable page context' }]
-        }],
-        tools: [{ google_search: {} }],
-        toolConfig: { includeServerSideToolInvocations: true },
-        ttl: '1800s'
-    });
-
     assert.strictEqual(doesOpenRouterModelNeedExplicitCacheControl('anthropic/claude-sonnet-4.6'), true);
     assert.strictEqual(doesOpenRouterModelNeedExplicitCacheControl('qwen/qwen3.7-max'), true);
     assert.strictEqual(doesOpenRouterModelNeedExplicitCacheControl('openai/gpt-5.6-sol'), false);
@@ -356,11 +304,11 @@ function toPlainValue(value) {
     }]);
 
     const geminiInquiryTools = toPlainValue(buildGeminiRequestTools());
-    assert.deepStrictEqual(geminiInquiryTools, [{ google_search: {} }]);
+    assert.deepStrictEqual(geminiInquiryTools, [{ type: 'google_search' }]);
 
-    const pageTool = { functionDeclarations: [{ name: 'run_js' }] };
+    const pageTool = { type: 'function', name: 'run_js' };
     const geminiAgentTools = toPlainValue(buildGeminiRequestTools([pageTool]));
-    assert.deepStrictEqual(geminiAgentTools[0], { google_search: {} });
+    assert.deepStrictEqual(geminiAgentTools[0], { type: 'google_search' });
     assert.deepStrictEqual(geminiAgentTools[1], pageTool);
 
     const geminiLegacyAgentTools = toPlainValue(buildGeminiRequestTools([pageTool], false));
@@ -370,15 +318,6 @@ function toPlainValue(value) {
     assert.strictEqual(doesGeminiModelSupportCombinedTools('gemini-3.5-flash'), true);
     assert.strictEqual(doesGeminiModelSupportCombinedTools(' GEMINI-3.1-PRO-PREVIEW '), true);
     assert.strictEqual(doesGeminiModelSupportCombinedTools('gemini-2.5-flash'), false);
-    assert.deepStrictEqual(toPlainValue(buildGeminiToolConfig('gemini-3.6-flash', true)), {
-        includeServerSideToolInvocations: true
-    });
-    assert.deepStrictEqual(toPlainValue(buildGeminiToolConfig('gemini-3.5-flash', true)), {
-        includeServerSideToolInvocations: true
-    });
-    assert.strictEqual(buildGeminiToolConfig('gemini-3.5-flash', false), null);
-    assert.strictEqual(buildGeminiToolConfig('gemini-2.5-flash', true), null);
-
     const usageSummary = createApiTokenUsageSummary('OpenAI', {
         prompt_tokens: 120,
         prompt_tokens_details: {
@@ -446,13 +385,9 @@ function toPlainValue(value) {
         getPromptCacheKeyForContext(turnOneContext, false, inquiryCacheOptions)
     );
 
-    assert.match(contentScript, /v1beta\/cachedContents\?key=/);
-    assert.match(contentScript, /requestBody\.cachedContent = explicitCacheName/);
+    assert.doesNotMatch(contentScript, /cachedContents|explicitCacheName|geminiCacheEntries/);
     assert.match(contentScript, /const tools = getGeminiToolDefinitions\(selectedModel, enableTools, googleSearchEnabled\)/);
-    assert.match(contentScript, /geminiCacheEntries = new Map\(\)/);
-    assert.match(contentScript, /isGeminiCachedContentReferenceError\(error\)/);
-    assert.match(contentScript, /const contents = explicitCacheName\s*\n\s*\? buildGeminiConversationContents\(\)/);
-    assert.match(contentScript, /contents\.unshift\(\{\s*role: 'user',\s*parts: \[\{ text: pageConversationContext\.conversationContextText \}\]/);
+    assert.match(contentScript, /\.\.\.buildGeminiConversationSteps\(\)/);
     assert.match(contentScript, /delete fallbackRequestBody\.prompt_cache_key/);
 
     const inquirySystemPrompt = buildSystemPrompt({

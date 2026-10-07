@@ -146,8 +146,8 @@ assert.deepStrictEqual(Array.from(Object.keys(OPENAI_REASONING_CAPABILITIES)).so
 ]);
 
 // Gemini 3.x exposes only the thinking levels documented for each exact model.
-assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.8-flash'), ['minimal', 'low', 'medium', 'high']);
-assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.7-flash'), ['minimal', 'low', 'medium', 'high']);
+assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.8-flash'), ['low', 'medium', 'high']);
+assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.7-flash'), ['low', 'medium', 'high']);
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.6-flash'), ['minimal', 'low', 'medium', 'high']);
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.5-flash-lite'), ['minimal', 'low', 'medium', 'high']);
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.1-pro-preview'), ['low', 'medium', 'high']);
@@ -173,38 +173,35 @@ assert.strictEqual(
     'none'
 );
 
-// Gemini 2.5 keeps the exact GenerateContent thinking-budget ranges and special modes.
+// Gemini 2.5 uses Interactions levels and migrates saved GenerateContent budgets.
 const gemini25Pro = getReasoningCapability('gemini', 'gemini-2.5-pro');
-assert.strictEqual(gemini25Pro.minBudget, 128);
-assert.strictEqual(gemini25Pro.maxBudget, 32768);
-assert.strictEqual(gemini25Pro.allowOff, false);
-assert.strictEqual(gemini25Pro.allowDynamic, true);
-assert.strictEqual(gemini25Pro.defaultValue, 32768);
-
-const gemini25FlashLite = getReasoningCapability('gemini', 'gemini-2.5-flash-lite');
-assert.strictEqual(gemini25FlashLite.minBudget, 512);
-assert.strictEqual(gemini25FlashLite.maxBudget, 24576);
-assert.strictEqual(gemini25FlashLite.allowOff, true);
-assert.strictEqual(gemini25FlashLite.defaultValue, 0);
-
 const gemini25Flash = getReasoningCapability('gemini', 'gemini-2.5-flash');
-assert.strictEqual(gemini25Flash.minBudget, 0);
-assert.strictEqual(gemini25Flash.maxBudget, 24576);
-assert.strictEqual(gemini25Flash.allowOff, true);
-assert.strictEqual(gemini25Flash.allowDynamic, true);
-assert.strictEqual(gemini25Flash.defaultValue, 24576);
-
-const proSlider = getReasoningSliderConfig(gemini25Pro, -1);
-assert.strictEqual(getReasoningValueFromSlider(gemini25Pro, proSlider.min), 128);
-assert.strictEqual(getReasoningValueFromSlider(gemini25Pro, proSlider.max), -1);
-
-const flashLiteSlider = getReasoningSliderConfig(gemini25FlashLite, 0);
-assert.strictEqual(flashLiteSlider.index, 0);
-assert.strictEqual(getReasoningValueFromSlider(gemini25FlashLite, 0), 0);
-assert.strictEqual(getReasoningValueFromSlider(gemini25FlashLite, 1), 512);
-assert.strictEqual(getReasoningValueFromSlider(gemini25FlashLite, flashLiteSlider.max), -1);
-assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, 511), 0);
-assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, 24576), 24576);
+const gemini25FlashLite = getReasoningCapability('gemini', 'gemini-2.5-flash-lite');
+assert.deepStrictEqual(Array.from(gemini25Pro.options), ['low', 'medium', 'high']);
+assert.deepStrictEqual(Array.from(gemini25Flash.options), ['low', 'medium', 'high']);
+assert.deepStrictEqual(Array.from(gemini25FlashLite.options), ['default', 'low', 'medium', 'high']);
+assert.strictEqual(gemini25Pro.defaultValue, 'high');
+assert.strictEqual(gemini25Flash.defaultValue, 'high');
+assert.strictEqual(gemini25FlashLite.defaultValue, 'default');
+assert.strictEqual(normalizeReasoningValue(gemini25Pro, 32768), 'high');
+assert.strictEqual(normalizeReasoningValue(gemini25Pro, 128), 'low');
+assert.strictEqual(normalizeReasoningValue(gemini25Flash, 12000), 'medium');
+assert.strictEqual(normalizeReasoningValue(gemini25Flash, 0), 'low');
+assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, 0), 'default');
+assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, '0'), 'default');
+assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, -1), 'high');
+assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, 512), 'low');
+assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, 24576), 'high');
+assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, null), 'default');
+assert.strictEqual(normalizeReasoningValue(gemini25FlashLite, 24577), 'default');
+assert.strictEqual(getReasoningValueFromSlider(gemini25Pro, 0), 'low');
+assert.strictEqual(getReasoningSliderConfig(gemini25Pro, -1).index, 2);
+assert.strictEqual(getReasoningSliderConfig(gemini25FlashLite, 0).index, 0);
+assert.strictEqual(getReasoningValueFromSlider(gemini25FlashLite, 0), 'default');
+assert.strictEqual(getReasoningValueFromSlider(gemini25FlashLite, 3), 'high');
+for (const model of ['gemini-3.8-flash', 'gemini-3.7-flash']) {
+    assert.strictEqual(normalizeReasoningValue(getReasoningCapability('gemini', model), 'minimal'), 'low');
+}
 
 // OpenAI options follow the model-specific subsets documented by OpenAI.
 assert.deepStrictEqual(capabilityOptions('openai', 'gpt-6-astra'), ['low', 'medium', 'high', 'xhigh', 'max']);
@@ -351,24 +348,32 @@ assert.strictEqual(getReasoningCapability('openai-compatible', 'gpt-5.6-sol'), n
 // Request parameters use the provider endpoint's exact field shape.
 assert.deepStrictEqual(
     JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemini-3.6-flash', 'high', true))),
-    { includeThoughts: true, thinkingLevel: 'high' }
+    { thinking_summaries: 'auto', thinking_level: 'high' }
 );
 assert.deepStrictEqual(
     JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemini-3.1-pro-preview', null, false))),
-    { thinkingLevel: 'high' }
+    { thinking_level: 'high' }
 );
 assert.deepStrictEqual(
     JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemini-2.5-flash', 0, false))),
-    { thinkingBudget: 0 }
+    { thinking_level: 'low' }
 );
-assert.strictEqual(buildGeminiThinkingConfig('gemini-flash-lite-latest', 'medium', true), null);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemini-flash-lite-latest', 'medium', true))),
+    { thinking_summaries: 'auto' }
+);
+assert.strictEqual(buildGeminiThinkingConfig('gemini-flash-lite-latest', 'medium', false), null);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemini-2.5-flash-lite', 0, true))),
+    { thinking_summaries: 'auto' }
+);
 assert.deepStrictEqual(
     JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemma-4-31b-it', 'none', false))),
-    { thinkingLevel: 'minimal' }
+    { thinking_level: 'minimal' }
 );
 assert.deepStrictEqual(
     JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemma-4-26b-a4b-it', null, true))),
-    { includeThoughts: true, thinkingLevel: 'high' }
+    { thinking_summaries: 'auto', thinking_level: 'high' }
 );
 
 assert.deepStrictEqual(

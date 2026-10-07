@@ -216,6 +216,7 @@
     "inquiryEnabledState": { "message": "inquiry mode" },
     "modeToggleAria": { "message": "$label$: currently $current$; click to switch to $next$", "placeholders": { "label": { "content": "$1" }, "current": { "content": "$2" }, "next": { "content": "$3" } } },
     "reasoningDynamic": { "message": "Dynamic" },
+    "reasoningModelDefault": { "message": "Model default" },
     "reasoningOff": { "message": "Off" },
     "reasoningMinimal": { "message": "Minimal" },
     "reasoningLow": { "message": "Low" },
