@@ -1936,6 +1936,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(t('apiEndpointRequired'));
                 }
 
+                try {
+                    const parsedEndpoint = new URL(endpoint);
+                    if (parsedEndpoint.protocol !== 'http:' && parsedEndpoint.protocol !== 'https:') {
+                        throw new Error();
+                    }
+                } catch (e) {
+                    throw new Error(t('apiEndpointRequired'));
+                }
+
                 url = endpoint.endsWith('/models') ? endpoint : `${endpoint.replace(/\/$/, '')}/models`;
                 if (apiKey) {
                     headers['Authorization'] = `Bearer ${apiKey}`;
