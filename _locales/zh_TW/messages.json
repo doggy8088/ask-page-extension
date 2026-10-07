@@ -453,5 +453,9 @@
     "agentExecutionCompleted": { "message": "頁問已經打完收工，共執行 $count$ 個步驟，$duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
     "agentExecutionStopped": { "message": "頁問提早收工，共執行 $count$ 個步驟，$duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
     "endpointToolFallbackMessage": { "message": "⚠️ **目前這個 $provider$ 端點未完整支援 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
-    "agentToolFallbackMessage": { "message": "⚠️ **目前 $provider$ 提供者未完整支援 agent 模式下的 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } }
+    "agentToolFallbackMessage": { "message": "⚠️ **目前 $provider$ 提供者未完整支援 agent 模式下的 tool calling**\n\n已自動改用一般文字模式，因此這次無法直接操作頁面 DOM 或表單。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
+    "copyMessage": { "message": "複製訊息" },
+    "copiedMessage": { "message": "已複製" },
+    "editMessage": { "message": "編輯訊息" },
+    "sendEditedMessage": { "message": "送出" }
 }

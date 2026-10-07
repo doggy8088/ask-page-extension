@@ -453,5 +453,9 @@
     "agentExecutionCompleted": { "message": "AskPage は $count$ ステップを実行して完了しました。$duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
     "agentExecutionStopped": { "message": "AskPage は $count$ ステップで停止しました。$duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
     "endpointToolFallbackMessage": { "message": "⚠️ **この $provider$ エンドポイントは tool calling を完全にはサポートしていません**\n\n自動的に通常のテキストモードへ切り替えたため、今回のリクエストではページの DOM やフォームを直接操作できません。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
-    "agentToolFallbackMessage": { "message": "⚠️ **$provider$ プロバイダーは agent モードでの tool calling を完全にはサポートしていません**\n\n自動的に通常のテキストモードへ切り替えたため、今回のリクエストではページの DOM やフォームを直接操作できません。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } }
+    "agentToolFallbackMessage": { "message": "⚠️ **$provider$ プロバイダーは agent モードでの tool calling を完全にはサポートしていません**\n\n自動的に通常のテキストモードへ切り替えたため、今回のリクエストではページの DOM やフォームを直接操作できません。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
+    "copyMessage": { "message": "メッセージをコピー" },
+    "copiedMessage": { "message": "コピーしました" },
+    "editMessage": { "message": "メッセージを編集" },
+    "sendEditedMessage": { "message": "送信" }
 }

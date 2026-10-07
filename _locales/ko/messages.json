@@ -453,5 +453,9 @@
     "agentExecutionCompleted": { "message": "AskPage가 $count$단계를 실행하고 완료했습니다. $duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
     "agentExecutionStopped": { "message": "AskPage가 $count$단계 후 중지되었습니다. $duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
     "endpointToolFallbackMessage": { "message": "⚠️ **이 $provider$ 엔드포인트는 tool calling을 완전히 지원하지 않습니다**\n\n자동으로 일반 텍스트 모드로 전환했으므로 이번 요청에서는 페이지 DOM이나 양식을 직접 조작할 수 없습니다.\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
-    "agentToolFallbackMessage": { "message": "⚠️ **$provider$ 제공자는 agent 모드의 tool calling을 완전히 지원하지 않습니다**\n\n자동으로 일반 텍스트 모드로 전환했으므로 이번 요청에서는 페이지 DOM이나 양식을 직접 조작할 수 없습니다.\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } }
+    "agentToolFallbackMessage": { "message": "⚠️ **$provider$ 제공자는 agent 모드의 tool calling을 완전히 지원하지 않습니다**\n\n자동으로 일반 텍스트 모드로 전환했으므로 이번 요청에서는 페이지 DOM이나 양식을 직접 조작할 수 없습니다.\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
+    "copyMessage": { "message": "메시지 복사" },
+    "copiedMessage": { "message": "복사됨" },
+    "editMessage": { "message": "메시지 편집" },
+    "sendEditedMessage": { "message": "보내기" }
 }

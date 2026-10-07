@@ -453,5 +453,9 @@
     "agentExecutionCompleted": { "message": "AskPage 已完成，共执行 $count$ 个步骤，$duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
     "agentExecutionStopped": { "message": "AskPage 已停止，共执行 $count$ 个步骤，$duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
     "endpointToolFallbackMessage": { "message": "⚠️ **当前这个 $provider$ 端点未完整支持 tool calling**\n\n已自动改用一般文字模式，因此这次无法直接操作页面 DOM 或表单。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
-    "agentToolFallbackMessage": { "message": "⚠️ **当前 $provider$ 提供者未完整支持 agent 模式下的 tool calling**\n\n已自动改用一般文字模式，因此这次无法直接操作页面 DOM 或表单。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } }
+    "agentToolFallbackMessage": { "message": "⚠️ **当前 $provider$ 提供者未完整支持 agent 模式下的 tool calling**\n\n已自动改用一般文字模式，因此这次无法直接操作页面 DOM 或表单。\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
+    "copyMessage": { "message": "复制消息" },
+    "copiedMessage": { "message": "已复制" },
+    "editMessage": { "message": "编辑消息" },
+    "sendEditedMessage": { "message": "发送" }
 }

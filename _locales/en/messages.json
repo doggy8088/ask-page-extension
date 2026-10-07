@@ -453,5 +453,9 @@
     "agentExecutionCompleted": { "message": "AskPage finished successfully after $count$ steps, $duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
     "agentExecutionStopped": { "message": "AskPage stopped after $count$ steps, $duration$$usage$", "placeholders": { "count": { "content": "$1" }, "duration": { "content": "$2" }, "usage": { "content": "$3" } } },
     "endpointToolFallbackMessage": { "message": "⚠️ **This $provider$ endpoint does not fully support tool calling**\n\nThe request automatically continued in plain text mode, so this request cannot directly operate the page DOM or forms.\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
-    "agentToolFallbackMessage": { "message": "⚠️ **The $provider$ provider does not fully support tool calling in agent mode**\n\nThe request automatically continued in plain text mode, so this request cannot directly operate the page DOM or forms.\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } }
+    "agentToolFallbackMessage": { "message": "⚠️ **The $provider$ provider does not fully support tool calling in agent mode**\n\nThe request automatically continued in plain text mode, so this request cannot directly operate the page DOM or forms.\n\n$answer$", "placeholders": { "provider": { "content": "$1" }, "answer": { "content": "$2" } } },
+    "copyMessage": { "message": "Copy message" },
+    "copiedMessage": { "message": "Copied" },
+    "editMessage": { "message": "Edit message" },
+    "sendEditedMessage": { "message": "Send" }
 }

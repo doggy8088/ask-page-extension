@@ -5965,7 +5965,7 @@ async function sendRequestWithPromptCacheKeyFallback(sendRequest, requestBody, o
 }
 
 function addConversationTurn(role, content, displayContent = content, options = {}) {
-    conversationHistory.push({
+    const turn = {
         role,
         content,
         displayContent,
@@ -5976,7 +5976,28 @@ function addConversationTurn(role, content, displayContent = content, options = 
         screenshotDataUrl: options.screenshotDataUrl || '',
         inputImageDataUrls: normalizeInputImageDataUrls(options.inputImageDataUrls),
         ...(options.geminiSteps ? { geminiSteps: options.geminiSteps } : {})
-    });
+    };
+    conversationHistory.push(turn);
+    return turn;
+}
+
+function truncateConversationFromTurn(turn, newContent, newDisplayContent = newContent, fallbackOptions = {}) {
+    const turnIndex = turn ? conversationHistory.indexOf(turn) : -1;
+    if (turnIndex !== -1) {
+        conversationHistory.length = turnIndex + 1;
+        turn.content = newContent;
+        turn.displayContent = newDisplayContent;
+        return turn;
+    }
+
+    const beforeTurnIndex = fallbackOptions.beforeTurn
+        ? conversationHistory.indexOf(fallbackOptions.beforeTurn)
+        : -1;
+    if (beforeTurnIndex !== -1) {
+        conversationHistory.length = beforeTurnIndex;
+    }
+
+    return addConversationTurn('user', newContent, newDisplayContent, fallbackOptions);
 }
 
 function clearConversationHistory() {
@@ -6543,6 +6564,23 @@ async function createDialog() {
             button.title = getLocalizedText(key);
             button.setAttribute('aria-label', button.title);
         });
+        shadowRoot.querySelectorAll('.askpage-user-copy-btn').forEach((button) => {
+            const key = button.dataset.state === 'copied' ? 'copiedMessage' : 'copyMessage';
+            const label = getLocalizedText(key);
+            button.dataset.tooltip = label;
+            button.setAttribute('aria-label', label);
+        });
+        shadowRoot.querySelectorAll('.askpage-user-edit-btn').forEach((button) => {
+            const label = getLocalizedText('editMessage');
+            button.dataset.tooltip = label;
+            button.setAttribute('aria-label', label);
+        });
+        shadowRoot.querySelectorAll('.askpage-user-edit-cancel-btn').forEach((button) => {
+            button.textContent = getLocalizedText('cancel');
+        });
+        shadowRoot.querySelectorAll('.askpage-user-edit-submit-btn').forEach((button) => {
+            button.textContent = getLocalizedText('sendEditedMessage');
+        });
         shadowRoot.querySelectorAll('.askpage-message-screenshot-thumb').forEach((link) => {
             link.title = getLocalizedText('openFullScreenshot');
             link.setAttribute('aria-label', getLocalizedText('openQuestionScreenshot'));
@@ -7102,7 +7140,8 @@ async function createDialog() {
                 suppressCopyButton: turn.suppressCopyButton,
                 extraClassName: turn.extraClassName,
                 screenshotDataUrl: turn.screenshotDataUrl || '',
-                inputImageDataUrls: turn.inputImageDataUrls || []
+                inputImageDataUrls: turn.inputImageDataUrls || [],
+                turn
             });
         });
     } else {
@@ -7181,6 +7220,15 @@ async function createDialog() {
         }
 
         const activeElement = shadowRoot.activeElement;
+        const activeEditingCancelBtn = activeElement
+            ?.closest?.('.askpage-user-edit-container')
+            ?.querySelector?.('.askpage-user-edit-cancel-btn');
+        if (activeEditingCancelBtn) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            activeEditingCancelBtn.click();
+            return;
+        }
         const isFocusInDialog = activeElement && (dialog.contains(activeElement) || intelliBox.contains(activeElement));
         const pageActiveElement = document.activeElement;
         const isPageWithoutFocus = !pageActiveElement ||
@@ -8028,8 +8076,8 @@ async function createDialog() {
                 ? await captureViewportScreenshot(task.signal)
                 : null;
             throwIfAskTaskCancelled(task);
-            appendMessage('user', displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
-            addConversationTurn('user', question, displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
+            const userTurn = addConversationTurn('user', question, displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
+            appendMessage('user', displayedQuestion, { screenshotDataUrl, inputImageDataUrls, turn: userTurn });
             clearInputContextImages();
             setInputValue('', { resetToSingleLine: true });
             input.focus();
@@ -8841,7 +8889,8 @@ async function createDialog() {
                     duration: 0
                 });
                 isMessageTopPinned = true;
-                addConversationTurn('assistant', text, text, historyOptions);
+                const turn = addConversationTurn('assistant', text, text, historyOptions);
+                messageElement._askpageTurn = turn;
                 return messageElement;
             },
             discard
@@ -8946,9 +8995,301 @@ async function createDialog() {
         messageElement.appendChild(gallery);
     }
 
+    const USER_MESSAGE_COPY_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4.5A2.5 2.5 0 0 1 2 12.5v-8A2.5 2.5 0 0 1 4.5 2h8A2.5 2.5 0 0 1 15 4.5V5"/></svg>';
+    const USER_MESSAGE_COPIED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"/></svg>';
+    const USER_MESSAGE_FAILED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+    const USER_MESSAGE_EDIT_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><path d="m15 5 4 4"/></svg>';
+
+    async function copyUserMessageWithFeedback(button, text) {
+        if (button._copyResetTimer) {
+            clearTimeout(button._copyResetTimer);
+            button._copyResetTimer = null;
+        }
+
+        try {
+            await navigator.clipboard.writeText(String(text ?? ''));
+            button.innerHTML = USER_MESSAGE_COPIED_ICON_SVG;
+            button.dataset.state = 'copied';
+            const copiedLabel = getLocalizedText('copiedMessage');
+            button.dataset.tooltip = copiedLabel;
+            button.setAttribute('aria-label', copiedLabel);
+        } catch (error) {
+            console.error('複製失敗:', error);
+            button.innerHTML = USER_MESSAGE_FAILED_ICON_SVG;
+            button.dataset.state = 'error';
+        }
+
+        button._copyResetTimer = setTimeout(() => {
+            button._copyResetTimer = null;
+            button.innerHTML = USER_MESSAGE_COPY_ICON_SVG;
+            delete button.dataset.state;
+            const copyLabel = getLocalizedText('copyMessage');
+            button.dataset.tooltip = copyLabel;
+            button.setAttribute('aria-label', copyLabel);
+        }, 1000);
+    }
+
+    function findFollowingTurnForElement(messageElement) {
+        let nextEl = messageElement?.nextElementSibling || null;
+        while (nextEl) {
+            if (nextEl._askpageTurn && conversationHistory.includes(nextEl._askpageTurn)) {
+                return nextEl._askpageTurn;
+            }
+            nextEl = nextEl.nextElementSibling;
+        }
+        return null;
+    }
+
+    async function submitUserMessageInlineEdit(messageElement, rawEditedText) {
+        const editedQuestion = String(rawEditedText ?? '').trim();
+        if (!editedQuestion) {
+            return;
+        }
+
+        if (activeAskTask) {
+            const runningTask = activeAskTask;
+            cancelActiveAskTask();
+            finishAskTask(runningTask);
+        }
+
+        const task = beginAskTask();
+        if (!task) {
+            return;
+        }
+
+        const previousOptions = messageElement._askpageUserOptions || {};
+        const beforeTurn = findFollowingTurnForElement(messageElement);
+        const turn = truncateConversationFromTurn(
+            messageElement._askpageTurn || previousOptions.turn || null,
+            editedQuestion,
+            editedQuestion,
+            {
+                beforeTurn,
+                screenshotDataUrl: previousOptions.screenshotDataUrl || '',
+                inputImageDataUrls: previousOptions.inputImageDataUrls || []
+            }
+        );
+
+        while (messageElement.nextSibling) {
+            messageElement.nextSibling.remove();
+        }
+
+        delete messageElement._cancelInlineEdit;
+        const updatedOptions = {
+            ...previousOptions,
+            turn,
+            screenshotDataUrl: turn.screenshotDataUrl || previousOptions.screenshotDataUrl || '',
+            inputImageDataUrls: turn.inputImageDataUrls || previousOptions.inputImageDataUrls || []
+        };
+        renderUserMessageElement(messageElement, editedQuestion, updatedOptions);
+
+        try {
+            promptHistory.push(editedQuestion);
+            if (promptHistory.length > 100) {
+                promptHistory.shift();
+            }
+            historyIndex = promptHistory.length;
+            await setValue(PROMPT_HISTORY_STORAGE, JSON.stringify(promptHistory));
+
+            throwIfAskTaskCancelled(task);
+            resumeActiveMessagesAutoScroll(messagesEl);
+            const activeSelectedText = getActiveSelectedText(capturedSelectedText);
+            await askAI(
+                editedQuestion,
+                activeSelectedText,
+                updatedOptions.screenshotDataUrl || null,
+                updatedOptions.inputImageDataUrls || [],
+                task
+            );
+        } catch (error) {
+            if (!isAskTaskCancellationError(error) && canUpdateAskTaskUi(task)) {
+                console.error('[AskPage] Failed to handle edited question:', error);
+                appendErrorMessageAndStore(getLocalizedText('errorPrefix', {
+                    error: error.userMessage || error.message
+                }));
+            }
+        } finally {
+            finishAskTask(task);
+        }
+    }
+
+    function startUserMessageInlineEdit(messageElement) {
+        const targetMessagesEl = getActiveMessagesElement(messagesEl);
+        targetMessagesEl?.querySelectorAll?.('.gemini-msg-user.is-editing').forEach((otherEl) => {
+            if (otherEl !== messageElement && typeof otherEl._cancelInlineEdit === 'function') {
+                otherEl._cancelInlineEdit();
+            }
+        });
+
+        const originalText = String(messageElement._askpageUserText ?? '');
+        const messageOptions = { ...(messageElement._askpageUserOptions || {}) };
+        const cancelEdit = () => {
+            delete messageElement._cancelInlineEdit;
+            renderUserMessageElement(messageElement, originalText, messageOptions);
+        };
+        messageElement._cancelInlineEdit = cancelEdit;
+
+        messageElement.classList.remove(
+            'askpage-user-collapsible',
+            'askpage-user-with-screenshot',
+            'askpage-user-with-context-images'
+        );
+        messageElement.classList.add('is-editing');
+        messageElement.innerHTML = '';
+
+        const editContainer = document.createElement('div');
+        editContainer.className = 'askpage-user-edit-container';
+
+        const textarea = document.createElement('textarea');
+        textarea.className = 'askpage-user-edit-textarea';
+        textarea.rows = 1;
+        textarea.value = originalText;
+
+        const actionsRow = document.createElement('div');
+        actionsRow.className = 'askpage-user-edit-actions';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'askpage-user-edit-cancel-btn';
+        cancelBtn.textContent = getLocalizedText('cancel');
+        cancelBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            cancelEdit();
+        });
+
+        const submitBtn = document.createElement('button');
+        submitBtn.type = 'button';
+        submitBtn.className = 'askpage-user-edit-submit-btn';
+        submitBtn.textContent = getLocalizedText('sendEditedMessage');
+        submitBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            submitUserMessageInlineEdit(messageElement, textarea.value);
+        });
+
+        const syncTextareaState = () => {
+            textarea.style.height = 'auto';
+            const nextHeight = Math.min(Math.max(textarea.scrollHeight || 0, 44), 240);
+            textarea.style.height = `${nextHeight}px`;
+            textarea.style.overflowY = (textarea.scrollHeight || 0) > 240 ? 'auto' : 'hidden';
+            submitBtn.disabled = !textarea.value.trim();
+        };
+
+        let isEditComposing = false;
+        let justEndedEditComposition = false;
+        textarea.addEventListener('compositionstart', () => {
+            isEditComposing = true;
+            justEndedEditComposition = false;
+        });
+        textarea.addEventListener('compositionend', () => {
+            isEditComposing = false;
+            justEndedEditComposition = true;
+            setTimeout(() => {
+                justEndedEditComposition = false;
+            }, 0);
+        });
+        textarea.addEventListener('input', syncTextareaState);
+        textarea.addEventListener('keydown', (event) => {
+            if (isEditComposing || event.isComposing || event.keyCode === 229) {
+                return;
+            }
+            if (justEndedEditComposition && event.key === 'Enter') {
+                justEndedEditComposition = false;
+                return;
+            }
+            justEndedEditComposition = false;
+
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                cancelEdit();
+                return;
+            }
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (textarea.value.trim()) {
+                    submitUserMessageInlineEdit(messageElement, textarea.value);
+                }
+            }
+        });
+
+        actionsRow.appendChild(cancelBtn);
+        actionsRow.appendChild(submitBtn);
+        editContainer.appendChild(textarea);
+        editContainer.appendChild(actionsRow);
+        messageElement.appendChild(editContainer);
+
+        syncTextareaState();
+        textarea.focus();
+        if (typeof textarea.setSelectionRange === 'function') {
+            const caretPos = textarea.value.length;
+            textarea.setSelectionRange(caretPos, caretPos);
+        }
+    }
+
+    function appendUserMessageActions(messageElement, text) {
+        const actionsBar = document.createElement('div');
+        actionsBar.className = 'askpage-user-msg-actions';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'askpage-user-msg-action-btn askpage-user-copy-btn';
+        const copyLabel = getLocalizedText('copyMessage');
+        copyBtn.dataset.tooltip = copyLabel;
+        copyBtn.setAttribute('aria-label', copyLabel);
+        copyBtn.innerHTML = USER_MESSAGE_COPY_ICON_SVG;
+        copyBtn.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            await copyUserMessageWithFeedback(copyBtn, messageElement._askpageUserText ?? text);
+        });
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'askpage-user-msg-action-btn askpage-user-edit-btn';
+        const editLabel = getLocalizedText('editMessage');
+        editBtn.dataset.tooltip = editLabel;
+        editBtn.setAttribute('aria-label', editLabel);
+        editBtn.innerHTML = USER_MESSAGE_EDIT_ICON_SVG;
+        editBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            startUserMessageInlineEdit(messageElement);
+        });
+
+        actionsBar.appendChild(copyBtn);
+        actionsBar.appendChild(editBtn);
+        messageElement.appendChild(actionsBar);
+    }
+
+    function renderUserMessageElement(element, text, options = {}) {
+        const normalizedText = String(text ?? '');
+        element._askpageUserText = normalizedText;
+        element._askpageUserOptions = { ...options };
+        if (options.turn) {
+            element._askpageTurn = options.turn;
+        }
+        element.classList.remove(
+            'is-editing',
+            'askpage-user-collapsible',
+            'askpage-user-with-screenshot',
+            'askpage-user-with-context-images'
+        );
+        element.innerHTML = '';
+        appendCollapsibleTextPreview(element, normalizedText);
+        appendUserScreenshotThumbnail(element, options.screenshotDataUrl);
+        appendUserInputImageGallery(element, options.inputImageDataUrls);
+        appendUserMessageActions(element, normalizedText);
+    }
+
     function appendMessage(role, text, options = {}) {
         const div = document.createElement('div');
         div.className = role === 'user' ? 'gemini-msg-user' : 'gemini-msg-assistant';
+        if (options.turn) {
+            div._askpageTurn = options.turn;
+        }
         if (options.extraClassName) {
             options.extraClassName
                 .split(/\s+/)
@@ -8958,9 +9299,7 @@ async function createDialog() {
         if (role === 'assistant') {
             renderAssistantMessageElement(div, text, options);
         } else {
-            appendCollapsibleTextPreview(div, `${getLocalizedText('userMessagePrefix')}: ${text}`);
-            appendUserScreenshotThumbnail(div, options.screenshotDataUrl);
-            appendUserInputImageGallery(div, options.inputImageDataUrls);
+            renderUserMessageElement(div, text, options);
         }
         return appendNodeToActiveMessages(div, messagesEl, options);
     }
@@ -8970,7 +9309,7 @@ async function createDialog() {
             ? getAssistantStoredText(text)
             : text;
         const messageElement = appendMessage(role, messageText, options);
-        addConversationTurn(
+        const turn = addConversationTurn(
             role,
             historyOptions.content ?? messageText,
             historyOptions.displayContent ?? messageText,
@@ -8984,6 +9323,9 @@ async function createDialog() {
                 inputImageDataUrls: historyOptions.inputImageDataUrls ?? options.inputImageDataUrls
             }
         );
+        if (messageElement) {
+            messageElement._askpageTurn = turn;
+        }
         return messageElement;
     }
 
