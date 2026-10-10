@@ -1359,22 +1359,34 @@ function getImageMimeTypeFromDataUrl(imageDataUrl) {
 // 頁面 CSP 的 img-src 若不允許 data:（例如 img-src 'self'），<img src="data:..."> 與 blob: 都會載入失敗。
 // 此時改用 createImageBitmap 解碼後畫到 canvas，不經過資源載入，因此不受 CSP 限制。
 const IMAGE_CANVAS_FALLBACK_MAX_EDGE = 480;
+const IMAGE_PREVIEW_CANVAS_MAX_EDGE = 4096;
 
-function setImageDataUrlSource(img, imageDataUrl) {
+function setImageDataUrlSource(img, imageDataUrl, options = {}) {
     img.addEventListener('error', async () => {
         try {
             const binary = atob(imageDataUrl.slice(imageDataUrl.indexOf(',') + 1));
             const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
             const bitmap = await createImageBitmap(new Blob([bytes], { type: getImageMimeTypeFromDataUrl(imageDataUrl) }));
-            const scale = Math.min(1, IMAGE_CANVAS_FALLBACK_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+            const maxEdge = options.maxEdge || IMAGE_CANVAS_FALLBACK_MAX_EDGE;
+            const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
             const canvas = document.createElement('canvas');
             canvas.width = Math.max(1, Math.round(bitmap.width * scale));
             canvas.height = Math.max(1, Math.round(bitmap.height * scale));
             canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+            const naturalSize = { width: bitmap.width, height: bitmap.height };
             bitmap.close();
-            canvas.setAttribute('role', 'img');
-            canvas.setAttribute('aria-label', img.alt);
+            canvas.className = img.className;
+            canvas.style.cssText = img.style.cssText;
+            canvas.title = img.title;
+            Object.assign(canvas.dataset, img.dataset);
+            if (img.alt) {
+                canvas.setAttribute('role', 'img');
+                canvas.setAttribute('aria-label', img.alt);
+            }
             img.replaceWith(canvas);
+            if (typeof options.onCanvas === 'function') {
+                options.onCanvas(canvas, naturalSize);
+            }
         } catch (error) {
             console.warn('[AskPage] Failed to render image preview:', error);
         }
@@ -7420,7 +7432,6 @@ async function createDialog() {
         const previewTitle = options.title || getLocalizedText('screenshotPreviewTitle');
         const previewHeading = options.heading || getLocalizedText('screenshotPreviewHeading');
         const previewAlt = options.alt || getLocalizedText('screenshotPreviewAlt');
-        const escapedDataUrl = escapeHtml(imageDataUrl);
         const imageSize = Math.round(imageDataUrl.length / 1024);
         const previewLocale = typeof AskPageI18n !== 'undefined' && AskPageI18n.locale
             ? AskPageI18n.locale.replace('_', '-')
@@ -7428,58 +7439,59 @@ async function createDialog() {
         const previewDirection = typeof AskPageI18n !== 'undefined' && AskPageI18n.direction
             ? AskPageI18n.direction
             : 'ltr';
-        const previewHtml = `<!doctype html>
-<html lang="${escapeHtml(previewLocale)}" dir="${escapeHtml(previewDirection)}">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(previewTitle)}</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 24px;
-            background: #f0f2f5;
-            color: #1f2937;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
-        .preview {
-            max-width: min(1200px, 100%);
-            margin: 0 auto;
-            text-align: center;
-        }
-        img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-            box-shadow: 0 8px 28px rgba(15, 23, 42, 0.22);
-            background: #fff;
-        }
-        .meta {
-            margin-top: 12px;
-            color: #64748b;
-            font-size: 13px;
-        }
-    </style>
-</head>
-<body>
-    <main class="preview">
-        <h1>${escapeHtml(previewHeading)}</h1>
-        <img src="${escapedDataUrl}" alt="${escapeHtml(previewAlt)}">
-        <div class="meta">${escapeHtml(getLocalizedText('imagePreviewSize', { size: imageSize }))}</div>
-    </main>
-</body>
-</html>`;
-        const previewUrl = URL.createObjectURL(new Blob([previewHtml], { type: 'text/html' }));
-        const previewWindow = window.open(previewUrl, '_blank');
 
+        // blob: 與 about:blank 文件都會繼承頁面 CSP，<style> 與 <img src="data:..."> 可能被擋下，
+        // 因此以 DOM API、CSSOM 與 canvas 建立預覽內容。必須同步開窗，才能保留使用者點擊的手勢。
+        const previewWindow = window.open('', '_blank');
         if (!previewWindow) {
-            URL.revokeObjectURL(previewUrl);
             console.warn('[AskPage] Image preview window was blocked by the browser.');
             return false;
         }
 
         previewWindow.opener = null;
-        setTimeout(() => URL.revokeObjectURL(previewUrl), 60000);
+        const previewDocument = previewWindow.document;
+        previewDocument.title = previewTitle;
+        previewDocument.documentElement.lang = previewLocale;
+        previewDocument.documentElement.dir = previewDirection;
+        Object.assign(previewDocument.body.style, {
+            margin: '0',
+            padding: '24px',
+            background: '#f0f2f5',
+            color: '#1f2937',
+            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        });
+
+        const main = previewDocument.createElement('main');
+        Object.assign(main.style, {
+            maxWidth: 'min(1200px, 100%)',
+            margin: '0 auto',
+            textAlign: 'center'
+        });
+
+        const heading = previewDocument.createElement('h1');
+        heading.textContent = previewHeading;
+
+        const img = previewDocument.createElement('img');
+        img.alt = previewAlt;
+        Object.assign(img.style, {
+            maxWidth: '100%',
+            height: 'auto',
+            borderRadius: '8px',
+            boxShadow: '0 8px 28px rgba(15, 23, 42, 0.22)',
+            background: '#fff'
+        });
+        setImageDataUrlSource(img, imageDataUrl, { maxEdge: IMAGE_PREVIEW_CANVAS_MAX_EDGE });
+
+        const meta = previewDocument.createElement('div');
+        meta.textContent = getLocalizedText('imagePreviewSize', { size: imageSize });
+        Object.assign(meta.style, {
+            marginTop: '12px',
+            color: '#64748b',
+            fontSize: '13px'
+        });
+
+        main.append(heading, img, meta);
+        previewDocument.body.append(main);
         return true;
     }
 
@@ -8970,10 +8982,10 @@ async function createDialog() {
         });
 
         const img = document.createElement('img');
-        img.src = screenshotDataUrl;
         img.alt = getLocalizedText('questionScreenshotAlt');
         img.dataset.askpageI18nAlt = 'questionScreenshotAlt';
         img.loading = 'lazy';
+        setImageDataUrlSource(img, screenshotDataUrl);
 
         link.appendChild(img);
         messageElement.appendChild(link);
@@ -9781,7 +9793,6 @@ async function createDialog() {
 
         // 建立截圖圖片元素
         const img = document.createElement('img');
-        img.src = screenshotDataUrl;
         img.style.cssText = `
             max-width: 100%;
             max-height: 300px;
@@ -9794,7 +9805,8 @@ async function createDialog() {
         img.title = getLocalizedText('viewOriginalSize');
 
         // 點擊圖片時在新視窗中開啟
-        img.addEventListener('click', () => openScreenshotPreviewWindow(screenshotDataUrl));
+        const openPreview = () => openScreenshotPreviewWindow(screenshotDataUrl);
+        img.addEventListener('click', openPreview);
 
         screenshotContainer.appendChild(img);
 
@@ -9812,13 +9824,21 @@ async function createDialog() {
         });
 
         // 當圖片載入完成時更新尺寸資訊
-        img.onload = () => {
+        const updateScreenshotInfo = (width, height) => {
             info.textContent = getLocalizedText('screenshotInfo', {
-                width: img.naturalWidth,
-                height: img.naturalHeight,
+                width,
+                height,
                 size: Math.round(screenshotDataUrl.length / 1024)
             });
         };
+        img.onload = () => updateScreenshotInfo(img.naturalWidth, img.naturalHeight);
+        setImageDataUrlSource(img, screenshotDataUrl, {
+            maxEdge: 1280,
+            onCanvas: (canvas, { width, height }) => {
+                canvas.addEventListener('click', openPreview);
+                updateScreenshotInfo(width, height);
+            }
+        });
 
         screenshotContainer.appendChild(info);
         div.appendChild(screenshotContainer);
