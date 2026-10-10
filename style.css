@@ -455,7 +455,8 @@
   overflow: visible;
   cursor: zoom-in;
 }
-#gemini-qna-messages .gemini-msg-user .askpage-user-context-image-thumb img {
+#gemini-qna-messages .gemini-msg-user .askpage-user-context-image-thumb img,
+#gemini-qna-messages .gemini-msg-user .askpage-user-context-image-thumb canvas {
   display: block;
   width: 100%;
   height: 100%;
@@ -470,7 +471,9 @@
   outline: none;
 }
 #gemini-qna-messages .gemini-msg-user .askpage-user-context-image-thumb:hover img,
-#gemini-qna-messages .gemini-msg-user .askpage-user-context-image-thumb:focus-visible img {
+#gemini-qna-messages .gemini-msg-user .askpage-user-context-image-thumb:hover canvas,
+#gemini-qna-messages .gemini-msg-user .askpage-user-context-image-thumb:focus-visible img,
+#gemini-qna-messages .gemini-msg-user .askpage-user-context-image-thumb:focus-visible canvas {
   transform: scale(2.6);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.34);
 }
@@ -1002,7 +1005,8 @@
   overflow: visible;
   cursor: zoom-in;
 }
-.askpage-input-image-thumb img {
+.askpage-input-image-thumb img,
+.askpage-input-image-thumb canvas {
   display: block;
   width: 100%;
   height: 100%;
@@ -1017,7 +1021,9 @@
   outline: none;
 }
 .askpage-input-image-thumb:hover img,
-.askpage-input-image-thumb:focus-visible img {
+.askpage-input-image-thumb:hover canvas,
+.askpage-input-image-thumb:focus-visible img,
+.askpage-input-image-thumb:focus-visible canvas {
   transform: scale(2.8);
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.28);
 }

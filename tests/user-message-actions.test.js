@@ -275,6 +275,9 @@ const sandbox = {
     isImageDataUrl(url) {
         return typeof url === 'string' && url.startsWith('data:image/');
     },
+    setImageDataUrlSource(img, url) {
+        img.src = url;
+    },
     shouldCollapseTextPreview() {
         return false;
     },

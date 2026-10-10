@@ -1356,6 +1356,32 @@ function getImageMimeTypeFromDataUrl(imageDataUrl) {
     return match ? match[1].toLowerCase() : 'image/png';
 }
 
+// 頁面 CSP 的 img-src 若不允許 data:（例如 img-src 'self'），<img src="data:..."> 與 blob: 都會載入失敗。
+// 此時改用 createImageBitmap 解碼後畫到 canvas，不經過資源載入，因此不受 CSP 限制。
+const IMAGE_CANVAS_FALLBACK_MAX_EDGE = 480;
+
+function setImageDataUrlSource(img, imageDataUrl) {
+    img.addEventListener('error', async () => {
+        try {
+            const binary = atob(imageDataUrl.slice(imageDataUrl.indexOf(',') + 1));
+            const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+            const bitmap = await createImageBitmap(new Blob([bytes], { type: getImageMimeTypeFromDataUrl(imageDataUrl) }));
+            const scale = Math.min(1, IMAGE_CANVAS_FALLBACK_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+            canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+            canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+            bitmap.close();
+            canvas.setAttribute('role', 'img');
+            canvas.setAttribute('aria-label', img.alt);
+            img.replaceWith(canvas);
+        } catch (error) {
+            console.warn('[AskPage] Failed to render image preview:', error);
+        }
+    }, { once: true });
+    img.src = imageDataUrl;
+}
+
 function normalizeInputImageDataUrls(imageDataUrls = []) {
     if (!Array.isArray(imageDataUrls)) {
         return [];
@@ -7503,10 +7529,10 @@ async function createDialog() {
             });
 
             const img = document.createElement('img');
-            img.src = imageDataUrl;
             img.alt = getLocalizedText('questionImageAlt', { index: index + 1 });
             img.dataset.askpageI18nAlt = 'questionImageAlt';
             img.loading = 'lazy';
+            setImageDataUrlSource(img, imageDataUrl);
             link.appendChild(img);
 
             const removeBtn = document.createElement('button');
@@ -8982,10 +9008,10 @@ async function createDialog() {
             });
 
             const img = document.createElement('img');
-            img.src = imageDataUrl;
             img.alt = getLocalizedText('questionImageAlt', { index: index + 1 });
             img.dataset.askpageI18nAlt = 'questionImageAlt';
             img.loading = 'lazy';
+            setImageDataUrlSource(img, imageDataUrl);
             link.appendChild(img);
 
             gallery.appendChild(link);
