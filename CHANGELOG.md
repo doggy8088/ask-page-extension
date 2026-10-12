@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.47.2] - 2026-10-12
+
+### 修正 / 更新（v0.47.2）
+
+- **修正關閉對話框後再次開啟時內容空白與無法按 `Enter` 送出提問**：當已有對話紀錄（例如執行 `/summary` 後點擊網頁關閉對話框）並再次啟動 AskPage 時，`createDialog()` 在渲染歷史用戶訊息時會呼叫 `appendUserMessageActions()`，但 `USER_MESSAGE_COPY_ICON_SVG` 等圖示常數與對話框內部狀態變數原本宣告在歷史渲染區段之後，觸發 Temporal Dead Zone（TDZ）`ReferenceError` 並中斷後續初始化，導致歷史訊息未顯示、`Enter` 送出與關閉事件未完成綁定。現已將相關常數與狀態變數統一提升至歷史渲染前宣告，並支援在串流生成期間關閉再重開對話框時即時保留並持續更新串流中的回答。
+- **修正思考、執行工具步驟及串流生成答案時滑鼠移入對話框的閃爍問題**：AI 任務執行期間對話框不再因焦點不在內部或節點重繪短暫失焦而進入半透明狀態（`data-askpage-dimmed="true"`），且 `setDialogDimmed()` 僅在狀態實際改變時寫入屬性；思考摘要與工具執行步驟（`.askpage-tool-trace`）改為原位更新（in-place DOM update）與即時捲動，保留既有 `<details>`／`<summary>` 節點與 `:hover` 狀態；同時移除對話框的 `backdrop-filter` 與 `::before` 的 `mask-image`、調整 `contain: layout style` 並將脈衝動畫改為僅動畫化 `opacity`，以及快取 Shadow Host 隔離樣式檢查，消除 Chromium 合成層（RenderSurface）在滑鼠 hover 時的整塊重繪閃爍。
+- **新增回歸測試**：`tests/user-message-actions.test.js` 補上重開對話框 TDZ 防護、串流期間關閉重開保留回答，以及思考／工具步驟原位更新與防閃爍設定的回歸測試。
+
 ## [0.47.1] - 2026-10-10
 
 ### 修正 / 更新（v0.47.1）
