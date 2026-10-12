@@ -6038,6 +6038,11 @@ function truncateConversationFromTurn(turn, newContent, newDisplayContent = newC
     return addConversationTurn('user', newContent, newDisplayContent, fallbackOptions);
 }
 
+const USER_MESSAGE_COPY_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4.5A2.5 2.5 0 0 1 2 12.5v-8A2.5 2.5 0 0 1 4.5 2h8A2.5 2.5 0 0 1 15 4.5V5"/></svg>';
+const USER_MESSAGE_COPIED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"/></svg>';
+const USER_MESSAGE_FAILED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+const USER_MESSAGE_EDIT_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><path d="m15 5 4 4"/></svg>';
+
 function clearConversationHistory() {
     conversationHistory = [];
     conversationSelectedText = '';
@@ -6724,6 +6729,21 @@ async function createDialog() {
     let dragState = null;
     let didDragDialog = false;
     let dialogDimTimer = 0;
+    let promptHistory = [];
+    let historyIndex = 0;
+    let isInputComposing = false;
+    let justEndedComposition = false;
+    let compositionEndGuardTimer = null;
+    let inputContextImageDataUrls = [];
+    let inputContextImageNotice = '';
+    let inputContextImageNoticeSource = null;
+    let inputContextImageNoticeLevel = 'info';
+    let pendingAnnotatedScreenshotDataUrl = '';
+    let isScreenshotAnnotationAvailable = false;
+    let dragEnterDepth = 0;
+    let intelliActive = false;
+    let intelliIndex = 0;
+    let snippetState = null;
 
     function clearDialogDimTimer() {
         if (!dialogDimTimer) {
@@ -7172,6 +7192,7 @@ async function createDialog() {
     }
 
     if (conversationHistory.length > 0) {
+        messagesEl.innerHTML = '';
         conversationHistory.forEach((turn) => {
             appendMessage(turn.role, turn.displayContent || turn.content, {
                 renderedHtml: turn.renderedHtml || '',
@@ -7301,18 +7322,8 @@ async function createDialog() {
     };
     window.addEventListener('keydown', clearShortcutListener, true);
 
-    const promptHistory = JSON.parse(await getValue(PROMPT_HISTORY_STORAGE, '[]'));
-    let historyIndex = promptHistory.length;
-    let isInputComposing = false;
-    let justEndedComposition = false;
-    let compositionEndGuardTimer = null;
-    let inputContextImageDataUrls = [];
-    let inputContextImageNotice = '';
-    let inputContextImageNoticeSource = null;
-    let inputContextImageNoticeLevel = 'info';
-    let pendingAnnotatedScreenshotDataUrl = '';
-    let isScreenshotAnnotationAvailable = false;
-    let dragEnterDepth = 0;
+    promptHistory = JSON.parse(await getValue(PROMPT_HISTORY_STORAGE, '[]'));
+    historyIndex = promptHistory.length;
 
     function getQuestionInputMetrics() {
         const computedStyle = window.getComputedStyle(input);
@@ -8132,9 +8143,6 @@ async function createDialog() {
         }
     }
 
-    let intelliActive = false;
-    let intelliIndex = 0;
-    let snippetState = null;
     async function showIntelliBox(filtered) {
         if (!filtered.length) {
             hideIntelliBox();
@@ -8820,9 +8828,41 @@ async function createDialog() {
 
     function createStreamingAssistantMessageRenderer() {
         let messageElement = null;
+        let streamedTurn = null;
         let text = '';
         let renderFrame = 0;
         let isMessageTopPinned = false;
+
+        const syncStreamedTurn = (contentText, options = {}) => {
+            const finalized = options.finalized === true;
+            const historyOptions = options.historyOptions || {};
+            if (!streamedTurn) {
+                streamedTurn = addConversationTurn('assistant', contentText, contentText, {
+                    ...historyOptions,
+                    extraClassName: finalized ? (historyOptions.extraClassName || '') : 'askpage-streaming-answer',
+                    suppressCopyButton: !finalized,
+                    includeInModelContext: finalized ? historyOptions.includeInModelContext !== false : false
+                });
+                return streamedTurn;
+            }
+
+            if (finalized) {
+                const existingIndex = conversationHistory.indexOf(streamedTurn);
+                if (existingIndex !== -1 && existingIndex !== conversationHistory.length - 1) {
+                    conversationHistory.splice(existingIndex, 1);
+                    conversationHistory.push(streamedTurn);
+                } else if (existingIndex === -1) {
+                    conversationHistory.push(streamedTurn);
+                }
+            }
+
+            streamedTurn.content = contentText;
+            streamedTurn.displayContent = contentText;
+            streamedTurn.extraClassName = finalized ? (historyOptions.extraClassName || '') : 'askpage-streaming-answer';
+            streamedTurn.suppressCopyButton = !finalized;
+            streamedTurn.includeInModelContext = finalized ? historyOptions.includeInModelContext !== false : false;
+            return streamedTurn;
+        };
 
         const pinMessageTop = (options = {}) => {
             if (!messageElement || isMessageTopPinned) {
@@ -8847,12 +8887,40 @@ async function createDialog() {
         };
 
         const ensureMessageElement = () => {
-            if (messageElement) {
+            const targetMessagesEl = getActiveMessagesElement(messagesEl);
+            if (!targetMessagesEl) {
+                messageElement = null;
+                return null;
+            }
+
+            const isAttachedToTarget = Boolean(
+                messageElement && (
+                    typeof targetMessagesEl.contains === 'function'
+                        ? targetMessagesEl.contains(messageElement)
+                        : messageElement.parentNode === targetMessagesEl
+                )
+            );
+            if (isAttachedToTarget) {
                 return messageElement;
             }
 
+            if (streamedTurn && targetMessagesEl.children) {
+                const rehydratedElement = Array.from(targetMessagesEl.children).find(
+                    (child) => child && child._askpageTurn === streamedTurn
+                );
+                if (rehydratedElement) {
+                    messageElement = rehydratedElement;
+                    isMessageTopPinned = false;
+                    return messageElement;
+                }
+            }
+
+            isMessageTopPinned = false;
             messageElement = document.createElement('div');
             messageElement.className = 'gemini-msg-assistant askpage-streaming-answer';
+            if (streamedTurn) {
+                messageElement._askpageTurn = streamedTurn;
+            }
             appendNodeToActiveMessages(messageElement, messagesEl, {
                 autoScrollMode: 'message-top',
                 autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
@@ -8862,11 +8930,12 @@ async function createDialog() {
         };
 
         const render = (options = {}) => {
-            if (!messageElement) {
+            const activeElement = ensureMessageElement();
+            if (!activeElement) {
                 return;
             }
 
-            renderAssistantMessageElement(messageElement, text || '...', {
+            renderAssistantMessageElement(activeElement, text || '...', {
                 suppressCopyButton: options.suppressCopyButton === true,
                 copyText: text
             });
@@ -8878,9 +8947,25 @@ async function createDialog() {
                 cancelAnimationFrame(renderFrame);
                 renderFrame = 0;
             }
+            const targetMessagesEl = getActiveMessagesElement(messagesEl);
+            if (streamedTurn && targetMessagesEl && targetMessagesEl.children) {
+                const rehydratedElement = Array.from(targetMessagesEl.children).find(
+                    (child) => child && child._askpageTurn === streamedTurn
+                );
+                if (rehydratedElement && rehydratedElement !== messageElement) {
+                    rehydratedElement.remove();
+                }
+            }
             if (messageElement) {
                 messageElement.remove();
                 messageElement = null;
+            }
+            if (streamedTurn) {
+                const turnIndex = conversationHistory.indexOf(streamedTurn);
+                if (turnIndex !== -1) {
+                    conversationHistory.splice(turnIndex, 1);
+                }
+                streamedTurn = null;
             }
             text = '';
             isMessageTopPinned = false;
@@ -8904,6 +8989,7 @@ async function createDialog() {
                 }
 
                 text += delta;
+                syncStreamedTurn(text, { finalized: false });
                 ensureMessageElement();
                 scheduleRender();
             },
@@ -8914,22 +9000,31 @@ async function createDialog() {
                     return null;
                 }
 
-                ensureMessageElement();
+                const turn = syncStreamedTurn(text, {
+                    finalized: true,
+                    historyOptions
+                });
+                const activeElement = ensureMessageElement();
                 if (renderFrame) {
                     cancelAnimationFrame(renderFrame);
                     renderFrame = 0;
                 }
-                messageElement.classList.remove('askpage-streaming-answer');
+                if (!activeElement) {
+                    return null;
+                }
+                activeElement.classList.remove('askpage-streaming-answer');
                 render({ suppressCopyButton: false });
-                scrollMessagesToMessageTop(messagesEl, messageElement, {
-                    scrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
-                    force: false,
-                    duration: 0
-                });
+                const targetMessagesEl = getActiveMessagesElement(messagesEl);
+                if (targetMessagesEl) {
+                    scrollMessagesToMessageTop(targetMessagesEl, activeElement, {
+                        scrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
+                        force: false,
+                        duration: 0
+                    });
+                }
                 isMessageTopPinned = true;
-                const turn = addConversationTurn('assistant', text, text, historyOptions);
-                messageElement._askpageTurn = turn;
-                return messageElement;
+                activeElement._askpageTurn = turn;
+                return activeElement;
             },
             discard
         };
@@ -9032,11 +9127,6 @@ async function createDialog() {
         messageElement.classList.add('askpage-user-with-context-images');
         messageElement.appendChild(gallery);
     }
-
-    const USER_MESSAGE_COPY_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4.5A2.5 2.5 0 0 1 2 12.5v-8A2.5 2.5 0 0 1 4.5 2h8A2.5 2.5 0 0 1 15 4.5V5"/></svg>';
-    const USER_MESSAGE_COPIED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"/></svg>';
-    const USER_MESSAGE_FAILED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>';
-    const USER_MESSAGE_EDIT_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><path d="m15 5 4 4"/></svg>';
 
     async function copyUserMessageWithFeedback(button, text) {
         if (button._copyResetTimer) {
