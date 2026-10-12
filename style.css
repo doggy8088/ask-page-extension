@@ -49,7 +49,7 @@
   text-transform: none;
   word-spacing: normal;
   isolation: isolate;
-  contain: layout style paint;
+  contain: layout style;
   overscroll-behavior: contain;
 }
 
@@ -72,13 +72,15 @@
   font-family: system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   box-sizing: border-box;
   isolation: isolate;
-  contain: layout style paint;
+  contain: layout style;
+  backface-visibility: hidden;
   opacity: 1;
   transition: opacity 0.18s ease;
 }
 #gemini-qna-dialog[data-askpage-dimmed="true"] {
   opacity: 0.1;
 }
+#gemini-qna-dialog[data-askpage-dimmed="true"]:hover,
 #gemini-qna-dialog[data-askpage-dimmed="true"]:focus-within {
   opacity: 1;
 }
@@ -556,7 +558,6 @@
   padding: 4px 8px;
   display: none;
   transition: all 0.2s ease;
-  backdrop-filter: blur(4px);
   user-select: none;
   min-width: 28px;
   text-align: center;
@@ -816,7 +817,6 @@
   right: 0;
   bottom: 0;
   background: rgba(17, 24, 39, 0.6);
-  backdrop-filter: blur(3px);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -828,18 +828,16 @@
   z-index: 10;
   pointer-events: none;
   animation: askpagePulseGlow 1.5s ease-in-out infinite;
+  text-shadow: 0 0 10px rgba(167, 139, 250, 0.65);
   box-shadow: inset 0 0 20px rgba(167, 139, 250, 0.15);
   border: 1px solid rgba(167, 139, 250, 0.2);
 }
 @keyframes askpagePulseGlow {
   0%, 100% {
     opacity: 0.6;
-    text-shadow: 0 0 4px rgba(167, 139, 250, 0.4);
   }
   50% {
     opacity: 1;
-    text-shadow: 0 0 12px rgba(167, 139, 250, 0.8), 0 0 24px rgba(59, 130, 246, 0.6);
-    color: #60a5fa;
   }
 }
 #gemini-qna-messages .gemini-msg-assistant .askpage-code-block pre code.hljs {
@@ -1198,8 +1196,8 @@
   --askpage-ink: #edf6ff;
   --askpage-muted: #8ea2bc;
   --askpage-subtle: #60748d;
-  --askpage-panel: rgba(7, 13, 24, 0.94);
-  --askpage-panel-2: rgba(9, 20, 34, 0.94);
+  --askpage-panel: rgba(7, 13, 24, 0.98);
+  --askpage-panel-2: rgba(9, 20, 34, 0.96);
   --askpage-card: rgba(13, 27, 43, 0.78);
   --askpage-line: rgba(111, 140, 173, 0.24);
   --askpage-line-strong: rgba(95, 168, 255, 0.58);
@@ -1243,7 +1241,6 @@
   color: var(--askpage-ink);
   font-family: var(--askpage-font);
   overflow: hidden;
-  backdrop-filter: blur(22px) saturate(1.25);
   transition: opacity 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -1257,11 +1254,15 @@
     linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
     linear-gradient(180deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
   background-size: 42px 42px;
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.72), transparent 74%);
+  opacity: 0.55;
 }
 
 #gemini-qna-dialog[data-askpage-dimmed="true"] {
   opacity: 0.16;
+}
+#gemini-qna-dialog[data-askpage-dimmed="true"]:hover,
+#gemini-qna-dialog[data-askpage-dimmed="true"]:focus-within {
+  opacity: 1;
 }
 
 #provider-header {
@@ -1350,7 +1351,6 @@
   border-radius: 12px;
   font-size: 12px;
   letter-spacing: 0.02em;
-  backdrop-filter: blur(10px);
 }
 
 .askpage-toolbar-btn:hover {
@@ -1368,6 +1368,9 @@
 }
 
 #gemini-qna-messages {
+  position: relative;
+  isolation: isolate;
+  transform: translateZ(0);
   padding: 22px;
   background:
     radial-gradient(circle at 96% 5%, rgba(22, 135, 255, 0.14), transparent 30%),
@@ -2088,6 +2091,7 @@
 /* 最後一則狀態代表模型仍在思考 */
 #gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-status:last-child::after {
   background: var(--askpage-cyan);
+  box-shadow: 0 0 0 3px #040b16, 0 0 0 5px rgba(117, 216, 255, 0.28);
   animation: askpageTracePulse 1.6s ease-in-out infinite;
 }
 
@@ -2137,6 +2141,8 @@
   border-radius: 50%;
   background: #040b16;
   color: var(--askpage-subtle);
+  pointer-events: none;
+  backface-visibility: hidden;
 }
 
 #gemini-qna-messages .gemini-msg-assistant .askpage-tool-trace-icon svg {
@@ -2177,6 +2183,7 @@
 
 /* 最後一列思考代表模型仍在串流思考內容 */
 #gemini-qna-messages .gemini-msg-assistant.askpage-agent-trace.askpage-agent-trace-reasoning:last-child .askpage-tool-trace-icon {
+  box-shadow: 0 0 0 3px #040b16, 0 0 0 5px rgba(117, 216, 255, 0.28);
   animation: askpageTracePulse 1.6s ease-in-out infinite;
 }
 
@@ -2317,10 +2324,10 @@
 @keyframes askpageTracePulse {
   0%,
   100% {
-    box-shadow: 0 0 0 3px #040b16, 0 0 0 3px rgba(117, 216, 255, 0.4);
+    opacity: 1;
   }
   50% {
-    box-shadow: 0 0 0 3px #040b16, 0 0 0 7px rgba(117, 216, 255, 0);
+    opacity: 0.38;
   }
 }
 
@@ -2518,7 +2525,6 @@
   background: rgba(6, 14, 26, 0.98) !important;
   color: var(--askpage-ink) !important;
   box-shadow: 0 18px 46px rgba(0, 0, 0, 0.46), 0 0 0 1px rgba(117, 216, 255, 0.12) !important;
-  backdrop-filter: blur(18px) saturate(1.2);
 }
 
 #gemini-qna-intellisense .gemini-intelli-item {

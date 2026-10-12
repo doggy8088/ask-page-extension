@@ -575,9 +575,17 @@ function applyDialogHostIsolationStyles(host) {
         return;
     }
 
+    const currentStyleAttr = typeof host.getAttribute === 'function' ? host.getAttribute('style') : null;
+    if (host._askpageIsolationStyleAttr && currentStyleAttr === host._askpageIsolationStyleAttr) {
+        return;
+    }
+
     DIALOG_HOST_ISOLATION_STYLES.forEach(([property, value]) => {
         host.style.setProperty(property, value, 'important');
     });
+    if (typeof host.getAttribute === 'function') {
+        host._askpageIsolationStyleAttr = host.getAttribute('style');
+    }
 }
 
 function getDialogHostMountParent() {
@@ -814,10 +822,14 @@ function appendNodeToActiveMessages(messageNode, fallbackMessagesEl, options = {
     if (autoScrollMode === 'message-top') {
         scrollMessagesToMessageTop(targetMessagesEl, messageNode, {
             scrollOffset: options.autoScrollOffset,
-            force: options.autoScrollForce === true
+            force: options.autoScrollForce === true,
+            duration: options.autoScrollDuration
         });
     } else if (autoScrollMode === 'bottom') {
-        scrollMessagesToBottom(targetMessagesEl);
+        scrollMessagesToBottom(targetMessagesEl, {
+            force: options.autoScrollForce === true,
+            duration: options.autoScrollDuration
+        });
     }
     return messageNode;
 }
@@ -857,21 +869,21 @@ function scrollMessagesToMessageTop(messagesElement, messageElement, options = {
     });
 }
 
-function scrollMessagesToBottom(messagesElement) {
+function scrollMessagesToBottom(messagesElement, options = {}) {
     if (!messagesElement) {
         return;
     }
 
     const dialogState = getActiveDialogStateForMessages(messagesElement);
-    if (dialogState?.autoScrollSuspended) {
+    if (dialogState?.autoScrollSuspended && options.force !== true) {
         return;
     }
 
-    animateScrollTo(messagesElement, messagesElement.scrollHeight);
+    animateScrollTo(messagesElement, messagesElement.scrollHeight, options);
 }
 
-function scrollActiveMessagesToBottom(fallbackMessagesEl) {
-    scrollMessagesToBottom(getActiveMessagesElement(fallbackMessagesEl));
+function scrollActiveMessagesToBottom(fallbackMessagesEl, options = {}) {
+    scrollMessagesToBottom(getActiveMessagesElement(fallbackMessagesEl), options);
 }
 
 function closeActiveDialog() {
@@ -2450,32 +2462,28 @@ function ensureAgentGlowStylesInjected() {
             z-index: 2147483646;
             pointer-events: none;
             opacity: 0;
+            will-change: opacity;
             transition: opacity 0.35s ease;
             box-shadow:
-                inset 0 0 18px 2px rgba(255, 145, 41, 0.45),
-                inset 0 0 46px 10px rgba(234, 125, 42, 0.28),
-                inset 0 0 90px 26px rgba(188, 74, 24, 0.14);
-            animation: askpageAgentGlowPulse 2.2s ease-in-out infinite;
+                inset 0 0 22px 3px rgba(255, 155, 58, 0.58),
+                inset 0 0 54px 12px rgba(234, 125, 42, 0.35),
+                inset 0 0 100px 28px rgba(188, 74, 24, 0.18);
         }
         #${AGENT_GLOW_OVERLAY_ID}.${AGENT_GLOW_VISIBLE_CLASS} {
             opacity: 1;
+            animation: askpageAgentGlowPulse 2.2s ease-in-out infinite;
         }
         @keyframes askpageAgentGlowPulse {
             0%, 100% {
-                box-shadow:
-                    inset 0 0 18px 2px rgba(255, 145, 41, 0.45),
-                    inset 0 0 46px 10px rgba(234, 125, 42, 0.28),
-                    inset 0 0 90px 26px rgba(188, 74, 24, 0.14);
+                opacity: 0.72;
             }
             50% {
-                box-shadow:
-                    inset 0 0 26px 4px rgba(255, 166, 77, 0.7),
-                    inset 0 0 60px 14px rgba(234, 125, 42, 0.42),
-                    inset 0 0 110px 32px rgba(188, 74, 24, 0.22);
+                opacity: 1;
             }
         }
         @media (prefers-reduced-motion: reduce) {
-            #${AGENT_GLOW_OVERLAY_ID} {
+            #${AGENT_GLOW_OVERLAY_ID},
+            #${AGENT_GLOW_OVERLAY_ID}.${AGENT_GLOW_VISIBLE_CLASS} {
                 animation: none;
                 transition: opacity 0.2s ease;
             }
@@ -6744,6 +6752,8 @@ async function createDialog() {
     let intelliActive = false;
     let intelliIndex = 0;
     let snippetState = null;
+    let isPointerInsideDialog = false;
+    let isPointerInsideIntelliBox = false;
 
     function clearDialogDimTimer() {
         if (!dialogDimTimer) {
@@ -6754,7 +6764,22 @@ async function createDialog() {
         dialogDimTimer = 0;
     }
 
+    function isDialogHovered() {
+        return isPointerInsideDialog
+            || isPointerInsideIntelliBox
+            || dialog.matches(':hover')
+            || intelliBox.matches(':hover');
+    }
+
     function setDialogDimmed(dimmed, options = {}) {
+        if (dimmed && (shouldKeepDialogVisible() || isDialogHovered())) {
+            clearDialogDimTimer();
+            if (dialog.dataset.askpageDimmed !== 'false') {
+                dialog.dataset.askpageDimmed = 'false';
+            }
+            return;
+        }
+
         if (dimmed && options.delay === true) {
             if (dialogDimTimer || dialog.dataset.askpageDimmed === 'true') {
                 return;
@@ -6762,7 +6787,7 @@ async function createDialog() {
 
             dialogDimTimer = setTimeout(() => {
                 dialogDimTimer = 0;
-                if (!shouldKeepDialogVisible()) {
+                if (!shouldKeepDialogVisible() && !isDialogHovered() && dialog.dataset.askpageDimmed !== 'true') {
                     dialog.dataset.askpageDimmed = 'true';
                 }
             }, DIALOG_DIM_DELAY_MS);
@@ -6770,12 +6795,16 @@ async function createDialog() {
         }
 
         clearDialogDimTimer();
-        dialog.dataset.askpageDimmed = dimmed ? 'true' : 'false';
+        const nextDimmedValue = dimmed ? 'true' : 'false';
+        if (dialog.dataset.askpageDimmed !== nextDimmedValue) {
+            dialog.dataset.askpageDimmed = nextDimmedValue;
+        }
     }
 
     function shouldKeepDialogVisible() {
         const activeElement = shadowRoot.activeElement;
         return Boolean(dragState)
+            || Boolean(activeAskTask)
             || (activeElement && (dialog.contains(activeElement) || intelliBox.contains(activeElement)));
     }
 
@@ -6904,16 +6933,34 @@ async function createDialog() {
         event.stopPropagation();
     }, { passive: true });
 
+    function isEventTargetInsideDialog(event) {
+        const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+        if (path.includes(dialog) || path.includes(intelliBox)) {
+            return true;
+        }
+
+        return Boolean(
+            event.target && (dialog.contains(event.target) || intelliBox.contains(event.target))
+        );
+    }
+
     overlay.addEventListener('mousemove', (event) => {
+        if (isEventTargetInsideDialog(event)) {
+            isPointerInsideDialog = true;
+            setDialogDimmed(false);
+            return;
+        }
+
         if (shouldKeepDialogVisible()) {
             setDialogDimmed(false);
             return;
         }
 
-        const isMouseOutsideDialog = !dialog.contains(event.target) && !intelliBox.contains(event.target);
-        setDialogDimmed(isMouseOutsideDialog, { delay: isMouseOutsideDialog });
+        setDialogDimmed(true, { delay: true });
     });
     overlay.addEventListener('mouseleave', () => {
+        isPointerInsideDialog = false;
+        isPointerInsideIntelliBox = false;
         if (shouldKeepDialogVisible()) {
             return;
         }
@@ -6921,10 +6968,24 @@ async function createDialog() {
         setDialogDimmed(true, { delay: true });
     });
     dialog.addEventListener('mouseenter', () => {
+        isPointerInsideDialog = true;
         setDialogDimmed(false);
     });
+    dialog.addEventListener('mouseleave', () => {
+        isPointerInsideDialog = false;
+        if (!shouldKeepDialogVisible() && !isPointerInsideIntelliBox) {
+            setDialogDimmed(true, { delay: true });
+        }
+    });
     intelliBox.addEventListener('mouseenter', () => {
+        isPointerInsideIntelliBox = true;
         setDialogDimmed(false);
+    });
+    intelliBox.addEventListener('mouseleave', () => {
+        isPointerInsideIntelliBox = false;
+        if (!shouldKeepDialogVisible() && !isPointerInsideDialog) {
+            setDialogDimmed(true, { delay: true });
+        }
     });
     dialog.addEventListener('focusin', () => {
         setDialogDimmed(false);
@@ -6933,12 +6994,12 @@ async function createDialog() {
         setDialogDimmed(false);
     });
     dialog.addEventListener('focusout', () => {
-        if (shouldKeepDialogVisible()) {
+        if (shouldKeepDialogVisible() || isDialogHovered()) {
             setDialogDimmed(false);
             return;
         }
 
-        setDialogDimmed(!(dialog.matches(':hover') || intelliBox.matches(':hover')));
+        setDialogDimmed(true, { delay: true });
     });
 
     // Initialize provider display
@@ -8798,11 +8859,23 @@ async function createDialog() {
         const displayText = options.renderedHtml ? sourceText : getAssistantDisplayMarkdown(sourceText);
         const copyText = options.renderedHtml ? sourceText : getAssistantStoredText(sourceText);
         if (isRawHtmlResponse) {
-            element.dataset.askpageRawHtmlResponse = 'true';
-        } else {
+            if (element.dataset.askpageRawHtmlResponse !== 'true') {
+                element.dataset.askpageRawHtmlResponse = 'true';
+            }
+        } else if ('askpageRawHtmlResponse' in element.dataset) {
             delete element.dataset.askpageRawHtmlResponse;
         }
-        element.innerHTML = options.renderedHtml || renderMarkdown(displayText);
+
+        if (options.suppressCopyButton && options.renderedHtml && updateReasoningTraceInPlace(element, options.renderedHtml)) {
+            return;
+        }
+
+        const nextHtml = options.renderedHtml || renderMarkdown(displayText);
+        if (options.suppressCopyButton && element._askpageLastRenderedHtml === nextHtml && element.innerHTML) {
+            return;
+        }
+        element._askpageLastRenderedHtml = nextHtml;
+        element.innerHTML = nextHtml;
         if (!options.renderedHtml) {
             renderLatexInElement(element);
         }
@@ -8824,6 +8897,81 @@ async function createDialog() {
             });
             element.appendChild(copyBtn);
         }
+    }
+
+    function updateReasoningTraceInPlace(element, renderedHtml) {
+        if (!renderedHtml || !renderedHtml.includes('askpage-tool-trace')) {
+            return false;
+        }
+
+        const existingDetails = element.querySelector?.('.askpage-tool-trace');
+        const existingSummaryEl = existingDetails?.querySelector?.('summary');
+        const existingSummary = existingDetails?.querySelector?.('.askpage-tool-trace-summary');
+        const existingBody = existingDetails?.querySelector?.('.askpage-reasoning-trace-body, .askpage-tool-trace-body');
+        const traceId = existingDetails?.getAttribute?.('data-askpage-trace-id');
+        if (!existingDetails || !existingSummaryEl || !existingSummary || !existingBody || !traceId) {
+            return false;
+        }
+        if (!renderedHtml.includes(`data-askpage-trace-id="${escapeHtml(traceId)}"`)) {
+            return false;
+        }
+
+        const tempContainer = document.createElement('div');
+        tempContainer.innerHTML = renderedHtml;
+        const nextDetails = tempContainer.querySelector?.('.askpage-tool-trace');
+        const nextSummary = nextDetails?.querySelector?.('.askpage-tool-trace-summary');
+        const nextBody = nextDetails?.querySelector?.('.askpage-reasoning-trace-body, .askpage-tool-trace-body');
+        if (!nextDetails || !nextSummary || !nextBody) {
+            return false;
+        }
+
+        const nextState = nextDetails.getAttribute?.('data-state');
+        if (nextState && existingDetails.getAttribute?.('data-state') !== nextState) {
+            existingDetails.setAttribute('data-state', nextState);
+        }
+
+        const existingIcon = existingDetails.querySelector?.('.askpage-tool-trace-icon');
+        const nextIcon = nextDetails.querySelector?.('.askpage-tool-trace-icon');
+        if (existingIcon && nextIcon && existingIcon.innerHTML !== nextIcon.innerHTML) {
+            existingIcon.innerHTML = nextIcon.innerHTML;
+        }
+
+        if (existingSummary.textContent !== nextSummary.textContent) {
+            existingSummary.textContent = nextSummary.textContent;
+        }
+        const nextTitle = nextSummary.getAttribute?.('title');
+        if (nextTitle !== null && nextTitle !== undefined) {
+            if (existingSummary.getAttribute?.('title') !== nextTitle) {
+                existingSummary.setAttribute('title', nextTitle);
+            }
+        }
+
+        const existingDuration = existingDetails.querySelector?.('.askpage-tool-trace-duration');
+        const nextDuration = nextDetails.querySelector?.('.askpage-tool-trace-duration');
+        if (nextDuration) {
+            if (existingDuration) {
+                if (existingDuration.textContent !== nextDuration.textContent) {
+                    existingDuration.textContent = nextDuration.textContent;
+                }
+            } else {
+                const chevron = existingSummaryEl.querySelector?.('.askpage-tool-trace-chevron');
+                if (chevron && typeof existingSummaryEl.insertBefore === 'function') {
+                    existingSummaryEl.insertBefore(nextDuration, chevron);
+                } else {
+                    existingSummaryEl.appendChild(nextDuration);
+                }
+            }
+        } else if (existingDuration) {
+            existingDuration.remove?.();
+        }
+
+        if (existingBody.innerHTML !== nextBody.innerHTML) {
+            existingBody.innerHTML = nextBody.innerHTML;
+            enhanceCodeBlocks(existingBody);
+            bindInteractiveCommandElements(existingBody);
+        }
+        element._askpageLastRenderedHtml = renderedHtml;
+        return true;
     }
 
     function createStreamingAssistantMessageRenderer() {
@@ -9463,7 +9611,8 @@ async function createDialog() {
             suppressCopyButton: true,
             renderedHtml: options.renderedHtml || '',
             extraClassName: `askpage-agent-trace askpage-agent-trace-${kind}`,
-            autoScrollMode: shouldAutoScroll ? (options.autoScrollMode || 'bottom') : 'none'
+            autoScrollMode: shouldAutoScroll ? (options.autoScrollMode || 'bottom') : 'none',
+            autoScrollDuration: 0
         }, {
             renderedHtml: options.renderedHtml || '',
             includeInModelContext: false
@@ -9605,7 +9754,10 @@ async function createDialog() {
             renderedHtml,
             suppressCopyButton: true
         });
-        messageElement.querySelector('.askpage-tool-trace').open = wasOpen;
+        const detailsEl = messageElement.querySelector('.askpage-tool-trace');
+        if (detailsEl && detailsEl.open !== wasOpen) {
+            detailsEl.open = wasOpen;
+        }
         return true;
     }
 
@@ -9648,7 +9800,7 @@ async function createDialog() {
                 renderedHtml
             });
             if (renderTraceMessage(streamedReasoningTraceId, reasoningTraceText, renderedHtml)) {
-                scrollActiveMessagesToBottom(messagesEl);
+                scrollActiveMessagesToBottom(messagesEl, { duration: 0 });
             }
         };
         const scheduleStreamedReasoningRender = () => {
@@ -9671,7 +9823,8 @@ async function createDialog() {
             const reasoningTraceOptions = {
                 renderedHtml: buildReasoningTraceHtml(streamedReasoningTraceId, streamedReasoningText),
                 suppressCopyButton: true,
-                extraClassName: 'askpage-agent-trace askpage-agent-trace-reasoning'
+                extraClassName: 'askpage-agent-trace askpage-agent-trace-reasoning',
+                autoScrollDuration: 0
             };
             appendMessage('assistant', reasoningTraceText, reasoningTraceOptions);
             // 建立元素時就推入對話紀錄、結束時再改寫內容；最後一輪的回答會先存入紀錄，

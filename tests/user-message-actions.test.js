@@ -480,8 +480,39 @@ this.createStreamingAssistantMessageRenderer = createStreamingAssistantMessageRe
     assert.strictEqual(conversationHistory[conversationHistory.length - 1].content, '第一段摘要、第二段摘要（完成）');
     assert.strictEqual(conversationHistory[conversationHistory.length - 1].includeInModelContext, true);
 
+    assert.ok(
+        contentScript.includes('Boolean(activeAskTask)'),
+        'shouldKeepDialogVisible 應在生成答案期間（activeAskTask）保持對話框不進入 dimmed 狀態，避免 hover 閃爍'
+    );
+    assert.ok(
+        contentScript.includes('if (dialog.dataset.askpageDimmed !== nextDimmedValue)'),
+        'setDialogDimmed 應只在狀態實際變更時才寫入 dataset.askpageDimmed，避免 mousemove 重複觸發樣式重算'
+    );
+    assert.ok(
+        contentScript.includes('function updateReasoningTraceInPlace('),
+        '串流思考軌跡應支援就地更新，避免每幀重建 <details> 導致 hover 閃爍'
+    );
+    assert.match(
+        styleSheet,
+        /#gemini-qna-dialog\s*\{[\s\S]*?contain:\s*layout style;/,
+        '#gemini-qna-dialog 不應搭配 contain: paint 與 backdrop-filter，避免子節點高頻重繪與 hover 時觸發合成層閃爍'
+    );
+    assert.doesNotMatch(
+        styleSheet,
+        /backdrop-filter\s*:/,
+        'style.css 不應在對話框或子元件使用 backdrop-filter，避免思考與工具步驟動畫期間 hover 造成整框合成層閃爍'
+    );
+    assert.match(
+        styleSheet,
+        /@keyframes askpageTracePulse\s*\{[\s\S]*?opacity:\s*0\.38;/,
+        'askpageTracePulse 應使用合成層友善的 opacity 動畫而非每幀重繪 box-shadow'
+    );
+
     console.log('user-message-actions: ok');
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
 });
+
+
+
