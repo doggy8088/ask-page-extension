@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.47.3] - 2026-10-14
+
+### 新增 / 改進（v0.47.3）
+
+- **Google Gemini 預設模型新增 `gemini-4-argon` 並移除 `gemini-3.7-flash` 與 `gemini-3.5-flash`**：Gemini 提供者預設模型清單最前方新增 `gemini-4-argon`，並移除 `gemini-3.7-flash` 與 `gemini-3.5-flash`；已勾選這兩個舊模型的使用者仍會保留設定並可繼續使用。`gemini-4-argon` 完整支援 Interactions API 串流與非串流回應、65536 最大輸出 Token、等級型推理強度控制（`low`／`medium`／`high`，預設 `medium`；舊 `minimal` 設定自動正規化為 `low`），以及代理模式下同時啟用內建 `google_search` 與自訂函式工具（`doesGeminiModelSupportCombinedTools` 擴充支援 `gemini-4` 前綴）。
+- **文件與測試同步更新**：`README.md` 支援模型清單、`docs/目前推理強度對應表.md` 與單元測試（`tests/reasoning-effort.test.js`、`tests/prompt-cache-conversation.test.js`、`tests/streaming-mode.test.js`）同步更新。
+
 ## [0.47.2] - 2026-10-12
 
 ### 修正 / 更新（v0.47.2）
