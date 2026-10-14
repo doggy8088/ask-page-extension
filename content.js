@@ -67,6 +67,7 @@ function getSystemPromptLanguageInstruction() {
     return '';
 }
 const GEMINI_MODEL_MAX_OUTPUT_TOKENS = {
+    'gemini-4-argon': 65536,
     'gemini-3.8-flash': 65536,
     'gemini-3.7-flash': 65536,
     'gemini-3.6-flash': 65536,
@@ -308,7 +309,8 @@ function canUpdateAskTaskUi(task) {
 }
 
 function doesGeminiModelSupportCombinedTools(model = '') {
-    return normalizeModelIdentifier(model).startsWith('gemini-3');
+    const normalizedModel = normalizeModelIdentifier(model);
+    return normalizedModel.startsWith('gemini-4') || normalizedModel.startsWith('gemini-3');
 }
 
 function buildGeminiRequestTools(additionalTools = [], includeGoogleSearch = true) {
@@ -1489,6 +1491,12 @@ function isStreamingSupported(providerType = '', model = '') {
 // Kimi K2.7 Code: https://registry.ollama.com/library/kimi-k2.7-code
 // Unknown providers, aliases, and model families must not inherit these capabilities.
 const GEMINI_REASONING_CAPABILITIES = {
+    'gemini-4-argon': {
+        kind: 'level',
+        options: ['low', 'medium', 'high'],
+        valueAliases: { minimal: 'low' },
+        defaultValue: 'medium'
+    },
     'gemini-3.8-flash': {
         kind: 'level',
         options: ['low', 'medium', 'high'],

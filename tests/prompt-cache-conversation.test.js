@@ -313,6 +313,7 @@ function toPlainValue(value) {
 
     const geminiLegacyAgentTools = toPlainValue(buildGeminiRequestTools([pageTool], false));
     assert.deepStrictEqual(geminiLegacyAgentTools, [pageTool]);
+    assert.strictEqual(doesGeminiModelSupportCombinedTools('gemini-4-argon'), true);
     assert.strictEqual(doesGeminiModelSupportCombinedTools('gemini-3.6-flash'), true);
     assert.strictEqual(doesGeminiModelSupportCombinedTools('gemini-3.5-flash-lite'), true);
     assert.strictEqual(doesGeminiModelSupportCombinedTools('gemini-3.5-flash'), true);
