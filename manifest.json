@@ -40,6 +40,7 @@
         "lib/katex/katex.min.js",
         "lib/katex/auto-render.min.js",
         "i18n.js",
+        "endpoint-utils.js",
         "content.js"
       ]
     }
