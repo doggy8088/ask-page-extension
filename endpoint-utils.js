@@ -24,6 +24,21 @@
         return String(host || '').includes(':') && /^[0-9a-f:.]+$/i.test(host);
     }
 
+    function mappedIPv4FromIPv6(host) {
+        const dotted = host.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+        if (dotted) {
+            return isIPv4Literal(dotted[1]) ? dotted[1] : null;
+        }
+
+        const hex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+        if (!hex) {
+            return null;
+        }
+        const high = Number.parseInt(hex[1], 16);
+        const low = Number.parseInt(hex[2], 16);
+        return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.');
+    }
+
     function isLoopbackOrPrivateHost(hostname) {
         const host = String(hostname || '').toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
         if (!host) {
@@ -38,6 +53,10 @@
         if (isIPv6Literal(host)) {
             if (host === '::1') {
                 return true;
+            }
+            const mappedIPv4 = mappedIPv4FromIPv6(host);
+            if (mappedIPv4) {
+                return isPrivateIPv4(mappedIPv4);
             }
             return /^f[cd][0-9a-f]{2}:/.test(host);
         }

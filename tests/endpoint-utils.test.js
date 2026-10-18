@@ -54,6 +54,9 @@ assertValid('http://172.31.255.255:11434/v1');
 assertValid('http://192.168.1.5:11434/v1');
 assertValid('http://foo.localhost:11434/v1');
 assertValid('http://[fd00::1]:11434/v1');
+assertValid('http://[::ffff:127.0.0.1]:11434/v1');
+assertValid('http://[::ffff:192.168.1.10]:11434/v1');
+assertValid('http://[::ffff:10.0.0.5]:11434/v1');
 
 const bareOllama = assertValid('http://localhost:11434');
 assert.strictEqual(bareOllama.normalized, 'http://localhost:11434');
@@ -85,6 +88,8 @@ assertInvalid('http://127.0.0.1.evil.com', 'insecure');
 assertInvalid('http://localhost.evil.com', 'insecure');
 assertInvalid('http://172.32.0.1', 'insecure');
 assertInvalid('http://[fe80::1]', 'insecure');
+assertInvalid('http://[::ffff:8.8.8.8]:11434/v1', 'insecure');
+assertInvalid('http://[::ffff:169.254.169.254]:11434/v1', 'insecure');
 
 assert.strictEqual(isLoopbackOrPrivateHost('localhost'), true);
 assert.strictEqual(isLoopbackOrPrivateHost('foo.localhost'), true);
@@ -95,6 +100,11 @@ assert.strictEqual(isLoopbackOrPrivateHost('172.32.0.1'), false);
 assert.strictEqual(isLoopbackOrPrivateHost('::1'), true);
 assert.strictEqual(isLoopbackOrPrivateHost('fd00::1'), true);
 assert.strictEqual(isLoopbackOrPrivateHost('fe80::1'), false);
+assert.strictEqual(isLoopbackOrPrivateHost('::ffff:127.0.0.1'), true);
+assert.strictEqual(isLoopbackOrPrivateHost('::ffff:7f00:1'), true);
+assert.strictEqual(isLoopbackOrPrivateHost('::ffff:c0a8:10a'), true);
+assert.strictEqual(isLoopbackOrPrivateHost('::ffff:808:808'), false);
+assert.strictEqual(isLoopbackOrPrivateHost('::ffff:a9fe:a9fe'), false);
 
 assert.strictEqual(
     validateProviders([
