@@ -2011,7 +2011,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         throw new Error();
                     }
                 } catch (e) {
-                    const baseUrl = url.replace(/\/v1\/?$/, '').replace(/\/models$/, '');
+                    const baseUrl = url.replace(/\/models$/, '').replace(/\/v1\/?$/, '');
                     response = await fetch(`${baseUrl}/api/tags`);
                 }
             } else {

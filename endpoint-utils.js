@@ -69,9 +69,13 @@
             return { ok: false, reason: 'insecure' };
         }
 
+        if (url.pathname !== '/' && url.pathname.endsWith('/')) {
+            url.pathname = url.pathname.replace(/\/$/, '');
+        }
+        const normalized = url.pathname === '/' && !url.search && !url.hash ? url.origin : url.href;
         return {
             ok: true,
-            normalized: url.href,
+            normalized,
             url
         };
     }

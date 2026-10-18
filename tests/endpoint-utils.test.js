@@ -12,6 +12,9 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'
 const settingsHtml = fs.readFileSync(path.join(rootDir, 'settings.html'), 'utf8');
 const settingsScript = fs.readFileSync(path.join(rootDir, 'settings.js'), 'utf8');
 const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
+const releaseWorkflow = fs.readFileSync(path.join(rootDir, '.github/workflows/release.yml'), 'utf8');
+const manualBuildWorkflow = fs.readFileSync(path.join(rootDir, '.github/workflows/manual-build.yml'), 'utf8');
+const testReleaseScript = fs.readFileSync(path.join(rootDir, 'test-release.sh'), 'utf8');
 
 const sandbox = { URL, console };
 sandbox.globalThis = sandbox;
@@ -51,6 +54,21 @@ assertValid('http://172.31.255.255:11434/v1');
 assertValid('http://192.168.1.5:11434/v1');
 assertValid('http://foo.localhost:11434/v1');
 assertValid('http://[fd00::1]:11434/v1');
+
+const bareOllama = assertValid('http://localhost:11434');
+assert.strictEqual(bareOllama.normalized, 'http://localhost:11434');
+assert.strictEqual(`${bareOllama.normalized}/models`, 'http://localhost:11434/models');
+assert.strictEqual(`${bareOllama.normalized}/api/tags`, 'http://localhost:11434/api/tags');
+
+const versionedOllama = assertValid('http://localhost:11434/v1/');
+assert.strictEqual(versionedOllama.normalized, 'http://localhost:11434/v1');
+assert.strictEqual(`${versionedOllama.normalized}/models`, 'http://localhost:11434/v1/models');
+
+const httpsOrigin = assertValid('https://example.com/');
+assert.strictEqual(httpsOrigin.normalized, 'https://example.com');
+
+const hashEndpoint = assertValid('https://example.com/#/');
+assert.strictEqual(hashEndpoint.normalized, 'https://example.com/#/');
 
 assertInvalid('', 'required');
 assertInvalid(null, 'required');
@@ -122,6 +140,10 @@ assert.ok(
     'endpoint-utils.js must load before settings.js'
 );
 assert.match(packageJson.scripts.package, /endpoint-utils\.js/);
+for (const [name, content] of Object.entries({ releaseWorkflow, manualBuildWorkflow, testReleaseScript })) {
+    assert.ok(content.includes('endpoint-utils.js'), `${name} must package endpoint-utils.js`);
+}
+assert.match(manualBuildWorkflow, /FILES=\([^)]*"endpoint-utils\.js"/);
 
 assert.match(settingsScript, /function validateEndpointOrThrow\(endpoint\)/);
 assert.match(settingsScript, /endpoint = validateEndpointOrThrow\(rawEndpoint\);/);
@@ -130,6 +152,10 @@ assert.match(settingsScript, /const validatedEndpoint = validateEndpointOrThrow\
 assert.match(settingsScript, /endpoint = validateEndpointOrThrow\(modalOllamaEndpoint\.value\.trim\(\)/);
 assert.match(settingsScript, /AskPageEndpoint\.validateConfig\(settings\)/);
 assert.match(settingsScript, /importCustomEndpointWarning/);
+assert.ok(
+    settingsScript.includes(".replace(/\\/models$/, '').replace(/\\/v1\\/?$/, '')"),
+    'Ollama fallback must strip /models before /v1'
+);
 
 assert.match(contentScript, /function getValidatedProviderEndpoint\(endpoint\)/);
 assert.strictEqual(
