@@ -275,6 +275,9 @@ const sandbox = {
     isImageDataUrl(url) {
         return typeof url === 'string' && url.startsWith('data:image/');
     },
+    setImageDataUrlSource(img, url) {
+        img.src = url;
+    },
     shouldCollapseTextPreview() {
         return false;
     },
@@ -413,8 +416,103 @@ this.appendPersistentMessage = appendPersistentMessage;
     assert.strictEqual(conversationHistory[1].content, `AI 針對「${editedQuestion}」的回答`);
     assert.strictEqual(messagesEl.children.length, 2);
 
+    // 3. 回歸測試：驗證重開對話框渲染 conversationHistory 時不會觸發 TDZ ReferenceError，
+    //    且點擊 /summary 後關閉再重開對話框期間的串流回答不會遺失
+    const createDialogIdx = contentScript.indexOf('async function createDialog()');
+    const historyRenderIdx = contentScript.indexOf('if (conversationHistory.length > 0)', createDialogIdx);
+    const copyIconIdx = contentScript.indexOf('const USER_MESSAGE_COPY_ICON_SVG =');
+    const intelliActiveIdx = contentScript.indexOf('let intelliActive = false;', createDialogIdx);
+    const promptHistoryDeclIdx = contentScript.indexOf('let promptHistory = [];', createDialogIdx);
+    assert.ok(copyIconIdx !== -1 && copyIconIdx < createDialogIdx, 'USER_MESSAGE_COPY_ICON_SVG 必須在 createDialog 之前定義，避免重開對話框時觸發 TDZ ReferenceError');
+    assert.ok(intelliActiveIdx !== -1 && intelliActiveIdx < historyRenderIdx, 'intelliActive 必須在 createDialog 首次 await 與歷史渲染前宣告');
+    assert.ok(promptHistoryDeclIdx !== -1 && promptHistoryDeclIdx < historyRenderIdx, 'promptHistory 必須在 createDialog 首次 await 與歷史渲染前宣告');
+
+    let currentActiveMessagesEl = messagesEl;
+    sandbox.ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX = 12;
+    sandbox.requestAnimationFrame = (cb) => {
+        cb();
+        return 1;
+    };
+    sandbox.cancelAnimationFrame = () => {};
+    sandbox.scrollMessagesToMessageTop = () => {};
+    sandbox.getActiveMessagesElement = () => currentActiveMessagesEl;
+    sandbox.appendNodeToActiveMessages = (node) => {
+        if (currentActiveMessagesEl) {
+            currentActiveMessagesEl.appendChild(node);
+        }
+        return node;
+    };
+    vm.runInContext(`
+${sliceSource('    function createStreamingAssistantMessageRenderer() {', '    async function refreshUsagePromptMessage(')}
+this.createStreamingAssistantMessageRenderer = createStreamingAssistantMessageRenderer;
+`, sandbox);
+
+    const summaryTurn = addConversationTurn('user', '/summary', '/summary');
+    appendMessage('user', '/summary', { turn: summaryTurn });
+    const renderer = sandbox.createStreamingAssistantMessageRenderer();
+    renderer.append('第一段摘要');
+    assert.strictEqual(conversationHistory[conversationHistory.length - 1].content, '第一段摘要');
+    assert.strictEqual(conversationHistory[conversationHistory.length - 1].includeInModelContext, false);
+
+    // 模擬使用者點擊網頁關閉對話框，接著在串流期間再次啟動 AskPage
+    currentActiveMessagesEl = null;
+    renderer.append('、第二段摘要');
+
+    const reopenedMessagesEl = new FakeElement('div');
+    currentActiveMessagesEl = reopenedMessagesEl;
+    conversationHistory.forEach((turn) => {
+        appendMessage(turn.role, turn.displayContent || turn.content, {
+            renderedHtml: turn.renderedHtml || '',
+            suppressCopyButton: turn.suppressCopyButton,
+            extraClassName: turn.extraClassName,
+            screenshotDataUrl: turn.screenshotDataUrl || '',
+            inputImageDataUrls: turn.inputImageDataUrls || [],
+            turn
+        });
+    });
+    assert.strictEqual(reopenedMessagesEl.children.length, conversationHistory.length);
+
+    const finalizedEl = renderer.finalize('第一段摘要、第二段摘要（完成）');
+    assert.strictEqual(reopenedMessagesEl.children.length, conversationHistory.length, '串流完成時應直接更新重開對話框中的既有訊息節點，而非重複新增');
+    assert.strictEqual(finalizedEl, reopenedMessagesEl.children[reopenedMessagesEl.children.length - 1]);
+    assert.strictEqual(finalizedEl.textContent, '第一段摘要、第二段摘要（完成）');
+    assert.strictEqual(finalizedEl.classList.contains('askpage-streaming-answer'), false);
+    assert.strictEqual(conversationHistory[conversationHistory.length - 1].content, '第一段摘要、第二段摘要（完成）');
+    assert.strictEqual(conversationHistory[conversationHistory.length - 1].includeInModelContext, true);
+
+    assert.ok(
+        contentScript.includes('Boolean(activeAskTask)'),
+        'shouldKeepDialogVisible 應在生成答案期間（activeAskTask）保持對話框不進入 dimmed 狀態，避免 hover 閃爍'
+    );
+    assert.ok(
+        contentScript.includes('if (dialog.dataset.askpageDimmed !== nextDimmedValue)'),
+        'setDialogDimmed 應只在狀態實際變更時才寫入 dataset.askpageDimmed，避免 mousemove 重複觸發樣式重算'
+    );
+    assert.ok(
+        contentScript.includes('function updateReasoningTraceInPlace('),
+        '串流思考軌跡應支援就地更新，避免每幀重建 <details> 導致 hover 閃爍'
+    );
+    assert.match(
+        styleSheet,
+        /#gemini-qna-dialog\s*\{[\s\S]*?contain:\s*layout style;/,
+        '#gemini-qna-dialog 不應搭配 contain: paint 與 backdrop-filter，避免子節點高頻重繪與 hover 時觸發合成層閃爍'
+    );
+    assert.doesNotMatch(
+        styleSheet,
+        /backdrop-filter\s*:/,
+        'style.css 不應在對話框或子元件使用 backdrop-filter，避免思考與工具步驟動畫期間 hover 造成整框合成層閃爍'
+    );
+    assert.match(
+        styleSheet,
+        /@keyframes askpageTracePulse\s*\{[\s\S]*?opacity:\s*0\.38;/,
+        'askpageTracePulse 應使用合成層友善的 opacity 動畫而非每幀重繪 box-shadow'
+    );
+
     console.log('user-message-actions: ok');
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
 });
+
+
+

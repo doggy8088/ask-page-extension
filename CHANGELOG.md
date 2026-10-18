@@ -6,6 +6,30 @@
 
 ## [Unreleased]
 
+## [0.47.3] - 2026-10-14
+
+### 新增 / 改進（v0.47.3）
+
+- **Google Gemini 預設模型新增 `gemini-4-argon` 並移除 `gemini-3.7-flash` 與 `gemini-3.5-flash`**：Gemini 提供者預設模型清單最前方新增 `gemini-4-argon`，並移除 `gemini-3.7-flash` 與 `gemini-3.5-flash`；已勾選這兩個舊模型的使用者仍會保留設定並可繼續使用。`gemini-4-argon` 完整支援 Interactions API 串流與非串流回應、65536 最大輸出 Token、等級型推理強度控制（`low`／`medium`／`high`，預設 `medium`；舊 `minimal` 設定自動正規化為 `low`），以及代理模式下同時啟用內建 `google_search` 與自訂函式工具（`doesGeminiModelSupportCombinedTools` 擴充支援 `gemini-4` 前綴）。
+- **文件與測試同步更新**：`README.md` 支援模型清單、`docs/目前推理強度對應表.md` 與單元測試（`tests/reasoning-effort.test.js`、`tests/prompt-cache-conversation.test.js`、`tests/streaming-mode.test.js`）同步更新。
+
+## [0.47.2] - 2026-10-12
+
+### 修正 / 更新（v0.47.2）
+
+- **修正關閉對話框後再次開啟時內容空白與無法按 `Enter` 送出提問**：當已有對話紀錄（例如執行 `/summary` 後點擊網頁關閉對話框）並再次啟動 AskPage 時，`createDialog()` 在渲染歷史用戶訊息時會呼叫 `appendUserMessageActions()`，但 `USER_MESSAGE_COPY_ICON_SVG` 等圖示常數與對話框內部狀態變數原本宣告在歷史渲染區段之後，觸發 Temporal Dead Zone（TDZ）`ReferenceError` 並中斷後續初始化，導致歷史訊息未顯示、`Enter` 送出與關閉事件未完成綁定。現已將相關常數與狀態變數統一提升至歷史渲染前宣告，並支援在串流生成期間關閉再重開對話框時即時保留並持續更新串流中的回答。
+- **修正思考、執行工具步驟及串流生成答案時滑鼠移入對話框的閃爍問題**：AI 任務執行期間對話框不再因焦點不在內部或節點重繪短暫失焦而進入半透明狀態（`data-askpage-dimmed="true"`），且 `setDialogDimmed()` 僅在狀態實際改變時寫入屬性；思考摘要與工具執行步驟（`.askpage-tool-trace`）改為原位更新（in-place DOM update）與即時捲動，保留既有 `<details>`／`<summary>` 節點與 `:hover` 狀態；同時移除對話框的 `backdrop-filter` 與 `::before` 的 `mask-image`、調整 `contain: layout style` 並將脈衝動畫改為僅動畫化 `opacity`，以及快取 Shadow Host 隔離樣式檢查，消除 Chromium 合成層（RenderSurface）在滑鼠 hover 時的整塊重繪閃爍。
+- **新增回歸測試**：`tests/user-message-actions.test.js` 補上重開對話框 TDZ 防護、串流期間關閉重開保留回答，以及思考／工具步驟原位更新與防閃爍設定的回歸測試。
+
+## [0.47.1] - 2026-10-10
+
+### 修正 / 更新（v0.47.1）
+
+- **修正嚴格 CSP 網站上貼圖、上傳與截圖縮圖顯示為破圖**：在設有 `img-src 'self'` 的網站（例如 personalagentprotocol.org）貼上或上傳圖片時，輸入區縮圖與送出後訊息中的縮圖會顯示成破圖，但圖片其實已經送給模型。原因是頁面 CSP 會擋下內容腳本建立的 `data:` 與 `blob:` 圖片；現在 `<img>` 載入失敗時，會改用 `createImageBitmap` 解碼並畫到 canvas 顯示（縮圖最長邊 480px，canvas 不受 CSP 限制），一般網站仍維持原本的 `<img>`。截圖縮圖與切換截圖模式時的測試截圖同樣套用，測試截圖的尺寸資訊與點擊開啟預覽也維持運作。
+- **修正嚴格 CSP 網站上原圖預覽視窗看不到圖**：點擊縮圖開啟的預覽視窗原本以 blob HTML 開窗，但 blob 與 `about:blank` 文件都會繼承頁面 CSP，圖片同樣會被擋下。現改為在點擊當下同步開啟空白視窗，並以 DOM API、CSSOM 與 canvas（最長邊 4096px）建立內容，不使用 `<style>`，避免被不允許 inline style 的頁面攔截；預覽頁網址由 `blob:` 變為 `about:blank`，版面與文字維持不變。
+- **已知限制**：換成 canvas 的縮圖在切換語系時不會更新 `aria-label`（`<img>` 的 `alt` 仍會更新）。
+- **新增回歸測試**：`tests/image-csp-fallback.test.js` 涵蓋正常載入維持 `<img>`、被 CSP 擋下時改畫 canvas、解碼失敗時保留原圖並輸出警告、canvas 沿用原樣式與屬性，以及預覽視窗的開窗與內容建立流程。
+
 ## [0.47.0] - 2026-10-08
 
 ### 新增 / 改進（v0.47.0）

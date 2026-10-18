@@ -67,6 +67,7 @@ function getSystemPromptLanguageInstruction() {
     return '';
 }
 const GEMINI_MODEL_MAX_OUTPUT_TOKENS = {
+    'gemini-4-argon': 65536,
     'gemini-3.8-flash': 65536,
     'gemini-3.7-flash': 65536,
     'gemini-3.6-flash': 65536,
@@ -308,7 +309,8 @@ function canUpdateAskTaskUi(task) {
 }
 
 function doesGeminiModelSupportCombinedTools(model = '') {
-    return normalizeModelIdentifier(model).startsWith('gemini-3');
+    const normalizedModel = normalizeModelIdentifier(model);
+    return normalizedModel.startsWith('gemini-4') || normalizedModel.startsWith('gemini-3');
 }
 
 function buildGeminiRequestTools(additionalTools = [], includeGoogleSearch = true) {
@@ -575,9 +577,17 @@ function applyDialogHostIsolationStyles(host) {
         return;
     }
 
+    const currentStyleAttr = typeof host.getAttribute === 'function' ? host.getAttribute('style') : null;
+    if (host._askpageIsolationStyleAttr && currentStyleAttr === host._askpageIsolationStyleAttr) {
+        return;
+    }
+
     DIALOG_HOST_ISOLATION_STYLES.forEach(([property, value]) => {
         host.style.setProperty(property, value, 'important');
     });
+    if (typeof host.getAttribute === 'function') {
+        host._askpageIsolationStyleAttr = host.getAttribute('style');
+    }
 }
 
 function getDialogHostMountParent() {
@@ -814,10 +824,14 @@ function appendNodeToActiveMessages(messageNode, fallbackMessagesEl, options = {
     if (autoScrollMode === 'message-top') {
         scrollMessagesToMessageTop(targetMessagesEl, messageNode, {
             scrollOffset: options.autoScrollOffset,
-            force: options.autoScrollForce === true
+            force: options.autoScrollForce === true,
+            duration: options.autoScrollDuration
         });
     } else if (autoScrollMode === 'bottom') {
-        scrollMessagesToBottom(targetMessagesEl);
+        scrollMessagesToBottom(targetMessagesEl, {
+            force: options.autoScrollForce === true,
+            duration: options.autoScrollDuration
+        });
     }
     return messageNode;
 }
@@ -857,21 +871,21 @@ function scrollMessagesToMessageTop(messagesElement, messageElement, options = {
     });
 }
 
-function scrollMessagesToBottom(messagesElement) {
+function scrollMessagesToBottom(messagesElement, options = {}) {
     if (!messagesElement) {
         return;
     }
 
     const dialogState = getActiveDialogStateForMessages(messagesElement);
-    if (dialogState?.autoScrollSuspended) {
+    if (dialogState?.autoScrollSuspended && options.force !== true) {
         return;
     }
 
-    animateScrollTo(messagesElement, messagesElement.scrollHeight);
+    animateScrollTo(messagesElement, messagesElement.scrollHeight, options);
 }
 
-function scrollActiveMessagesToBottom(fallbackMessagesEl) {
-    scrollMessagesToBottom(getActiveMessagesElement(fallbackMessagesEl));
+function scrollActiveMessagesToBottom(fallbackMessagesEl, options = {}) {
+    scrollMessagesToBottom(getActiveMessagesElement(fallbackMessagesEl), options);
 }
 
 function closeActiveDialog() {
@@ -1356,6 +1370,44 @@ function getImageMimeTypeFromDataUrl(imageDataUrl) {
     return match ? match[1].toLowerCase() : 'image/png';
 }
 
+// 頁面 CSP 的 img-src 若不允許 data:（例如 img-src 'self'），<img src="data:..."> 與 blob: 都會載入失敗。
+// 此時改用 createImageBitmap 解碼後畫到 canvas，不經過資源載入，因此不受 CSP 限制。
+const IMAGE_CANVAS_FALLBACK_MAX_EDGE = 480;
+const IMAGE_PREVIEW_CANVAS_MAX_EDGE = 4096;
+
+function setImageDataUrlSource(img, imageDataUrl, options = {}) {
+    img.addEventListener('error', async () => {
+        try {
+            const binary = atob(imageDataUrl.slice(imageDataUrl.indexOf(',') + 1));
+            const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+            const bitmap = await createImageBitmap(new Blob([bytes], { type: getImageMimeTypeFromDataUrl(imageDataUrl) }));
+            const maxEdge = options.maxEdge || IMAGE_CANVAS_FALLBACK_MAX_EDGE;
+            const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+            canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+            canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+            const naturalSize = { width: bitmap.width, height: bitmap.height };
+            bitmap.close();
+            canvas.className = img.className;
+            canvas.style.cssText = img.style.cssText;
+            canvas.title = img.title;
+            Object.assign(canvas.dataset, img.dataset);
+            if (img.alt) {
+                canvas.setAttribute('role', 'img');
+                canvas.setAttribute('aria-label', img.alt);
+            }
+            img.replaceWith(canvas);
+            if (typeof options.onCanvas === 'function') {
+                options.onCanvas(canvas, naturalSize);
+            }
+        } catch (error) {
+            console.warn('[AskPage] Failed to render image preview:', error);
+        }
+    }, { once: true });
+    img.src = imageDataUrl;
+}
+
 function normalizeInputImageDataUrls(imageDataUrls = []) {
     if (!Array.isArray(imageDataUrls)) {
         return [];
@@ -1439,6 +1491,12 @@ function isStreamingSupported(providerType = '', model = '') {
 // Kimi K2.7 Code: https://registry.ollama.com/library/kimi-k2.7-code
 // Unknown providers, aliases, and model families must not inherit these capabilities.
 const GEMINI_REASONING_CAPABILITIES = {
+    'gemini-4-argon': {
+        kind: 'level',
+        options: ['low', 'medium', 'high'],
+        valueAliases: { minimal: 'low' },
+        defaultValue: 'medium'
+    },
     'gemini-3.8-flash': {
         kind: 'level',
         options: ['low', 'medium', 'high'],
@@ -2412,32 +2470,28 @@ function ensureAgentGlowStylesInjected() {
             z-index: 2147483646;
             pointer-events: none;
             opacity: 0;
+            will-change: opacity;
             transition: opacity 0.35s ease;
             box-shadow:
-                inset 0 0 18px 2px rgba(255, 145, 41, 0.45),
-                inset 0 0 46px 10px rgba(234, 125, 42, 0.28),
-                inset 0 0 90px 26px rgba(188, 74, 24, 0.14);
-            animation: askpageAgentGlowPulse 2.2s ease-in-out infinite;
+                inset 0 0 22px 3px rgba(255, 155, 58, 0.58),
+                inset 0 0 54px 12px rgba(234, 125, 42, 0.35),
+                inset 0 0 100px 28px rgba(188, 74, 24, 0.18);
         }
         #${AGENT_GLOW_OVERLAY_ID}.${AGENT_GLOW_VISIBLE_CLASS} {
             opacity: 1;
+            animation: askpageAgentGlowPulse 2.2s ease-in-out infinite;
         }
         @keyframes askpageAgentGlowPulse {
             0%, 100% {
-                box-shadow:
-                    inset 0 0 18px 2px rgba(255, 145, 41, 0.45),
-                    inset 0 0 46px 10px rgba(234, 125, 42, 0.28),
-                    inset 0 0 90px 26px rgba(188, 74, 24, 0.14);
+                opacity: 0.72;
             }
             50% {
-                box-shadow:
-                    inset 0 0 26px 4px rgba(255, 166, 77, 0.7),
-                    inset 0 0 60px 14px rgba(234, 125, 42, 0.42),
-                    inset 0 0 110px 32px rgba(188, 74, 24, 0.22);
+                opacity: 1;
             }
         }
         @media (prefers-reduced-motion: reduce) {
-            #${AGENT_GLOW_OVERLAY_ID} {
+            #${AGENT_GLOW_OVERLAY_ID},
+            #${AGENT_GLOW_OVERLAY_ID}.${AGENT_GLOW_VISIBLE_CLASS} {
                 animation: none;
                 transition: opacity 0.2s ease;
             }
@@ -6000,6 +6054,11 @@ function truncateConversationFromTurn(turn, newContent, newDisplayContent = newC
     return addConversationTurn('user', newContent, newDisplayContent, fallbackOptions);
 }
 
+const USER_MESSAGE_COPY_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4.5A2.5 2.5 0 0 1 2 12.5v-8A2.5 2.5 0 0 1 4.5 2h8A2.5 2.5 0 0 1 15 4.5V5"/></svg>';
+const USER_MESSAGE_COPIED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"/></svg>';
+const USER_MESSAGE_FAILED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+const USER_MESSAGE_EDIT_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><path d="m15 5 4 4"/></svg>';
+
 function clearConversationHistory() {
     conversationHistory = [];
     conversationSelectedText = '';
@@ -6686,6 +6745,23 @@ async function createDialog() {
     let dragState = null;
     let didDragDialog = false;
     let dialogDimTimer = 0;
+    let promptHistory = [];
+    let historyIndex = 0;
+    let isInputComposing = false;
+    let justEndedComposition = false;
+    let compositionEndGuardTimer = null;
+    let inputContextImageDataUrls = [];
+    let inputContextImageNotice = '';
+    let inputContextImageNoticeSource = null;
+    let inputContextImageNoticeLevel = 'info';
+    let pendingAnnotatedScreenshotDataUrl = '';
+    let isScreenshotAnnotationAvailable = false;
+    let dragEnterDepth = 0;
+    let intelliActive = false;
+    let intelliIndex = 0;
+    let snippetState = null;
+    let isPointerInsideDialog = false;
+    let isPointerInsideIntelliBox = false;
 
     function clearDialogDimTimer() {
         if (!dialogDimTimer) {
@@ -6696,7 +6772,22 @@ async function createDialog() {
         dialogDimTimer = 0;
     }
 
+    function isDialogHovered() {
+        return isPointerInsideDialog
+            || isPointerInsideIntelliBox
+            || dialog.matches(':hover')
+            || intelliBox.matches(':hover');
+    }
+
     function setDialogDimmed(dimmed, options = {}) {
+        if (dimmed && (shouldKeepDialogVisible() || isDialogHovered())) {
+            clearDialogDimTimer();
+            if (dialog.dataset.askpageDimmed !== 'false') {
+                dialog.dataset.askpageDimmed = 'false';
+            }
+            return;
+        }
+
         if (dimmed && options.delay === true) {
             if (dialogDimTimer || dialog.dataset.askpageDimmed === 'true') {
                 return;
@@ -6704,7 +6795,7 @@ async function createDialog() {
 
             dialogDimTimer = setTimeout(() => {
                 dialogDimTimer = 0;
-                if (!shouldKeepDialogVisible()) {
+                if (!shouldKeepDialogVisible() && !isDialogHovered() && dialog.dataset.askpageDimmed !== 'true') {
                     dialog.dataset.askpageDimmed = 'true';
                 }
             }, DIALOG_DIM_DELAY_MS);
@@ -6712,12 +6803,16 @@ async function createDialog() {
         }
 
         clearDialogDimTimer();
-        dialog.dataset.askpageDimmed = dimmed ? 'true' : 'false';
+        const nextDimmedValue = dimmed ? 'true' : 'false';
+        if (dialog.dataset.askpageDimmed !== nextDimmedValue) {
+            dialog.dataset.askpageDimmed = nextDimmedValue;
+        }
     }
 
     function shouldKeepDialogVisible() {
         const activeElement = shadowRoot.activeElement;
         return Boolean(dragState)
+            || Boolean(activeAskTask)
             || (activeElement && (dialog.contains(activeElement) || intelliBox.contains(activeElement)));
     }
 
@@ -6846,16 +6941,34 @@ async function createDialog() {
         event.stopPropagation();
     }, { passive: true });
 
+    function isEventTargetInsideDialog(event) {
+        const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+        if (path.includes(dialog) || path.includes(intelliBox)) {
+            return true;
+        }
+
+        return Boolean(
+            event.target && (dialog.contains(event.target) || intelliBox.contains(event.target))
+        );
+    }
+
     overlay.addEventListener('mousemove', (event) => {
+        if (isEventTargetInsideDialog(event)) {
+            isPointerInsideDialog = true;
+            setDialogDimmed(false);
+            return;
+        }
+
         if (shouldKeepDialogVisible()) {
             setDialogDimmed(false);
             return;
         }
 
-        const isMouseOutsideDialog = !dialog.contains(event.target) && !intelliBox.contains(event.target);
-        setDialogDimmed(isMouseOutsideDialog, { delay: isMouseOutsideDialog });
+        setDialogDimmed(true, { delay: true });
     });
     overlay.addEventListener('mouseleave', () => {
+        isPointerInsideDialog = false;
+        isPointerInsideIntelliBox = false;
         if (shouldKeepDialogVisible()) {
             return;
         }
@@ -6863,10 +6976,24 @@ async function createDialog() {
         setDialogDimmed(true, { delay: true });
     });
     dialog.addEventListener('mouseenter', () => {
+        isPointerInsideDialog = true;
         setDialogDimmed(false);
     });
+    dialog.addEventListener('mouseleave', () => {
+        isPointerInsideDialog = false;
+        if (!shouldKeepDialogVisible() && !isPointerInsideIntelliBox) {
+            setDialogDimmed(true, { delay: true });
+        }
+    });
     intelliBox.addEventListener('mouseenter', () => {
+        isPointerInsideIntelliBox = true;
         setDialogDimmed(false);
+    });
+    intelliBox.addEventListener('mouseleave', () => {
+        isPointerInsideIntelliBox = false;
+        if (!shouldKeepDialogVisible() && !isPointerInsideDialog) {
+            setDialogDimmed(true, { delay: true });
+        }
     });
     dialog.addEventListener('focusin', () => {
         setDialogDimmed(false);
@@ -6875,12 +7002,12 @@ async function createDialog() {
         setDialogDimmed(false);
     });
     dialog.addEventListener('focusout', () => {
-        if (shouldKeepDialogVisible()) {
+        if (shouldKeepDialogVisible() || isDialogHovered()) {
             setDialogDimmed(false);
             return;
         }
 
-        setDialogDimmed(!(dialog.matches(':hover') || intelliBox.matches(':hover')));
+        setDialogDimmed(true, { delay: true });
     });
 
     // Initialize provider display
@@ -7134,6 +7261,7 @@ async function createDialog() {
     }
 
     if (conversationHistory.length > 0) {
+        messagesEl.innerHTML = '';
         conversationHistory.forEach((turn) => {
             appendMessage(turn.role, turn.displayContent || turn.content, {
                 renderedHtml: turn.renderedHtml || '',
@@ -7263,18 +7391,8 @@ async function createDialog() {
     };
     window.addEventListener('keydown', clearShortcutListener, true);
 
-    const promptHistory = JSON.parse(await getValue(PROMPT_HISTORY_STORAGE, '[]'));
-    let historyIndex = promptHistory.length;
-    let isInputComposing = false;
-    let justEndedComposition = false;
-    let compositionEndGuardTimer = null;
-    let inputContextImageDataUrls = [];
-    let inputContextImageNotice = '';
-    let inputContextImageNoticeSource = null;
-    let inputContextImageNoticeLevel = 'info';
-    let pendingAnnotatedScreenshotDataUrl = '';
-    let isScreenshotAnnotationAvailable = false;
-    let dragEnterDepth = 0;
+    promptHistory = JSON.parse(await getValue(PROMPT_HISTORY_STORAGE, '[]'));
+    historyIndex = promptHistory.length;
 
     function getQuestionInputMetrics() {
         const computedStyle = window.getComputedStyle(input);
@@ -7394,7 +7512,6 @@ async function createDialog() {
         const previewTitle = options.title || getLocalizedText('screenshotPreviewTitle');
         const previewHeading = options.heading || getLocalizedText('screenshotPreviewHeading');
         const previewAlt = options.alt || getLocalizedText('screenshotPreviewAlt');
-        const escapedDataUrl = escapeHtml(imageDataUrl);
         const imageSize = Math.round(imageDataUrl.length / 1024);
         const previewLocale = typeof AskPageI18n !== 'undefined' && AskPageI18n.locale
             ? AskPageI18n.locale.replace('_', '-')
@@ -7402,58 +7519,59 @@ async function createDialog() {
         const previewDirection = typeof AskPageI18n !== 'undefined' && AskPageI18n.direction
             ? AskPageI18n.direction
             : 'ltr';
-        const previewHtml = `<!doctype html>
-<html lang="${escapeHtml(previewLocale)}" dir="${escapeHtml(previewDirection)}">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(previewTitle)}</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 24px;
-            background: #f0f2f5;
-            color: #1f2937;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
-        .preview {
-            max-width: min(1200px, 100%);
-            margin: 0 auto;
-            text-align: center;
-        }
-        img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-            box-shadow: 0 8px 28px rgba(15, 23, 42, 0.22);
-            background: #fff;
-        }
-        .meta {
-            margin-top: 12px;
-            color: #64748b;
-            font-size: 13px;
-        }
-    </style>
-</head>
-<body>
-    <main class="preview">
-        <h1>${escapeHtml(previewHeading)}</h1>
-        <img src="${escapedDataUrl}" alt="${escapeHtml(previewAlt)}">
-        <div class="meta">${escapeHtml(getLocalizedText('imagePreviewSize', { size: imageSize }))}</div>
-    </main>
-</body>
-</html>`;
-        const previewUrl = URL.createObjectURL(new Blob([previewHtml], { type: 'text/html' }));
-        const previewWindow = window.open(previewUrl, '_blank');
 
+        // blob: 與 about:blank 文件都會繼承頁面 CSP，<style> 與 <img src="data:..."> 可能被擋下，
+        // 因此以 DOM API、CSSOM 與 canvas 建立預覽內容。必須同步開窗，才能保留使用者點擊的手勢。
+        const previewWindow = window.open('', '_blank');
         if (!previewWindow) {
-            URL.revokeObjectURL(previewUrl);
             console.warn('[AskPage] Image preview window was blocked by the browser.');
             return false;
         }
 
         previewWindow.opener = null;
-        setTimeout(() => URL.revokeObjectURL(previewUrl), 60000);
+        const previewDocument = previewWindow.document;
+        previewDocument.title = previewTitle;
+        previewDocument.documentElement.lang = previewLocale;
+        previewDocument.documentElement.dir = previewDirection;
+        Object.assign(previewDocument.body.style, {
+            margin: '0',
+            padding: '24px',
+            background: '#f0f2f5',
+            color: '#1f2937',
+            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        });
+
+        const main = previewDocument.createElement('main');
+        Object.assign(main.style, {
+            maxWidth: 'min(1200px, 100%)',
+            margin: '0 auto',
+            textAlign: 'center'
+        });
+
+        const heading = previewDocument.createElement('h1');
+        heading.textContent = previewHeading;
+
+        const img = previewDocument.createElement('img');
+        img.alt = previewAlt;
+        Object.assign(img.style, {
+            maxWidth: '100%',
+            height: 'auto',
+            borderRadius: '8px',
+            boxShadow: '0 8px 28px rgba(15, 23, 42, 0.22)',
+            background: '#fff'
+        });
+        setImageDataUrlSource(img, imageDataUrl, { maxEdge: IMAGE_PREVIEW_CANVAS_MAX_EDGE });
+
+        const meta = previewDocument.createElement('div');
+        meta.textContent = getLocalizedText('imagePreviewSize', { size: imageSize });
+        Object.assign(meta.style, {
+            marginTop: '12px',
+            color: '#64748b',
+            fontSize: '13px'
+        });
+
+        main.append(heading, img, meta);
+        previewDocument.body.append(main);
         return true;
     }
 
@@ -7503,10 +7621,10 @@ async function createDialog() {
             });
 
             const img = document.createElement('img');
-            img.src = imageDataUrl;
             img.alt = getLocalizedText('questionImageAlt', { index: index + 1 });
             img.dataset.askpageI18nAlt = 'questionImageAlt';
             img.loading = 'lazy';
+            setImageDataUrlSource(img, imageDataUrl);
             link.appendChild(img);
 
             const removeBtn = document.createElement('button');
@@ -8094,9 +8212,6 @@ async function createDialog() {
         }
     }
 
-    let intelliActive = false;
-    let intelliIndex = 0;
-    let snippetState = null;
     async function showIntelliBox(filtered) {
         if (!filtered.length) {
             hideIntelliBox();
@@ -8752,11 +8867,23 @@ async function createDialog() {
         const displayText = options.renderedHtml ? sourceText : getAssistantDisplayMarkdown(sourceText);
         const copyText = options.renderedHtml ? sourceText : getAssistantStoredText(sourceText);
         if (isRawHtmlResponse) {
-            element.dataset.askpageRawHtmlResponse = 'true';
-        } else {
+            if (element.dataset.askpageRawHtmlResponse !== 'true') {
+                element.dataset.askpageRawHtmlResponse = 'true';
+            }
+        } else if ('askpageRawHtmlResponse' in element.dataset) {
             delete element.dataset.askpageRawHtmlResponse;
         }
-        element.innerHTML = options.renderedHtml || renderMarkdown(displayText);
+
+        if (options.suppressCopyButton && options.renderedHtml && updateReasoningTraceInPlace(element, options.renderedHtml)) {
+            return;
+        }
+
+        const nextHtml = options.renderedHtml || renderMarkdown(displayText);
+        if (options.suppressCopyButton && element._askpageLastRenderedHtml === nextHtml && element.innerHTML) {
+            return;
+        }
+        element._askpageLastRenderedHtml = nextHtml;
+        element.innerHTML = nextHtml;
         if (!options.renderedHtml) {
             renderLatexInElement(element);
         }
@@ -8780,11 +8907,118 @@ async function createDialog() {
         }
     }
 
+    function updateReasoningTraceInPlace(element, renderedHtml) {
+        if (!renderedHtml || !renderedHtml.includes('askpage-tool-trace')) {
+            return false;
+        }
+
+        const existingDetails = element.querySelector?.('.askpage-tool-trace');
+        const existingSummaryEl = existingDetails?.querySelector?.('summary');
+        const existingSummary = existingDetails?.querySelector?.('.askpage-tool-trace-summary');
+        const existingBody = existingDetails?.querySelector?.('.askpage-reasoning-trace-body, .askpage-tool-trace-body');
+        const traceId = existingDetails?.getAttribute?.('data-askpage-trace-id');
+        if (!existingDetails || !existingSummaryEl || !existingSummary || !existingBody || !traceId) {
+            return false;
+        }
+        if (!renderedHtml.includes(`data-askpage-trace-id="${escapeHtml(traceId)}"`)) {
+            return false;
+        }
+
+        const tempContainer = document.createElement('div');
+        tempContainer.innerHTML = renderedHtml;
+        const nextDetails = tempContainer.querySelector?.('.askpage-tool-trace');
+        const nextSummary = nextDetails?.querySelector?.('.askpage-tool-trace-summary');
+        const nextBody = nextDetails?.querySelector?.('.askpage-reasoning-trace-body, .askpage-tool-trace-body');
+        if (!nextDetails || !nextSummary || !nextBody) {
+            return false;
+        }
+
+        const nextState = nextDetails.getAttribute?.('data-state');
+        if (nextState && existingDetails.getAttribute?.('data-state') !== nextState) {
+            existingDetails.setAttribute('data-state', nextState);
+        }
+
+        const existingIcon = existingDetails.querySelector?.('.askpage-tool-trace-icon');
+        const nextIcon = nextDetails.querySelector?.('.askpage-tool-trace-icon');
+        if (existingIcon && nextIcon && existingIcon.innerHTML !== nextIcon.innerHTML) {
+            existingIcon.innerHTML = nextIcon.innerHTML;
+        }
+
+        if (existingSummary.textContent !== nextSummary.textContent) {
+            existingSummary.textContent = nextSummary.textContent;
+        }
+        const nextTitle = nextSummary.getAttribute?.('title');
+        if (nextTitle !== null && nextTitle !== undefined) {
+            if (existingSummary.getAttribute?.('title') !== nextTitle) {
+                existingSummary.setAttribute('title', nextTitle);
+            }
+        }
+
+        const existingDuration = existingDetails.querySelector?.('.askpage-tool-trace-duration');
+        const nextDuration = nextDetails.querySelector?.('.askpage-tool-trace-duration');
+        if (nextDuration) {
+            if (existingDuration) {
+                if (existingDuration.textContent !== nextDuration.textContent) {
+                    existingDuration.textContent = nextDuration.textContent;
+                }
+            } else {
+                const chevron = existingSummaryEl.querySelector?.('.askpage-tool-trace-chevron');
+                if (chevron && typeof existingSummaryEl.insertBefore === 'function') {
+                    existingSummaryEl.insertBefore(nextDuration, chevron);
+                } else {
+                    existingSummaryEl.appendChild(nextDuration);
+                }
+            }
+        } else if (existingDuration) {
+            existingDuration.remove?.();
+        }
+
+        if (existingBody.innerHTML !== nextBody.innerHTML) {
+            existingBody.innerHTML = nextBody.innerHTML;
+            enhanceCodeBlocks(existingBody);
+            bindInteractiveCommandElements(existingBody);
+        }
+        element._askpageLastRenderedHtml = renderedHtml;
+        return true;
+    }
+
     function createStreamingAssistantMessageRenderer() {
         let messageElement = null;
+        let streamedTurn = null;
         let text = '';
         let renderFrame = 0;
         let isMessageTopPinned = false;
+
+        const syncStreamedTurn = (contentText, options = {}) => {
+            const finalized = options.finalized === true;
+            const historyOptions = options.historyOptions || {};
+            if (!streamedTurn) {
+                streamedTurn = addConversationTurn('assistant', contentText, contentText, {
+                    ...historyOptions,
+                    extraClassName: finalized ? (historyOptions.extraClassName || '') : 'askpage-streaming-answer',
+                    suppressCopyButton: !finalized,
+                    includeInModelContext: finalized ? historyOptions.includeInModelContext !== false : false
+                });
+                return streamedTurn;
+            }
+
+            if (finalized) {
+                const existingIndex = conversationHistory.indexOf(streamedTurn);
+                if (existingIndex !== -1 && existingIndex !== conversationHistory.length - 1) {
+                    conversationHistory.splice(existingIndex, 1);
+                    conversationHistory.push(streamedTurn);
+                } else if (existingIndex === -1) {
+                    conversationHistory.push(streamedTurn);
+                }
+            }
+
+            streamedTurn.content = contentText;
+            streamedTurn.displayContent = contentText;
+            streamedTurn.extraClassName = finalized ? (historyOptions.extraClassName || '') : 'askpage-streaming-answer';
+            streamedTurn.suppressCopyButton = !finalized;
+            streamedTurn.includeInModelContext = finalized ? historyOptions.includeInModelContext !== false : false;
+            return streamedTurn;
+        };
 
         const pinMessageTop = (options = {}) => {
             if (!messageElement || isMessageTopPinned) {
@@ -8809,12 +9043,40 @@ async function createDialog() {
         };
 
         const ensureMessageElement = () => {
-            if (messageElement) {
+            const targetMessagesEl = getActiveMessagesElement(messagesEl);
+            if (!targetMessagesEl) {
+                messageElement = null;
+                return null;
+            }
+
+            const isAttachedToTarget = Boolean(
+                messageElement && (
+                    typeof targetMessagesEl.contains === 'function'
+                        ? targetMessagesEl.contains(messageElement)
+                        : messageElement.parentNode === targetMessagesEl
+                )
+            );
+            if (isAttachedToTarget) {
                 return messageElement;
             }
 
+            if (streamedTurn && targetMessagesEl.children) {
+                const rehydratedElement = Array.from(targetMessagesEl.children).find(
+                    (child) => child && child._askpageTurn === streamedTurn
+                );
+                if (rehydratedElement) {
+                    messageElement = rehydratedElement;
+                    isMessageTopPinned = false;
+                    return messageElement;
+                }
+            }
+
+            isMessageTopPinned = false;
             messageElement = document.createElement('div');
             messageElement.className = 'gemini-msg-assistant askpage-streaming-answer';
+            if (streamedTurn) {
+                messageElement._askpageTurn = streamedTurn;
+            }
             appendNodeToActiveMessages(messageElement, messagesEl, {
                 autoScrollMode: 'message-top',
                 autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
@@ -8824,11 +9086,12 @@ async function createDialog() {
         };
 
         const render = (options = {}) => {
-            if (!messageElement) {
+            const activeElement = ensureMessageElement();
+            if (!activeElement) {
                 return;
             }
 
-            renderAssistantMessageElement(messageElement, text || '...', {
+            renderAssistantMessageElement(activeElement, text || '...', {
                 suppressCopyButton: options.suppressCopyButton === true,
                 copyText: text
             });
@@ -8840,9 +9103,25 @@ async function createDialog() {
                 cancelAnimationFrame(renderFrame);
                 renderFrame = 0;
             }
+            const targetMessagesEl = getActiveMessagesElement(messagesEl);
+            if (streamedTurn && targetMessagesEl && targetMessagesEl.children) {
+                const rehydratedElement = Array.from(targetMessagesEl.children).find(
+                    (child) => child && child._askpageTurn === streamedTurn
+                );
+                if (rehydratedElement && rehydratedElement !== messageElement) {
+                    rehydratedElement.remove();
+                }
+            }
             if (messageElement) {
                 messageElement.remove();
                 messageElement = null;
+            }
+            if (streamedTurn) {
+                const turnIndex = conversationHistory.indexOf(streamedTurn);
+                if (turnIndex !== -1) {
+                    conversationHistory.splice(turnIndex, 1);
+                }
+                streamedTurn = null;
             }
             text = '';
             isMessageTopPinned = false;
@@ -8866,6 +9145,7 @@ async function createDialog() {
                 }
 
                 text += delta;
+                syncStreamedTurn(text, { finalized: false });
                 ensureMessageElement();
                 scheduleRender();
             },
@@ -8876,22 +9156,31 @@ async function createDialog() {
                     return null;
                 }
 
-                ensureMessageElement();
+                const turn = syncStreamedTurn(text, {
+                    finalized: true,
+                    historyOptions
+                });
+                const activeElement = ensureMessageElement();
                 if (renderFrame) {
                     cancelAnimationFrame(renderFrame);
                     renderFrame = 0;
                 }
-                messageElement.classList.remove('askpage-streaming-answer');
+                if (!activeElement) {
+                    return null;
+                }
+                activeElement.classList.remove('askpage-streaming-answer');
                 render({ suppressCopyButton: false });
-                scrollMessagesToMessageTop(messagesEl, messageElement, {
-                    scrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
-                    force: false,
-                    duration: 0
-                });
+                const targetMessagesEl = getActiveMessagesElement(messagesEl);
+                if (targetMessagesEl) {
+                    scrollMessagesToMessageTop(targetMessagesEl, activeElement, {
+                        scrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
+                        force: false,
+                        duration: 0
+                    });
+                }
                 isMessageTopPinned = true;
-                const turn = addConversationTurn('assistant', text, text, historyOptions);
-                messageElement._askpageTurn = turn;
-                return messageElement;
+                activeElement._askpageTurn = turn;
+                return activeElement;
             },
             discard
         };
@@ -8944,10 +9233,10 @@ async function createDialog() {
         });
 
         const img = document.createElement('img');
-        img.src = screenshotDataUrl;
         img.alt = getLocalizedText('questionScreenshotAlt');
         img.dataset.askpageI18nAlt = 'questionScreenshotAlt';
         img.loading = 'lazy';
+        setImageDataUrlSource(img, screenshotDataUrl);
 
         link.appendChild(img);
         messageElement.appendChild(link);
@@ -8982,10 +9271,10 @@ async function createDialog() {
             });
 
             const img = document.createElement('img');
-            img.src = imageDataUrl;
             img.alt = getLocalizedText('questionImageAlt', { index: index + 1 });
             img.dataset.askpageI18nAlt = 'questionImageAlt';
             img.loading = 'lazy';
+            setImageDataUrlSource(img, imageDataUrl);
             link.appendChild(img);
 
             gallery.appendChild(link);
@@ -8994,11 +9283,6 @@ async function createDialog() {
         messageElement.classList.add('askpage-user-with-context-images');
         messageElement.appendChild(gallery);
     }
-
-    const USER_MESSAGE_COPY_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4.5A2.5 2.5 0 0 1 2 12.5v-8A2.5 2.5 0 0 1 4.5 2h8A2.5 2.5 0 0 1 15 4.5V5"/></svg>';
-    const USER_MESSAGE_COPIED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"/></svg>';
-    const USER_MESSAGE_FAILED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>';
-    const USER_MESSAGE_EDIT_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><path d="m15 5 4 4"/></svg>';
 
     async function copyUserMessageWithFeedback(button, text) {
         if (button._copyResetTimer) {
@@ -9335,7 +9619,8 @@ async function createDialog() {
             suppressCopyButton: true,
             renderedHtml: options.renderedHtml || '',
             extraClassName: `askpage-agent-trace askpage-agent-trace-${kind}`,
-            autoScrollMode: shouldAutoScroll ? (options.autoScrollMode || 'bottom') : 'none'
+            autoScrollMode: shouldAutoScroll ? (options.autoScrollMode || 'bottom') : 'none',
+            autoScrollDuration: 0
         }, {
             renderedHtml: options.renderedHtml || '',
             includeInModelContext: false
@@ -9477,7 +9762,10 @@ async function createDialog() {
             renderedHtml,
             suppressCopyButton: true
         });
-        messageElement.querySelector('.askpage-tool-trace').open = wasOpen;
+        const detailsEl = messageElement.querySelector('.askpage-tool-trace');
+        if (detailsEl && detailsEl.open !== wasOpen) {
+            detailsEl.open = wasOpen;
+        }
         return true;
     }
 
@@ -9520,7 +9808,7 @@ async function createDialog() {
                 renderedHtml
             });
             if (renderTraceMessage(streamedReasoningTraceId, reasoningTraceText, renderedHtml)) {
-                scrollActiveMessagesToBottom(messagesEl);
+                scrollActiveMessagesToBottom(messagesEl, { duration: 0 });
             }
         };
         const scheduleStreamedReasoningRender = () => {
@@ -9543,7 +9831,8 @@ async function createDialog() {
             const reasoningTraceOptions = {
                 renderedHtml: buildReasoningTraceHtml(streamedReasoningTraceId, streamedReasoningText),
                 suppressCopyButton: true,
-                extraClassName: 'askpage-agent-trace askpage-agent-trace-reasoning'
+                extraClassName: 'askpage-agent-trace askpage-agent-trace-reasoning',
+                autoScrollDuration: 0
             };
             appendMessage('assistant', reasoningTraceText, reasoningTraceOptions);
             // 建立元素時就推入對話紀錄、結束時再改寫內容；最後一輪的回答會先存入紀錄，
@@ -9755,7 +10044,6 @@ async function createDialog() {
 
         // 建立截圖圖片元素
         const img = document.createElement('img');
-        img.src = screenshotDataUrl;
         img.style.cssText = `
             max-width: 100%;
             max-height: 300px;
@@ -9768,7 +10056,8 @@ async function createDialog() {
         img.title = getLocalizedText('viewOriginalSize');
 
         // 點擊圖片時在新視窗中開啟
-        img.addEventListener('click', () => openScreenshotPreviewWindow(screenshotDataUrl));
+        const openPreview = () => openScreenshotPreviewWindow(screenshotDataUrl);
+        img.addEventListener('click', openPreview);
 
         screenshotContainer.appendChild(img);
 
@@ -9786,13 +10075,21 @@ async function createDialog() {
         });
 
         // 當圖片載入完成時更新尺寸資訊
-        img.onload = () => {
+        const updateScreenshotInfo = (width, height) => {
             info.textContent = getLocalizedText('screenshotInfo', {
-                width: img.naturalWidth,
-                height: img.naturalHeight,
+                width,
+                height,
                 size: Math.round(screenshotDataUrl.length / 1024)
             });
         };
+        img.onload = () => updateScreenshotInfo(img.naturalWidth, img.naturalHeight);
+        setImageDataUrlSource(img, screenshotDataUrl, {
+            maxEdge: 1280,
+            onCanvas: (canvas, { width, height }) => {
+                canvas.addEventListener('click', openPreview);
+                updateScreenshotInfo(width, height);
+            }
+        });
 
         screenshotContainer.appendChild(info);
         div.appendChild(screenshotContainer);
