@@ -1999,7 +1999,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Perform request
-            const fetchOptions = { method, headers };
+            const fetchOptions = { method, headers, redirect: 'error' };
             if (body) {
                 fetchOptions.body = body;
             }
@@ -2012,7 +2012,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 } catch (e) {
                     const baseUrl = url.replace(/\/models$/, '').replace(/\/v1\/?$/, '');
-                    response = await fetch(`${baseUrl}/api/tags`);
+                    response = await fetch(`${baseUrl}/api/tags`, { redirect: 'error' });
                 }
             } else {
                 response = await fetch(url, fetchOptions);
@@ -2256,7 +2256,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // 2. Fetch from API
-        const response = await fetch(url, { headers });
+        const response = await fetch(url, { headers, redirect: 'error' });
         if (!response.ok) {
             const errText = await response.text();
             throw new Error(t('apiResponseError', { status: response.status, error: errText || '' }));
@@ -2368,7 +2368,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let models = [];
         if (providerType === 'ollama') {
             try {
-                const response = await fetch(`${endpoint}/models`);
+                const response = await fetch(`${endpoint}/models`, { redirect: 'error' });
                 if (response.ok) {
                     const data = await response.json();
                     if (data.data && Array.isArray(data.data)) {
@@ -2379,7 +2379,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             } catch (e) {
                 const baseUrl = endpoint.replace(/\/v1\/?$/, '');
-                const response = await fetch(`${baseUrl}/api/tags`);
+                const response = await fetch(`${baseUrl}/api/tags`, { redirect: 'error' });
                 if (!response.ok) {throw new Error(t('ollamaConnectionFailed'));}
                 const data = await response.json();
                 if (data.models && Array.isArray(data.models)) {
@@ -2388,7 +2388,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } else {
             const url = endpoint.endsWith('/models') ? endpoint : `${endpoint.replace(/\/$/, '')}/models`;
-            const response = await fetch(url, { headers });
+            const response = await fetch(url, { headers, redirect: 'error' });
             if (!response.ok) {
                 const errText = await response.text();
                 throw new Error(t('apiResponseError', { status: response.status, error: errText || '' }));

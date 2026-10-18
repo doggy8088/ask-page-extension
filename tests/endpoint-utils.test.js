@@ -12,6 +12,7 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'
 const settingsHtml = fs.readFileSync(path.join(rootDir, 'settings.html'), 'utf8');
 const settingsScript = fs.readFileSync(path.join(rootDir, 'settings.js'), 'utf8');
 const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
+const backgroundScript = fs.readFileSync(path.join(rootDir, 'background.js'), 'utf8');
 const releaseWorkflow = fs.readFileSync(path.join(rootDir, '.github/workflows/release.yml'), 'utf8');
 const manualBuildWorkflow = fs.readFileSync(path.join(rootDir, '.github/workflows/manual-build.yml'), 'utf8');
 const testReleaseScript = fs.readFileSync(path.join(rootDir, 'test-release.sh'), 'utf8');
@@ -137,6 +138,14 @@ assert.strictEqual(
     validateConfig({ OPENAI_COMPATIBLE_ENDPOINT: 'http://localhost:11434/v1' }).ok,
     true
 );
+assert.strictEqual(
+    validateConfig({
+        PROVIDERS: [{ openaiCompatibleEndpoint: 'https://api.example.com/v1' }],
+        OPENAI_COMPATIBLE_ENDPOINT: 'http://example.com/v1'
+    }).ok,
+    true,
+    'legacy endpoints must be ignored once PROVIDERS is present'
+);
 
 const contentScriptFiles = manifest.content_scripts[0].js;
 assert.ok(
@@ -177,5 +186,24 @@ assert.match(
     contentScript,
     /endpoint = activeConfig\?\.openaiCompatibleEndpoint \|\| 'http:\/\/localhost:11434\/v1';/
 );
+
+assert.match(settingsScript, /const fetchOptions = \{ method, headers, redirect: 'error' \};/);
+assert.strictEqual(
+    (settingsScript.match(/fetch\(`\$\{baseUrl\}\/api\/tags`, \{ redirect: 'error' \}\)/g) || []).length,
+    2,
+    'both Ollama fallback requests must reject redirects'
+);
+assert.strictEqual(
+    (settingsScript.match(/fetch\(url, \{ headers, redirect: 'error' \}\)/g) || []).length,
+    2,
+    'model-list requests must reject redirects'
+);
+assert.match(settingsScript, /fetch\(`\$\{endpoint\}\/models`, \{ redirect: 'error' \}\)/);
+assert.strictEqual(
+    (contentScript.match(/const requestOptions = \{ \.\.\.options, redirect: 'error' \};/g) || []).length,
+    2,
+    'JSON and streaming retry paths must reject redirects'
+);
+assert.match(backgroundScript, /redirect: 'error'/);
 
 console.log('endpoint-utils: ok');

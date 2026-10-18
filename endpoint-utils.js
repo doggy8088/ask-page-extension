@@ -141,6 +141,10 @@
             return providersResult;
         }
 
+        if (Array.isArray(config.PROVIDERS)) {
+            return { ok: true };
+        }
+
         for (const key of LEGACY_ENDPOINT_KEYS) {
             if (!config[key]) {
                 continue;

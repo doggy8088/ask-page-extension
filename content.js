@@ -10482,7 +10482,10 @@ async function createDialog() {
         for (;;) {
             try {
                 throwIfAskTaskCancelled(signal);
-                const requestOptions = signal ? { ...options, signal } : options;
+                const requestOptions = { ...options, redirect: 'error' };
+                if (signal) {
+                    requestOptions.signal = signal;
+                }
                 const response = await fetchImpl(url, requestOptions);
                 if (!response.ok) {
                     const errorBody = await response.text();
@@ -10625,7 +10628,10 @@ async function createDialog() {
             let receivedEvent = false;
             try {
                 throwIfAskTaskCancelled(signal);
-                const requestOptions = signal ? { ...options, signal } : options;
+                const requestOptions = { ...options, redirect: 'error' };
+                if (signal) {
+                    requestOptions.signal = signal;
+                }
                 const response = await fetchImpl(url, requestOptions);
                 if (!response.ok) {
                     const errorBody = await response.text();
