@@ -211,6 +211,10 @@
 2. 視服務需求填入 API Key（部分端點可省略）
 3. 輸入 endpoint URL 與 model 名稱
 4. 儲存設定後即可切換使用
+5. 安全注意事項：
+   - 遠端 endpoint 必須使用 `https://`；`http://` 僅允許 `localhost` 或私有網路位址（例如本機 Ollama）。
+   - API Key 會傳送到您設定的 endpoint。請只匯入來自可信任來源的設定檔，並確認 endpoint 主機正確。
+   - Gemini、OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Meta 與 Ollama Cloud 固定使用官方 endpoint；Azure、Ollama（本機）與 OpenAI Compatible 使用您設定的 endpoint。
 
 ### 支援的模型
 
