@@ -1,8 +1,10 @@
 'use strict';
 
 (function initEndpointUtils(root) {
-    const PROVIDER_ENDPOINT_FIELDS = ['openaiCompatibleEndpoint', 'ollamaEndpoint', 'azureEndpoint'];
+    const PROVIDER_ENDPOINT_FIELDS = Object.freeze(['openaiCompatibleEndpoint', 'ollamaEndpoint', 'azureEndpoint']);
     const LEGACY_ENDPOINT_KEYS = ['AZURE_OPENAI_ENDPOINT', 'OPENAI_COMPATIBLE_ENDPOINT'];
+    const INVALID_MESSAGE_KEY = 'apiEndpointInvalid';
+    const INSECURE_MESSAGE_KEY = 'apiEndpointInsecure';
 
     function isIPv4Literal(host) {
         const parts = String(host || '').split('.');
@@ -66,36 +68,35 @@
     function validateEndpoint(rawEndpoint) {
         const endpoint = String(rawEndpoint === null || rawEndpoint === undefined ? '' : rawEndpoint).trim();
         if (!endpoint) {
-            return { ok: false, reason: 'required' };
+            return { ok: false, reason: 'required', messageKey: INVALID_MESSAGE_KEY };
         }
 
         let url;
         try {
             url = new URL(endpoint);
         } catch (_) {
-            return { ok: false, reason: 'invalid' };
+            return { ok: false, reason: 'invalid', messageKey: INVALID_MESSAGE_KEY };
         }
 
         if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-            return { ok: false, reason: 'invalid' };
+            return { ok: false, reason: 'invalid', messageKey: INVALID_MESSAGE_KEY };
         }
 
         if (url.username || url.password) {
-            return { ok: false, reason: 'invalid' };
+            return { ok: false, reason: 'invalid', messageKey: INVALID_MESSAGE_KEY };
         }
 
         if (url.protocol === 'http:' && !isLoopbackOrPrivateHost(url.hostname)) {
-            return { ok: false, reason: 'insecure' };
+            return { ok: false, reason: 'insecure', messageKey: INSECURE_MESSAGE_KEY };
         }
 
-        if (url.pathname !== '/' && url.pathname.endsWith('/')) {
-            url.pathname = url.pathname.replace(/\/$/, '');
+        if (url.pathname !== '/') {
+            url.pathname = url.pathname.replace(/\/+$/, '');
         }
         const normalized = url.pathname === '/' && !url.search && !url.hash ? url.origin : url.href;
         return {
             ok: true,
-            normalized,
-            url
+            normalized
         };
     }
 
@@ -159,6 +160,7 @@
     }
 
     root.AskPageEndpoint = Object.freeze({
+        PROVIDER_ENDPOINT_FIELDS,
         validateEndpoint,
         validateProviders,
         validateConfig,

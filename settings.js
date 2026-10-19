@@ -111,7 +111,7 @@ function validateEndpointOrThrow(endpoint) {
 
     const result = AskPageEndpoint.validateEndpoint(endpoint);
     if (!result.ok) {
-        throw new Error(t(result.reason === 'insecure' ? 'apiEndpointInsecure' : 'apiEndpointInvalid'));
+        throw new Error(t(result.messageKey));
     }
 
     return result.normalized;
@@ -668,11 +668,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const hasCustomEndpoints = Boolean(
                     settings.AZURE_OPENAI_ENDPOINT
                     || settings.OPENAI_COMPATIBLE_ENDPOINT
-                    || (Array.isArray(settings.PROVIDERS) && settings.PROVIDERS.some((provider) => provider && (
-                        provider.openaiCompatibleEndpoint
-                        || provider.ollamaEndpoint
-                        || provider.azureEndpoint
-                    )))
+                    || (Array.isArray(settings.PROVIDERS) && settings.PROVIDERS.some((provider) => provider
+                        && AskPageEndpoint.PROVIDER_ENDPOINT_FIELDS.some((field) => provider[field])))
                 );
                 const confirmKey = hasCustomEndpoints ? 'importCustomEndpointWarning' : 'importSettingsConfirm';
 

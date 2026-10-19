@@ -68,7 +68,7 @@ function getValidatedProviderEndpoint(endpoint) {
     if (!result.ok) {
         return {
             ok: false,
-            message: getLocalizedText(result.reason === 'insecure' ? 'apiEndpointInsecure' : 'apiEndpointInvalid')
+            message: getLocalizedText(result.messageKey)
         };
     }
 

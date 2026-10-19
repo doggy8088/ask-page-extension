@@ -16,6 +16,7 @@ const backgroundScript = fs.readFileSync(path.join(rootDir, 'background.js'), 'u
 const releaseWorkflow = fs.readFileSync(path.join(rootDir, '.github/workflows/release.yml'), 'utf8');
 const manualBuildWorkflow = fs.readFileSync(path.join(rootDir, '.github/workflows/manual-build.yml'), 'utf8');
 const testReleaseScript = fs.readFileSync(path.join(rootDir, 'test-release.sh'), 'utf8');
+const publishDoc = fs.readFileSync(path.join(rootDir, 'PUBLISH.md'), 'utf8');
 
 const sandbox = { URL, console };
 sandbox.globalThis = sandbox;
@@ -26,6 +27,10 @@ const endpointUtils = sandbox.AskPageEndpoint;
 assert.ok(endpointUtils, 'AskPageEndpoint must be exported');
 
 const { validateEndpoint, validateProviders, validateConfig, isLoopbackOrPrivateHost } = endpointUtils;
+assert.deepStrictEqual(
+    Array.from(endpointUtils.PROVIDER_ENDPOINT_FIELDS),
+    ['openaiCompatibleEndpoint', 'ollamaEndpoint', 'azureEndpoint']
+);
 
 function assertValid(endpoint) {
     const result = validateEndpoint(endpoint);
@@ -38,6 +43,11 @@ function assertInvalid(endpoint, reason) {
     assert.strictEqual(result.ok, false, `${endpoint} should be invalid`);
     if (reason) {
         assert.strictEqual(result.reason, reason, `${endpoint} should fail with ${reason}`);
+        assert.strictEqual(
+            result.messageKey,
+            reason === 'insecure' ? 'apiEndpointInsecure' : 'apiEndpointInvalid',
+            `${endpoint} should carry the correct message key`
+        );
     }
 }
 
@@ -61,12 +71,27 @@ assertValid('http://[::ffff:10.0.0.5]:11434/v1');
 
 const bareOllama = assertValid('http://localhost:11434');
 assert.strictEqual(bareOllama.normalized, 'http://localhost:11434');
+assert.strictEqual(Object.prototype.hasOwnProperty.call(bareOllama, 'url'), false);
 assert.strictEqual(`${bareOllama.normalized}/models`, 'http://localhost:11434/models');
 assert.strictEqual(`${bareOllama.normalized}/api/tags`, 'http://localhost:11434/api/tags');
 
 const versionedOllama = assertValid('http://localhost:11434/v1/');
 assert.strictEqual(versionedOllama.normalized, 'http://localhost:11434/v1');
 assert.strictEqual(`${versionedOllama.normalized}/models`, 'http://localhost:11434/v1/models');
+
+const multiSlashOllama = assertValid('http://localhost:11434/v1//');
+assert.strictEqual(multiSlashOllama.normalized, 'http://localhost:11434/v1');
+assert.strictEqual(`${multiSlashOllama.normalized}/models`, 'http://localhost:11434/v1/models');
+
+const multiSlashModels = assertValid('https://example.com/models//');
+assert.strictEqual(multiSlashModels.normalized, 'https://example.com/models');
+const multiSlashModelsUrl = multiSlashModels.normalized.endsWith('/models')
+    ? multiSlashModels.normalized
+    : `${multiSlashModels.normalized.replace(/\/$/, '')}/models`;
+assert.strictEqual(multiSlashModelsUrl, 'https://example.com/models');
+
+const multiSlashOrigin = assertValid('http://localhost:11434///');
+assert.strictEqual(multiSlashOrigin.normalized, 'http://localhost:11434');
 
 const httpsOrigin = assertValid('https://example.com/');
 assert.strictEqual(httpsOrigin.normalized, 'https://example.com');
@@ -159,12 +184,15 @@ assert.ok(
     'endpoint-utils.js must load before settings.js'
 );
 assert.match(packageJson.scripts.package, /endpoint-utils\.js/);
-for (const [name, content] of Object.entries({ releaseWorkflow, manualBuildWorkflow, testReleaseScript })) {
+for (const [name, content] of Object.entries({ releaseWorkflow, manualBuildWorkflow, testReleaseScript, publishDoc })) {
     assert.ok(content.includes('endpoint-utils.js'), `${name} must package endpoint-utils.js`);
 }
 assert.match(manualBuildWorkflow, /FILES=\([^)]*"endpoint-utils\.js"/);
+assert.match(publishDoc, /zip -r test-package\.zip[^\n]*endpoint-utils\.js/);
 
 assert.match(settingsScript, /function validateEndpointOrThrow\(endpoint\)/);
+assert.match(settingsScript, /throw new Error\(t\(result\.messageKey\)\);/);
+assert.match(settingsScript, /AskPageEndpoint\.PROVIDER_ENDPOINT_FIELDS\.some/);
 assert.match(settingsScript, /endpoint = validateEndpointOrThrow\(rawEndpoint\);/);
 assert.match(settingsScript, /const azureEndpoint = validateEndpointOrThrow\(endpoint\)\.replace/);
 assert.match(settingsScript, /const validatedEndpoint = validateEndpointOrThrow\(endpoint\);/);
@@ -177,6 +205,7 @@ assert.ok(
 );
 
 assert.match(contentScript, /function getValidatedProviderEndpoint\(endpoint\)/);
+assert.match(contentScript, /getLocalizedText\(result\.messageKey\)/);
 assert.strictEqual(
     (contentScript.match(/const endpointValidation = getValidatedProviderEndpoint\(endpoint\);/g) || []).length,
     2,

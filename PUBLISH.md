@@ -99,6 +99,7 @@ git push origin v1.0.0
   - manifest.json (版本號已更新)
   - background.js
   - content.js
+  - endpoint-utils.js
   - popup.html
   - popup.js
   - style.css
@@ -149,7 +150,7 @@ npm install
 npm run lint
 
 # 建立測試套件（手動壓縮需上傳至 CWS 的檔案）
-zip -r test-package.zip manifest.json background.js content.js popup.html popup.js settings.html settings.js style.css icons/ lib/
+zip -r test-package.zip manifest.json background.js content.js popup.html popup.js settings.html settings.js endpoint-utils.js style.css icons/ lib/
 ```
 
 ## 參考資源
