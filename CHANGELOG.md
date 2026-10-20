@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+### 修正 / 更新
+
+- **品質檢查改為執行真實的測試套件**：`.github/workflows/quality-check.yml` 過去只做 ESLint 檢查，專案既有的 30 個測試檔（`tests/run-all.js`）從未在 CI 中執行過。現新增「執行測試套件」步驟實際執行 `npm test`，讓測試失敗會讓品質檢查 job 失敗，而不只是本地跑過。
+- **品質檢查工作流程收斂權限**：新增 `permissions: contents: read` 將工作流程權限限制為唯讀，並在 `actions/checkout` 加上 `persist-credentials: false`，避免 GITHUB_TOKEN 被寫入 `.git/config`。
+- **品質檢查摘要補上測試項目**：「程式碼品質總結」的檢查項目清單原本沒有測試項目，與實際執行的步驟不符，現補上「✅ 單元測試套件 (npm test)」。
+- **AGENTS.md 測試說明修正**：`AGENTS.md` 的 Testing 段落原本註記「Currently no automated tests」，與現有 30 個測試檔不符，已更正。
+
 ## [0.48.0] - 2026-10-20
 
 ### 新增 / 改進（v0.48.0）
