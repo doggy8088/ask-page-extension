@@ -1,3 +1,4 @@
+/* global AskPageAgentGlow */
 // AES-256-GCM encryption functions (reused from popup.js)
 async function generateEncryptionKey() {
     const key = await crypto.subtle.generateKey(
@@ -571,6 +572,69 @@ document.addEventListener('DOMContentLoaded', async () => {
             showLocalizedStatus('settingsAutoSaved', undefined, 'success');
         });
     }
+
+    const glowColorPreset = document.getElementById('agentGlowColorPreset');
+    const glowCustomGroup = document.getElementById('agentGlowCustomColorGroup');
+    const glowCustomInput = document.getElementById('agentGlowCustomColor');
+    const glowColorError = document.getElementById('agentGlowColorError');
+    const glowPreview = document.getElementById('agentGlowColorPreview');
+
+    for (const preset of [...AskPageAgentGlow.PRESETS, { key: 'agentGlowCustom', color: 'custom' }]) {
+        const option = document.createElement('option');
+        option.value = preset.color;
+        option.dataset.i18n = preset.key;
+        option.textContent = t(preset.key);
+        glowColorPreset.appendChild(option);
+    }
+
+    function updateGlowPreview(color) {
+        glowPreview.style.setProperty('--agent-glow-preview-shadow', AskPageAgentGlow.buildShadow(color));
+    }
+
+    function setGlowColorError(invalid) {
+        glowColorError.hidden = !invalid;
+        glowCustomInput.setAttribute('aria-invalid', String(invalid));
+        glowCustomInput.setCustomValidity(invalid ? t('agentGlowColorInvalid') : '');
+    }
+
+    function loadGlowColor(value) {
+        const color = AskPageAgentGlow.normalizeColor(value) || AskPageAgentGlow.DEFAULT_COLOR;
+        const preset = AskPageAgentGlow.PRESETS.find((item) => item.color === color);
+        glowColorPreset.value = preset ? color : 'custom';
+        glowCustomGroup.hidden = !!preset;
+        glowCustomInput.value = color;
+        updateGlowPreview(color);
+    }
+
+    async function saveGlowColor(color) {
+        updateGlowPreview(color);
+        await chrome.storage.local.set({ [AskPageAgentGlow.STORAGE_KEY]: color });
+        showLocalizedStatus('settingsAutoSaved', undefined, 'success');
+    }
+
+    glowColorPreset.addEventListener('change', async () => {
+        glowCustomGroup.hidden = glowColorPreset.value !== 'custom';
+        setGlowColorError(false);
+        if (glowColorPreset.value !== 'custom') {
+            glowCustomInput.value = glowColorPreset.value;
+            await saveGlowColor(glowColorPreset.value);
+        }
+    });
+    glowCustomInput.addEventListener('input', () => {
+        setGlowColorError(false);
+        const color = AskPageAgentGlow.normalizeColor(glowCustomInput.value);
+        if (color) {
+            updateGlowPreview(color);
+        }
+    });
+    glowCustomInput.addEventListener('change', async () => {
+        const color = AskPageAgentGlow.normalizeColor(glowCustomInput.value);
+        setGlowColorError(!color);
+        if (color) {
+            glowCustomInput.value = color;
+            await saveGlowColor(color);
+        }
+    });
 
     if (agentContextFormatSelect) {
         agentContextFormatSelect.addEventListener('change', async () => {
@@ -1209,7 +1273,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         CUSTOM_SUMMARY_PROMPT_STORAGE, CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE,
         CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
         LAST_ACTIVE_TAB_STORAGE, PENDING_OPTIONS_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE,
-        AGENT_CONTEXT_FORMAT_STORAGE, AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE, TOOL_CALL_MAX_ROUNDS_STORAGE
+        AGENT_CONTEXT_FORMAT_STORAGE, AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE, TOOL_CALL_MAX_ROUNDS_STORAGE,
+        AskPageAgentGlow.STORAGE_KEY
     ], async (result) => {
         activeProviderId = result.ACTIVE_PROVIDER_ID || '';
         activeModel = result.ACTIVE_MODEL || '';
@@ -1247,6 +1312,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (toolCallMaxRoundsInput) {
             toolCallMaxRoundsInput.value = String(normalizeToolCallMaxRounds(result[TOOL_CALL_MAX_ROUNDS_STORAGE]));
         }
+
+        loadGlowColor(result[AskPageAgentGlow.STORAGE_KEY]);
 
         if (agentGlowEffectEnabledCheckbox) {
             agentGlowEffectEnabledCheckbox.checked = result[AGENT_GLOW_EFFECT_ENABLED_STORAGE] !== false;

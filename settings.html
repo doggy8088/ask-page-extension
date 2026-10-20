@@ -262,6 +262,52 @@
       margin-top: 16px;
     }
 
+    #agentGlowCustomColorGroup[hidden] {
+      display: none;
+    }
+
+    .glow-preview {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .glow-preview-sample {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: 96px;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #101827;
+      color: #e8eef8;
+    }
+
+    .glow-preview-sample.light {
+      background: #f8fafc;
+      color: #182230;
+    }
+
+    .glow-preview-sample::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      box-shadow: var(--agent-glow-preview-shadow);
+      animation: agentGlowPreviewPulse 2.2s ease-in-out infinite;
+    }
+
+    @keyframes agentGlowPreviewPulse {
+      0%, 100% { opacity: 0.72; }
+      50% { opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .glow-preview-sample::after { animation: none; }
+    }
+
     .card:hover {
       border-color: rgba(117, 216, 255, 0.34);
       box-shadow: var(--shadow-lg);
@@ -824,7 +870,23 @@
                 <input type="checkbox" id="agentGlowEffectEnabled" checked />
                 <span data-i18n="enableAgentGlowEffect">代理模式執行時顯示網頁背光效果</span>
               </label>
-              <small style="color: var(--text-secondary);" data-i18n="enableAgentGlowEffectHelp">啟用後，從送出問題到代理模式回覆完成前，網頁四周會顯示琥珀色背光動畫，提示 AskPage 正在頁面上工作。</small>
+              <small style="color: var(--text-secondary);" data-i18n="enableAgentGlowEffectHelp">啟用後，從送出問題到代理模式回覆完成前，網頁四周會顯示所選顏色的背光動畫，提示 AskPage 正在頁面上工作。</small>
+            </div>
+
+            <div class="form-group">
+              <label for="agentGlowColorPreset" data-i18n="agentGlowColorLabel">背光顏色</label>
+              <select id="agentGlowColorPreset" aria-describedby="agentGlowColorHelp"></select>
+              <small id="agentGlowColorHelp" style="color: var(--text-secondary);" data-i18n="agentGlowColorHelp">選擇固定配色或自訂色碼。預設為琥珀色，變更會自動儲存，於下次任務生效。</small>
+            </div>
+            <div class="form-group" id="agentGlowCustomColorGroup" hidden>
+              <label for="agentGlowCustomColor" data-i18n="agentGlowCustomColorLabel">自訂背光色碼</label>
+              <input type="text" id="agentGlowCustomColor" value="#FF9B3A" placeholder="#FF9B3A" maxlength="7" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="agentGlowCustomColorHelp agentGlowColorError" />
+              <small id="agentGlowCustomColorHelp" style="color: var(--text-secondary);" data-i18n="agentGlowCustomColorHelp">接受 3 位或 6 位十六進位色碼，例如 #F93 或 #FF9B3A。無效的色碼不會儲存。</small>
+              <small id="agentGlowColorError" role="alert" style="color: var(--danger-color);" hidden data-i18n="agentGlowColorInvalid">請輸入有效的十六進位色碼，例如 #FF9B3A。</small>
+            </div>
+            <div class="glow-preview" id="agentGlowColorPreview">
+              <div class="glow-preview-sample"><span data-i18n="agentGlowPreviewDark">深色背景預覽</span></div>
+              <div class="glow-preview-sample light"><span data-i18n="agentGlowPreviewLight">淺色背景預覽</span></div>
             </div>
           </div>
 
@@ -1241,6 +1303,7 @@
 
   <script src="i18n.js"></script>
   <script src="endpoint-utils.js"></script>
+  <script src="agent-glow.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

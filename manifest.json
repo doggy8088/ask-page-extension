@@ -43,6 +43,7 @@
         "endpoint-utils.js",
         "lib/tool-policy.js",
         "lib/tool-governance.js",
+        "agent-glow.js",
         "content.js"
       ]
     }

@@ -1,4 +1,4 @@
-/* global AskPageI18n */
+/* global AskPageI18n, AskPageAgentGlow */
 'use strict';
 
 // Log content script loading
@@ -2515,6 +2515,11 @@ async function getAgentGlowEffectEnabled() {
     return result[AGENT_GLOW_EFFECT_ENABLED_STORAGE] !== false;
 }
 
+async function getAgentGlowColor() {
+    const result = await chrome.storage.local.get([AskPageAgentGlow.STORAGE_KEY]);
+    return AskPageAgentGlow.normalizeColor(result[AskPageAgentGlow.STORAGE_KEY]) || AskPageAgentGlow.DEFAULT_COLOR;
+}
+
 function ensureAgentGlowStylesInjected() {
     if (document.getElementById(AGENT_GLOW_STYLE_ELEMENT_ID)) {
         return;
@@ -2531,10 +2536,6 @@ function ensureAgentGlowStylesInjected() {
             opacity: 0;
             will-change: opacity;
             transition: opacity 0.35s ease;
-            box-shadow:
-                inset 0 0 22px 3px rgba(255, 155, 58, 0.58),
-                inset 0 0 54px 12px rgba(234, 125, 42, 0.35),
-                inset 0 0 100px 28px rgba(188, 74, 24, 0.18);
         }
         #${AGENT_GLOW_OVERLAY_ID}.${AGENT_GLOW_VISIBLE_CLASS} {
             opacity: 1;
@@ -2562,7 +2563,7 @@ function ensureAgentGlowStylesInjected() {
 let agentGlowActiveCount = 0;
 let agentGlowHideTimeoutId = null;
 
-function showAgentGlowEffect() {
+function showAgentGlowEffect(color = AskPageAgentGlow.DEFAULT_COLOR) {
     agentGlowActiveCount += 1;
     if (agentGlowActiveCount > 1) {
         return;
@@ -2583,6 +2584,7 @@ function showAgentGlowEffect() {
         document.documentElement.appendChild(overlay);
     }
 
+    overlay.style.setProperty('box-shadow', AskPageAgentGlow.buildShadow(color), 'important');
     requestAnimationFrame(() => {
         overlay.classList.add(AGENT_GLOW_VISIBLE_CLASS);
     });
@@ -15416,14 +15418,15 @@ async function createDialog() {
 
         console.log('[AskPage] Using active provider type:', activeConfig.type);
 
-        const [agentModeEnabled, agentGlowEffectEnabled] = await Promise.all([
+        const [agentModeEnabled, agentGlowEffectEnabled, agentGlowColor] = await Promise.all([
             getAgentModeEnabled(),
-            getAgentGlowEffectEnabled()
+            getAgentGlowEffectEnabled(),
+            getAgentGlowColor()
         ]);
         const shouldShowAgentGlow = agentModeEnabled && agentGlowEffectEnabled;
 
         if (shouldShowAgentGlow) {
-            showAgentGlowEffect();
+            showAgentGlowEffect(agentGlowColor);
         }
 
         try {
