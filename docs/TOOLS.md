@@ -244,10 +244,13 @@ Ollama Cloud 另有可選的 `web_search` 工具。使用者在 Ollama Cloud pro
 - 工具回報 ref 已失效或不存在時，改用 `find` / `read_page` 重新取得，不要猜測
 - 工具執行結果會回傳給模型，供下一輪決策使用
 
+所有 provider 收到的工具描述都會加上 `[tool-risk: …]` 風險標註（`read-only`、`reversible-mutation`、`external-side-effect`、`high-impact`、`unknown`），用來讓模型知道各工具的影響範圍。風險分類與治理行為說明見 [`GOVERNED_TOOL_EXECUTION.md`](GOVERNED_TOOL_EXECUTION.md)。
+
 ## 四、建議閱讀順序
 
 若要進一步理解工具行為，建議搭配閱讀：
 
 1. `content.js` 中的 `getToolDefinitions()`：看工具宣告與參數 schema
-2. `content.js` 中的 `executeToolCall()`：看每個工具的實際執行邏輯
+2. `content.js` 中的 `executeToolCallUngoverned()`：看每個工具的實際執行邏輯
 3. `docs\目前提示詞管理邏輯與提問動態結構.md`：看工具如何被放入多步驟代理流程
+4. `docs\GOVERNED_TOOL_EXECUTION.md`：看風險分類、治理模式與核准契約
