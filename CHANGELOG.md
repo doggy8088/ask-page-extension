@@ -6,8 +6,11 @@
 
 ## [Unreleased]
 
-### 修正 / 更新
+## [0.48.1] - 2026-10-20
 
+### 修正 / 更新（v0.48.1）
+
+- **修正串流工具呼叫被誤合併而無法解析參數**：OpenAI 相容串流改為優先依工具呼叫 `id` 識別資料；不同 `id` 即使共用 `index`，仍保留各自的工具名稱與 JSON 參數，避免出現 `get_page_textread_page`、參數物件直接串接及後續工具執行失敗。省略 `id` 的後續片段仍依索引接續目前呼叫，並保留一般交錯分段與延後提供 `id` 的支援。新增回歸測試；已於 Chrome 使用 Ollama Cloud 的 `minimax-m3.1-flash` 與代理模式，完成 DevFest Taipei 2026 頁面的摘要提問。
 - **Ollama Cloud 內建模型清單改用最新雲端模型並重新排序**：設定頁內建的 Ollama Cloud 模型清單由 8 個改為 10 個，依序為 `deepseek-v4.1-flash:1017`、`deepseek-v4-pro`、`deepseek-v4.1-flash`、`muse-spark-open`、`minimax-m3.1-flash`、`minimax-m3`、`kimi-k2.7-code`、`kimi-k3`、`gemma4:31b`、`gpt-oss:120b`。新增 Ollama Cloud Provider 時預設勾選的第一項改為 `deepseek-v4.1-flash:1017`；已勾選舊模型（`glm-5.3-flash`、`deepseek-v4-flash`）的使用者仍會保留原有設定並可繼續使用。移除的 `glm-5.3-flash` 與 `deepseek-v4-flash` 保留既有推理強度能力設定，讓已儲存這些名稱的使用者維持原有推理強度控制。
 - **Ollama Cloud 的 `deepseek-v4-pro` 與 `deepseek-v4.1-flash` 固定使用最高推理強度**：這兩個模型只提供 `max` 等級，設定頁完全隱藏推理強度控制（不顯示滑桿，也無法選擇 `none` 或 `high`），request 固定送出 `reasoning_effort: "max"`。`kimi-k2.7-code` 的五個 OpenAI 相容 effort 值維持不變。
 - **品質檢查改為執行真實的測試套件**：`.github/workflows/quality-check.yml` 過去只做 ESLint 檢查，專案既有的 30 個測試檔（`tests/run-all.js`）從未在 CI 中執行過。現新增「執行測試套件」步驟實際執行 `npm test`，讓測試失敗會讓品質檢查 job 失敗，而不只是本地跑過。
