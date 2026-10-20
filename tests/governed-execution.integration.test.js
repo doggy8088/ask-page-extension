@@ -10,6 +10,7 @@ const {
 function blockedResult({
     id,
     name,
+    message,
     policy,
     plan,
     approval,
@@ -21,6 +22,7 @@ function blockedResult({
         name,
         result: {
             success: false,
+            message,
             data: {
                 governance: {
                     risk: policy?.risk || 'unknown',
@@ -228,6 +230,29 @@ async function run() {
         );
     }
     assert.strictEqual(executions, 3, '未知工具不得執行');
+
+    // ===== 參數過深：應回傳失敗結果，不可讓整輪代理中斷 =====
+    let deepArgs = {};
+    let deepCursor = deepArgs;
+    for (let i = 0; i < 5000; i += 1) {
+        deepCursor.next = {};
+        deepCursor = deepCursor.next;
+    }
+    const tooDeep = await executeGovernedToolCall({
+        toolCall: { id: 'too-deep', name: 'run_js', args: deepArgs },
+        mode: 'observe',
+        buildPolicy: buildToolPolicy,
+        execute,
+        onAudit: (record) => audits.push(record),
+        createBlockedResult: blockedResult
+    });
+    assert.strictEqual(tooDeep.result.success, false, '參數過深應回傳失敗的工具結果');
+    assert.match(
+        tooDeep.result.message,
+        /巢狀深度/,
+        '失敗訊息應說明是巢狀深度問題'
+    );
+    assert.strictEqual(executions, 3, '參數過深時不得執行工具');
 
     // ===== 稽核紀錄 =====
     assert.ok(

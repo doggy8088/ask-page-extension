@@ -88,11 +88,15 @@ id, name, args, policy, plan
 
 稽核是旁路觀察：**稽核寫入失敗不會改變工具執行結果**（同步拋錯與非同步拒絕都被隔離）。
 
+治理模組本身缺席時（`enforce` 模式下最需要被診斷的 fail-closed 情境），`content.js` 仍會以相同的欄位契約送出一筆 `blocked` 紀錄（`risk: unknown`、`decision: block`、`error: governance-module-unavailable`），稽核消費者不需分辨紀錄來源。
+
 ## 參數快照的安全性
 
 快照使用 `Object.create(null)` 搭配 `Object.defineProperty` 建立自己的資料屬性。
 
 若直接用 `{}` 賦值，JSON 解析出的 `"__proto__"` 鍵會走成 prototype setter，讓快照憑空繼承出 `submit` 等旗標，導致政策判定與原始參數不一致（例如原本只填欄位卻被判定為送出表單）。快照不繼承任何原型，因此不存在這條路徑。
+
+工具參數來自模型輸出，屬於不可信輸入，因此快照另設 32 層深度上限。超過上限時擲出 `ToolArgumentSnapshotError`，由治理層轉成失敗的工具結果（`success: false`）與 `blocked` 稽核紀錄，不會以 `RangeError` 中斷整輪代理。
 
 ## 目前邊界
 

@@ -13,6 +13,11 @@
 - **治理模式與核准掛鉤**：預設為 `observe` 模式，只分類、只稽核，**不擋任何現有行為**，因此這次改動不影響使用者既有體驗。`enforce` 模式為 fail-closed：治理模組不可用、缺少核准機制、核准被拒或拋錯、核准後缺少或未通過 target/precondition 驗證時，一律擋下執行；核准的參數為不可變快照；稽核寫入失敗（同步拋錯與非同步拒絕）與工具執行結果隔離；核准與前置驗證等待期間保留既有的任務取消語意。核准 UI 尚未實作，治理層改以 `toolContext.requestToolApproval` / `validateToolPrecondition` / `onToolAudit` 掛鉤形式開放。
 - **測試與文件**：新增 `tests/tool-policy.test.js`、`tests/tool-governance.test.js`、`tests/governed-execution.integration.test.js`、`tests/governance-runtime-guard.test.js` 與 `tests/governed-content-integration.test.js`，涵蓋風險分類、參數升級、參數正規化與執行層一致、fail-closed 語意、參數快照與原型污染防護、未知工具（含 `constructor` 等繼承名稱）必須要求核准、TOCTOU 前置驗證、稽核隔離、取消語意與各 provider 定義一致性；`tests/gemini-interactions.test.js` 改為擷取共用的工具定義片段；新增 `docs/GOVERNED_TOOL_EXECUTION.md` 說明架構、模式、核准契約與目前邊界；`npm run lint` 新增 `lint:governance` 檢查治理層檔案。
 
+### 修正（Unreleased）
+
+- **治理層不可用時仍會留下稽核紀錄**：`enforce` 模式下若治理模組未能載入，原本會直接回傳阻擋結果而不呼叫 `toolContext.onToolAudit`，導致最需要被診斷的 fail-closed 情境反而沒有稽核紀錄。現在 `content.js` 會先送出與 `buildToolAuditRecord` 相同欄位契約的 `blocked` 稽核紀錄（`risk: unknown`、`decision: block`、`error: governance-module-unavailable`）再回傳阻擋結果，稽核寫入失敗仍與工具執行結果隔離。
+- **深層巢狀參數不會耗盡呼叫堆疊**：工具參數來自模型輸出，屬於不可信輸入；原先遞迴快照深層 JSON 會在政策判定與既有錯誤處理之前就以 `RangeError: Maximum call stack size exceeded` 中斷整輪代理（`observe` 模式亦然）。現在快照設有 32 層深度上限，超過時擲出可辨識的 `ToolArgumentSnapshotError`，並由治理層轉成失敗的工具結果（`success: false`）與 `blocked` 稽核紀錄，不讓整輪代理中斷。
+
 ## [0.47.3] - 2026-10-14
 
 ### 新增 / 改進（v0.47.3）

@@ -119,4 +119,19 @@ assert.ok(boundedError.error.length <= 500, '錯誤訊息應被截斷');
     );
 }
 
+// 工具參數屬於不可信輸入，深層巢狀不得耗盡呼叫堆疊。
+{
+    let deep = {};
+    let cursor = deep;
+    for (let i = 0; i < 5000; i += 1) {
+        cursor.next = {};
+        cursor = cursor.next;
+    }
+    assert.throws(
+        () => snapshotToolArguments(deep),
+        (error) => error?.name === 'ToolArgumentSnapshotError',
+        '超過深度上限的參數應擲出可辨識的錯誤，而非 RangeError'
+    );
+}
+
 console.log('tool-governance.test.js passed');

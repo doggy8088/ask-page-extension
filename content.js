@@ -12749,6 +12749,39 @@ async function createDialog() {
         }
     }
 
+    // 治理層不可用時，仍要留下稽核紀錄：治理模組缺席本身就是最需要被診斷的情境。
+    // 稽核是旁路觀察，寫入失敗不可影響工具執行結果。
+    // 欄位名稱對齊 buildToolAuditRecord 契約，讓稽核消費者不需要分辨兩種來源。
+    function emitToolAuditFallback(record, toolContext = {}) {
+        const onAudit = toolContext.onToolAudit;
+        if (typeof onAudit !== 'function') {
+            return;
+        }
+        try {
+            const result = onAudit({
+                version: 1,
+                timestamp: new Date().toISOString(),
+                toolCallId: record.id || '',
+                toolName: record.name || '',
+                risk: record.risk || 'unknown',
+                governanceMode: record.mode || 'observe',
+                decision: record.decision || 'block',
+                approval: record.approval || 'not-available',
+                outcome: record.outcome || 'blocked',
+                success: typeof record.success === 'boolean' ? record.success : false,
+                durationMs: 0,
+                error: record.error || null
+            });
+            if (result && typeof result.catch === 'function') {
+                result.catch((error) => {
+                    console.warn('[AskPage] Async tool audit callback failed:', error);
+                });
+            }
+        } catch (error) {
+            console.warn('[AskPage] Tool audit callback failed:', error);
+        }
+    }
+
     // 治理層轉接：只負責把既有工具執行包進治理流程，風險判定在 lib/tool-policy.js，
     // 決策與稽核在 lib/tool-governance.js。既有工具實作維持不變。
     async function executeToolCall(toolCall, toolContext = {}) {
@@ -12758,6 +12791,18 @@ async function createDialog() {
         // 治理模組不可用時，enforce 模式必須擋下，不可放行。
         if (typeof governance?.executeGovernedToolCall !== 'function') {
             if (toolContext.governanceMode === 'enforce') {
+                // 治理層不可用正是最需要稽核的情境，不可漏掉。
+                emitToolAuditFallback({
+                    id,
+                    name,
+                    risk: 'unknown',
+                    mode: 'enforce',
+                    decision: 'block',
+                    approval: 'not-available',
+                    outcome: 'blocked',
+                    success: false,
+                    error: 'governance-module-unavailable'
+                }, toolContext);
                 return {
                     id,
                     name,
@@ -12785,7 +12830,9 @@ async function createDialog() {
         }) => {
             let message = `工具 ${blockedName} 未執行。`;
 
-            if (plan?.decision === 'block') {
+            if (plan?.reason === 'argument-snapshot-failed') {
+                message = `工具 ${blockedName} 的參數無法處理，因此未執行。`;
+            } else if (plan?.decision === 'block') {
                 message = `工具 ${blockedName} 因缺少可用的治理政策而被阻擋。`;
             } else if (approval === 'unavailable') {
                 message = `工具 ${blockedName} 需要明確批准，但目前沒有 approval handler。`;

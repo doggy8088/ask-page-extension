@@ -71,6 +71,11 @@ vm.createContext(sandbox);
 // 依 manifest 順序載入治理層，再載入 content script。
 vm.runInContext(policySource, sandbox, { filename: 'lib/tool-policy.js' });
 vm.runInContext(governanceSource, sandbox, { filename: 'lib/tool-governance.js' });
+// 保留治理模組快照，供測試模擬「治理層不可用」後還原。
+vm.runInContext(
+    'globalThis.governanceModuleSnapshot = globalThis.AskPageToolGovernance;',
+    sandbox
+);
 
 // 這些函式巢狀在 createDialog 內，測試需自行擷取對應片段。
 // 執行路徑從 executeToolCallUngoverned 到 getToolDefinitionsForRequest 為止。
@@ -184,6 +189,76 @@ assert.strictEqual(
         'unavailable',
         '核准且前置驗證通過後不應被治理層擋下'
     );
+
+    // ===== 治理層不可用時，仍須留下稽核紀錄 =====
+    // 治理模組缺席正是最需要被診斷的情境，不可漏掉稽核。
+    // 注意：必須在 vm context 內部刪除，host 端 delete 對 globalThis 不可見。
+    const fallbackAudits = [];
+    vm.runInContext('delete globalThis.AskPageToolGovernance', sandbox);
+    try {
+        assert.strictEqual(
+            vm.runInContext('typeof globalThis.AskPageToolGovernance', sandbox),
+            'undefined',
+            '測試前置條件：治理模組應已被移除'
+        );
+        const blockedByMissingModule = await api.executeToolCall({
+            id: 'missing-module-call',
+            name: 'run_js',
+            args: { code: 'return 1;' }
+        }, {
+            governanceMode: 'enforce',
+            onToolAudit: (record) => fallbackAudits.push(record)
+        });
+        assert.strictEqual(
+            blockedByMissingModule.result.success,
+            false,
+            '治理層不可用時 enforce 模式必須擋下'
+        );
+        assert.strictEqual(
+            blockedByMissingModule.result.data.governance.reason,
+            'governance-module-unavailable'
+        );
+        assert.strictEqual(fallbackAudits.length, 1, '治理層不可用時仍應送出稽核紀錄');
+        assert.strictEqual(fallbackAudits[0].outcome, 'blocked');
+        assert.strictEqual(fallbackAudits[0].decision, 'block');
+        assert.strictEqual(fallbackAudits[0].risk, 'unknown');
+        assert.strictEqual(
+            fallbackAudits[0].error,
+            'governance-module-unavailable'
+        );
+        // 稽核欄位名稱必須與 buildToolAuditRecord 契約一致，消費者不需分辨來源。
+        assert.strictEqual(fallbackAudits[0].toolCallId, 'missing-module-call');
+        assert.strictEqual(fallbackAudits[0].toolName, 'run_js');
+        assert.strictEqual(fallbackAudits[0].governanceMode, 'enforce');
+        assert.strictEqual(fallbackAudits[0].version, 1);
+        assert.ok(fallbackAudits[0].timestamp, '稽核紀錄應帶時間戳');
+    } finally {
+        vm.runInContext(
+            'globalThis.AskPageToolGovernance = governanceModuleSnapshot;',
+            sandbox
+        );
+    }
+    assert.strictEqual(
+        vm.runInContext('typeof globalThis.AskPageToolGovernance', sandbox),
+        'object',
+        '測試結束後應恢復治理模組'
+    );
+
+    // 稽核寫入失敗不得改變工具執行結果。
+    const failingAudits = [];
+    const audited = await api.executeToolCall({
+        id: 'audit-failure-call',
+        name: 'run_js',
+        args: { code: 'return 1;' }
+    }, {
+        governanceMode: 'enforce',
+        requestToolApproval: async () => ({ approved: true }),
+        validateToolPrecondition: async () => ({ valid: true }),
+        onToolAudit: () => {
+            throw new Error('audit sink unavailable');
+        }
+    });
+    assert.ok(audited, '稽核寫入失敗不應讓呼叫拋出例外');
 
     console.log('governed-content-integration.test.js passed');
 })().catch((error) => {
