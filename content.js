@@ -1678,6 +1678,17 @@ const OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY = {
     defaultValue: 'max'
 };
 
+// Ollama Cloud 的 DeepSeek V4 Pro 與 V4.1 Flash 僅提供最高推理強度；固定送出 max，且不顯示推理強度控制。
+const OLLAMA_CLOUD_DEEPSEEK_FIXED_MAX_REASONING_CAPABILITY = {
+    kind: 'level',
+    options: ['max'],
+    defaultValue: 'max',
+    locked: true
+};
+
+// 以模型本體名稱比對，忽略 Ollama 的 tag（例：deepseek-v4.1-flash:1017）。
+const OLLAMA_CLOUD_FIXED_MAX_REASONING_MODELS = ['deepseek-v4-pro', 'deepseek-v4.1-flash'];
+
 const OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY = {
     kind: 'level',
     options: ['none', 'high', 'max'],
@@ -1735,6 +1746,13 @@ function getReasoningCapability(providerType = '', model = '') {
     if (providerType === 'openrouter') {
         return OPENROUTER_REASONING_CAPABILITIES[normalizedModel] || null;
     }
+    // 固定 max 的模型優先比對：deepseek-v4-pro 符合 deepseek-v4- 前綴，但只能使用最高推理強度。
+    if (providerType === 'ollama-cloud' && OLLAMA_CLOUD_FIXED_MAX_REASONING_MODELS.includes(
+        normalizedModel.split(':')[0]
+    )) {
+        return OLLAMA_CLOUD_DEEPSEEK_FIXED_MAX_REASONING_CAPABILITY;
+    }
+    // 只比對 deepseek-v4- 前綴；DeepSeek V4.1（deepseek-v4.1-*）不符合此前綴，且官方未提供可切換的思考模式，故不加入推理強度控制。
     if (providerType === 'ollama-cloud' && normalizedModel.startsWith('deepseek-v4-')) {
         return OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY;
     }
@@ -1750,6 +1768,11 @@ function getReasoningCapability(providerType = '', model = '') {
 function normalizeReasoningValue(capability, value) {
     if (!capability) {
         return null;
+    }
+
+    // 鎖定的模型永遠送出固定的 defaultValue，不接受任何使用者選擇。
+    if (capability.locked) {
+        return capability.defaultValue;
     }
 
     if (capability.kind === 'level') {
@@ -2393,6 +2416,16 @@ async function updateProviderDisplay() {
     }
 
     if (!capability || !activeConfig) {
+        reasoningControl.removeAttribute('data-reasoning-configurable');
+        reasoningPopover.hidden = true;
+        if (providerDisplayModel) {
+            providerDisplayModel.title = getLocalizedText('switchProviderModel');
+        }
+        return;
+    }
+
+    // 固定 max 的模型不提供推理強度控制，完整隱藏 popover；request 仍會送出 reasoning_effort: "max"。
+    if (capability.locked) {
         reasoningControl.removeAttribute('data-reasoning-configurable');
         reasoningPopover.hidden = true;
         if (providerDisplayModel) {

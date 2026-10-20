@@ -310,12 +310,14 @@ const PREDEFINED_MODELS = {
         'muse-spark-1.1'
     ],
     'ollama-cloud': [
-        'glm-5.3-flash',
-        'deepseek-v4-flash',
+        'deepseek-v4.1-flash:1017',
         'deepseek-v4-pro',
-        'kimi-k3',
-        'kimi-k2.7-code',
+        'deepseek-v4.1-flash',
+        'muse-spark-open',
+        'minimax-m3.1-flash',
         'minimax-m3',
+        'kimi-k2.7-code',
+        'kimi-k3',
         'gemma4:31b',
         'gpt-oss:120b'
     ]

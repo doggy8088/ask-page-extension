@@ -8,6 +8,8 @@
 
 ### 修正 / 更新
 
+- **Ollama Cloud 內建模型清單改用最新雲端模型並重新排序**：設定頁內建的 Ollama Cloud 模型清單由 8 個改為 10 個，依序為 `deepseek-v4.1-flash:1017`、`deepseek-v4-pro`、`deepseek-v4.1-flash`、`muse-spark-open`、`minimax-m3.1-flash`、`minimax-m3`、`kimi-k2.7-code`、`kimi-k3`、`gemma4:31b`、`gpt-oss:120b`。新增 Ollama Cloud Provider 時預設勾選的第一項改為 `deepseek-v4.1-flash:1017`；已勾選舊模型（`glm-5.3-flash`、`deepseek-v4-flash`）的使用者仍會保留原有設定並可繼續使用。移除的 `glm-5.3-flash` 與 `deepseek-v4-flash` 保留既有推理強度能力設定，讓已儲存這些名稱的使用者維持原有推理強度控制。
+- **Ollama Cloud 的 `deepseek-v4-pro` 與 `deepseek-v4.1-flash` 固定使用最高推理強度**：這兩個模型只提供 `max` 等級，設定頁完全隱藏推理強度控制（不顯示滑桿，也無法選擇 `none` 或 `high`），request 固定送出 `reasoning_effort: "max"`。`kimi-k2.7-code` 的五個 OpenAI 相容 effort 值維持不變。
 - **品質檢查改為執行真實的測試套件**：`.github/workflows/quality-check.yml` 過去只做 ESLint 檢查，專案既有的 30 個測試檔（`tests/run-all.js`）從未在 CI 中執行過。現新增「執行測試套件」步驟實際執行 `npm test`，讓測試失敗會讓品質檢查 job 失敗，而不只是本地跑過。
 - **品質檢查工作流程收斂權限**：新增 `permissions: contents: read` 將工作流程權限限制為唯讀，並在 `actions/checkout` 加上 `persist-credentials: false`，避免 GITHUB_TOKEN 被寫入 `.git/config`。
 - **品質檢查摘要補上測試項目**：「程式碼品質總結」的檢查項目清單原本沒有測試項目，與實際執行的步驟不符，現補上「✅ 單元測試套件 (npm test)」。

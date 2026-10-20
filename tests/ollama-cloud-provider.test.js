@@ -25,12 +25,14 @@ vm.runInContext(`${settingsScript}\nglobalThis.__ollamaCloudModels = PREDEFINED_
 });
 
 const expectedModels = [
-    'glm-5.3-flash',
-    'deepseek-v4-flash',
+    'deepseek-v4.1-flash:1017',
     'deepseek-v4-pro',
-    'kimi-k3',
-    'kimi-k2.7-code',
+    'deepseek-v4.1-flash',
+    'muse-spark-open',
+    'minimax-m3.1-flash',
     'minimax-m3',
+    'kimi-k2.7-code',
+    'kimi-k3',
     'gemma4:31b',
     'gpt-oss:120b'
 ];
@@ -38,6 +40,10 @@ const expectedModels = [
 const actualModels = Array.from(sandbox.__ollamaCloudModels);
 assert.deepStrictEqual(actualModels, expectedModels);
 assert.strictEqual(new Set(actualModels).size, actualModels.length);
+
+// 新增 Ollama Cloud Provider 時，設定頁預設勾選內建清單第一項。
+assert.strictEqual(expectedModels[0], 'deepseek-v4.1-flash:1017');
+assert.match(settingsScript, /ollamaCloudModels\[0\]/);
 
 assert.match(settingsHtml, /<option value="ollama-cloud"[^>]*data-i18n="providerOllamaCloud"[^>]*>Ollama Cloud<\/option>/);
 assert.match(settingsHtml, /id="modalOllamaCloudApiKey"/);

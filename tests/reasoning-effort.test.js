@@ -54,6 +54,7 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     DEEPSEEK_REASONING_CAPABILITIES,
     OPENROUTER_REASONING_CAPABILITIES,
     OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY,
+    OLLAMA_CLOUD_DEEPSEEK_FIXED_MAX_REASONING_CAPABILITY,
     OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY,
     OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY,
     pendingReasoningValues,
@@ -83,6 +84,7 @@ const {
     DEEPSEEK_REASONING_CAPABILITIES,
     OPENROUTER_REASONING_CAPABILITIES,
     OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY,
+    OLLAMA_CLOUD_DEEPSEEK_FIXED_MAX_REASONING_CAPABILITY,
     OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY,
     OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY,
     pendingReasoningValues,
@@ -310,15 +312,15 @@ assert.deepStrictEqual(capabilityOptions('openrouter', 'x-ai/grok-4.3'), ['none'
 assert.strictEqual(getReasoningCapability('openrouter', 'x-ai/grok-4.3').defaultValue, 'low');
 assert.strictEqual(getReasoningCapability('openrouter', 'deepseek/deepseek-v4-pro'), null);
 
-// Ollama Cloud DeepSeek V4 models expose explicit Off, High and Max modes.
+// Ollama Cloud DeepSeek V4 Flash (legacy saved configs) exposes explicit Off, High and Max modes.
 assert.deepStrictEqual(Array.from(OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY.options), ['none', 'high', 'max']);
 assert.strictEqual(OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY.defaultValue, 'max');
+assert.strictEqual(OLLAMA_CLOUD_DEEPSEEK_V4_REASONING_CAPABILITY.locked, undefined);
 assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-flash'), ['none', 'high', 'max']);
-assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'deepseek-v4-pro'), ['none', 'high', 'max']);
 assert.strictEqual(getReasoningCapability('ollama-cloud', 'deepseek-v3.1:cloud'), null);
 assert.strictEqual(getReasoningCapability('ollama', 'deepseek-v4-flash:cloud'), null);
 assert.strictEqual(
-    normalizeReasoningValue(getReasoningCapability('ollama-cloud', 'deepseek-v4-pro'), 'low'),
+    normalizeReasoningValue(getReasoningCapability('ollama-cloud', 'deepseek-v4-flash'), 'low'),
     'max'
 );
 
@@ -341,6 +343,54 @@ assert.strictEqual(OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY.defaultValue
 assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'kimi-k2.7-code'), ['none', 'low', 'medium', 'high', 'max']);
 assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'kimi-k2.7-code:cloud'), ['none', 'low', 'medium', 'high', 'max']);
 assert.strictEqual(getReasoningCapability('ollama', 'kimi-k2.7-code'), null);
+
+// DeepSeek V4 Pro 與 V4.1 Flash 固定使用 max：不提供 none／high 選項，也無法由使用者調整。
+assert.strictEqual(OLLAMA_CLOUD_DEEPSEEK_FIXED_MAX_REASONING_CAPABILITY.locked, true);
+assert.strictEqual(OLLAMA_CLOUD_DEEPSEEK_FIXED_MAX_REASONING_CAPABILITY.defaultValue, 'max');
+assert.deepStrictEqual(Array.from(OLLAMA_CLOUD_DEEPSEEK_FIXED_MAX_REASONING_CAPABILITY.options), ['max']);
+['deepseek-v4-pro', 'deepseek-v4.1-flash', 'deepseek-v4.1-flash:1017'].forEach((model) => {
+    const capability = getReasoningCapability('ollama-cloud', model);
+    assert.deepStrictEqual(capabilityOptions('ollama-cloud', model), ['max'], `${model} should only offer max`);
+    assert.strictEqual(capability.locked, true, `${model} should be locked to max`);
+    assert.strictEqual(capability.defaultValue, 'max', `${model} should default to max`);
+    ['none', 'high', 'low', 'medium'].forEach((value) => {
+        assert.strictEqual(
+            normalizeReasoningValue(capability, value),
+            'max',
+            `${model} should ignore the ${value} selection`
+        );
+    });
+    assert.strictEqual(normalizeReasoningValue(capability, null), 'max');
+    assert.strictEqual(normalizeReasoningValue(capability, 'max'), 'max');
+});
+// 鎖定模型仍可送出 reasoning_effort: "max"。
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(applyOpenAIReasoningEffort(
+        { model: 'deepseek-v4-pro' },
+        normalizeReasoningValue(getReasoningCapability('ollama-cloud', 'deepseek-v4-pro'), 'none'),
+        false
+    ))),
+    { model: 'deepseek-v4-pro', reasoning_effort: 'max' }
+);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(applyOpenAIReasoningEffort(
+        { model: 'deepseek-v4.1-flash:1017' },
+        normalizeReasoningValue(getReasoningCapability('ollama-cloud', 'deepseek-v4.1-flash:1017'), 'high'),
+        false
+    ))),
+    { model: 'deepseek-v4.1-flash:1017', reasoning_effort: 'max' }
+);
+// 鎖定能力不應退化成單一選項滑桿。
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(getReasoningSliderConfig(getReasoningCapability('ollama-cloud', 'deepseek-v4-pro'), 'max'))),
+    { min: 0, max: 0, index: 0 }
+);
+
+assert.strictEqual(getReasoningCapability('ollama-cloud', 'muse-spark-open'), null);
+assert.strictEqual(getReasoningCapability('ollama-cloud', 'minimax-m3.1-flash'), null);
+assert.strictEqual(getReasoningCapability('ollama-cloud', 'kimi-k3'), null);
+assert.strictEqual(getReasoningCapability('ollama-cloud', 'gemma4:31b'), null);
+assert.strictEqual(getReasoningCapability('ollama-cloud', 'gpt-oss:120b'), null);
 
 // Undocumented models and providers that cannot guarantee compatible Off semantics stay hidden.
 assert.strictEqual(getReasoningCapability('openai', 'gpt-5.3'), null);
@@ -464,12 +514,24 @@ assert.match(styleSheet, /\.askpage-reasoning-slider::-webkit-slider-thumb/);
     const activeConfig = {
         id: 'ollama-cloud-test',
         type: 'ollama-cloud',
-        activeModel: 'deepseek-v4-pro'
+        activeModel: 'kimi-k2.7-code'
     };
     const settingKey = JSON.stringify([activeConfig.id, activeConfig.activeModel]);
-    pendingReasoningValues.set(settingKey, 'max');
+    pendingReasoningValues.set(settingKey, 'high');
     assert.strictEqual(await setActiveReasoningValue(activeConfig, 'high'), 'high');
     assert.strictEqual(pendingReasoningValues.has(settingKey), false);
+
+    // 固定 max 的模型拒絕任何非 max 的寫入。
+    const lockedConfig = {
+        id: 'ollama-cloud-locked',
+        type: 'ollama-cloud',
+        activeModel: 'deepseek-v4-pro'
+    };
+    const lockedSettingKey = JSON.stringify([lockedConfig.id, lockedConfig.activeModel]);
+    pendingReasoningValues.set(lockedSettingKey, 'max');
+    assert.strictEqual(await setActiveReasoningValue(lockedConfig, 'high'), 'max');
+    assert.strictEqual(await setActiveReasoningValue(lockedConfig, 'none'), 'max');
+    assert.strictEqual(pendingReasoningValues.has(lockedSettingKey), false);
     console.log('reasoning-effort: ok');
 })().catch((error) => {
     console.error(error);
