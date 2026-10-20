@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### 新增 / 改進（Unreleased）
+
+- **新增工具治理層，將工具執行與風險判定拆開**：新增 `lib/tool-policy.js`（風險分類）與 `lib/tool-governance.js`（治理決策與稽核），`content.js` 內的 `executeToolCall` 改為薄轉接層，既有工具實作（`executeToolCallUngoverned`）行為完全不變。風險分為 `read-only`、`reversible-mutation`、`external-side-effect`、`high-impact`、`unknown` 五級，`type` / `fill_form_fields` 帶 `submit: true` 時會送出表單，風險升級為 `external-side-effect`；未知工具一律落在 `unknown`，不會被當成安全。所有 provider（OpenAI、OpenAI Responses、Gemini）改為共用同一份工具定義來源，工具描述前統一加上 `[tool-risk: …]` 標註，確保模型看到一致的工具描述。
+- **治理模式與核准掛鉤**：預設為 `observe` 模式，只分類、只稽核，**不擋任何現有行為**，因此這次改動不影響使用者既有體驗。`enforce` 模式為 fail-closed：治理模組不可用、缺少核准機制、核准被拒或拋錯、核准後缺少或未通過 target/precondition 驗證時，一律擋下執行；核准的參數為不可變快照；稽核寫入失敗（同步拋錯與非同步拒絕）與工具執行結果隔離；核准與前置驗證等待期間保留既有的任務取消語意。核准 UI 尚未實作，治理層改以 `toolContext.requestToolApproval` / `validateToolPrecondition` / `onToolAudit` 掛鉤形式開放。
+- **測試與文件**：新增 `tests/tool-policy.test.js`、`tests/tool-governance.test.js`、`tests/governed-execution.integration.test.js`、`tests/governance-runtime-guard.test.js` 與 `tests/governed-content-integration.test.js`，涵蓋風險分類、參數升級、fail-closed 語意、參數快照、TOCTOU 前置驗證、稽核隔離、取消語意與各 provider 定義一致性；`tests/gemini-interactions.test.js` 改為擷取共用的工具定義片段；新增 `docs/GOVERNED_TOOL_EXECUTION.md` 說明架構、模式、核准契約與目前邊界；`npm run lint` 新增 `lint:governance` 檢查治理層檔案。
+
 ## [0.47.3] - 2026-10-14
 
 ### 新增 / 改進（v0.47.3）

@@ -94,7 +94,7 @@ sandbox.getPageConversationContext = async () => ({
 vm.runInContext(`
 ${section('    async function fetchJsonWithRetry(', '    function createHttpError(')}
 ${section('    function buildModelToolResultPayload(', '    function escapeSelectorValue(')}
-${section('    function getGeminiToolDefinitions(', '    function parseToolArguments(')}
+${section('    function getToolDefinitionsForRequest(', '    function parseToolArguments(')}
 ${section('    function getGeminiTextContent(', '    function isExpectedNonDisplayableTextError(')}
 ${section('    function parseSseJsonEvent(', '    function appendOpenAIChatToolCallDelta(')}
 ${section('    function mergeGeminiInteractionEvent(', '    async function runOpenAIStyleToolLoop(')}

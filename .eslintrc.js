@@ -83,6 +83,14 @@ module.exports = {
         document: 'readonly',
         window: 'readonly'
       }
+    },
+    {
+      // 治理層同時在瀏覽器（content script）與 Node（測試）中使用
+      files: ['lib/tool-policy.js', 'lib/tool-governance.js'],
+      env: {
+        browser: true,
+        node: true
+      }
     }
   ]
 };
