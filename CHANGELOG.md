@@ -17,6 +17,7 @@
 
 - **治理層不可用時仍會留下稽核紀錄**：`enforce` 模式下若治理模組未能載入，原本會直接回傳阻擋結果而不呼叫 `toolContext.onToolAudit`，導致最需要被診斷的 fail-closed 情境反而沒有稽核紀錄。現在 `content.js` 會先送出與 `buildToolAuditRecord` 相同欄位契約的 `blocked` 稽核紀錄（`risk: unknown`、`decision: block`、`error: governance-module-unavailable`）再回傳阻擋結果，稽核寫入失敗仍與工具執行結果隔離。
 - **深層巢狀參數不會耗盡呼叫堆疊**：工具參數來自模型輸出，屬於不可信輸入；原先遞迴快照深層 JSON 會在政策判定與既有錯誤處理之前就以 `RangeError: Maximum call stack size exceeded` 中斷整輪代理（`observe` 模式亦然）。現在快照設有 32 層深度上限，超過時擲出可辨識的 `ToolArgumentSnapshotError`，並由治理層轉成失敗的工具結果（`success: false`）與 `blocked` 稽核紀錄，不讓整輪代理中斷。
+- **新增治理層觀察方式文件**：新增 `docs/工具治理層觀察方式.md`，說明如何觀察治理層的實際運作狀態（DevTools Network 看風險標註、跑測試看完整治理決策、在 `content.js` 加 console 觀察點），並記錄稽核紀錄的欄位定義、完整的 `decision` / `approval` / `outcome` 值清單、fail-closed 情境對照表與風險分類對照表。文件中說明現況：治理層確實在跑，但現行 `toolContext` 沒有 `onToolAudit` 掛鉤，稽核紀錄被靜默丟棄，DevTools console 看不到任何東西。
 
 ## [0.47.3] - 2026-10-14
 
