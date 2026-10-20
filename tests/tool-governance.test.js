@@ -100,4 +100,23 @@ assert.ok(boundedError.error.length <= 500, '錯誤訊息應被截斷');
     assert.ok(Object.isFrozen(snapshot.fields[0]), '快照內的元素應被凍結');
 }
 
+// JSON 解析出的 "__proto__" 鍵不可走成 prototype setter，
+// 否則快照會憑空繼承出 submit 等旗標，讓政策判定與原始參數不一致。
+{
+    const parsed = JSON.parse('{"__proto__": {"submit": true}, "text": "hello"}');
+    assert.strictEqual(parsed.submit, undefined, '原始參數本身沒有 submit');
+    const snapshot = snapshotToolArguments(parsed);
+    assert.strictEqual(snapshot.submit, undefined, '快照不可憑空繼承出 submit');
+    assert.ok(
+        Object.prototype.hasOwnProperty.call(snapshot, '__proto__'),
+        '__proto__ 應保留為自己的資料屬性'
+    );
+    assert.strictEqual(snapshot.text, 'hello', '其他欄位仍需正常保留');
+    assert.strictEqual(
+        Object.getPrototypeOf(snapshot),
+        null,
+        '快照不應繼承任何原型'
+    );
+}
+
 console.log('tool-governance.test.js passed');

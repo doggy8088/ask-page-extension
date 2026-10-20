@@ -27,14 +27,26 @@ AskPage 把「工具怎麼執行」與「這次呼叫能不能執行」拆成三
 | 層級 | 意義 | 需要明確核准 |
 | --- | --- | --- |
 | `read-only` | 只讀取頁面內容 | 否 |
-| `reversible-mutation` | 可逆的頁面修改（填欄位、輸入文字） | 否 |
-| `external-side-effect` | 有外部副作用（點擊、送出表單） | 是 |
+| `reversible-mutation` | 可逆且不觸發頁面事件的頁面修改 | 否 |
+| `external-side-effect` | 有外部副作用 | 是 |
 | `high-impact` | 高衝擊（`run_js` 執行任意 JavaScript） | 是 |
 | `unknown` | 未知工具 | 是 |
 
-風險可依參數升級：`type` / `fill_form_fields` 帶 `submit: true` 時會送出表單，從 `reversible-mutation` 升級為 `external-side-effect`。
+風險可依參數升級：`type` / `fill_form_fields` 帶 `submit: true` 會送出表單，從 `reversible-mutation` 升級為 `external-side-effect`。
 
-未知工具一律落在 `unknown`，不會因為沒被列入對照表就被當成安全。
+### 為什麼填表類工具也算 external-side-effect
+
+`type`、`select_option`、`fill_form_fields` 表面上只是填值，但實作會派發 `input` / `change` / `blur` 事件，checkbox 與 radio 更是呼叫原生 `.click()`。頁面若綁定自動儲存、`onchange` 導向或事件驅動的送出，這些「可逆」呼叫就會送出資料或觸發其他外部副作用。
+
+因此這三個工具一律歸為 `external-side-effect`，避免在 enforce 模式下被視為安全而繞過核准。
+
+### 參數正規化必須與實際執行一致
+
+政策層的布林正規化（`coerceSubmitFlag`）與 `content.js` 的 `coerceBooleanValue` 保持一致：`'true'`、`'yes'`、`1`、`'on'`、`'checked'`、`'selected'`、`'是'`、`'需要'`、`'勾選'` 都視為 `true`。
+
+若政策層用嚴格比較而執行層用寬鬆轉換，同一個參數會得到不同結論，enforce 模式就會出現可繞過的缺口。
+
+未知工具一律落在 `unknown`，不會因為沒被列入對照表就被當成安全。查詢對照表時只認取**自己的屬性**，因此 `constructor`、`toString`、`__proto__` 這類繼承自 `Object.prototype` 的名稱同樣視為未知。
 
 ## 兩種模式
 
@@ -75,6 +87,12 @@ id, name, args, policy, plan
 `toolContext.onToolAudit` 會收到標準化紀錄：工具呼叫 ID／名稱、風險層級、治理模式與決策、核准狀態、結果、成功與否、耗時、有上限的錯誤訊息。
 
 稽核是旁路觀察：**稽核寫入失敗不會改變工具執行結果**（同步拋錯與非同步拒絕都被隔離）。
+
+## 參數快照的安全性
+
+快照使用 `Object.create(null)` 搭配 `Object.defineProperty` 建立自己的資料屬性。
+
+若直接用 `{}` 賦值，JSON 解析出的 `"__proto__"` 鍵會走成 prototype setter，讓快照憑空繼承出 `submit` 等旗標，導致政策判定與原始參數不一致（例如原本只填欄位卻被判定為送出表單）。快照不繼承任何原型，因此不存在這條路徑。
 
 ## 目前邊界
 

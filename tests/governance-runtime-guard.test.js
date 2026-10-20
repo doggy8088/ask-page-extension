@@ -84,14 +84,26 @@ assert.ok(
 );
 
 // ===== 政策層必須對未知工具採保守分類 =====
+// 以實際行為驗證，不依賴原始碼字串，避免實作調整後守護失效。
+const { classifyToolRisk, TOOL_RISK } = require('../lib/tool-policy');
+
 assert.ok(
     policySource.includes('TOOL_RISK.UNKNOWN'),
     '政策層必須保留 unknown 風險層級'
 );
-assert.ok(
-    policySource.includes('|| TOOL_RISK.UNKNOWN'),
+assert.strictEqual(
+    classifyToolRisk('does-not-exist'),
+    TOOL_RISK.UNKNOWN,
     '未知工具必須落到 unknown，不可默默視為安全'
 );
+// 繼承自 Object.prototype 的名稱同樣視為未知，不能查表查到函式或物件。
+['constructor', 'toString', '__proto__', 'valueOf', 'hasOwnProperty'].forEach((name) => {
+    assert.strictEqual(
+        classifyToolRisk(name),
+        TOOL_RISK.UNKNOWN,
+        `${name} 必須視為未知工具`
+    );
+});
 
 // ===== 每個內建工具都必須被分類，新增工具時不可漏掉 =====
 const toolDefinitionsSection = contentSource.slice(

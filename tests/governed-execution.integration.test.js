@@ -201,6 +201,34 @@ async function run() {
     assert.strictEqual(readOnly.result.success, true);
     assert.strictEqual(executions, 3, '唯讀工具不應要求核准');
 
+    // ===== 未知工具（含繼承自 Object.prototype 的名稱）必須要求核准 =====
+    for (const unknownName of ['constructor', 'toString', '__proto__', 'valueOf', 'not-a-tool']) {
+        const blockedUnknown = await executeGovernedToolCall({
+            toolCall: { id: `unknown-${unknownName}`, name: unknownName, args: {} },
+            mode: 'enforce',
+            buildPolicy: buildToolPolicy,
+            execute,
+            onAudit: (record) => audits.push(record),
+            createBlockedResult: blockedResult
+        });
+        assert.strictEqual(
+            blockedUnknown.result.success,
+            false,
+            `未知工具 ${unknownName} 在 enforce 模式下必須被擋下`
+        );
+        assert.strictEqual(
+            blockedUnknown.result.data.governance.risk,
+            'unknown',
+            `未知工具 ${unknownName} 的風險應為 unknown`
+        );
+        assert.strictEqual(
+            blockedUnknown.result.data.governance.approval,
+            'unavailable',
+            `未知工具 ${unknownName} 應因缺少核准機制而被擋下`
+        );
+    }
+    assert.strictEqual(executions, 3, '未知工具不得執行');
+
     // ===== 稽核紀錄 =====
     assert.ok(
         audits.some((record) => record.toolCallId === 'deny' && record.outcome === 'blocked'),
