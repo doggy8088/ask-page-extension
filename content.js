@@ -2093,6 +2093,7 @@ async function getEncryptionKey() {
 async function decryptApiKey(encryptedData) {
     if (!encryptedData || typeof encryptedData === 'string') {
         // Fallback to plaintext for backward compatibility
+        globalThis.AskPageDebug?.registerSecret(encryptedData);
         return encryptedData;
     }
 
@@ -2110,7 +2111,9 @@ async function decryptApiKey(encryptedData) {
         );
 
         const decoder = new TextDecoder();
-        return decoder.decode(decrypted);
+        const apiKey = decoder.decode(decrypted);
+        globalThis.AskPageDebug?.registerSecret(apiKey);
+        return apiKey;
     } catch (error) {
         console.error('[AskPage] Error decrypting API key:', error);
         return encryptedData;
@@ -10014,6 +10017,10 @@ async function createDialog() {
     }
 
     function logAgentExecutionCompletion(success, stats, errorMessage = '') {
+        globalThis.AskPageDebug?.record('task-completion', {
+            success, stepCount: stats.stepCount, elapsedMilliseconds: stats.elapsedMilliseconds,
+            error: success ? undefined : errorMessage
+        });
         const tokenUsageText = formatApiTokenUsageSummary(stats.tokenUsage);
         const durationText = getLocalizedText('executionDuration', {
             duration: formatElapsedDuration(stats.elapsedMilliseconds)
@@ -10048,6 +10055,8 @@ async function createDialog() {
         if (!traceEvent) {
             return;
         }
+
+        globalThis.AskPageDebug?.recordTrace(providerLabel, traceEvent);
 
         if (traceEvent.type === 'status') {
             traceReporter.reportStatus(traceEvent.text);
@@ -10085,6 +10094,7 @@ async function createDialog() {
     }
 
     function appendErrorMessageAndStore(errorMessage) {
+        globalThis.AskPageDebug?.record('task-error', { message: errorMessage });
         appendPersistentMessage('assistant', errorMessage);
     }
 
@@ -10525,6 +10535,7 @@ async function createDialog() {
         let curlCommandLogged = false;
 
         for (;;) {
+            const debugStartedAt = Date.now();
             try {
                 throwIfAskTaskCancelled(signal);
                 const requestOptions = { ...options, redirect: 'error' };
@@ -10532,6 +10543,12 @@ async function createDialog() {
                     requestOptions.signal = signal;
                 }
                 const response = await fetchImpl(url, requestOptions);
+                globalThis.AskPageDebug?.record('api-response', {
+                    provider: providerLabel, endpoint: url, status: response.status,
+                    contentType: response.headers?.get?.('content-type'),
+                    elapsedMs: Date.now() - debugStartedAt, retryCount,
+                    streaming: false
+                });
                 if (!response.ok) {
                     const errorBody = await response.text();
                     throw buildHttpError(response, errorBody);
@@ -10542,6 +10559,11 @@ async function createDialog() {
                     ? transformResponse(responseData)
                     : responseData;
             } catch (error) {
+                globalThis.AskPageDebug?.record('api-error', {
+                    provider: providerLabel, endpoint: url, retryCount,
+                    elapsedMs: Date.now() - debugStartedAt,
+                    error: { name: error?.name, message: error?.message, stack: error?.stack }
+                });
                 if (isAskTaskCancellationError(error) || isAskTaskCancelled(signal)) {
                     throw createAskTaskCancellationError();
                 }
@@ -10670,6 +10692,7 @@ async function createDialog() {
         let curlCommandLogged = false;
 
         for (;;) {
+            const debugStartedAt = Date.now();
             let receivedEvent = false;
             try {
                 throwIfAskTaskCancelled(signal);
@@ -10678,6 +10701,12 @@ async function createDialog() {
                     requestOptions.signal = signal;
                 }
                 const response = await fetchImpl(url, requestOptions);
+                globalThis.AskPageDebug?.record('api-response', {
+                    provider: providerLabel, endpoint: url, status: response.status,
+                    contentType: response.headers?.get?.('content-type'),
+                    elapsedMs: Date.now() - debugStartedAt, retryCount,
+                    streaming: true
+                });
                 if (!response.ok) {
                     const errorBody = await response.text();
                     throw buildHttpError(response, errorBody);
@@ -10690,6 +10719,11 @@ async function createDialog() {
                 }, signal);
                 return;
             } catch (error) {
+                globalThis.AskPageDebug?.record('api-error', {
+                    provider: providerLabel, endpoint: url, retryCount,
+                    elapsedMs: Date.now() - debugStartedAt,
+                    error: { name: error?.name, message: error?.message, stack: error?.stack }
+                });
                 if (isAskTaskCancellationError(error) || isAskTaskCancelled(signal)) {
                     throw createAskTaskCancellationError();
                 }
@@ -13471,6 +13505,7 @@ async function createDialog() {
     }
 
     async function fetchOpenAIChatCompletionsStream({
+        providerType = '',
         providerLabel,
         url,
         requestBody,
@@ -13501,7 +13536,15 @@ async function createDialog() {
                 headers,
                 body: JSON.stringify({
                     ...requestBody,
-                    stream: true
+                    stream: true,
+                    // Only documented opt-in providers receive this Chat Completions option.
+                    // DeepSeek/OpenRouter include usage automatically; other providers may reject it.
+                    ...(['openai', 'azure', 'ollama', 'ollama-cloud'].includes(providerType) ? {
+                        stream_options: {
+                            ...requestBody.stream_options,
+                            include_usage: true
+                        }
+                    } : {})
                 })
             },
             buildHttpError,
@@ -14592,6 +14635,7 @@ async function createDialog() {
                     };
                     if (streamingEnabled) {
                         const streamOptions = {
+                            providerType: 'openai',
                             providerLabel,
                             url: useResponsesApi ? 'https://api.openai.com/v1/responses' : 'https://api.openai.com/v1/chat/completions',
                             requestBody,
@@ -14808,6 +14852,7 @@ async function createDialog() {
                     const sendAzureRequest = async (body) => {
                         if (streamingEnabled) {
                             const streamOptions = {
+                                providerType: 'azure',
                                 providerLabel,
                                 url: apiUrl,
                                 requestBody: body,
@@ -15036,6 +15081,7 @@ async function createDialog() {
                     );
                     if (streamingEnabled) {
                         const streamOptions = {
+                            providerType,
                             providerLabel: providerLabel,
                             url,
                             requestBody,
@@ -15417,6 +15463,9 @@ async function createDialog() {
         }
 
         console.log('[AskPage] Using active provider type:', activeConfig.type);
+        globalThis.AskPageDebug?.record('task-start', {
+            taskId: taskContext?.id, provider: activeConfig.type, model: activeConfig.activeModel
+        });
 
         const [agentModeEnabled, agentGlowEffectEnabled, agentGlowColor] = await Promise.all([
             getAgentModeEnabled(),

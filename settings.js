@@ -573,6 +573,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    const debugEnabledInput = document.getElementById('debugEnabled');
+    debugEnabledInput.addEventListener('change', async () => {
+        await chrome.storage.local.set({ ASKPAGE_DEBUG_ENABLED: debugEnabledInput.checked });
+        showLocalizedStatus('settingsAutoSaved', undefined, 'success');
+    });
+    document.getElementById('copyDebugCommand').addEventListener('click', async () => {
+        await navigator.clipboard.writeText('askpageDebug.download()');
+        showLocalizedStatus('debugCommandCopied', undefined, 'success');
+    });
+
     const glowColorPreset = document.getElementById('agentGlowColorPreset');
     const glowCustomGroup = document.getElementById('agentGlowCustomColorGroup');
     const glowCustomInput = document.getElementById('agentGlowCustomColor');
@@ -1274,7 +1284,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
         LAST_ACTIVE_TAB_STORAGE, PENDING_OPTIONS_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE,
         AGENT_CONTEXT_FORMAT_STORAGE, AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE, TOOL_CALL_MAX_ROUNDS_STORAGE,
-        AskPageAgentGlow.STORAGE_KEY
+        AskPageAgentGlow.STORAGE_KEY, 'ASKPAGE_DEBUG_ENABLED'
     ], async (result) => {
         activeProviderId = result.ACTIVE_PROVIDER_ID || '';
         activeModel = result.ACTIVE_MODEL || '';
@@ -1314,6 +1324,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         loadGlowColor(result[AskPageAgentGlow.STORAGE_KEY]);
+        debugEnabledInput.checked = result.ASKPAGE_DEBUG_ENABLED === true;
 
         if (agentGlowEffectEnabledCheckbox) {
             agentGlowEffectEnabledCheckbox.checked = result[AGENT_GLOW_EFFECT_ENABLED_STORAGE] !== false;

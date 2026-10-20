@@ -927,6 +927,25 @@
               <small id="toolCallMaxRoundsHelp" style="color: var(--text-secondary);" data-i18n="toolCallMaxRoundsHelp">請輸入正整數，預設為 50。每輪可包含多個工具呼叫；達到上限後會中止任務。變更會自動儲存，於下次任務生效。</small>
             </div>
           </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title" data-i18n="debugTitle">偵錯模式</h2>
+              <p class="card-description" data-i18n="debugDescription">記錄目前分頁的任務、工具執行與錯誤，供後續排查問題。</p>
+            </div>
+            <div class="form-group">
+              <label for="debugEnabled">
+                <input type="checkbox" id="debugEnabled" aria-describedby="debugPrivacyHelp" />
+                <span data-i18n="debugEnabledLabel">啟用偵錯紀錄</span>
+              </label>
+              <small id="debugPrivacyHelp" style="color: var(--text-secondary);" data-i18n="debugPrivacyHelp">預設關閉。只在分頁記憶體保留最近 500 筆紀錄，最多 1 MiB；關閉或重新整理後清除。不記錄完整對話、網頁內容、圖片、原始工具程式碼或授權標頭，並遮蔽 API Key 等敏感值。</small>
+            </div>
+            <div class="form-group">
+              <p class="card-description" data-i18n="debugDownloadHelp">啟用後，重現問題，再到該網頁的 F12 Console 執行以下指令，即可下載 JSON 偵錯紀錄。各分頁分開記錄。</p>
+              <code>askpageDebug.download()</code>
+              <button type="button" id="copyDebugCommand" class="btn-secondary" data-i18n="debugCopyCommand">複製 Console 下載指令</button>
+            </div>
+          </div>
         </div>
       </div>
 
