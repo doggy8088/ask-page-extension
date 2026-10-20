@@ -23,7 +23,8 @@ const MAX_INPUT_VISIBLE_LINES = 5;
 const MAX_INPUT_CONTEXT_IMAGES = 4;
 const MAX_INPUT_CONTEXT_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_FORM_FIELD_DISCOVERY = 80;
-const MAX_TOOL_CALL_ROUNDS = 50;
+const DEFAULT_TOOL_CALL_MAX_ROUNDS = 50;
+const TOOL_CALL_MAX_ROUNDS_STORAGE = 'TOOL_CALL_MAX_ROUNDS';
 const GEMINI_EMPTY_RESPONSE_RETRY_LIMIT = 1;
 const DEBUG_API_CURL = false;
 const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 65536;
@@ -1010,6 +1011,15 @@ const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
 const CUSTOM_COMMAND_USAGE_STORAGE = 'CUSTOM_COMMAND_USAGE';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
 const pendingReasoningValues = new Map();
+
+function normalizeToolCallMaxRounds(value) {
+    const numericValue = Number(value);
+    return Number.isSafeInteger(numericValue) && numericValue > 0 ? numericValue : DEFAULT_TOOL_CALL_MAX_ROUNDS;
+}
+
+async function getToolCallMaxRounds() {
+    return normalizeToolCallMaxRounds(await getValue(TOOL_CALL_MAX_ROUNDS_STORAGE, DEFAULT_TOOL_CALL_MAX_ROUNDS));
+}
 
 async function getValue(key, defaultValue) {
     const result = await chrome.storage.local.get([key]);
@@ -14010,7 +14020,8 @@ async function createDialog() {
             onTrace({ type: 'status', text: status });
         };
 
-        for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round++) {
+        const maxToolCallRounds = await getToolCallMaxRounds();
+        for (let round = 0; round < maxToolCallRounds; round++) {
             throwIfAskTaskCancelled(cancellationContext);
             // 第二輪起工具結果已顯示在時間軸上，不再重複顯示規劃狀態。
             if (!useTools || round === 0) {
@@ -14194,7 +14205,8 @@ async function createDialog() {
         }, ...buildGeminiConversationSteps()];
         const generatedSteps = [];
 
-        for (let round = 0; round < MAX_TOOL_CALL_ROUNDS; round++) {
+        const maxToolCallRounds = await getToolCallMaxRounds();
+        for (let round = 0; round < maxToolCallRounds; round++) {
             throwIfAskTaskCancelled(cancellationContext);
             // 第二輪起工具結果已顯示在時間軸上，不再重複顯示規劃狀態。
             if (!enableTools || round === 0) {

@@ -179,6 +179,7 @@ let modalCommandModeAgent, modalCommandModeInquiry, modalCommandModeUnspecified,
 let modalSave, modalCancel, modalCommandNameError, modalCommandPromptError;
 let customSystemPromptTextarea, customSystemPromptCount;
 let agentGlowEffectEnabledCheckbox;
+let toolCallMaxRoundsInput;
 let agentContextFormatSelect, agentSnapshotTokenBudgetInput;
 
 // Multi-provider UI elements
@@ -207,12 +208,19 @@ const CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE = 'CUSTOM_SUMMARY_SHOW_VARIABL
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
 const LAST_ACTIVE_TAB_STORAGE = 'LAST_ACTIVE_TAB';
 const PENDING_OPTIONS_TAB_STORAGE = 'PENDING_OPTIONS_TAB';
+const TOOL_CALL_MAX_ROUNDS_STORAGE = 'TOOL_CALL_MAX_ROUNDS';
+const DEFAULT_TOOL_CALL_MAX_ROUNDS = 50;
 const AGENT_GLOW_EFFECT_ENABLED_STORAGE = 'AGENT_GLOW_EFFECT_ENABLED';
 const AGENT_CONTEXT_FORMAT_STORAGE = 'AGENT_CONTEXT_FORMAT';
 const AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE = 'AGENT_SNAPSHOT_TOKEN_BUDGET';
 const DEFAULT_AGENT_SNAPSHOT_TOKEN_BUDGET = 8000;
 const MIN_AGENT_SNAPSHOT_TOKEN_BUDGET = 2000;
 const MAX_AGENT_SNAPSHOT_TOKEN_BUDGET = 60000;
+
+function normalizeToolCallMaxRounds(value) {
+    const numericValue = Number(value);
+    return Number.isSafeInteger(numericValue) && numericValue > 0 ? numericValue : DEFAULT_TOOL_CALL_MAX_ROUNDS;
+}
 
 function normalizeAgentSnapshotTokenBudget(value) {
     const numericValue = Number(value);
@@ -441,6 +449,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCancel = document.getElementById('modalCancel');
     customSystemPromptTextarea = document.getElementById('customSystemPrompt');
     customSystemPromptCount = document.getElementById('customSystemPromptCount');
+    toolCallMaxRoundsInput = document.getElementById('toolCallMaxRounds');
     agentGlowEffectEnabledCheckbox = document.getElementById('agentGlowEffectEnabled');
     agentContextFormatSelect = document.getElementById('agentContextFormat');
     agentSnapshotTokenBudgetInput = document.getElementById('agentSnapshotTokenBudget');
@@ -546,6 +555,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             showLocalizedStatus('settingsAutoSaved', undefined, 'success');
         }, 500);
     });
+
+    if (toolCallMaxRoundsInput) {
+        toolCallMaxRoundsInput.addEventListener('change', async () => {
+            const rounds = normalizeToolCallMaxRounds(toolCallMaxRoundsInput.value);
+            toolCallMaxRoundsInput.value = String(rounds);
+            await chrome.storage.local.set({ [TOOL_CALL_MAX_ROUNDS_STORAGE]: rounds });
+            showLocalizedStatus('settingsAutoSaved', undefined, 'success');
+        });
+    }
 
     if (agentGlowEffectEnabledCheckbox) {
         agentGlowEffectEnabledCheckbox.addEventListener('change', async () => {
@@ -1191,7 +1209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         CUSTOM_SUMMARY_PROMPT_STORAGE, CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE,
         CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
         LAST_ACTIVE_TAB_STORAGE, PENDING_OPTIONS_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE,
-        AGENT_CONTEXT_FORMAT_STORAGE, AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE
+        AGENT_CONTEXT_FORMAT_STORAGE, AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE, TOOL_CALL_MAX_ROUNDS_STORAGE
     ], async (result) => {
         activeProviderId = result.ACTIVE_PROVIDER_ID || '';
         activeModel = result.ACTIVE_MODEL || '';
@@ -1225,6 +1243,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         customSystemPromptTextarea.value = result[CUSTOM_SYSTEM_PROMPT_STORAGE] || '';
         updateCustomSystemPromptCount();
+
+        if (toolCallMaxRoundsInput) {
+            toolCallMaxRoundsInput.value = String(normalizeToolCallMaxRounds(result[TOOL_CALL_MAX_ROUNDS_STORAGE]));
+        }
 
         if (agentGlowEffectEnabledCheckbox) {
             agentGlowEffectEnabledCheckbox.checked = result[AGENT_GLOW_EFFECT_ENABLED_STORAGE] !== false;

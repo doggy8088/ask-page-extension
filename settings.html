@@ -258,6 +258,10 @@
       transition: border-color 0.24s ease, box-shadow 0.24s ease, transform 0.24s ease;
     }
 
+    .tab-pane > .card + .card {
+      margin-top: 16px;
+    }
+
     .card:hover {
       border-color: rgba(117, 216, 255, 0.34);
       box-shadow: var(--shadow-lg);
@@ -846,6 +850,19 @@
               <label for="agentSnapshotTokenBudget" data-i18n="agentSnapshotBudgetLabel">快照 Token 預算</label>
               <input type="number" id="agentSnapshotTokenBudget" min="2000" max="60000" step="500" value="8000" />
               <small style="color: var(--text-secondary);" data-i18n="agentSnapshotBudgetHelp">快照的估算 Token 上限（2000～60000，預設 8000）。超出時會優先保留選取範圍與視窗內的內容，其餘區段折疊成可展開的標題行。</small>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title" data-i18n="toolCallingTitle">工具呼叫</h2>
+              <p class="card-description" data-i18n="toolCallingDescription">設定每次任務的工具呼叫輪數上限，避免持續執行。</p>
+            </div>
+
+            <div class="form-group">
+              <label for="toolCallMaxRounds" data-i18n="toolCallMaxRoundsLabel">工具呼叫輪數上限</label>
+              <input type="number" id="toolCallMaxRounds" min="1" step="1" value="50" aria-describedby="toolCallMaxRoundsHelp" />
+              <small id="toolCallMaxRoundsHelp" style="color: var(--text-secondary);" data-i18n="toolCallMaxRoundsHelp">請輸入正整數，預設為 50。每輪可包含多個工具呼叫；達到上限後會中止任務。變更會自動儲存，於下次任務生效。</small>
             </div>
           </div>
         </div>
