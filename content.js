@@ -13412,10 +13412,27 @@ async function createDialog() {
         }
     }
 
+    const openAIChatToolCallIndexes = new WeakMap();
+
     function appendOpenAIChatToolCallDelta(toolCalls, toolCallDelta) {
+        if (!openAIChatToolCallIndexes.has(toolCalls)) {
+            openAIChatToolCallIndexes.set(toolCalls, new Map());
+        }
+        const indexes = openAIChatToolCallIndexes.get(toolCalls);
         const index = Number.isInteger(toolCallDelta.index) ? toolCallDelta.index : toolCalls.length;
-        if (!toolCalls[index]) {
-            toolCalls[index] = {
+        // Some compatible providers reuse an index for distinct call IDs.
+        // Keep the calls separate and route ID-less continuations to the latest one.
+        let target = toolCallDelta.id
+            ? toolCalls.find((call) => call.id === toolCallDelta.id)
+            : null;
+        if (!target) {
+            const indexed = indexes.get(index);
+            if (indexed && (!toolCallDelta.id || !indexed.id || indexed.id === toolCallDelta.id)) {
+                target = indexed;
+            }
+        }
+        if (!target) {
+            target = {
                 id: toolCallDelta.id || '',
                 type: toolCallDelta.type || 'function',
                 function: {
@@ -13423,9 +13440,10 @@ async function createDialog() {
                     arguments: ''
                 }
             };
+            toolCalls.push(target);
         }
+        indexes.set(index, target);
 
-        const target = toolCalls[index];
         if (toolCallDelta.id) {
             target.id = toolCallDelta.id;
         }
