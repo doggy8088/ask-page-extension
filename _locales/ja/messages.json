@@ -32,7 +32,7 @@
     "additionalPromptPlaceholder": { "message": "システムプロンプトに追加する内容を入力..." },
     "additionalPromptSaveDescription": { "message": "保存後、すべての AI プロバイダーがリクエストにこの追加プロンプトを適用します。" },
     "characterCount": { "message": "$count$ 文字", "placeholders": { "count": { "content": "$1" } } },
-    "generalSettingsTab": { "message": "一般設定" },
+    "generalSettingsTab": { "message": "詳細設定" },
     "interfaceIndicatorsTitle": { "message": "インターフェース表示効果" },
     "interfaceIndicatorsDescription": { "message": "AskPage ダイアログ以外でページ上に表示される視覚的な合図を調整します。" },
     "enableAgentGlowEffect": { "message": "エージェントモード実行中にページの光彩効果を表示" },

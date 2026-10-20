@@ -32,7 +32,7 @@
     "additionalPromptPlaceholder": { "message": "Enter text to append to the system prompt..." },
     "additionalPromptSaveDescription": { "message": "After saving, every AI provider applies this additional prompt to its requests." },
     "characterCount": { "message": "$count$ characters", "placeholders": { "count": { "content": "$1" } } },
-    "generalSettingsTab": { "message": "General" },
+    "generalSettingsTab": { "message": "Advanced" },
     "interfaceIndicatorsTitle": { "message": "Interface Indicators" },
     "interfaceIndicatorsDescription": { "message": "Adjust the visual cues AskPage shows on the page itself, outside the dialog." },
     "enableAgentGlowEffect": { "message": "Show a page glow while Agent Mode is running" },

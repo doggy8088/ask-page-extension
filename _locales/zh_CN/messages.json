@@ -32,7 +32,7 @@
     "additionalPromptPlaceholder": { "message": "请输入要附加到系统提示末尾的内容..." },
     "additionalPromptSaveDescription": { "message": "保存后，所有 AI 提供商都会在发送请求时应用这段追加提示词。" },
     "characterCount": { "message": "$count$ 个字符", "placeholders": { "count": { "content": "$1" } } },
-    "generalSettingsTab": { "message": "常规设置" },
+    "generalSettingsTab": { "message": "高级设置" },
     "interfaceIndicatorsTitle": { "message": "界面提示效果" },
     "interfaceIndicatorsDescription": { "message": "调整 AskPage 对话框以外，在网页上显示的视觉提示效果。" },
     "enableAgentGlowEffect": { "message": "代理模式执行时显示网页背光效果" },
