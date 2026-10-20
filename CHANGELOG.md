@@ -6,18 +6,23 @@
 
 ## [Unreleased]
 
-### 新增 / 改進（Unreleased）
+## [0.48.0] - 2026-10-20
+
+### 新增 / 改進（v0.48.0）
 
 - **新增工具治理層，將工具執行與風險判定拆開**：新增 `lib/tool-policy.js`（風險分類）與 `lib/tool-governance.js`（治理決策與稽核），`content.js` 內的 `executeToolCall` 改為薄轉接層，既有工具實作（`executeToolCallUngoverned`）行為完全不變。風險分為 `read-only`、`reversible-mutation`、`external-side-effect`、`high-impact`、`unknown` 五級；`type` / `select_option` / `fill_form_fields` 雖只填值，但實作會派發 `input` / `change` / `blur` 事件，checkbox 與 radio 更是呼叫原生 `.click()`，頁面若綁定自動送出或 `onchange` 導向就會產生外部副作用，因此歸為 `external-side-effect`；`type` / `fill_form_fields` 帶 `submit: true` 會送出表單，同樣升級為 `external-side-effect`。政策層的布林正規化與 `content.js` 的 `coerceBooleanValue` 保持一致（`'true'`、`'yes'`、`1`、`'on'` 等視為 `true`），避免政策與實際執行對同一參數給出不同結論。未知工具一律落在 `unknown`，且查詢對照表只認取自己的屬性，`constructor`、`toString`、`__proto__` 等繼承自 `Object.prototype` 的名稱同樣視為未知。所有 provider（OpenAI、OpenAI Responses、Gemini）改為共用同一份工具定義來源，工具描述前統一加上 `[tool-risk: …]` 標註，確保模型看到一致的工具描述。
 - **參數快照不會因 `__proto__` 產生原型污染**：快照改用 `Object.create(null)` 搭配 `Object.defineProperty` 建立自己的資料屬性，避免 JSON 解析出的 `"__proto__"` 鍵走成 prototype setter，讓快照憑空繼承出 `submit` 等旗標而與原始參數不一致。
 - **治理模式與核准掛鉤**：預設為 `observe` 模式，只分類、只稽核，**不擋任何現有行為**，因此這次改動不影響使用者既有體驗。`enforce` 模式為 fail-closed：治理模組不可用、缺少核准機制、核准被拒或拋錯、核准後缺少或未通過 target/precondition 驗證時，一律擋下執行；核准的參數為不可變快照；稽核寫入失敗（同步拋錯與非同步拒絕）與工具執行結果隔離；核准與前置驗證等待期間保留既有的任務取消語意。核准 UI 尚未實作，治理層改以 `toolContext.requestToolApproval` / `validateToolPrecondition` / `onToolAudit` 掛鉤形式開放。
 - **測試與文件**：新增 `tests/tool-policy.test.js`、`tests/tool-governance.test.js`、`tests/governed-execution.integration.test.js`、`tests/governance-runtime-guard.test.js` 與 `tests/governed-content-integration.test.js`，涵蓋風險分類、參數升級、參數正規化與執行層一致、fail-closed 語意、參數快照與原型污染防護、未知工具（含 `constructor` 等繼承名稱）必須要求核准、TOCTOU 前置驗證、稽核隔離、取消語意與各 provider 定義一致性；`tests/gemini-interactions.test.js` 改為擷取共用的工具定義片段；新增 `docs/GOVERNED_TOOL_EXECUTION.md` 說明架構、模式、核准契約與目前邊界；`npm run lint` 新增 `lint:governance` 檢查治理層檔案。
 
-### 修正（Unreleased）
+### 修正 / 更新（v0.48.0）
 
+- **修正自訂 API Endpoint 的 SSRF 風險（CWE-918）**：新增 `endpoint-utils.js`，在使用者設定自訂 endpoint（Azure OpenAI、OpenAI Compatible、本機 Ollama）時統一驗證。遠端 endpoint 必須使用 `https://`；`http://` 僅允許 `localhost` 與私有網路位址（含 `127.0.0.0/8`、`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`、`::1` 與 IPv4-mapped IPv6 形式如 `::ffff:127.0.0.1`）。不符合時在設定頁直接顯示「遠端 API Endpoint 必須使用 HTTPS；HTTP 僅允許 localhost 或私有網路位址」。同時拒絕 provider 以重新導向的方式轉發請求到未驗證的主機，並忽略未經驗證的舊版 endpoint 設定欄位。Gemini、OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Meta 與 Ollama Cloud 固定使用官方 endpoint，不接受自訂主機。
+- **設定檔匯入會檢查 endpoint 安全性**：匯入設定檔時會一併驗證其中的 endpoint，若包含無效或不安全的 endpoint 則拒絕匯入並提示「匯入失敗：設定檔包含無效或不安全的 API Endpoint」；若設定檔含有自訂 endpoint，匯入前會額外顯示確認提示，說明 API Key 可能會傳送到這些主機。
 - **治理層不可用時仍會留下稽核紀錄**：`enforce` 模式下若治理模組未能載入，原本會直接回傳阻擋結果而不呼叫 `toolContext.onToolAudit`，導致最需要被診斷的 fail-closed 情境反而沒有稽核紀錄。現在 `content.js` 會先送出與 `buildToolAuditRecord` 相同欄位契約的 `blocked` 稽核紀錄（`risk: unknown`、`decision: block`、`error: governance-module-unavailable`）再回傳阻擋結果，稽核寫入失敗仍與工具執行結果隔離。
 - **深層巢狀參數不會耗盡呼叫堆疊**：工具參數來自模型輸出，屬於不可信輸入；原先遞迴快照深層 JSON 會在政策判定與既有錯誤處理之前就以 `RangeError: Maximum call stack size exceeded` 中斷整輪代理（`observe` 模式亦然）。現在快照設有 32 層深度上限，超過時擲出可辨識的 `ToolArgumentSnapshotError`，並由治理層轉成失敗的工具結果（`success: false`）與 `blocked` 稽核紀錄，不讓整輪代理中斷。
 - **新增治理層觀察方式文件**：新增 `docs/工具治理層觀察方式.md`，說明如何觀察治理層的實際運作狀態（DevTools Network 看風險標註、跑測試看完整治理決策、在 `content.js` 加 console 觀察點），並記錄稽核紀錄的欄位定義、完整的 `decision` / `approval` / `outcome` 值清單、fail-closed 情境對照表與風險分類對照表。文件中說明現況：治理層確實在跑，但現行 `toolContext` 沒有 `onToolAudit` 掛鉤，稽核紀錄被靜默丟棄，DevTools console 看不到任何東西。
+- **新增端點驗證測試**：新增 `tests/endpoint-utils.test.js`，涵蓋 HTTPS 要求、私有網路位址判定、IPv4-mapped IPv6 形式、重導向拒絕與舊版 endpoint 欄位忽略等情境。
 
 ## [0.47.3] - 2026-10-14
 
