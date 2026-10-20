@@ -16,6 +16,7 @@ module.exports = {
     // 外部函式庫
     marked: 'readonly',
     DOMPurify: 'readonly',
+    AskPageEndpoint: 'readonly',
     hljs: 'readonly',
     renderMathInElement: 'readonly'
   },

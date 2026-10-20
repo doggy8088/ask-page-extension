@@ -638,7 +638,8 @@ chrome.runtime.onConnect.addListener((port) => {
                     method: 'POST',
                     headers: getServiceWorkerRequestHeaders(providerType, apiKey),
                     body: JSON.stringify(requestBody),
-                    signal: abortController.signal
+                    signal: abortController.signal,
+                    redirect: 'error'
                 });
 
                 if (!postOllamaCloudProxyMessage(port, {

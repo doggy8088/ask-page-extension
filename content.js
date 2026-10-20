@@ -59,6 +59,22 @@ function getLocalizedText(key, substitutions) {
     return key;
 }
 
+function getValidatedProviderEndpoint(endpoint) {
+    if (typeof AskPageEndpoint === 'undefined' || typeof AskPageEndpoint.validateEndpoint !== 'function') {
+        return { ok: false, message: getLocalizedText('apiEndpointInvalid') };
+    }
+
+    const result = AskPageEndpoint.validateEndpoint(endpoint);
+    if (!result.ok) {
+        return {
+            ok: false,
+            message: getLocalizedText(result.messageKey)
+        };
+    }
+
+    return { ok: true, endpoint: result.normalized };
+}
+
 function getSystemPromptLanguageInstruction() {
     if (typeof AskPageI18n !== 'undefined' && typeof AskPageI18n.getSystemPromptLanguageInstruction === 'function') {
         return AskPageI18n.getSystemPromptLanguageInstruction();
@@ -10466,7 +10482,10 @@ async function createDialog() {
         for (;;) {
             try {
                 throwIfAskTaskCancelled(signal);
-                const requestOptions = signal ? { ...options, signal } : options;
+                const requestOptions = { ...options, redirect: 'error' };
+                if (signal) {
+                    requestOptions.signal = signal;
+                }
                 const response = await fetchImpl(url, requestOptions);
                 if (!response.ok) {
                     const errorBody = await response.text();
@@ -10609,7 +10628,10 @@ async function createDialog() {
             let receivedEvent = false;
             try {
                 throwIfAskTaskCancelled(signal);
-                const requestOptions = signal ? { ...options, signal } : options;
+                const requestOptions = { ...options, redirect: 'error' };
+                if (signal) {
+                    requestOptions.signal = signal;
+                }
                 const response = await fetchImpl(url, requestOptions);
                 if (!response.ok) {
                     const errorBody = await response.text();
@@ -14428,7 +14450,7 @@ async function createDialog() {
         const activeConfig = await getActiveProviderConfig();
         throwIfAskTaskCancelled(taskContext);
         const encryptedApiKey = activeConfig?.apiKey || '';
-        const endpoint = activeConfig?.azureEndpoint || '';
+        let endpoint = activeConfig?.azureEndpoint || '';
         const deployment = activeConfig?.azureDeployment || '';
         const apiVersion = activeConfig?.azureApiVersion || '2024-10-21';
         const providerLabel = getProviderDisplayName(activeConfig);
@@ -14443,6 +14465,13 @@ async function createDialog() {
             appendErrorMessageAndStore(getLocalizedText('providerEndpointMissing', { provider: providerLabel }));
             return;
         }
+
+        const endpointValidation = getValidatedProviderEndpoint(endpoint);
+        if (!endpointValidation.ok) {
+            appendErrorMessageAndStore(endpointValidation.message);
+            return;
+        }
+        endpoint = endpointValidation.endpoint;
 
         if (!deployment) {
             appendErrorMessageAndStore(getLocalizedText('providerDeploymentMissing', { provider: providerLabel }));
@@ -14643,26 +14672,31 @@ async function createDialog() {
         console.log(`[AskPage] ===== ${providerLabel.toUpperCase()} API CALL STARTED =====`);
         const encryptedApiKey = activeConfig?.apiKey || '';
 
-        let endpoint = activeConfig?.openaiCompatibleEndpoint || '';
-        if (!endpoint) {
-            if (providerType === 'deepseek') {
-                endpoint = 'https://api.deepseek.com/v1';
-            } else if (providerType === 'openrouter') {
-                endpoint = 'https://openrouter.ai/api/v1';
-            } else if (providerType === 'groq') {
-                endpoint = 'https://api.groq.com/openai/v1';
-            } else if (providerType === 'mistral') {
-                endpoint = 'https://api.mistral.ai/v1';
-            } else if (providerType === 'meta') {
-                endpoint = 'https://api.meta.ai/v1';
-            } else if (providerType === 'ollama') {
-                endpoint = activeConfig?.ollamaEndpoint || 'http://localhost:11434/v1';
-            } else if (providerType === 'ollama-cloud') {
-                endpoint = 'https://ollama.com/v1';
-            } else {
-                endpoint = 'http://localhost:11434/v1';
-            }
+        let endpoint;
+        if (providerType === 'deepseek') {
+            endpoint = 'https://api.deepseek.com/v1';
+        } else if (providerType === 'openrouter') {
+            endpoint = 'https://openrouter.ai/api/v1';
+        } else if (providerType === 'groq') {
+            endpoint = 'https://api.groq.com/openai/v1';
+        } else if (providerType === 'mistral') {
+            endpoint = 'https://api.mistral.ai/v1';
+        } else if (providerType === 'meta') {
+            endpoint = 'https://api.meta.ai/v1';
+        } else if (providerType === 'ollama') {
+            endpoint = activeConfig?.ollamaEndpoint || 'http://localhost:11434/v1';
+        } else if (providerType === 'ollama-cloud') {
+            endpoint = 'https://ollama.com/v1';
+        } else {
+            endpoint = activeConfig?.openaiCompatibleEndpoint || 'http://localhost:11434/v1';
         }
+
+        const endpointValidation = getValidatedProviderEndpoint(endpoint);
+        if (!endpointValidation.ok) {
+            appendErrorMessageAndStore(endpointValidation.message);
+            return;
+        }
+        endpoint = endpointValidation.endpoint;
 
         const selectedModel = activeConfig?.activeModel || '';
         const reasoningEffort = await getActiveReasoningValue(activeConfig);

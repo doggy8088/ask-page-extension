@@ -104,6 +104,19 @@ function t(key, substitutions) {
     });
 }
 
+function validateEndpointOrThrow(endpoint) {
+    if (typeof AskPageEndpoint === 'undefined' || typeof AskPageEndpoint.validateEndpoint !== 'function') {
+        throw new Error(t('apiEndpointInvalid'));
+    }
+
+    const result = AskPageEndpoint.validateEndpoint(endpoint);
+    if (!result.ok) {
+        throw new Error(t(result.messageKey));
+    }
+
+    return result.normalized;
+}
+
 function escapeHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -632,6 +645,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const reader = new FileReader();
         reader.onload = (event) => {
+            let importErrorKey = 'importInvalid';
             try {
                 const settings = JSON.parse(event.target.result);
                 // Basic validation
@@ -639,11 +653,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error('Invalid settings format');
                 }
 
+                const endpointCheck = typeof AskPageEndpoint !== 'undefined' && typeof AskPageEndpoint.validateConfig === 'function'
+                    ? AskPageEndpoint.validateConfig(settings)
+                    : { ok: false, reason: 'invalid' };
+                if (!endpointCheck.ok) {
+                    importErrorKey = 'importInvalidEndpoint';
+                    throw new Error('Invalid API endpoint in imported settings');
+                }
+
                 if (Object.prototype.hasOwnProperty.call(settings, 'ASKPAGE_UI_LOCALE')) {
                     settings.ASKPAGE_UI_LOCALE = window.AskPageI18n?.normalizePreference?.(settings.ASKPAGE_UI_LOCALE) || 'auto';
                 }
 
-                if (confirm(t('importSettingsConfirm'))) {
+                const hasCustomEndpoints = Boolean(
+                    settings.AZURE_OPENAI_ENDPOINT
+                    || settings.OPENAI_COMPATIBLE_ENDPOINT
+                    || (Array.isArray(settings.PROVIDERS) && settings.PROVIDERS.some((provider) => provider
+                        && AskPageEndpoint.PROVIDER_ENDPOINT_FIELDS.some((field) => provider[field])))
+                );
+                const confirmKey = hasCustomEndpoints ? 'importCustomEndpointWarning' : 'importSettingsConfirm';
+
+                if (confirm(t(confirmKey))) {
                     chrome.storage.local.set(settings, () => {
                         showLocalizedStatus('settingsImported', undefined, 'success');
                         chrome.runtime.sendMessage({ action: 'reload-options-source-tab' }).catch((error) => {
@@ -656,7 +686,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             } catch (error) {
                 console.error('Import error:', error);
-                showLocalizedStatus('importInvalid', undefined, 'error');
+                showLocalizedStatus(importErrorKey, undefined, 'error');
             }
             // Reset input value to allow importing same file again
             importFileInput.value = '';
@@ -1582,12 +1612,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             providerData.models = selectedModels;
         } else if (type === 'azure') {
             apiKeyRaw = modalAzureApiKey.value.trim();
-            const endpoint = modalAzureEndpoint.value.trim();
+            const rawEndpoint = modalAzureEndpoint.value.trim();
             const deployment = modalAzureDeployment.value.trim();
             const apiVersion = modalAzureApiVersion.value;
 
-            if (!apiKeyRaw || !endpoint || !deployment) {
+            if (!apiKeyRaw || !rawEndpoint || !deployment) {
                 alert(t('azureFieldsRequired'));
+                return;
+            }
+            let endpoint;
+            try {
+                endpoint = validateEndpointOrThrow(rawEndpoint);
+            } catch (error) {
+                alert(error.message);
                 return;
             }
             providerData.azureEndpoint = endpoint;
@@ -1595,11 +1632,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             providerData.azureApiVersion = apiVersion;
             providerData.models = [deployment];
         } else if (type === 'openai-compatible') {
-            const endpoint = modalOpenaiCompatibleEndpoint.value.trim();
+            const rawEndpoint = modalOpenaiCompatibleEndpoint.value.trim();
             apiKeyRaw = modalOpenaiCompatibleApiKey.value.trim();
 
-            if (!endpoint) {
+            if (!rawEndpoint) {
                 alert(t('apiEndpointRequired'));
+                return;
+            }
+            let endpoint;
+            try {
+                endpoint = validateEndpointOrThrow(rawEndpoint);
+            } catch (error) {
+                alert(error.message);
                 return;
             }
 
@@ -1721,11 +1765,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             providerData.models = selectedModels;
         } else if (type === 'ollama') {
-            const endpoint = modalOllamaEndpoint.value.trim();
+            const rawEndpoint = modalOllamaEndpoint.value.trim();
             const model = modalOllamaModel.value.trim();
 
-            if (!endpoint || !model) {
+            if (!rawEndpoint || !model) {
                 alert(t('ollamaFieldsRequired'));
+                return;
+            }
+            let endpoint;
+            try {
+                endpoint = validateEndpointOrThrow(rawEndpoint);
+            } catch (error) {
+                alert(error.message);
                 return;
             }
             providerData.ollamaEndpoint = endpoint;
@@ -1894,7 +1945,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const useResponsesApi = shouldUseResponsesApi(deployment);
                 const azureApiVersionForRequest = useResponsesApi ? getAzureResponsesApiVersion(apiVersion) : apiVersion;
-                const azureEndpoint = endpoint.trim().replace(/\/$/, '');
+                const azureEndpoint = validateEndpointOrThrow(endpoint).replace(/\/$/, '');
 
                 if (useResponsesApi) {
                     url = `${azureEndpoint}/openai/v1/responses?api-version=${azureApiVersionForRequest}`;
@@ -1921,7 +1972,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
                 }
             } else if (type === 'ollama') {
-                const endpoint = modalOllamaEndpoint.value.trim() || 'http://localhost:11434/v1';
+                const endpoint = validateEndpointOrThrow(modalOllamaEndpoint.value.trim() || 'http://localhost:11434/v1');
                 const model = modalOllamaModel.value.trim();
                 if (!model) {
                     throw new Error(t('ollamaModelRequired'));
@@ -1935,7 +1986,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(t('apiEndpointRequired'));
                 }
 
-                url = endpoint.endsWith('/models') ? endpoint : `${endpoint.replace(/\/$/, '')}/models`;
+                const validatedEndpoint = validateEndpointOrThrow(endpoint);
+                url = validatedEndpoint.endsWith('/models') ? validatedEndpoint : `${validatedEndpoint.replace(/\/$/, '')}/models`;
                 if (apiKey) {
                     headers['Authorization'] = `Bearer ${apiKey}`;
                 }
@@ -1944,7 +1996,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Perform request
-            const fetchOptions = { method, headers };
+            const fetchOptions = { method, headers, redirect: 'error' };
             if (body) {
                 fetchOptions.body = body;
             }
@@ -1956,8 +2008,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         throw new Error();
                     }
                 } catch (e) {
-                    const baseUrl = url.replace(/\/v1\/?$/, '').replace(/\/models$/, '');
-                    response = await fetch(`${baseUrl}/api/tags`);
+                    const baseUrl = url.replace(/\/models$/, '').replace(/\/v1\/?$/, '');
+                    response = await fetch(`${baseUrl}/api/tags`, { redirect: 'error' });
                 }
             } else {
                 response = await fetch(url, fetchOptions);
@@ -2201,7 +2253,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // 2. Fetch from API
-        const response = await fetch(url, { headers });
+        const response = await fetch(url, { headers, redirect: 'error' });
         if (!response.ok) {
             const errText = await response.text();
             throw new Error(t('apiResponseError', { status: response.status, error: errText || '' }));
@@ -2299,10 +2351,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const headers = {};
 
         if (providerType === 'ollama') {
-            endpoint = modalOllamaEndpoint.value.trim() || 'http://localhost:11434/v1';
+            endpoint = validateEndpointOrThrow(modalOllamaEndpoint.value.trim() || 'http://localhost:11434/v1');
         } else if (providerType === 'openai-compatible') {
-            endpoint = modalOpenaiCompatibleEndpoint.value.trim();
-            if (!endpoint) {throw new Error(t('apiEndpointRequired'));}
+            const rawEndpoint = modalOpenaiCompatibleEndpoint.value.trim();
+            if (!rawEndpoint) {throw new Error(t('apiEndpointRequired'));}
+            endpoint = validateEndpointOrThrow(rawEndpoint);
             apiKey = modalOpenaiCompatibleApiKey.value.trim();
             if (apiKey) {
                 headers['Authorization'] = `Bearer ${apiKey}`;
@@ -2312,7 +2365,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let models = [];
         if (providerType === 'ollama') {
             try {
-                const response = await fetch(`${endpoint}/models`);
+                const response = await fetch(`${endpoint}/models`, { redirect: 'error' });
                 if (response.ok) {
                     const data = await response.json();
                     if (data.data && Array.isArray(data.data)) {
@@ -2323,7 +2376,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             } catch (e) {
                 const baseUrl = endpoint.replace(/\/v1\/?$/, '');
-                const response = await fetch(`${baseUrl}/api/tags`);
+                const response = await fetch(`${baseUrl}/api/tags`, { redirect: 'error' });
                 if (!response.ok) {throw new Error(t('ollamaConnectionFailed'));}
                 const data = await response.json();
                 if (data.models && Array.isArray(data.models)) {
@@ -2332,7 +2385,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } else {
             const url = endpoint.endsWith('/models') ? endpoint : `${endpoint.replace(/\/$/, '')}/models`;
-            const response = await fetch(url, { headers });
+            const response = await fetch(url, { headers, redirect: 'error' });
             if (!response.ok) {
                 const errText = await response.text();
                 throw new Error(t('apiResponseError', { status: response.status, error: errText || '' }));

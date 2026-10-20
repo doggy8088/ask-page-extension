@@ -50,6 +50,7 @@ zip -r "$PACKAGE_NAME" \
   codepen.html \
   codepen.js \
   i18n.js \
+  endpoint-utils.js \
   style.css \
   icons/ \
   lib/ \
