@@ -12189,7 +12189,7 @@ async function createDialog() {
         if (target.isRange) {
             return { error: `ref ${target.ref} 是折疊區段而不是單一元素。請先用 read_page 展開該區段，再對其中的元素 ref 操作。` };
         }
-        return target;
+        return { ...target, element: target.elements[0] };
     }
 
     function scrollElementIntoViewForAction(element) {
