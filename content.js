@@ -15477,7 +15477,7 @@ async function createDialog() {
         const activeConfig = await getActiveProviderConfig();
         throwIfAskTaskCancelled(taskContext);
         const encryptedApiKey = activeConfig?.apiKey || '';
-        const selectedModel = activeConfig?.activeModel || 'claude-3-5-sonnet-latest';
+        const selectedModel = activeConfig?.activeModel || 'claude-haiku-5-5';
         const providerLabel = getProviderDisplayName(activeConfig);
         const reasoningValue = await getActiveReasoningValue(activeConfig);
 

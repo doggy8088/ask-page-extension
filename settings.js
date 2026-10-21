@@ -273,9 +273,10 @@ const PREDEFINED_MODELS = {
         'gpt-4.1-mini'
     ],
     anthropic: [
-        'claude-opus-4-7',
-        'claude-sonnet-4-6',
-        'claude-haiku-4-5'
+        'claude-haiku-5-5',
+        'claude-sonnet-5-5',
+        'claude-opus-5-5',
+        'claude-fable-5-1'
     ],
     deepseek: [
         'deepseek-flash',
