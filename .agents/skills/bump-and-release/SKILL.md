@@ -1,6 +1,6 @@
 ---
 name: bump-and-release
-description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語意化版本、依既有 CHANGELOG.md 格式整理 Unreleased 內容，並完成主線發布。當使用者要求 bump 版本、更新 CHANGELOG.md、整理發行記錄或準備 Chrome Web Store 發布時使用；每次執行至少 bump 一次版本，未明確指定時預設使用 patch，只有明確指定 minor 或 major 才使用對應類型；發行前必須位於 main 分支、執行版本 bump 前先以 git pull --rebase 更新遠端分支並同步 Git tag，發布提交後必須推送 main、驗證 GitHub Actions 成功，並以該版本 CHANGELOG 更新 GitHub Release notes；若工作區有未提交變更，必須先以完整正體中文提交訊息提交，之後才可編輯 CHANGELOG.md。
+description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語意化版本、依既有 CHANGELOG.md 格式整理 Unreleased 內容，並完成主線發布。當使用者要求 bump 版本、更新 CHANGELOG.md、整理發行記錄或準備 Chrome Web Store 發布時使用；每次執行至少 bump 一次版本，未明確指定時預設使用 patch，`minor`、`minor version`、`次版本` 都視為 minor，`major`、`major version`、`主版本` 都視為 major；發行前必須位於 main 分支、執行版本 bump 前先以 git pull --rebase 更新遠端分支並同步 Git tag，發布提交後必須推送 main、驗證 GitHub Actions 成功，並以該版本 CHANGELOG 更新 GitHub Release notes；若工作區有未提交變更，必須先以完整正體中文提交訊息提交，之後才可編輯 CHANGELOG.md。
 ---
 
 # Bump And Release
@@ -9,11 +9,33 @@ description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語�
 
 依 AskPage 專案目前的版本腳本與 GitHub Actions 流程，完成版本提升、變更日誌整理、品質檢查、發布提交與 GitHub Release notes 更新。所有操作都必須保留可追溯的提交紀錄，不得虛構未由程式碼或提交內容支持的變更。
 
-本技能每次執行都必須至少提升一次版本號。使用者未指定 bump 類型時，預設執行 patch；只有使用者明確提到 minor 或 major 時，才執行對應的版本升級。
+本技能每次執行都必須至少提升一次版本號。版本類型必須先依「版本類型解析」判斷；`minor`、`minor version`、`次版本` 等說法同等，`major`、`major version`、`主版本` 等說法同等。只有完全沒有指定類型時，才預設執行 patch。
 
 本技能只允許在 `main` 分支執行發行流程；完成發布提交後，必須直接推送 `origin/main`，並等待對應 GitHub Actions 工作流程全部成功，再以該版本的 `CHANGELOG.md` 區段更新並驗證 GitHub Release notes 後才能結束。
 
-**核心順序：先確認位於 main，再處理並提交既有未提交變更、同步遠端分支與 Git tag，接著執行版本 bump、整理 CHANGELOG.md、檢查並提交發布內容、推送 main，最後驗證 CI 成功，再以 CHANGELOG 更新並驗證 GitHub Release notes。**
+**核心順序：先解析使用者指定的版本類型並確認位於 main，再處理並提交既有未提交變更、同步遠端分支與 Git tag，接著執行版本 bump、整理 CHANGELOG.md、檢查並提交發布內容、推送 main，最後驗證 CI 成功，再以 CHANGELOG 更新並驗證 GitHub Release notes。**
+
+* * *
+
+## 版本類型解析（優先於任何預設值）
+
+在使用者本次請求的原始文字中解析 bump 類型。`/bump-and-release` 後方的參數（例如 `minor version`）屬於本次請求的一部分，必須納入解析，不可忽略。**不要只接受單獨一個 `minor` 字樣**；`/bump-and-release minor version`、`/bump-and-release minor`、`請用 minor version 發布`、`bump minor` 都必須解析為 minor，`major version` 與 `major` 同理。
+
+解析規則：
+
+1. 忽略大小寫、前後空白、slash command 名稱（`/bump-and-release`），以及 `bump`、`version`、`release`、`update`、`版本`、`升級`、`發布` 等修飾詞。
+2. 只要請求中出現下表任一說法，就採用該類型；不要求該說法必須單獨成句或緊接在指令後。
+3. 若同時出現兩種以上不同類型（例如同時提到 `minor` 與 `major`），停止並要求使用者確認，不可自行挑選。
+4. 若使用者直接指定目標版本（例如 `0.50.0`），先與目前版本比較：只提升 major、只提升 minor 或只提升 patch，且其餘層級依語意化版本規則歸零時，採用該層級。若目標版本不是合法的單一層級提升，停止並要求使用者確認。
+5. 若完全沒有出現任何類型說法，才使用預設 patch。
+
+| 版本類型 | 可辨識說法（大小寫不拘） | 執行指令 |
+| --- | --- | --- |
+| patch | `patch`、`patch version`、`patch release`、`patch bump`、`修補`、`修補版`、`修補版本`、`修訂版` | `npm run bump:patch` |
+| minor | `minor`、`minor version`、`minor release`、`minor bump`、`次版本`、`小版本`、`功能版本` | `npm run bump:minor` |
+| major | `major`、`major version`、`major release`、`major bump`、`主版本`、`大版本`、`重大版本` | `npm run bump:major` |
+
+例：`/bump-and-release minor version` 與 `/bump-and-release minor` 都代表 minor bump；若目前版本為 `X.Y.Z`，結果會是 `X.(Y+1).0`，不可因為多了 `version` 就回退成 patch。若目前版本為 `0.49.1`，指定目標版本 `0.50.0` 就是 minor bump，指定 `0.49.2` 就是 patch bump；若指定 `0.50.1` 這種同時變動 minor 與 patch 的版本，則停止確認。
 
 * * *
 
@@ -83,9 +105,12 @@ git fetch --tags --force --prune
 
 本技能每次執行都必須從目前 `manifest.json` 版本實際提升一次，且只執行一次版本 bump。版本類型依以下規則決定：
 
+- 先依「版本類型解析」判斷；`minor version`、`minor`、`minor bump`、`次版本` 等都算明確指定 minor，`major version` 與 `major` 同等。
+- 若使用者直接指定目標版本，依「版本類型解析」判定；例如目前 `0.49.1` 指定 `0.50.0` 時執行 minor bump。
 - 使用者明確指定 `major` 時，執行 major bump。
 - 使用者明確指定 `minor` 時，執行 minor bump。
-- 使用者未指定 bump 類型時，預設執行 patch bump。
+- 使用者明確指定 `patch`，或完全未指定 bump 類型時，執行 patch bump。
+- 若同時出現衝突的版本類型，停止並要求使用者確認，不可自行推測。
 - 不得依變更規模自行推測 minor 或 major，也不得因目前版本已在先前提交中提升、看似符合預計目標，或 `Unreleased` 沒有條目而跳過本次 bump。
 
 使用專案既有腳本，只執行其中一個：
@@ -228,6 +253,7 @@ diff -u "$release_notes_file" "$verified_notes_file"
 
 ## 不可違反的檢查
 
+- **`minor` 與 `minor version` 都代表 minor bump；`major` 與 `major version` 都代表 major bump，不可忽略 slash command 後方的版本類型參數。**
 - **先行提交永遠在 CHANGELOG.md 整理之前。**
 - **發行流程只允許在 `main` 分支執行；其他分支必須立即終止並要求使用者切換回 `main`。**
 - **執行任何版本 bump 前，必須先成功執行 `git pull --rebase` 並同步遠端 Git tag。**
