@@ -283,27 +283,20 @@ const PREDEFINED_MODELS = {
         'deepseek-v4-pro'
     ],
     openrouter: [
-        'openai/gpt-5.6-sol-pro',
-        'openai/gpt-5.6-sol',
-        'openai/gpt-5.6-terra-pro',
-        'openai/gpt-5.6-terra',
-        'openai/gpt-5.6-luna-pro',
-        'openai/gpt-5.6-luna',
-        'qwen/qwen3.7-max',
-        'deepseek/deepseek-v4-flash',
-        'deepseek/deepseek-v4-pro',
-        'tencent/hy3-preview',
-        'xiaomi/mimo-v2.5-pro',
-        'xiaomi/mimo-v2.5',
-        'z-ai/glm-5',
-        'x-ai/grok-4.3',
-        'moonshotai/kimi-k2.6',
-        'minimax/minimax-m2.7'
+        'openai/gpt-6.1-sol',
+        'openai/gpt-6-luna',
+        'openai/gpt-6-sol',
+        'openai/gpt-6-astra',
+        'qwen/qwen3.8-flash',
+        'qwen/qwen3.8-27b',
+        'z-ai/glm-5.3-flashx',
+        'z-ai/glm-5.3',
+        'deepseek/deepseek-v4.1-flash-1017',
+        'deepseek/deepseek-v4.1-flash'
     ],
     groq: [
-        'openai/gpt-oss-120b',
-        'qwen/qwen3-32b',
-        'llama-3.3-70b-versatile'
+        'qwen/qwen3.8-27b',
+        'openai/gpt-oss-120b'
     ],
     mistral: [
         'mistral-large-latest',
