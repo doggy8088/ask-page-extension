@@ -6,8 +6,13 @@
 
 ## [Unreleased]
 
-### 新增 / 改進
+## [0.49.1] - 2026-10-22
 
+### 新增 / 改進（v0.49.1）
+
+- **Anthropic 預設模型改為 Claude 5.5 系列**：新增 Anthropic 提供者時，預設模型清單改為 `claude-haiku-5-5`、`claude-sonnet-5-5`、`claude-opus-5-5` 與 `claude-fable-5-1`，順序沿用使用者指定；未設定使用中模型時的備援值同步改為 `claude-haiku-5-5`。既有已儲存的提供者仍保留原本的模型清單與使用中模型。這四個模型尚未加入推理能力表，介面不顯示推理強度控制，request 也不送出 `thinking` 或 `output_config`。
+- **Groq 預設模型精簡為兩個**：Groq 預設模型清單改為 `qwen/qwen3.8-27b` 與 `openai/gpt-oss-120b`，新增提供者時預設勾選第一項 `qwen/qwen3.8-27b`。既有已儲存設定仍保留原本勾選的模型；`qwen/qwen3-32b` 與 `llama-3.3-70b-versatile` 不再列為預設。
+- **OpenRouter 預設模型更新為十個 routes**：預設清單依序改為 `openai/gpt-6.1-sol`、`openai/gpt-6-luna`、`openai/gpt-6-sol`、`openai/gpt-6-astra`、`qwen/qwen3.8-flash`、`qwen/qwen3.8-27b`、`z-ai/glm-5.3-flashx`、`z-ai/glm-5.3`、`deepseek/deepseek-v4.1-flash-1017` 與 `deepseek/deepseek-v4.1-flash`，新增提供者時預設勾選 `openai/gpt-6.1-sol`。既有已儲存設定與舊 routes 的推理能力設定維持不變；新 routes 尚未查核 reasoning metadata，因此不加入推理強度控制。
 - **Anthropic 供應商接上頁面工具**：Anthropic 現在與 Gemini、OpenAI、Azure OpenAI 與 OpenAI Compatible 一樣，可在代理模式下呼叫頁面工具。工具定義改用 Anthropic 的 `input_schema` 描述；模型回應的 `tool_use` 區塊會轉成既有的工具執行流程，執行結果再包成 `tool_result` 區塊送回模型，模型據此繼續回答。
 - **Anthropic 串流支援思考區塊與工具參數**：串流解析新增 `thinking_delta`、`signature_delta` 與 `input_json_delta` 事件，可在對話中顯示思考內容，並在工具回合中正確組出工具參數。
 - **Anthropic 工具回合保留思考區塊**：工具回合的 assistant 訊息會原樣帶回 `thinking`、`redacted_thinking` 與 `tool_use` 區塊，避免 API 因思考區塊遭修改而回傳 400。跨輪對話也會保存思考區塊，維持擴充思考的連續性。
@@ -16,8 +21,10 @@
 - **新增 `lib/anthropic-tools.js`**：把 Anthropic 工具回合的純邏輯（工具 schema 轉換、串流事件累積、思考區塊保留、工具結果組裝）獨立成模組，與 `lib/tool-policy.js`、`lib/tool-governance.js` 使用相同的載入方式，並納入測試覆蓋。
 - **新增內容腳本共用作用域的測試**：新增 `tests/content-script-scope.test.js`，依 Chrome 的行為把所有內容腳本載入同一個全域作用域，能抓到不同檔案重複宣告頂層常數、導致內容腳本載入失敗的問題。
 
-### 修正 / 更新
+### 修正 / 更新（v0.49.1）
 
+- **新增「頁問：詢問模式與代理模式」說明文件**：新增 `docs/頁問-詢問模式與代理模式.html`，整理詢問模式與代理模式的差異、頁面工具與網路搜尋工具的使用方式，以及相關設定與操作說明，作為使用者與開發者的共同參考。
+- **同步更新模型與推理強度文件**：`docs/目前推理強度對應表.md` 同步記錄 Anthropic、Groq 與 OpenRouter 的最新預設模型，說明 Anthropic 新預設模型尚未加入推理能力表、Groq 舊模型退役，以及 OpenRouter 舊 routes 的能力保留狀態。
 - **補上 Anthropic 工具回合的錯誤判斷**：缺少 `id` 或名稱的工具呼叫改為回報格式不正確的工具呼叫，不再送出無法對應的請求；達到輸出長度上限時回報輸出上限，取代原本籠統的空白回應訊息。兩種訊息都補上五種語系。
 - **修正 Anthropic 工具模組與內容腳本重複宣告常數**：`lib/anthropic-tools.js` 與 `content.js` 同時宣告 `TOOL_RESULT_PREVIEW_MAX_CHARS`，而 content script 的所有檔案共用同一個全域作用域，載入時會拋出 `SyntaxError: Identifier 'TOOL_RESULT_PREVIEW_MAX_CHARS' has already been declared`，導致整個內容腳本無法載入。工具結果的長度上限改由 `content.js` 傳入，模組內使用獨立名稱作為預設值。
 - **移除已無用途的代理模式降級訊息**：Anthropic 已支援工具呼叫，`agentToolFallbackMessage` 從五種語系移除。OpenAI 相容端點的工具降級提示維持不變。
