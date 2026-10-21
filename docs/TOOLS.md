@@ -81,6 +81,16 @@ Ollama Cloud 另有可選的 `web_search` 工具。使用者在 Ollama Cloud pro
 
 此工具只回傳搜尋結果，不會自動使用 Ollama 的 `web_fetch` API。詳細 API 格式請參閱 [`docs/ollama-web-search.md`](ollama-web-search.md)。
 
+### 0-1. `web_search`（Anthropic 原生 server tool）
+
+- **用途**：由 Anthropic API 直接搜尋網路，讓模型以最新資料回答，並在回覆中附上引用來源
+- **適用 provider**：Anthropic
+- **啟用方式**：在 Anthropic provider 編輯畫面勾選「啟用 Web search 工具」
+- **工具定義**：使用 Anthropic 的 `web_search_20250305` server tool，`max_uses` 預設為 5
+- **執行方式**：不同於 Ollama Cloud 的 `web_search`，這個工具由 Anthropic 伺服器執行，內容腳本不會另外呼叫搜尋 API；搜尋次數依 Anthropic 的計價方式收費
+- **回應處理**：AskPage 會保留 `server_tool_use`、`web_search_tool_result`、`citations`、`encrypted_content` 與 `encrypted_index`，並在回覆末尾列出參考來源；遇到 `pause_turn` 時會原樣送回 assistant 內容續跑
+- **與頁面工具併用**：代理模式會同時帶上頁面工具與原生搜尋工具；若模型在同一輪同時呼叫兩者，AskPage 會先執行頁面工具，再帶著相同工具定義續跑搜尋
+
 ### 1. `get_page_metadata`
 
 - **用途**：取得頁面 title、URL、canonical/alternate links、SEO / OpenGraph / Twitter Card metadata、JSON-LD、headings 與頁面統計

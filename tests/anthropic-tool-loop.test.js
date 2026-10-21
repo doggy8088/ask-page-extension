@@ -220,6 +220,7 @@ const loopSandbox = {
     buildAnthropicThinkingBlocks: anthropicToolsModule.buildAnthropicThinkingBlocks,
     buildAnthropicAssistantBlocks: anthropicToolsModule.buildAnthropicAssistantBlocks,
     buildAnthropicToolResultBlock: anthropicToolsModule.buildAnthropicToolResultBlock,
+    collectAnthropicWebSearchCitations: anthropicToolsModule.collectAnthropicWebSearchCitations,
     globalThis: null
 };
 loopSandbox.globalThis = loopSandbox;

@@ -11,6 +11,7 @@
 - **Anthropic 供應商接上頁面工具**：Anthropic 現在與 Gemini、OpenAI、Azure OpenAI 與 OpenAI Compatible 一樣，可在代理模式下呼叫頁面工具。工具定義改用 Anthropic 的 `input_schema` 描述；模型回應的 `tool_use` 區塊會轉成既有的工具執行流程，執行結果再包成 `tool_result` 區塊送回模型，模型據此繼續回答。
 - **Anthropic 串流支援思考區塊與工具參數**：串流解析新增 `thinking_delta`、`signature_delta` 與 `input_json_delta` 事件，可在對話中顯示思考內容，並在工具回合中正確組出工具參數。
 - **Anthropic 工具回合保留思考區塊**：工具回合的 assistant 訊息會原樣帶回 `thinking`、`redacted_thinking` 與 `tool_use` 區塊，避免 API 因思考區塊遭修改而回傳 400。跨輪對話也會保存思考區塊，維持擴充思考的連續性。
+- **Anthropic 支援原生網路搜尋**：Anthropic provider 設定新增「啟用 Web search 工具」選項（預設關閉），啟用後詢問模式與代理模式都會帶上 Anthropic 的 `web_search_20250305` server tool。搜尋由 Anthropic 伺服器執行，AskPage 會保留 `server_tool_use`、`web_search_tool_result`、`citations`、`encrypted_content` 與 `encrypted_index`，在回覆末尾列出參考來源，並處理 `pause_turn` 續跑；代理模式可同時使用頁面工具與網路搜尋。串流與非串流路徑都支援，新增 `tests/anthropic-web-search.test.js` 覆蓋工具格式、串流區塊、暫停續跑與混合工具回合。
 - **代理模式提高 Anthropic 輸出額度**：代理模式的 `max_tokens` 由詢問模式的額度提高至 32768，讓思考、工具呼叫 JSON 與最終回答共用額度時不會被截斷。手動思考預算模式仍沿用原本的「預算加回答空間」計算。
 - **新增 `lib/anthropic-tools.js`**：把 Anthropic 工具回合的純邏輯（工具 schema 轉換、串流事件累積、思考區塊保留、工具結果組裝）獨立成模組，與 `lib/tool-policy.js`、`lib/tool-governance.js` 使用相同的載入方式，並納入測試覆蓋。
 - **新增內容腳本共用作用域的測試**：新增 `tests/content-script-scope.test.js`，依 Chrome 的行為把所有內容腳本載入同一個全域作用域，能抓到不同檔案重複宣告頂層常數、導致內容腳本載入失敗的問題。

@@ -133,6 +133,8 @@
 
 Anthropic 的串流能力與 agent tool calling 是兩件事：Anthropic 串流時也會解析 `thinking_delta`、`signature_delta` 與 `input_json_delta`，把 thinking 區塊原樣保留並在下一輪連同 `tool_use` 區塊一起送回，確保擴充思考在工具回合中不會被 API 拒絕。
 
+啟用 Anthropic 原生 Web search 時，串流累積器會額外保留 `server_tool_use`、`web_search_tool_result`、`citations_delta`、`encrypted_content` 與 `encrypted_index`；遇到 `pause_turn` 會把 assistant 內容原樣送回並沿用相同工具定義續跑，最後在回覆末尾列出參考來源。
+
 * * *
 
 ## 五、為什麼之前看不到串流效果

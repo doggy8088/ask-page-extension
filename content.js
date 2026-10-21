@@ -15210,7 +15210,11 @@ async function createDialog() {
             if (Array.isArray(content)) {
                 content = content.map(item => {
                     if (item.type === 'text') {
-                        return { type: 'text', text: item.text };
+                        const textBlock = { type: 'text', text: item.text };
+                        if (Array.isArray(item.citations) && item.citations.length) {
+                            textBlock.citations = item.citations;
+                        }
+                        return textBlock;
                     }
                     if (item.type === 'image_url') {
                         const url = item.image_url?.url || '';
@@ -15250,6 +15254,7 @@ async function createDialog() {
         onRetry,
         onAnswerDelta = () => {},
         onReasoningDelta = () => {},
+        onServerToolUse = () => {},
         fetchImpl = fetch,
         providerLabel = 'Anthropic',
         signal = null
@@ -15283,6 +15288,10 @@ async function createDialog() {
                 if (chunk.type === 'message_start' && chunk.message) {
                     responseId = chunk.message.id || responseId;
                     responseModel = chunk.message.model || responseModel;
+                }
+
+                if (chunk.type === 'content_block_start' && chunk.content_block?.type === 'server_tool_use') {
+                    onServerToolUse(chunk.content_block);
                 }
 
                 accumulator.handleEvent(chunk);
@@ -15329,6 +15338,27 @@ async function createDialog() {
         return globalThis.AskPageAnthropicTools.buildAnthropicAssistantBlocks(contentBlocks);
     }
 
+    function buildAnthropicWebSearchTool() {
+        return globalThis.AskPageAnthropicTools.buildAnthropicWebSearchTool();
+    }
+
+    function collectAnthropicWebSearchCitations(contentBlocks = []) {
+        return globalThis.AskPageAnthropicTools.collectAnthropicWebSearchCitations(contentBlocks);
+    }
+
+    function appendAnthropicWebSearchSources(answer, citations = []) {
+        if (!Array.isArray(citations) || citations.length === 0) {
+            return answer;
+        }
+
+        const sourceLines = citations.map((citation, index) =>
+            `${index + 1}. [${citation.title || citation.url}](${citation.url})`
+        );
+        return `${answer}\n\n**${getLocalizedText('webSearchSourcesTitle')}**\n\n${sourceLines.join('\n')}`;
+    }
+
+    const ANTHROPIC_MAX_PAUSE_TURNS = 5;
+
     async function runAnthropicToolLoop({
         providerLabel,
         initialMessages,
@@ -15345,6 +15375,10 @@ async function createDialog() {
         const messages = initialMessages.map((message) => ({ ...message }));
         let useTools = initialUseTools;
         let fallbackUsed = false;
+        let pauseTurnCount = 0;
+        const collectedCitations = [];
+        const collectedCitationUrls = new Set();
+        const serverToolUseBlocks = new Map();
         const cancellationContext = task || signal;
         const reportStatus = (status) => {
             throwIfAskTaskCancelled(cancellationContext);
@@ -15382,6 +15416,18 @@ async function createDialog() {
 
             onTrace({ type: 'usage', round, usage: responseData?.usage || null });
             const contentBlocks = Array.isArray(responseData?.content) ? responseData.content : [];
+            for (const citation of collectAnthropicWebSearchCitations(contentBlocks)) {
+                if (!collectedCitationUrls.has(citation.url)) {
+                    collectedCitationUrls.add(citation.url);
+                    collectedCitations.push(citation);
+                }
+            }
+            for (const block of contentBlocks) {
+                if (block?.type === 'server_tool_use' && block.id) {
+                    serverToolUseBlocks.set(block.id, buildAnthropicAssistantBlocks([block])[0]);
+                }
+            }
+            const stopReason = globalThis.AskPageAnthropicTools.getAnthropicStopReason(responseData);
             const toolUseBlocks = useTools
                 ? contentBlocks.filter((block) => block?.type === 'tool_use')
                 : [];
@@ -15391,8 +15437,22 @@ async function createDialog() {
                 .join('');
             const thinkingBlocks = buildAnthropicThinkingBlocks(contentBlocks);
 
+            // 伺服器端網路搜尋可能暫停同一個回合；把 assistant 內容原樣送回即可續跑。
+            if (stopReason === 'pause_turn') {
+                if (pauseTurnCount >= ANTHROPIC_MAX_PAUSE_TURNS) {
+                    throw new Error(getLocalizedText('anthropicPauseTurnLimit', { provider: providerLabel }));
+                }
+                pauseTurnCount += 1;
+                messages.push({
+                    role: 'assistant',
+                    content: buildAnthropicAssistantBlocks(contentBlocks)
+                });
+                reportStatus(getLocalizedText('statusAnthropicWebSearch', { provider: providerLabel }));
+                continue;
+            }
+
             if (!toolUseBlocks.length && !answerText) {
-                if (globalThis.AskPageAnthropicTools.getAnthropicStopReason(responseData) === 'max_tokens') {
+                if (stopReason === 'max_tokens') {
                     throw new Error(getLocalizedText('anthropicOutputLimit', {
                         provider: providerLabel,
                         details: ''
@@ -15403,13 +15463,39 @@ async function createDialog() {
 
             if (!toolUseBlocks.length) {
                 console.debug(`[AskPage] ${providerLabel} 已取得最終回覆，正在整理答案...`);
+                const finalBlocks = buildAnthropicAssistantBlocks(contentBlocks).filter(
+                    (block) => block.type === 'thinking'
+                        || block.type === 'redacted_thinking'
+                        || block.type === 'text'
+                        || block.type === 'server_tool_use'
+                        || block.type === 'web_search_tool_result'
+                );
+                // pause_turn 或混合工具回合的搜尋結果可能出現在下一個 response，
+                // 補回對應的 server_tool_use，避免下一輪對話留下孤兒結果區塊。
+                const includedServerToolUseIds = new Set(
+                    finalBlocks
+                        .filter((block) => block.type === 'server_tool_use')
+                        .map((block) => block.id)
+                );
+                const assistantBlocks = [];
+                for (const block of finalBlocks) {
+                    if (block.type === 'web_search_tool_result') {
+                        const serverToolUseBlock = serverToolUseBlocks.get(block.tool_use_id);
+                        if (serverToolUseBlock && !includedServerToolUseIds.has(serverToolUseBlock.id)) {
+                            assistantBlocks.push(serverToolUseBlock);
+                            includedServerToolUseIds.add(serverToolUseBlock.id);
+                        }
+                    }
+                    assistantBlocks.push(block);
+                }
+
                 return {
                     answer: answerText,
                     thinkingBlocks,
-                    // 最終回合沒有後續的 tool_result，因此只保存 thinking 與 text block。
-                    assistantBlocks: buildAnthropicAssistantBlocks(contentBlocks).filter(
-                        (block) => block.type === 'thinking' || block.type === 'redacted_thinking' || block.type === 'text'
-                    ),
+                    citations: collectedCitations,
+                    // 最終回合沒有後續的 client tool_result；保留搜尋結果區塊與 citations，
+                    // 讓下一輪對話能原樣帶回 encrypted_content 與 encrypted_index。
+                    assistantBlocks,
                     fallbackUsed
                 };
             }
@@ -15499,6 +15585,7 @@ async function createDialog() {
 
         const normalizedInputImages = normalizeInputImageDataUrls(inputImageDataUrls);
         const agentModeEnabled = await getAgentModeEnabled();
+        const anthropicWebSearchEnabled = !!activeConfig?.webSearchEnabled;
         const pageConversationContext = await getPageConversationContext(capturedSelectedText, {
             includeScreenshot: Boolean(screenshotDataUrl),
             inputImageDataUrls: normalizedInputImages
@@ -15508,7 +15595,7 @@ async function createDialog() {
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
 
         const maxOutputTokens = getAnthropicMaxOutputTokens(selectedModel, reasoningValue, agentModeEnabled);
-        console.log('[AskPage] Anthropic max output tokens:', maxOutputTokens, 'model:', selectedModel, 'reasoning:', reasoningValue ?? 'default', 'streaming:', streamingEnabled);
+        console.log('[AskPage] Anthropic max output tokens:', maxOutputTokens, 'model:', selectedModel, 'reasoning:', reasoningValue ?? 'default', 'streaming:', streamingEnabled, 'web_search:', anthropicWebSearchEnabled);
 
         const allMessages = buildTextProviderMessages(pageConversationContext);
         const systemMessage = allMessages.find(msg => msg.role === 'system');
@@ -15555,7 +15642,7 @@ async function createDialog() {
             const answer = await runAnthropicToolLoop({
                 providerLabel,
                 initialMessages: messages,
-                initialUseTools: agentModeEnabled,
+                initialUseTools: agentModeEnabled || anthropicWebSearchEnabled,
                 signal: taskContext?.signal,
                 task: taskContext,
                 onStatusUpdate: handleStatusUpdate,
@@ -15577,7 +15664,15 @@ async function createDialog() {
                     }
 
                     if (useTools) {
-                        requestBody.tools = getAnthropicToolDefinitions();
+                        const tools = getAnthropicToolDefinitions({
+                            includePageTools: agentModeEnabled
+                        });
+                        if (anthropicWebSearchEnabled) {
+                            tools.push(buildAnthropicWebSearchTool());
+                        }
+                        if (tools.length) {
+                            requestBody.tools = tools;
+                        }
                     }
 
                     return applyPromptCacheRequestOptions(requestBody, {
@@ -15609,6 +15704,9 @@ async function createDialog() {
                                 }
                             },
                             onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta }),
+                            onServerToolUse: () => handleStatusUpdate(
+                                getLocalizedText('statusAnthropicWebSearch', { provider: providerLabel })
+                            ),
                             fetchImpl: providerFetch,
                             providerLabel,
                             signal: taskContext?.signal
@@ -15636,7 +15734,7 @@ async function createDialog() {
             });
 
             throwIfAskTaskCancelled(taskContext);
-            const finalAnswer = answer.answer;
+            const finalAnswer = appendAnthropicWebSearchSources(answer.answer, answer.citations);
             const anthropicBlocks = answer.assistantBlocks || [];
             if (streamedAnswer) {
                 streamedAnswer.finalize(finalAnswer, { anthropicBlocks });

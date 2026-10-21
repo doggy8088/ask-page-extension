@@ -6,6 +6,7 @@
 
 - 🤖 **多 AI 提供者支援** - 整合 Google Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Meta AI、Ollama Local、Ollama Cloud 與 OpenAI Compatible，可自由切換
 - **Gemini Google Search Grounding** - Gemini 提供者設定可選啟用 Google Search Grounding（預設關閉）；啟用後詢問模式與 Gemini 3 代理模式可使用網路搜尋（代理模式可同時使用頁面工具），勾選時會顯示免費方案不支援的警示
+- **Anthropic 原生 Web Search** - Anthropic 提供者設定可選啟用原生 Web search（預設關閉）；由 Anthropic 伺服器執行搜尋並回傳附來源的回答，詢問模式與代理模式皆可使用，代理模式可同時呼叫頁面工具
 - **完整詢問上下文** - 詢問模式會建立近似無障礙樹並固定第一問的頁面快照，完整保留後續文字、圖片與多輪對話
 - 💬 **多輪對話脈絡延續** - 追問時會自動帶入前文，切換不同 AI Provider 也能延續同一段對話
 - 🛠️ **單頁面 Tool Calling** - 模型可直接讀取頁面標題、選取範圍、表單欄位，並可填表、點擊元素、替換部分 DOM、執行 JavaScript

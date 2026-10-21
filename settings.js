@@ -195,6 +195,7 @@ let modalAnthropicApiKey, modalDeepseekApiKey, modalOpenrouterApiKey, modalGroqA
 let modalOllamaEndpoint, modalOllamaModel;
 let modalGeminiModelsList, modalOpenaiModelsList;
 let modalGeminiGoogleSearch, modalGeminiGoogleSearchWarning;
+let modalAnthropicWebSearch;
 let modalOllamaCloudWebSearch;
 let modalAnthropicModelsList, modalDeepseekModelsList, modalOpenrouterModelsList, modalGroqModelsList, modalMistralModelsList, modalMetaModelsList, modalOllamaCloudModelsList;
 let currentEditingProvider = null;
@@ -379,6 +380,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalOpenaiCompatibleModelsList = document.getElementById('modalOpenaiCompatibleModelsList');
 
     modalAnthropicApiKey = document.getElementById('modalAnthropicApiKey');
+    modalAnthropicWebSearch = document.getElementById('modalAnthropicWebSearch');
     modalDeepseekApiKey = document.getElementById('modalDeepseekApiKey');
     modalOpenrouterApiKey = document.getElementById('modalOpenrouterApiKey');
     modalGroqApiKey = document.getElementById('modalGroqApiKey');
@@ -1479,6 +1481,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalGeminiApiKey.value = '';
         modalGeminiGoogleSearch.checked = false;
         modalGeminiGoogleSearchWarning.hidden = true;
+        modalAnthropicWebSearch.checked = false;
         modalOllamaCloudWebSearch.checked = false;
         modalOpenaiApiKey.value = '';
         modalAzureApiKey.value = '';
@@ -1563,6 +1566,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else if (provider.type === 'anthropic') {
                 modalAnthropicApiKey.value = decryptedKey;
                 renderModalModelsList(modalAnthropicModelsList, combinedModels, configuredModels);
+                modalAnthropicWebSearch.checked = !!provider.webSearchEnabled;
             } else if (provider.type === 'deepseek') {
                 modalDeepseekApiKey.value = decryptedKey;
                 renderModalModelsList(modalDeepseekModelsList, combinedModels, configuredModels);
@@ -1785,6 +1789,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
             providerData.models = selectedModels;
+            providerData.webSearchEnabled = modalAnthropicWebSearch.checked;
         } else if (type === 'deepseek') {
             apiKeyRaw = modalDeepseekApiKey.value.trim();
             if (!apiKeyRaw) {
