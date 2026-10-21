@@ -95,8 +95,8 @@ assert.match(executeToolCallsSource, /durationMs: performance\.now\(\) - started
 assert.match(executeToolCallsSource, /results\.push\(timedToolResult\);\s*onToolResult\(timedToolResult\);/, '每個工具完成就要回報結果');
 assert.strictEqual(
     (contentScript.match(/\(toolResult\) => onTrace\(\{ type: 'tool-result', round, toolResults: \[toolResult\] \}\)/g) || []).length,
-    2,
-    '兩個 tool loop 都要逐一回報工具結果'
+    3,
+    '三個 tool loop 都要逐一回報工具結果'
 );
 assert.doesNotMatch(contentScript, /onTrace\(\{ type: 'tool-result', round, toolResults \}\)/, '不可等整批工具結束才回報');
 assert.match(reporterSource, /reportToolCalls\(toolCalls\) \{[\s\S]*?finishStreamedReasoning\(\);/, '每輪工具呼叫前要結束這一輪的思考列');

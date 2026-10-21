@@ -85,6 +85,9 @@
 - `run_js`
 
 > [!NOTE]
+> 頁面工具可由 Gemini、OpenAI、Azure OpenAI、Anthropic 與 OpenAI Compatible 供應商使用。Anthropic 會把工具定義改寫成 `input_schema`，並在工具回合保留模型的思考區塊，確保擴充思考不會被 API 拒絕。OpenAI 相容端點若不支援 tool calling，會自動退回一般文字模式。
+>
+> [!NOTE]
 > AskPage 會在多步驟工具調用期間以時間軸即時顯示執行過程：開始時以小字標示規劃狀態；每一輪的思考過程預設收合成一行摘要；每個工具的呼叫與回傳合併為同一列，依序呈現執行中、成功、失敗或已中止狀態、結果摘要與耗時。點開該列即可檢視完整的思考內容或參數與結果 JSON。變更型工具會直接執行，若失敗則錯誤會回傳給模型繼續處理。
 >
 > AskPage 會先依 Provider 與模型的已確認能力選擇串流 API。Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral 與 Ollama 的已支援模型在詢問模式與代理模式都會即時顯示可取得的 reasoning / thinking 文字與最後回答內容；若模型或端點不提供思考文字，仍會串流顯示一般回答。任意 OpenAI Compatible 端點因無法安全推定串流能力，會保留非串流請求。
@@ -112,7 +115,7 @@
 
 啟用截圖後，輸入框上方的「圖片上下文」區塊會出現「標注畫面」按鈕。點擊後對話框會暫時隱藏，滑鼠移到頁面元素上會顯示明顯框線；您可以點擊選取該 DOM 元素，或按住滑鼠左鍵拖曳畫線標注。完成後，含選取框或手繪線條的畫面會加入圖片上下文；本次提問送出時不會再額外擷取一次自動截圖。
 
-除了 `/screenshot` 自動截圖模式外，您也可以在 **代理模式** 下手動貼上或拖曳自己的圖片。手動附加的圖片同樣會送給 Gemini、OpenAI、Azure OpenAI 與 OpenAI Compatible 作為本次提問的視覺上下文。
+除了 `/screenshot` 自動截圖模式外，您也可以在 **代理模式** 下手動貼上或拖曳自己的圖片。手動附加的圖片同樣會送給 Gemini、OpenAI、Azure OpenAI、Anthropic 與 OpenAI Compatible 作為本次提問的視覺上下文。
 
 ### 技能
 

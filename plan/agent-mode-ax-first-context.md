@@ -74,7 +74,7 @@ tags: [architecture, agent-mode, token-efficiency, accessibility-tree, tools]
 - **SEC-001**：不新增 `debugger`、`scripting`、`tabs` 權限；ref 不得洩漏成可被頁面腳本利用的全域物件。
 - **SEC-002**：AX 快照與工具回傳仍標記為不受信任資料；密碼欄位值持續不輸出。
 - **CON-001**：Vanilla JS、無建置流程；沿用 `tests/semantic-page-context.test.js` 的 vm 載入方式撰寫測試。
-- **CON-002**：Anthropic 供應商目前無工具支援，代理模式仍以 fallback 訊息處理，不在本計畫範圍。
+- **CON-002**：Anthropic 供應商已接上頁面工具，工具定義改用 `input_schema`，並在工具回合保留 thinking 區塊。
 - **GUD-001**：所有新工具描述與 UI 文案以繁體中文為主，遵守既有 i18n 流程。
 - **PAT-001**：採「漸進式揭露（progressive disclosure）」：先給便宜的摘要，模型有需要再花 Token 換更細的資訊。
 

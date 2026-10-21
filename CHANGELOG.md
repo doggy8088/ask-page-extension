@@ -6,6 +6,22 @@
 
 ## [Unreleased]
 
+### 新增 / 改進
+
+- **Anthropic 供應商接上頁面工具**：Anthropic 現在與 Gemini、OpenAI、Azure OpenAI 與 OpenAI Compatible 一樣，可在代理模式下呼叫頁面工具。工具定義改用 Anthropic 的 `input_schema` 描述；模型回應的 `tool_use` 區塊會轉成既有的工具執行流程，執行結果再包成 `tool_result` 區塊送回模型，模型據此繼續回答。
+- **Anthropic 串流支援思考區塊與工具參數**：串流解析新增 `thinking_delta`、`signature_delta` 與 `input_json_delta` 事件，可在對話中顯示思考內容，並在工具回合中正確組出工具參數。
+- **Anthropic 工具回合保留思考區塊**：工具回合的 assistant 訊息會原樣帶回 `thinking`、`redacted_thinking` 與 `tool_use` 區塊，避免 API 因思考區塊遭修改而回傳 400。跨輪對話也會保存思考區塊，維持擴充思考的連續性。
+- **代理模式提高 Anthropic 輸出額度**：代理模式的 `max_tokens` 由詢問模式的額度提高至 32768，讓思考、工具呼叫 JSON 與最終回答共用額度時不會被截斷。手動思考預算模式仍沿用原本的「預算加回答空間」計算。
+- **新增 `lib/anthropic-tools.js`**：把 Anthropic 工具回合的純邏輯（工具 schema 轉換、串流事件累積、思考區塊保留、工具結果組裝）獨立成模組，與 `lib/tool-policy.js`、`lib/tool-governance.js` 使用相同的載入方式，並納入測試覆蓋。
+- **新增內容腳本共用作用域的測試**：新增 `tests/content-script-scope.test.js`，依 Chrome 的行為把所有內容腳本載入同一個全域作用域，能抓到不同檔案重複宣告頂層常數、導致內容腳本載入失敗的問題。
+
+### 修正 / 更新
+
+- **補上 Anthropic 工具回合的錯誤判斷**：缺少 `id` 或名稱的工具呼叫改為回報格式不正確的工具呼叫，不再送出無法對應的請求；達到輸出長度上限時回報輸出上限，取代原本籠統的空白回應訊息。兩種訊息都補上五種語系。
+- **修正 Anthropic 工具模組與內容腳本重複宣告常數**：`lib/anthropic-tools.js` 與 `content.js` 同時宣告 `TOOL_RESULT_PREVIEW_MAX_CHARS`，而 content script 的所有檔案共用同一個全域作用域，載入時會拋出 `SyntaxError: Identifier 'TOOL_RESULT_PREVIEW_MAX_CHARS' has already been declared`，導致整個內容腳本無法載入。工具結果的長度上限改由 `content.js` 傳入，模組內使用獨立名稱作為預設值。
+- **移除已無用途的代理模式降級訊息**：Anthropic 已支援工具呼叫，`agentToolFallbackMessage` 從五種語系移除。OpenAI 相容端點的工具降級提示維持不變。
+- **同步更新工具與串流文件**：`docs/TOOLS.md` 與 `docs/目前串流回應邏輯與 Provider 支援狀態.md` 改為描述 Anthropic 的工具支援方式，不再宣稱 Anthropic 沒有工具。
+
 ## [0.49.0] - 2026-10-20
 
 ### 新增 / 改進（v0.49.0）

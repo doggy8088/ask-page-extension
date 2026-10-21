@@ -121,7 +121,15 @@ assert.match(geminiLoopSection, /responseData = streamingEnabled\s*\n\s*\? await
 });
 
 assert.match(contentScript, /onAnswerDelta: streamingEnabled \? \(delta\) => streamedAnswer\.append\(delta\)/);
-assert.match(contentScript, /finalAnswer = agentModeEnabled\s*\n\s*\? getLocalizedText\('agentToolFallbackMessage'/);
 assert.match(contentScript, /const finalAnswer = answer\.fallbackUsed\s*\n\s*\? getLocalizedText\('endpointToolFallbackMessage'/);
+
+// Anthropic 已接上頁面工具，串流時仍走 fetchAnthropicStream，並在迴圈內攔截 tool_use。
+const anthropicLoopSection = contentScript.slice(
+    contentScript.indexOf('async function runAnthropicToolLoop'),
+    contentScript.indexOf('async function askAnthropic')
+);
+assert.match(anthropicLoopSection, /await sendRequest\(buildRequestBody\(messages, useTools\)\)/);
+assert.match(anthropicLoopSection, /if \(!useTools \|\| round === 0\) \{/);
+assert.doesNotMatch(contentScript, /getLocalizedText\('agentToolFallbackMessage'/, 'Anthropic 不再需要工具不支援的 fallback 訊息');
 
 console.log('streaming-mode: ok');

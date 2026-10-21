@@ -454,6 +454,13 @@ assert.deepStrictEqual(
 assert.strictEqual(getAnthropicMaxOutputTokens('claude-opus-4-7', 'none'), 4096);
 assert.strictEqual(getAnthropicMaxOutputTokens('claude-opus-4-7', 'medium'), 16384);
 assert.strictEqual(getAnthropicMaxOutputTokens('claude-haiku-4-5', 4096), 8192);
+// 代理模式要同時容納思考、工具呼叫 JSON 與最終回答，額度需高於詢問模式。
+assert.strictEqual(getAnthropicMaxOutputTokens('claude-opus-4-7', 'none', true), 32768);
+assert.strictEqual(getAnthropicMaxOutputTokens('claude-opus-4-7', 'medium', true), 32768);
+assert.strictEqual(getAnthropicMaxOutputTokens('claude-haiku-4-5', 0, true), 32768);
+// 手動思考預算仍以預算加回答空間計算，不低於代理模式的額度。
+assert.strictEqual(getAnthropicMaxOutputTokens('claude-haiku-4-5', 4096, true), 8192);
+assert.strictEqual(getAnthropicMaxOutputTokens('claude-unknown-model', 'none', true), 32768);
 
 const responsesBody = applyOpenAIReasoningEffort({ model: 'gpt-5.6-sol' }, 'xhigh', true);
 assert.deepStrictEqual(JSON.parse(JSON.stringify(responsesBody)), {

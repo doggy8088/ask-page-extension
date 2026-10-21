@@ -43,6 +43,7 @@
         "endpoint-utils.js",
         "lib/tool-policy.js",
         "lib/tool-governance.js",
+        "lib/anthropic-tools.js",
         "agent-glow.js",
         "lib/debug-logger.js",
         "content.js"

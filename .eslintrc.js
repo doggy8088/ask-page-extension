@@ -86,7 +86,7 @@ module.exports = {
     },
     {
       // 治理層同時在瀏覽器（content script）與 Node（測試）中使用
-      files: ['lib/tool-policy.js', 'lib/tool-governance.js'],
+      files: ['lib/tool-policy.js', 'lib/tool-governance.js', 'lib/anthropic-tools.js'],
       env: {
         browser: true,
         node: true

@@ -39,11 +39,11 @@ AskPage 也支援使用者在設定頁建立自訂斜線指令。每筆資料包
 
 ## 二、頁面工具（提供給模型的 tool calling）
 
-以下工具由 `getToolDefinitions()` 定義，提供給 Gemini、OpenAI、Azure OpenAI 與 OpenAI Compatible 使用。  
+以下工具由 `getToolDefinitions()` 定義，提供給 Gemini、OpenAI、Azure OpenAI、OpenAI Compatible 與 Anthropic 使用。  
 用途是讓模型在多步驟代理流程中能讀取或操作目前頁面。
 
 > 注意：OpenAI Compatible 採 best-effort 模式，若端點不支援 tool calling，會自動退回一般文字模式。  
-> Anthropic 供應商目前沒有接上任何工具；代理模式下會以 fallback 訊息告知使用者，模型只能依快照回答。
+> Anthropic 供應商使用 `input_schema` 描述工具，並在 `stop_reason: "tool_use"` 時把 `tool_use` 區塊與 thinking 區塊一起帶回下一輪。
 
 ### 代理模式的頁面上下文與 ref
 

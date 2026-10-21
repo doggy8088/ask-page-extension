@@ -1944,11 +1944,15 @@ function buildAnthropicThinkingConfig(model = '', reasoningValue = null) {
     };
 }
 
-function getAnthropicMaxOutputTokens(model = '', reasoningValue = null) {
+// 代理模式的輸出額度要同時容納思考、工具呼叫 JSON 與最終回答，
+// 因此在一般模式的額度上額外保留空間，避免工具回合被輸出上限截斷。
+const ANTHROPIC_AGENT_MODE_MAX_OUTPUT_TOKENS = 32768;
+
+function getAnthropicMaxOutputTokens(model = '', reasoningValue = null, agentModeEnabled = false) {
     const baseOutputTokens = 4096;
     const capability = getReasoningCapability('anthropic', model);
     if (!capability) {
-        return baseOutputTokens;
+        return agentModeEnabled ? ANTHROPIC_AGENT_MODE_MAX_OUTPUT_TOKENS : baseOutputTokens;
     }
 
     const value = normalizeReasoningValue(capability, reasoningValue);
@@ -1956,9 +1960,11 @@ function getAnthropicMaxOutputTokens(model = '', reasoningValue = null) {
         return Math.min(65536, Number(value) + baseOutputTokens);
     }
     if (capability.thinkingMode === 'adaptive' && value !== 'none') {
-        return 16384;
+        return agentModeEnabled
+            ? Math.max(16384, ANTHROPIC_AGENT_MODE_MAX_OUTPUT_TOKENS)
+            : 16384;
     }
-    return baseOutputTokens;
+    return agentModeEnabled ? ANTHROPIC_AGENT_MODE_MAX_OUTPUT_TOKENS : baseOutputTokens;
 }
 
 function applyOpenAIReasoningEffort(requestBody, reasoningEffort, useResponsesApi) {
@@ -5975,6 +5981,28 @@ function getConversationMessagesForTextProviders() {
         }));
 }
 
+// Anthropic 的 thinking block 必須原封不動回傳，多輪對話才接得起來。
+// 助理回合改用保存下來的 block 內容，thinking 與其簽章才不會遺失。
+function buildAnthropicConversationMessages() {
+    return conversationHistory
+        .filter((turn) => turn.includeInModelContext !== false)
+        .map((turn) => {
+            if (turn.role === 'assistant' && Array.isArray(turn.anthropicBlocks) && turn.anthropicBlocks.length) {
+                return {
+                    role: turn.role,
+                    content: turn.anthropicBlocks
+                };
+            }
+
+            return {
+                role: turn.role,
+                content: turn.role === 'user'
+                    ? buildTextProviderUserContent(turn.content, turn.screenshotDataUrl, turn.inputImageDataUrls)
+                    : turn.content
+            };
+        });
+}
+
 function buildGeminiConversationSteps() {
     return conversationHistory
         .filter((turn) => turn.includeInModelContext !== false)
@@ -6093,7 +6121,8 @@ function addConversationTurn(role, content, displayContent = content, options = 
         extraClassName: options.extraClassName || '',
         screenshotDataUrl: options.screenshotDataUrl || '',
         inputImageDataUrls: normalizeInputImageDataUrls(options.inputImageDataUrls),
-        ...(options.geminiSteps ? { geminiSteps: options.geminiSteps } : {})
+        ...(options.geminiSteps ? { geminiSteps: options.geminiSteps } : {}),
+        ...(options.anthropicBlocks ? { anthropicBlocks: options.anthropicBlocks } : {})
     };
     conversationHistory.push(turn);
     return turn;
@@ -9074,6 +9103,10 @@ async function createDialog() {
                 } else if (existingIndex === -1) {
                     conversationHistory.push(streamedTurn);
                 }
+                // 串流期間建立的回合要在結束時補上後設資料，否則下一輪對話會遺失 thinking block。
+                if (historyOptions.anthropicBlocks) {
+                    streamedTurn.anthropicBlocks = historyOptions.anthropicBlocks;
+                }
             }
 
             streamedTurn.content = contentText;
@@ -9668,6 +9701,7 @@ async function createDialog() {
                 extraClassName: options.extraClassName,
                 screenshotDataUrl: historyOptions.screenshotDataUrl ?? options.screenshotDataUrl,
                 geminiSteps: historyOptions.geminiSteps,
+                anthropicBlocks: historyOptions.anthropicBlocks,
                 inputImageDataUrls: historyOptions.inputImageDataUrls ?? options.inputImageDataUrls
             }
         );
@@ -12986,6 +13020,14 @@ async function createDialog() {
         return tools;
     }
 
+    // Anthropic 的工具 schema 用 input_schema 取代 JSON Schema 的 parameters，
+    // 其餘欄位（name、description）與其他 provider 相同。
+    function getAnthropicToolDefinitions(options = {}) {
+        return globalThis.AskPageAnthropicTools.buildAnthropicToolDefinitions(
+            getToolDefinitionsForRequest(options)
+        );
+    }
+
     function getOpenAIToolDefinitions(options = {}) {
         return getToolDefinitionsForRequest(options).map((tool) => ({
             type: 'function',
@@ -15194,6 +15236,12 @@ async function createDialog() {
         });
     }
 
+    // Anthropic 串流回應的事件順序為 message_start → content_block_* → message_delta → message_stop。
+    // 事件累積成與非串流回應相同結構的 content 陣列（text / thinking / tool_use）。
+    function createAnthropicStreamAccumulator() {
+        return globalThis.AskPageAnthropicTools.createAnthropicStreamAccumulator();
+    }
+
     async function fetchAnthropicStream({
         url,
         requestBody,
@@ -15201,14 +15249,14 @@ async function createDialog() {
         buildHttpError,
         onRetry,
         onAnswerDelta = () => {},
+        onReasoningDelta = () => {},
         fetchImpl = fetch,
         providerLabel = 'Anthropic',
         signal = null
     }) {
-        let answerText = '';
+        const accumulator = createAnthropicStreamAccumulator();
         let responseId = '';
         let responseModel = requestBody.model || '';
-        let usage = null;
 
         await fetchSseWithRetry({
             providerLabel,
@@ -15235,28 +15283,192 @@ async function createDialog() {
                 if (chunk.type === 'message_start' && chunk.message) {
                     responseId = chunk.message.id || responseId;
                     responseModel = chunk.message.model || responseModel;
-                    usage = chunk.message.usage || usage;
                 }
 
-                if (chunk.usage) {
-                    usage = chunk.usage;
+                accumulator.handleEvent(chunk);
+
+                if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta' && chunk.delta.text) {
+                    onAnswerDelta(chunk.delta.text);
+                    return;
                 }
 
-                if (chunk.type === 'content_block_delta' && chunk.delta && chunk.delta.text) {
-                    const textDelta = chunk.delta.text;
-                    answerText += textDelta;
-                    onAnswerDelta(textDelta);
+                if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'thinking_delta' && chunk.delta.thinking) {
+                    onReasoningDelta(chunk.delta.thinking);
                 }
             },
             signal
         });
 
+        const contentBlocks = accumulator.getContentBlocks();
         return {
-            answer: answerText,
+            answer: accumulator.getText(),
+            content: contentBlocks,
+            stopReason: accumulator.getStopReason(),
             id: responseId,
             model: responseModel,
-            usage
+            usage: accumulator.getUsage()
         };
+    }
+
+    // Anthropic 工具回合的規則與其他供應商不同：
+    // 1. 工具結果要包成 user 訊息裡的 tool_result block，用 tool_use_id 對應；
+    // 2. 同一輪的 thinking block 必須原封不動回傳，否則 API 會回 400；
+    // 3. 工具呼叫結束前 assistant 訊息不能只有 tool_use，必須一併帶回 thinking 與 text block。
+    function buildAnthropicToolResultBlock(toolResult) {
+        return globalThis.AskPageAnthropicTools.buildAnthropicToolResultBlock(
+            toolResult,
+            TOOL_RESULT_PREVIEW_MAX_CHARS
+        );
+    }
+
+    function buildAnthropicThinkingBlocks(contentBlocks = []) {
+        return globalThis.AskPageAnthropicTools.buildAnthropicThinkingBlocks(contentBlocks);
+    }
+
+    function buildAnthropicAssistantBlocks(contentBlocks = []) {
+        return globalThis.AskPageAnthropicTools.buildAnthropicAssistantBlocks(contentBlocks);
+    }
+
+    async function runAnthropicToolLoop({
+        providerLabel,
+        initialMessages,
+        buildRequestBody,
+        sendRequest,
+        signal = null,
+        task = null,
+        toolContext = {},
+        allowToolFallback = false,
+        initialUseTools = true,
+        onStatusUpdate = () => {},
+        onTrace = () => {}
+    }) {
+        const messages = initialMessages.map((message) => ({ ...message }));
+        let useTools = initialUseTools;
+        let fallbackUsed = false;
+        const cancellationContext = task || signal;
+        const reportStatus = (status) => {
+            throwIfAskTaskCancelled(cancellationContext);
+            onStatusUpdate(status);
+            onTrace({ type: 'status', text: status });
+        };
+
+        const maxToolCallRounds = await getToolCallMaxRounds();
+        for (let round = 0; round < maxToolCallRounds; round++) {
+            throwIfAskTaskCancelled(cancellationContext);
+            // 第二輪起工具結果已顯示在時間軸上，不再重複顯示規劃狀態。
+            if (!useTools || round === 0) {
+                reportStatus(formatRoundStatus(
+                    round,
+                    useTools
+                        ? getLocalizedText('statusPlanningWithProvider', { provider: providerLabel })
+                        : getLocalizedText('statusAnsweringWithProvider', { provider: providerLabel })
+                ));
+            }
+
+            let responseData;
+            try {
+                responseData = await sendRequest(buildRequestBody(messages, useTools));
+                throwIfAskTaskCancelled(cancellationContext);
+            } catch (error) {
+                if (useTools && allowToolFallback && isLikelyToolUnsupportedError(error)) {
+                    console.warn(`[AskPage] ${providerLabel} does not appear to support tool calling, falling back to plain chat.`, error);
+                    useTools = false;
+                    fallbackUsed = true;
+                    reportStatus(formatRoundStatus(round, getLocalizedText('statusToolCallingFallbackDetailed', { provider: providerLabel })));
+                    continue;
+                }
+                throw error;
+            }
+
+            onTrace({ type: 'usage', round, usage: responseData?.usage || null });
+            const contentBlocks = Array.isArray(responseData?.content) ? responseData.content : [];
+            const toolUseBlocks = useTools
+                ? contentBlocks.filter((block) => block?.type === 'tool_use')
+                : [];
+            const answerText = contentBlocks
+                .filter((block) => block?.type === 'text')
+                .map((block) => block.text || '')
+                .join('');
+            const thinkingBlocks = buildAnthropicThinkingBlocks(contentBlocks);
+
+            if (!toolUseBlocks.length && !answerText) {
+                if (globalThis.AskPageAnthropicTools.getAnthropicStopReason(responseData) === 'max_tokens') {
+                    throw new Error(getLocalizedText('anthropicOutputLimit', {
+                        provider: providerLabel,
+                        details: ''
+                    }));
+                }
+                throw new Error(getLocalizedText('anthropicEmptyResponse'));
+            }
+
+            if (!toolUseBlocks.length) {
+                console.debug(`[AskPage] ${providerLabel} 已取得最終回覆，正在整理答案...`);
+                return {
+                    answer: answerText,
+                    thinkingBlocks,
+                    // 最終回合沒有後續的 tool_result，因此只保存 thinking 與 text block。
+                    assistantBlocks: buildAnthropicAssistantBlocks(contentBlocks).filter(
+                        (block) => block.type === 'thinking' || block.type === 'redacted_thinking' || block.type === 'text'
+                    ),
+                    fallbackUsed
+                };
+            }
+
+            // assistant 訊息要原樣帶回 thinking、text 與 tool_use block 的順序。
+            messages.push({
+                role: 'assistant',
+                content: buildAnthropicAssistantBlocks(contentBlocks)
+            });
+
+            // 缺少 id 或名稱的 tool_use 區塊無法對應 tool_result，API 會直接回 400。
+            if (toolUseBlocks.some((block) => !block.id || !block.name)) {
+                throw new Error(getLocalizedText('anthropicMalformedToolCall', {
+                    provider: providerLabel,
+                    details: ''
+                }));
+            }
+
+            const requestedToolNames = formatToolNameList(toolUseBlocks.map((block) => block.name));
+            const parsedToolCalls = toolUseBlocks.map((block) => ({
+                id: block.id || '',
+                name: block.name || '',
+                args: parseToolArguments(block.input)
+            }));
+            reportStatus(formatRoundStatus(round, getLocalizedText('statusToolSelected', {
+                provider: providerLabel,
+                tools: requestedToolNames
+            })));
+            onTrace({ type: 'tool-call', round, toolCalls: parsedToolCalls });
+
+            const toolResults = await executeToolCalls(
+                parsedToolCalls,
+                (toolStatus) => reportStatus(formatRoundStatus(round, getLocalizedText('statusToolExecuting', {
+                    tool: formatToolDisplayName(toolStatus.name),
+                    index: toolStatus.index,
+                    total: toolStatus.total
+                }))),
+                {
+                    ...toolContext,
+                    signal,
+                    task
+                },
+                (toolResult) => onTrace({ type: 'tool-result', round, toolResults: [toolResult] })
+            );
+            throwIfAskTaskCancelled(cancellationContext);
+
+            const toolNames = formatToolNameList(toolResults.map((toolResult) => toolResult.name));
+            reportStatus(formatRoundStatus(round, getLocalizedText('statusToolResults', {
+                tools: toolNames,
+                provider: providerLabel
+            })));
+
+            messages.push({
+                role: 'user',
+                content: toolResults.map((toolResult) => buildAnthropicToolResultBlock(toolResult))
+            });
+        }
+
+        throw new Error(getLocalizedText('toolCallLimitExceeded'));
     }
 
     async function askAnthropic(capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = [], taskContext = null) {
@@ -15295,137 +15507,145 @@ async function createDialog() {
         const streamingEnabled = isStreamingSupported('anthropic', selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
 
-        const maxOutputTokens = getAnthropicMaxOutputTokens(selectedModel, reasoningValue);
+        const maxOutputTokens = getAnthropicMaxOutputTokens(selectedModel, reasoningValue, agentModeEnabled);
         console.log('[AskPage] Anthropic max output tokens:', maxOutputTokens, 'model:', selectedModel, 'reasoning:', reasoningValue ?? 'default', 'streaming:', streamingEnabled);
 
         const allMessages = buildTextProviderMessages(pageConversationContext);
         const systemMessage = allMessages.find(msg => msg.role === 'system');
         const systemPrompt = systemMessage ? systemMessage.content : '';
-        const messages = formatMessagesForAnthropic(allMessages.filter(msg => msg.role !== 'system'));
+        const anthropicConversationMessages = buildAnthropicConversationMessages();
+        const messages = formatMessagesForAnthropic(anthropicConversationMessages);
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01'
+        };
+
+        const buildHttpError = (response, errorBody) => {
+            const retryAfterMs = getRetryAfterMilliseconds(response);
+            if (response.status === 401) {
+                const parsedError = parseApiErrorBody(errorBody);
+                const authMessage = parsedError.apiMessage
+                    ? getLocalizedText('providerAuthenticationFailed', {
+                        provider: providerLabel,
+                        error: parsedError.apiMessage
+                    })
+                    : getLocalizedText('invalidProviderApiKey', { provider: providerLabel });
+                return createHttpError(response.status, response.statusText, errorBody, authMessage, { retryAfterMs });
+            }
+            if (response.status === 403) {
+                return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerRequestForbidden', { provider: providerLabel }), { retryAfterMs });
+            }
+            if (response.status === 404) {
+                return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerModelNotFound', { provider: providerLabel }), { retryAfterMs });
+            }
+            if (response.status === 429) {
+                return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerRateLimited', { provider: providerLabel }), { retryAfterMs });
+            }
+            if (response.status >= 500) {
+                return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerUnavailable', { provider: providerLabel }), { retryAfterMs });
+            }
+            return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
+        };
+
+        const url = 'https://api.anthropic.com/v1/messages';
 
         try {
-            const requestBody = {
-                model: selectedModel,
-                messages,
-                max_tokens: maxOutputTokens
-            };
+            const answer = await runAnthropicToolLoop({
+                providerLabel,
+                initialMessages: messages,
+                initialUseTools: agentModeEnabled,
+                signal: taskContext?.signal,
+                task: taskContext,
+                onStatusUpdate: handleStatusUpdate,
+                onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
+                buildRequestBody: (currentMessages, useTools) => {
+                    const requestBody = {
+                        model: selectedModel,
+                        messages: currentMessages,
+                        max_tokens: maxOutputTokens
+                    };
 
-            if (systemPrompt) {
-                requestBody.system = systemPrompt;
-            }
+                    if (systemPrompt) {
+                        requestBody.system = systemPrompt;
+                    }
 
-            const anthropicThinkingConfig = buildAnthropicThinkingConfig(selectedModel, reasoningValue);
-            if (anthropicThinkingConfig) {
-                Object.assign(requestBody, anthropicThinkingConfig);
-            }
+                    const anthropicThinkingConfig = buildAnthropicThinkingConfig(selectedModel, reasoningValue);
+                    if (anthropicThinkingConfig) {
+                        Object.assign(requestBody, anthropicThinkingConfig);
+                    }
 
-            applyPromptCacheRequestOptions(requestBody, {
-                providerType: 'anthropic',
-                agentModeEnabled
+                    if (useTools) {
+                        requestBody.tools = getAnthropicToolDefinitions();
+                    }
+
+                    return applyPromptCacheRequestOptions(requestBody, {
+                        providerType: 'anthropic',
+                        agentModeEnabled
+                    });
+                },
+                sendRequest: async (requestBody) => {
+                    const handleRetry = (retryInfo) => handleStatusUpdate(
+                        getLocalizedText('statusRetrying', {
+                            provider: providerLabel,
+                            reason: retryInfo.shortReason,
+                            delay: formatRetryDelay(retryInfo.delayMs),
+                            retryCount: retryInfo.retryCount,
+                            maxRetries: retryInfo.maxRetries
+                        })
+                    );
+
+                    if (streamingEnabled) {
+                        const streamResult = await fetchAnthropicStream({
+                            url,
+                            requestBody,
+                            headers,
+                            buildHttpError,
+                            onRetry: handleRetry,
+                            onAnswerDelta: (delta) => {
+                                if (streamedAnswer) {
+                                    streamedAnswer.append(delta);
+                                }
+                            },
+                            onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta }),
+                            fetchImpl: providerFetch,
+                            providerLabel,
+                            signal: taskContext?.signal
+                        });
+                        traceReporter.reportUsage(providerLabel, streamResult.usage);
+                        return streamResult;
+                    }
+
+                    const response = await fetchJsonWithRetry({
+                        providerLabel,
+                        url,
+                        options: {
+                            method: 'POST',
+                            headers,
+                            body: JSON.stringify(requestBody)
+                        },
+                        buildHttpError,
+                        onRetry: handleRetry,
+                        fetchImpl: providerFetch,
+                        signal: taskContext?.signal
+                    });
+                    traceReporter.reportUsage(providerLabel, response.usage);
+                    return response;
+                }
             });
 
-            const headers = {
-                'Content-Type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01'
-            };
-
-            const buildHttpError = (response, errorBody) => {
-                const retryAfterMs = getRetryAfterMilliseconds(response);
-                if (response.status === 401) {
-                    const parsedError = parseApiErrorBody(errorBody);
-                    const authMessage = parsedError.apiMessage
-                        ? getLocalizedText('providerAuthenticationFailed', {
-                            provider: providerLabel,
-                            error: parsedError.apiMessage
-                        })
-                        : getLocalizedText('invalidProviderApiKey', { provider: providerLabel });
-                    return createHttpError(response.status, response.statusText, errorBody, authMessage, { retryAfterMs });
-                }
-                if (response.status === 403) {
-                    return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerRequestForbidden', { provider: providerLabel }), { retryAfterMs });
-                }
-                if (response.status === 404) {
-                    return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerModelNotFound', { provider: providerLabel }), { retryAfterMs });
-                }
-                if (response.status === 429) {
-                    return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerRateLimited', { provider: providerLabel }), { retryAfterMs });
-                }
-                if (response.status >= 500) {
-                    return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerUnavailable', { provider: providerLabel }), { retryAfterMs });
-                }
-                return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
-            };
-
-            const url = 'https://api.anthropic.com/v1/messages';
-            let finalAnswer = '';
-
-            if (streamingEnabled) {
-                const streamResult = await fetchAnthropicStream({
-                    url,
-                    requestBody,
-                    headers,
-                    buildHttpError,
-                    onRetry: (retryInfo) => handleStatusUpdate(
-                        getLocalizedText('statusRetrying', {
-                            provider: providerLabel,
-                            reason: retryInfo.shortReason,
-                            delay: formatRetryDelay(retryInfo.delayMs),
-                            retryCount: retryInfo.retryCount,
-                            maxRetries: retryInfo.maxRetries
-                        })
-                    ),
-                    onAnswerDelta: (delta) => {
-                        if (streamedAnswer) {
-                            streamedAnswer.append(delta);
-                        }
-                    },
-                    fetchImpl: providerFetch,
-                    providerLabel,
-                    signal: taskContext?.signal
-                });
-                traceReporter.reportUsage(providerLabel, streamResult.usage);
-                finalAnswer = agentModeEnabled
-                    ? getLocalizedText('agentToolFallbackMessage', {
-                        provider: providerLabel,
-                        answer: streamResult.answer
-                    })
-                    : streamResult.answer;
-            } else {
-                const response = await fetchJsonWithRetry({
-                    providerLabel,
-                    url,
-                    options: {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify(requestBody)
-                    },
-                    buildHttpError,
-                    onRetry: (retryInfo) => handleStatusUpdate(
-                        getLocalizedText('statusRetrying', {
-                            provider: providerLabel,
-                            reason: retryInfo.shortReason,
-                            delay: formatRetryDelay(retryInfo.delayMs),
-                            retryCount: retryInfo.retryCount,
-                            maxRetries: retryInfo.maxRetries
-                        })
-                    ),
-                    fetchImpl: providerFetch,
-                    signal: taskContext?.signal
-                });
-                traceReporter.reportUsage(providerLabel, response.usage);
-                finalAnswer = response.content?.map(block => block.text).join('') || '';
-            }
-
             throwIfAskTaskCancelled(taskContext);
+            const finalAnswer = answer.answer;
+            const anthropicBlocks = answer.assistantBlocks || [];
             if (streamedAnswer) {
-                streamedAnswer.finalize(finalAnswer);
+                streamedAnswer.finalize(finalAnswer, { anthropicBlocks });
             } else {
                 appendPersistentMessage('assistant', finalAnswer, {
                     autoScrollMode: 'message-top',
                     autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
                     autoScrollForce: true
-                });
+                }, { anthropicBlocks });
             }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));

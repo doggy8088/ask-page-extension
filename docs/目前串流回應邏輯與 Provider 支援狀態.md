@@ -131,7 +131,7 @@
 
 `fetchAnthropicStream()` 會在 Messages API request body 合併 `stream: true`，並解析 `message_start`、`content_block_delta` 等 SSE 事件。
 
-Anthropic 的串流能力與 agent tool calling 是兩件事：Anthropic 即使在代理模式下仍可串流文字，程式也會保留現有的 agent tool calling 降級警告；在詢問模式則直接顯示串流答案，不追加代理模式警告。
+Anthropic 的串流能力與 agent tool calling 是兩件事：Anthropic 串流時也會解析 `thinking_delta`、`signature_delta` 與 `input_json_delta`，把 thinking 區塊原樣保留並在下一輪連同 `tool_use` 區塊一起送回，確保擴充思考在工具回合中不會被 API 拒絕。
 
 * * *
 
