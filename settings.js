@@ -344,6 +344,8 @@ const PREDEFINED_MODELS = {
         'deepseek-v4.1-flash:1017',
         'deepseek-v4-pro',
         'deepseek-v4.1-flash',
+        'mimo-v2.6-pro',
+        'mimo-v2.6-flash',
         'muse-spark-open',
         'minimax-m3.1-flash',
         'minimax-m3',

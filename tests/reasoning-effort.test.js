@@ -386,6 +386,8 @@ assert.deepStrictEqual(
     { min: 0, max: 0, index: 0 }
 );
 
+assert.strictEqual(getReasoningCapability('ollama-cloud', 'mimo-v2.6-pro'), null);
+assert.strictEqual(getReasoningCapability('ollama-cloud', 'mimo-v2.6-flash'), null);
 assert.strictEqual(getReasoningCapability('ollama-cloud', 'muse-spark-open'), null);
 assert.strictEqual(getReasoningCapability('ollama-cloud', 'minimax-m3.1-flash'), null);
 assert.strictEqual(getReasoningCapability('ollama-cloud', 'kimi-k3'), null);
