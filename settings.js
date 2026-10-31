@@ -1154,13 +1154,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                 </div>
                 <div class="command-actions">
-                    ${isBuiltIn ? `<span class="built-in-badge">${escapeHtml(t('builtin'))}</span>` : ''}
                     ${isEditable ? `<button class="btn-secondary btn-small" data-action="edit" data-command="${command.cmd}">
                         <span class="icon">✏️</span>
                         ${escapeHtml(t('edit'))}
                     </button>` : ''}
+                    ${isBuiltIn ? `<span class="built-in-badge">${escapeHtml(t('builtin'))}</span>` : ''}
                     ${!isBuiltIn ? `<button class="btn-danger btn-small" data-action="delete" data-command="${command.cmd}">
-                        <span class="icon">🗑️</span>
+                        <span class="icon">✕</span>
                         ${escapeHtml(t('delete'))}
                     </button>` : ''}
                 </div>
@@ -1512,7 +1512,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             ✏️ ${escapeHtml(t('edit'))}
                         </button>
                         <button class="btn-danger btn-small" data-action="delete-provider" data-id="${escapeHtml(p.id)}">
-                            🗑️ ${escapeHtml(t('delete'))}
+                            ✕ ${escapeHtml(t('delete'))}
                         </button>
                     </div>
                 </div>
