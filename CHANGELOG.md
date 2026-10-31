@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.50.3] - 2026-11-01
+
+### 新增 / 改進（v0.50.3）
+
+- **Ollama Cloud 內建模型新增 MiMo-V2.6 系列**：設定頁的 Ollama Cloud 精選模型清單新增 `mimo-v2.6-pro` 與 `mimo-v2.6-flash`，插在 DeepSeek 系列之後、`muse-spark-open` 之前，內建清單由 10 個增加為 12 個。新增 Ollama Cloud 提供者時預設勾選的第一項維持 `deepseek-v4.1-flash:1017`，既有已儲存的提供者設定不受影響。這兩個模型頁只標示 thinking 能力，未列出可切換的思考模式，依查核政策不加入推理強度控制，request 不送出 `reasoning_effort`。
+- **同步更新模型與推理強度文件**：`README.md` 的 Ollama Cloud 內建精選模型數量更新為 12，`docs/目前推理強度對應表.md` 同步 Ollama Cloud 預設模型清單與兩張推理支援表，並補上 MiMo-V2.6 官方模型頁連結。
+
 ## [0.50.2] - 2026-10-31
 
 ### 新增 / 改進（v0.50.2）
