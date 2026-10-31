@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.50.4] - 2026-11-01
+
+### 新增 / 改進（v0.50.4）
+
+- **Ollama Cloud 內建模型清單精簡為九個**：自設定頁的 Ollama Cloud 精選模型清單移除 `deepseek-v4.1-flash`、`kimi-k2.7-code` 與 `gpt-oss:120b`，移除後依序為 `deepseek-v4.1-flash:1017`、`deepseek-v4-pro`、`mimo-v2.6-pro`、`mimo-v2.6-flash`、`muse-spark-open`、`minimax-m3.1-flash`、`minimax-m3`、`kimi-k3`、`gemma4:31b`。帶 tag 的 `deepseek-v4.1-flash:1017` 依指定保留，仍為新增提供者時預設勾選的第一項；既有已儲存的提供者設定不受影響，仍可繼續使用已勾選的模型。已移除模型的推理能力設定依專案慣例保留：不含 tag 的 `deepseek-v4.1-flash` 固定 `max` 能力（仍供 `deepseek-v4.1-flash:1017` 與已儲存設定使用）與 `kimi-k2.7-code` 的五個 `reasoning_effort` 值維持不變，已儲存這些模型名稱的使用者推理強度控制照常運作；`gpt-oss:120b` 本無推理能力設定，直接移除。
+- **同步更新模型與推理強度文件**：`README.md` 的 Ollama Cloud 內建精選模型數量更新為 9，`docs/目前推理強度對應表.md` 同步 Ollama Cloud 預設模型清單、相關推理支援表與可完全關閉模型總表，並補充已移除模型的能力保留說明。
+
 ## [0.50.3] - 2026-11-01
 
 ### 新增 / 改進（v0.50.3）
