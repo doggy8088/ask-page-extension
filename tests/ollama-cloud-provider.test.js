@@ -27,16 +27,13 @@ vm.runInContext(`${settingsScript}\nglobalThis.__ollamaCloudModels = PREDEFINED_
 const expectedModels = [
     'deepseek-v4.1-flash:1017',
     'deepseek-v4-pro',
-    'deepseek-v4.1-flash',
     'mimo-v2.6-pro',
     'mimo-v2.6-flash',
     'muse-spark-open',
     'minimax-m3.1-flash',
     'minimax-m3',
-    'kimi-k2.7-code',
     'kimi-k3',
-    'gemma4:31b',
-    'gpt-oss:120b'
+    'gemma4:31b'
 ];
 
 const actualModels = Array.from(sandbox.__ollamaCloudModels);
