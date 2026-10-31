@@ -46,11 +46,16 @@ const MAX_AGENT_SNAPSHOT_TOKEN_BUDGET = 60000;
 const AGENT_SNAPSHOT_REPEATED_CHILD_LIMIT = 25;
 const AGENT_AFFECTED_SUBTREE_TOKEN_BUDGET = 1500;
 const AGENT_READ_PAGE_DEFAULT_MAX_CHARS = 12000;
+const AGENT_READ_PAGE_MIN_MAX_CHARS = 200;
 const AGENT_READ_PAGE_MAX_CHARS_LIMIT = 60000;
+const READ_PAGE_DEFAULT_MAX_CHARS_STORAGE = 'READ_PAGE_DEFAULT_MAX_CHARS';
 const AGENT_FIND_DEFAULT_LIMIT = 10;
 const AGENT_FIND_MAX_LIMIT = 40;
 const AGENT_ACTION_SETTLE_DELAY_MS = 400;
 const TOOL_RESULT_PREVIEW_MAX_CHARS = 6000;
+const MIN_TOOL_RESULT_MAX_CHARS = 1000;
+const MAX_TOOL_RESULT_MAX_CHARS = 200000;
+const TOOL_RESULT_MAX_CHARS_STORAGE = 'TOOL_RESULT_MAX_CHARS';
 
 function getLocalizedText(key, substitutions) {
     if (typeof AskPageI18n !== 'undefined' && typeof AskPageI18n.t === 'function') {
@@ -1019,6 +1024,35 @@ function normalizeToolCallMaxRounds(value) {
 
 async function getToolCallMaxRounds() {
     return normalizeToolCallMaxRounds(await getValue(TOOL_CALL_MAX_ROUNDS_STORAGE, DEFAULT_TOOL_CALL_MAX_ROUNDS));
+}
+
+function normalizeBoundedIntegerSetting(value, defaultValue, min, max) {
+    if (value === undefined || value === null || value === '') {
+        return defaultValue;
+    }
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+        return defaultValue;
+    }
+    return Math.max(min, Math.min(max, Math.round(numericValue)));
+}
+
+function normalizeReadPageDefaultMaxChars(value) {
+    return normalizeBoundedIntegerSetting(value, AGENT_READ_PAGE_DEFAULT_MAX_CHARS, AGENT_READ_PAGE_MIN_MAX_CHARS, AGENT_READ_PAGE_MAX_CHARS_LIMIT);
+}
+
+function normalizeToolResultMaxChars(value) {
+    return normalizeBoundedIntegerSetting(value, TOOL_RESULT_PREVIEW_MAX_CHARS, MIN_TOOL_RESULT_MAX_CHARS, MAX_TOOL_RESULT_MAX_CHARS);
+}
+
+// 工具執行與結果組裝是同步流程，因此在每次任務開始時載入設定，任務進行中維持不變。
+let agentReadPageDefaultMaxChars = AGENT_READ_PAGE_DEFAULT_MAX_CHARS;
+let toolResultMaxChars = TOOL_RESULT_PREVIEW_MAX_CHARS;
+
+async function loadAgentToolOutputLimits() {
+    const result = await chrome.storage.local.get([READ_PAGE_DEFAULT_MAX_CHARS_STORAGE, TOOL_RESULT_MAX_CHARS_STORAGE]);
+    agentReadPageDefaultMaxChars = normalizeReadPageDefaultMaxChars(result?.[READ_PAGE_DEFAULT_MAX_CHARS_STORAGE]);
+    toolResultMaxChars = normalizeToolResultMaxChars(result?.[TOOL_RESULT_MAX_CHARS_STORAGE]);
 }
 
 async function getValue(key, defaultValue) {
@@ -5560,12 +5594,12 @@ function truncateTextToLimit(text, maxChars) {
     };
 }
 
-function normalizeReadPageMaxChars(value, defaultValue = AGENT_READ_PAGE_DEFAULT_MAX_CHARS) {
+function normalizeReadPageMaxChars(value, defaultValue = agentReadPageDefaultMaxChars) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue) || numericValue <= 0) {
         return defaultValue;
     }
-    return Math.max(200, Math.min(AGENT_READ_PAGE_MAX_CHARS_LIMIT, Math.round(numericValue)));
+    return Math.max(AGENT_READ_PAGE_MIN_MAX_CHARS, Math.min(AGENT_READ_PAGE_MAX_CHARS_LIMIT, Math.round(numericValue)));
 }
 
 function normalizePositiveInteger(value, defaultValue, maxValue = Infinity) {
@@ -10831,18 +10865,26 @@ async function createDialog() {
             : text;
     }
 
-    // 送回模型的工具結果一律受同一個長度上限控制；Gemini 需要物件，超長時改包成 preview 字串。
+    // 送回模型的工具結果受使用者設定的長度上限控制；UI 預覽仍使用固定的 TOOL_RESULT_PREVIEW_MAX_CHARS。
+    function getModelToolResultText(value) {
+        const text = JSON.stringify(value, null, 2);
+        return text.length > toolResultMaxChars
+            ? `${text.slice(0, toolResultMaxChars)}...`
+            : text;
+    }
+
+    // Gemini 需要物件，超長時改包成 preview 字串。
     function buildModelToolResultPayload(result) {
         const text = JSON.stringify(result, null, 2) || '';
-        if (text.length <= TOOL_RESULT_PREVIEW_MAX_CHARS) {
+        if (text.length <= toolResultMaxChars) {
             return result;
         }
         return {
             success: result?.success,
             message: result?.message,
             truncated: true,
-            preview: `${text.slice(0, TOOL_RESULT_PREVIEW_MAX_CHARS)}...`,
-            note: `工具結果過長（${text.length} 字元），已截斷為 ${TOOL_RESULT_PREVIEW_MAX_CHARS} 字元。請縮小查詢範圍或改用 read_page 指定 ref 分段讀取。`
+            preview: `${text.slice(0, toolResultMaxChars)}...`,
+            note: `工具結果過長（${text.length} 字元），已截斷為 ${toolResultMaxChars} 字元。請縮小查詢範圍或改用 read_page 指定 ref 分段讀取。`
         };
     }
 
@@ -11703,7 +11745,7 @@ async function createDialog() {
                         },
                         max_chars: {
                             type: 'integer',
-                            description: `回傳內容的字元上限，預設 ${AGENT_READ_PAGE_DEFAULT_MAX_CHARS}，最大 ${AGENT_READ_PAGE_MAX_CHARS_LIMIT}。超過會截斷並標注。`
+                            description: `回傳內容的字元上限，預設 ${agentReadPageDefaultMaxChars}，最大 ${AGENT_READ_PAGE_MAX_CHARS_LIMIT}。超過會截斷並標注。`
                         }
                     }
                 }
@@ -11742,7 +11784,7 @@ async function createDialog() {
                         },
                         max_chars: {
                             type: 'integer',
-                            description: `回傳字元上限，預設 ${AGENT_READ_PAGE_DEFAULT_MAX_CHARS}，最大 ${AGENT_READ_PAGE_MAX_CHARS_LIMIT}。`
+                            description: `回傳字元上限，預設 ${agentReadPageDefaultMaxChars}，最大 ${AGENT_READ_PAGE_MAX_CHARS_LIMIT}。`
                         }
                     }
                 }
@@ -13185,7 +13227,7 @@ async function createDialog() {
                 responsesInput.push({
                     type: 'function_call_output',
                     call_id: message.tool_call_id,
-                    output: typeof message.content === 'string' ? message.content : getJsonPreview(message.content)
+                    output: typeof message.content === 'string' ? message.content : getModelToolResultText(message.content)
                 });
                 return;
             }
@@ -14108,6 +14150,7 @@ async function createDialog() {
         };
 
         const maxToolCallRounds = await getToolCallMaxRounds();
+        await loadAgentToolOutputLimits();
         for (let round = 0; round < maxToolCallRounds; round++) {
             throwIfAskTaskCancelled(cancellationContext);
             // 第二輪起工具結果已顯示在時間軸上，不再重複顯示規劃狀態。
@@ -14240,7 +14283,7 @@ async function createDialog() {
                 messages.push({
                     role: 'tool',
                     tool_call_id: toolResult.id,
-                    content: getJsonPreview(toolResult.result)
+                    content: getModelToolResultText(toolResult.result)
                 });
             });
         }
@@ -14293,6 +14336,7 @@ async function createDialog() {
         const generatedSteps = [];
 
         const maxToolCallRounds = await getToolCallMaxRounds();
+        await loadAgentToolOutputLimits();
         for (let round = 0; round < maxToolCallRounds; round++) {
             throwIfAskTaskCancelled(cancellationContext);
             // 第二輪起工具結果已顯示在時間軸上，不再重複顯示規劃狀態。
@@ -15326,7 +15370,7 @@ async function createDialog() {
     function buildAnthropicToolResultBlock(toolResult) {
         return globalThis.AskPageAnthropicTools.buildAnthropicToolResultBlock(
             toolResult,
-            TOOL_RESULT_PREVIEW_MAX_CHARS
+            toolResultMaxChars
         );
     }
 
@@ -15387,6 +15431,7 @@ async function createDialog() {
         };
 
         const maxToolCallRounds = await getToolCallMaxRounds();
+        await loadAgentToolOutputLimits();
         for (let round = 0; round < maxToolCallRounds; round++) {
             throwIfAskTaskCancelled(cancellationContext);
             // 第二輪起工具結果已顯示在時間軸上，不再重複顯示規劃狀態。

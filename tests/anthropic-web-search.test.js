@@ -191,6 +191,7 @@ const loopSandbox = {
     getLocalizedText: (key) => key,
     AskPageAnthropicTools: anthropicToolsModule,
     getToolCallMaxRounds: async () => 10,
+    loadAgentToolOutputLimits: async () => {},
     throwIfAskTaskCancelled() {},
     formatRoundStatus: (round, message) => message,
     formatToolDisplayName: (name) => name || '未知工具',

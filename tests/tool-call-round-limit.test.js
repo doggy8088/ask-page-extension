@@ -26,6 +26,14 @@ const sandbox = {
     chrome: { storage: { local: { async get() { return { TOOL_CALL_MAX_ROUNDS: storedLimit }; } } } },
     DEFAULT_TOOL_CALL_MAX_ROUNDS: 50,
     TOOL_CALL_MAX_ROUNDS_STORAGE: 'TOOL_CALL_MAX_ROUNDS',
+    AGENT_READ_PAGE_DEFAULT_MAX_CHARS: 12000,
+    AGENT_READ_PAGE_MIN_MAX_CHARS: 200,
+    AGENT_READ_PAGE_MAX_CHARS_LIMIT: 60000,
+    READ_PAGE_DEFAULT_MAX_CHARS_STORAGE: 'READ_PAGE_DEFAULT_MAX_CHARS',
+    TOOL_RESULT_PREVIEW_MAX_CHARS: 6000,
+    MIN_TOOL_RESULT_MAX_CHARS: 1000,
+    MAX_TOOL_RESULT_MAX_CHARS: 200000,
+    TOOL_RESULT_MAX_CHARS_STORAGE: 'TOOL_RESULT_MAX_CHARS',
     DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS: 100,
     GEMINI_INTERACTIONS_URL: 'https://example.invalid', GEMINI_API_REVISION: 'test',
     conversationHistory: [],
@@ -49,6 +57,7 @@ const sandbox = {
     getGeminiInteractionText: (data) => data.text || '',
     buildModelToolResultPayload: (result) => result,
     getJsonPreview: JSON.stringify,
+    getModelToolResultText: JSON.stringify,
     fetchJsonWithRetry: async () => nextResponse()
         ? { status: 'completed', steps: [], text: 'done' }
         : { status: 'requires_action', steps: toolCalls.map((call) => ({ ...call, type: 'function_call' })) },

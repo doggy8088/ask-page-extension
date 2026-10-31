@@ -926,6 +926,18 @@
               <input type="number" id="toolCallMaxRounds" min="1" step="1" value="50" aria-describedby="toolCallMaxRoundsHelp" />
               <small id="toolCallMaxRoundsHelp" style="color: var(--text-secondary);" data-i18n="toolCallMaxRoundsHelp">請輸入正整數，預設為 50。每輪可包含多個工具呼叫；達到上限後會中止任務。變更會自動儲存，於下次任務生效。</small>
             </div>
+
+            <div class="form-group">
+              <label for="readPageDefaultMaxChars" data-i18n="readPageDefaultMaxCharsLabel">read_page／get_page_text 預設回傳字元數</label>
+              <input type="number" id="readPageDefaultMaxChars" min="200" max="60000" step="500" value="12000" aria-describedby="readPageDefaultMaxCharsHelp" />
+              <small id="readPageDefaultMaxCharsHelp" style="color: var(--text-secondary);" data-i18n="readPageDefaultMaxCharsHelp">模型未指定 max_chars 時使用的字元上限（200～60000，預設 12000）。模型仍可在每次呼叫時自行指定，最多 60000。變更會自動儲存，於下次任務生效。</small>
+            </div>
+
+            <div class="form-group">
+              <label for="toolResultMaxChars" data-i18n="toolResultMaxCharsLabel">工具結果送回模型的字元上限</label>
+              <input type="number" id="toolResultMaxChars" min="1000" max="200000" step="1000" value="6000" aria-describedby="toolResultMaxCharsHelp" />
+              <small id="toolResultMaxCharsHelp" style="color: var(--text-secondary);" data-i18n="toolResultMaxCharsHelp">每個工具結果轉成 JSON 後送回模型的字元上限（1000～200000，預設 6000），超過的部分會被截斷。若要讓模型讀到完整的 read_page 結果，請設為大於上方預設回傳字元數的值。數值越大，耗用的 Token 越多。變更會自動儲存，於下次任務生效。</small>
+            </div>
           </div>
 
           <div class="card">

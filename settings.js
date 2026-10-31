@@ -180,7 +180,7 @@ let modalCommandModeAgent, modalCommandModeInquiry, modalCommandModeUnspecified,
 let modalSave, modalCancel, modalCommandNameError, modalCommandPromptError;
 let customSystemPromptTextarea, customSystemPromptCount;
 let agentGlowEffectEnabledCheckbox;
-let toolCallMaxRoundsInput;
+let toolCallMaxRoundsInput, readPageDefaultMaxCharsInput, toolResultMaxCharsInput;
 let agentContextFormatSelect, agentSnapshotTokenBudgetInput;
 
 // Multi-provider UI elements
@@ -218,6 +218,14 @@ const AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE = 'AGENT_SNAPSHOT_TOKEN_BUDGET';
 const DEFAULT_AGENT_SNAPSHOT_TOKEN_BUDGET = 8000;
 const MIN_AGENT_SNAPSHOT_TOKEN_BUDGET = 2000;
 const MAX_AGENT_SNAPSHOT_TOKEN_BUDGET = 60000;
+const READ_PAGE_DEFAULT_MAX_CHARS_STORAGE = 'READ_PAGE_DEFAULT_MAX_CHARS';
+const DEFAULT_READ_PAGE_MAX_CHARS = 12000;
+const MIN_READ_PAGE_MAX_CHARS = 200;
+const MAX_READ_PAGE_MAX_CHARS = 60000;
+const TOOL_RESULT_MAX_CHARS_STORAGE = 'TOOL_RESULT_MAX_CHARS';
+const DEFAULT_TOOL_RESULT_MAX_CHARS = 6000;
+const MIN_TOOL_RESULT_MAX_CHARS = 1000;
+const MAX_TOOL_RESULT_MAX_CHARS = 200000;
 
 function normalizeToolCallMaxRounds(value) {
     const numericValue = Number(value);
@@ -230,6 +238,25 @@ function normalizeAgentSnapshotTokenBudget(value) {
         return DEFAULT_AGENT_SNAPSHOT_TOKEN_BUDGET;
     }
     return Math.max(MIN_AGENT_SNAPSHOT_TOKEN_BUDGET, Math.min(MAX_AGENT_SNAPSHOT_TOKEN_BUDGET, Math.round(numericValue)));
+}
+
+function normalizeBoundedIntegerSetting(value, defaultValue, min, max) {
+    if (value === undefined || value === null || value === '') {
+        return defaultValue;
+    }
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+        return defaultValue;
+    }
+    return Math.max(min, Math.min(max, Math.round(numericValue)));
+}
+
+function normalizeReadPageDefaultMaxChars(value) {
+    return normalizeBoundedIntegerSetting(value, DEFAULT_READ_PAGE_MAX_CHARS, MIN_READ_PAGE_MAX_CHARS, MAX_READ_PAGE_MAX_CHARS);
+}
+
+function normalizeToolResultMaxChars(value) {
+    return normalizeBoundedIntegerSetting(value, DEFAULT_TOOL_RESULT_MAX_CHARS, MIN_TOOL_RESULT_MAX_CHARS, MAX_TOOL_RESULT_MAX_CHARS);
 }
 
 const CUSTOM_COMMAND_MODE_AGENT = 'agent';
@@ -447,6 +474,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     customSystemPromptTextarea = document.getElementById('customSystemPrompt');
     customSystemPromptCount = document.getElementById('customSystemPromptCount');
     toolCallMaxRoundsInput = document.getElementById('toolCallMaxRounds');
+    readPageDefaultMaxCharsInput = document.getElementById('readPageDefaultMaxChars');
+    toolResultMaxCharsInput = document.getElementById('toolResultMaxChars');
     agentGlowEffectEnabledCheckbox = document.getElementById('agentGlowEffectEnabled');
     agentContextFormatSelect = document.getElementById('agentContextFormat');
     agentSnapshotTokenBudgetInput = document.getElementById('agentSnapshotTokenBudget');
@@ -558,6 +587,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             const rounds = normalizeToolCallMaxRounds(toolCallMaxRoundsInput.value);
             toolCallMaxRoundsInput.value = String(rounds);
             await chrome.storage.local.set({ [TOOL_CALL_MAX_ROUNDS_STORAGE]: rounds });
+            showLocalizedStatus('settingsAutoSaved', undefined, 'success');
+        });
+    }
+
+    if (readPageDefaultMaxCharsInput) {
+        readPageDefaultMaxCharsInput.addEventListener('change', async () => {
+            const maxChars = normalizeReadPageDefaultMaxChars(readPageDefaultMaxCharsInput.value);
+            readPageDefaultMaxCharsInput.value = String(maxChars);
+            await chrome.storage.local.set({ [READ_PAGE_DEFAULT_MAX_CHARS_STORAGE]: maxChars });
+            showLocalizedStatus('settingsAutoSaved', undefined, 'success');
+        });
+    }
+
+    if (toolResultMaxCharsInput) {
+        toolResultMaxCharsInput.addEventListener('change', async () => {
+            const maxChars = normalizeToolResultMaxChars(toolResultMaxCharsInput.value);
+            toolResultMaxCharsInput.value = String(maxChars);
+            await chrome.storage.local.set({ [TOOL_RESULT_MAX_CHARS_STORAGE]: maxChars });
             showLocalizedStatus('settingsAutoSaved', undefined, 'success');
         });
     }
@@ -1280,6 +1327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
         LAST_ACTIVE_TAB_STORAGE, PENDING_OPTIONS_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE,
         AGENT_CONTEXT_FORMAT_STORAGE, AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE, TOOL_CALL_MAX_ROUNDS_STORAGE,
+        READ_PAGE_DEFAULT_MAX_CHARS_STORAGE, TOOL_RESULT_MAX_CHARS_STORAGE,
         AskPageAgentGlow.STORAGE_KEY, 'ASKPAGE_DEBUG_ENABLED'
     ], async (result) => {
         activeProviderId = result.ACTIVE_PROVIDER_ID || '';
@@ -1317,6 +1365,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (toolCallMaxRoundsInput) {
             toolCallMaxRoundsInput.value = String(normalizeToolCallMaxRounds(result[TOOL_CALL_MAX_ROUNDS_STORAGE]));
+        }
+
+        if (readPageDefaultMaxCharsInput) {
+            readPageDefaultMaxCharsInput.value = String(normalizeReadPageDefaultMaxChars(result[READ_PAGE_DEFAULT_MAX_CHARS_STORAGE]));
+        }
+
+        if (toolResultMaxCharsInput) {
+            toolResultMaxCharsInput.value = String(normalizeToolResultMaxChars(result[TOOL_RESULT_MAX_CHARS_STORAGE]));
         }
 
         loadGlowColor(result[AskPageAgentGlow.STORAGE_KEY]);
