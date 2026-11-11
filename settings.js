@@ -172,6 +172,133 @@ function getProviderDisplayName(provider) {
         : providerName;
 }
 
+const GEMINI_KEY_TIERS_STORAGE = 'GEMINI_KEY_TIERS';
+const GEMINI_INTERACTIONS_PROBE_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+const GEMINI_INTERACTIONS_API_REVISION = '2026-05-20';
+const GEMINI_TIER_PROBE_MODEL = 'gemini-3.5-flash-lite';
+const GEMINI_FREE_TIER_PATTERN = /free[_-\s]?tier/i;
+const inFlightGeminiTierProbes = new Map();
+
+function isGeminiFreeTierErrorText(text = '') {
+    return GEMINI_FREE_TIER_PATTERN.test(String(text || ''));
+}
+
+function classifyGeminiTierProbeResponse(status, bodyText = '') {
+    const numericStatus = Number(status || 0);
+    if (numericStatus >= 200 && numericStatus < 300) {
+        return 'paid';
+    }
+    if ((numericStatus === 429 || numericStatus === 403 || numericStatus === 400) && isGeminiFreeTierErrorText(bodyText)) {
+        return 'free';
+    }
+    return 'unknown';
+}
+
+async function hashGeminiApiKey(apiKey = '') {
+    const trimmed = String(apiKey || '').trim();
+    if (!trimmed || typeof crypto === 'undefined' || !crypto?.subtle?.digest) {
+        return '';
+    }
+    const data = new TextEncoder().encode(trimmed);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(digest))
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+async function getCachedGeminiApiKeyTier(apiKey = '') {
+    const fingerprint = await hashGeminiApiKey(apiKey);
+    if (!fingerprint || typeof chrome === 'undefined' || !chrome?.storage?.local?.get) {
+        return 'unknown';
+    }
+    const result = await chrome.storage.local.get([GEMINI_KEY_TIERS_STORAGE]);
+    const tiers = result?.[GEMINI_KEY_TIERS_STORAGE];
+    const cached = tiers && typeof tiers === 'object' && Object.prototype.hasOwnProperty.call(tiers, fingerprint)
+        ? tiers[fingerprint]
+        : '';
+    return cached === 'free' || cached === 'paid' ? cached : 'unknown';
+}
+
+async function setCachedGeminiApiKeyTier(apiKey = '', tier = '') {
+    if (tier !== 'free' && tier !== 'paid') {
+        return;
+    }
+    const fingerprint = await hashGeminiApiKey(apiKey);
+    if (!fingerprint || typeof chrome === 'undefined' || !chrome?.storage?.local?.get || !chrome?.storage?.local?.set) {
+        return;
+    }
+    const result = await chrome.storage.local.get([GEMINI_KEY_TIERS_STORAGE]);
+    const existing = result?.[GEMINI_KEY_TIERS_STORAGE];
+    const nextTiers = existing && typeof existing === 'object' && !Array.isArray(existing)
+        ? { ...existing }
+        : {};
+    if (Object.prototype.hasOwnProperty.call(nextTiers, fingerprint) && nextTiers[fingerprint] === tier) {
+        return;
+    }
+    nextTiers[fingerprint] = tier;
+    await chrome.storage.local.set({ [GEMINI_KEY_TIERS_STORAGE]: nextTiers });
+}
+
+async function probeGeminiApiKeyTier(apiKey = '', options = {}) {
+    const { forceRefresh = false, fetchImpl = typeof fetch === 'function' ? fetch : null } = options;
+    const trimmed = String(apiKey || '').trim();
+    if (!trimmed || !fetchImpl) {
+        return 'unknown';
+    }
+    if (!forceRefresh) {
+        const cachedTier = await getCachedGeminiApiKeyTier(trimmed);
+        if (cachedTier === 'free' || cachedTier === 'paid') {
+            return cachedTier;
+        }
+    }
+    const fingerprint = await hashGeminiApiKey(trimmed);
+    const inflightKey = `${forceRefresh ? 'refresh' : 'cache'}:${fingerprint || trimmed}`;
+    if (inFlightGeminiTierProbes.has(inflightKey)) {
+        return inFlightGeminiTierProbes.get(inflightKey);
+    }
+    const probePromise = (async () => {
+        try {
+            const response = await fetchImpl(GEMINI_INTERACTIONS_PROBE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': trimmed,
+                    'Api-Revision': GEMINI_INTERACTIONS_API_REVISION
+                },
+                body: JSON.stringify({
+                    model: GEMINI_TIER_PROBE_MODEL,
+                    store: false,
+                    input: 'OK',
+                    tools: [{ type: 'google_search' }],
+                    generation_config: {
+                        thinking_level: 'minimal',
+                        max_output_tokens: 1
+                    }
+                })
+            });
+            let bodyText = '';
+            if (!response.ok) {
+                try {
+                    bodyText = await response.text();
+                } catch (_) {
+                    bodyText = '';
+                }
+            }
+            const tier = classifyGeminiTierProbeResponse(response.status, bodyText);
+            if (tier === 'free' || tier === 'paid') {
+                await setCachedGeminiApiKeyTier(trimmed, tier);
+            }
+            return tier;
+        } catch (_) {
+            return 'unknown';
+        } finally {
+            inFlightGeminiTierProbes.delete(inflightKey);
+        }
+    })();
+    inFlightGeminiTierProbes.set(inflightKey, probePromise);
+    return probePromise;
+}
+
 // DOM elements - 將在 DOMContentLoaded 中初始化
 let resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
 let localePreferenceSelect;
@@ -706,16 +833,78 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    let geminiWarningSyncSequence = 0;
+    let geminiApiKeyInputTimer = null;
+
+    function resetGeminiWarningSync() {
+        geminiWarningSyncSequence += 1;
+        if (geminiApiKeyInputTimer) {
+            clearTimeout(geminiApiKeyInputTimer);
+            geminiApiKeyInputTimer = null;
+        }
+        if (modalGeminiGoogleSearchWarning) {
+            modalGeminiGoogleSearchWarning.hidden = true;
+        }
+    }
+
+    async function syncGeminiGoogleSearchWarning(options = {}) {
+        const { probeIfNeeded = false } = options;
+        const syncId = ++geminiWarningSyncSequence;
+        if (geminiApiKeyInputTimer) {
+            clearTimeout(geminiApiKeyInputTimer);
+            geminiApiKeyInputTimer = null;
+        }
+        const isGeminiSelected = modalProviderType?.value === 'gemini';
+        const isChecked = Boolean(modalGeminiGoogleSearch?.checked);
+        const apiKey = String(modalGeminiApiKey?.value || '').trim();
+        if (!isGeminiSelected || !isChecked || !apiKey) {
+            modalGeminiGoogleSearchWarning.hidden = true;
+            return;
+        }
+
+        const cachedTier = await getCachedGeminiApiKeyTier(apiKey);
+        if (syncId !== geminiWarningSyncSequence) {
+            return;
+        }
+        if (cachedTier === 'free') {
+            modalGeminiGoogleSearchWarning.hidden = false;
+            return;
+        }
+        modalGeminiGoogleSearchWarning.hidden = true;
+        if (cachedTier === 'paid' || !probeIfNeeded) {
+            return;
+        }
+
+        const probedTier = await probeGeminiApiKeyTier(apiKey);
+        if (syncId !== geminiWarningSyncSequence) {
+            return;
+        }
+        modalGeminiGoogleSearchWarning.hidden = !(
+            modalProviderType?.value === 'gemini'
+            && modalGeminiGoogleSearch?.checked
+            && probedTier === 'free'
+        );
+    }
+
     // Provider modal listeners
     addProviderBtn.addEventListener('click', () => openProviderModal());
     modalProviderCancel.addEventListener('click', () => {
+        resetGeminiWarningSync();
         providerModal.style.display = 'none';
         currentEditingProvider = null;
     });
     modalProviderSave.addEventListener('click', saveProvider);
     modalProviderTest.addEventListener('click', testProviderConnection);
     modalGeminiGoogleSearch.addEventListener('change', () => {
-        modalGeminiGoogleSearchWarning.hidden = !modalGeminiGoogleSearch.checked;
+        syncGeminiGoogleSearchWarning({ probeIfNeeded: modalGeminiGoogleSearch.checked });
+    });
+    modalGeminiApiKey.addEventListener('input', () => {
+        syncGeminiGoogleSearchWarning({ probeIfNeeded: false });
+        if (modalGeminiGoogleSearch.checked && modalGeminiApiKey.value.trim()) {
+            geminiApiKeyInputTimer = setTimeout(() => {
+                syncGeminiGoogleSearchWarning({ probeIfNeeded: true });
+            }, 400);
+        }
     });
 
     // Model actions event listeners (fetch models, manually input models, etc.)
@@ -733,6 +922,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } else if (providerModal.style.display === 'block') {
             if (e.key === 'Escape') {
+                resetGeminiWarningSync();
                 providerModal.style.display = 'none';
                 currentEditingProvider = null;
             } else if (e.key === 'Enter' && e.ctrlKey) {
@@ -1536,7 +1726,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         modalProviderType.value = 'gemini';
         modalGeminiApiKey.value = '';
         modalGeminiGoogleSearch.checked = false;
-        modalGeminiGoogleSearchWarning.hidden = true;
+        resetGeminiWarningSync();
         modalAnthropicWebSearch.checked = false;
         modalOllamaCloudWebSearch.checked = false;
         modalOpenaiApiKey.value = '';
@@ -1596,7 +1786,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 modalGeminiApiKey.value = decryptedKey;
                 renderModalModelsList(modalGeminiModelsList, combinedModels, configuredModels);
                 modalGeminiGoogleSearch.checked = !!provider.googleSearchEnabled;
-                modalGeminiGoogleSearchWarning.hidden = !modalGeminiGoogleSearch.checked;
+                syncGeminiGoogleSearchWarning({ probeIfNeeded: modalGeminiGoogleSearch.checked });
             } else if (provider.type === 'openai') {
                 modalOpenaiApiKey.value = decryptedKey;
                 renderModalModelsList(modalOpenaiModelsList, combinedModels, configuredModels);
@@ -1716,6 +1906,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         updateModalFieldsVisibility();
+        syncGeminiGoogleSearchWarning({ probeIfNeeded: modalProviderType.value === 'gemini' && modalGeminiGoogleSearch.checked });
 
         if (modalProviderTestResult) {
             modalProviderTestResult.textContent = '';
@@ -2001,6 +2192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
+        resetGeminiWarningSync();
         providerModal.style.display = 'none';
         currentEditingProvider = null;
         renderProviders(activeProviderId, activeModel);
@@ -2196,6 +2388,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     status: response.status,
                     statusText: response.statusText
                 }));
+            }
+
+            if (type === 'gemini') {
+                await probeGeminiApiKeyTier(modalGeminiApiKey.value.trim(), { forceRefresh: true });
+                await syncGeminiGoogleSearchWarning({ probeIfNeeded: false });
             }
 
             // Connection test succeeded!

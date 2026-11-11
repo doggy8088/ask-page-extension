@@ -2367,6 +2367,73 @@ async function getActiveProviderConfig() {
     return null;
 }
 
+const GEMINI_KEY_TIERS_STORAGE = 'GEMINI_KEY_TIERS';
+const GEMINI_FREE_TIER_PATTERN = /free[_-\s]?tier/i;
+
+function isGeminiFreeTierErrorText(text = '') {
+    return GEMINI_FREE_TIER_PATTERN.test(String(text || ''));
+}
+
+function isGeminiFreeTierQuotaError(error) {
+    const status = Number(error?.status || 0);
+    if (status !== 429 && status !== 403 && status !== 400) {
+        return false;
+    }
+    const content = `${error?.message || ''}\n${error?.apiMessage || ''}\n${error?.body || ''}`;
+    return isGeminiFreeTierErrorText(content);
+}
+
+async function hashGeminiApiKey(apiKey = '') {
+    const trimmed = String(apiKey || '').trim();
+    if (!trimmed || typeof crypto === 'undefined' || !crypto?.subtle?.digest) {
+        return '';
+    }
+    const data = new TextEncoder().encode(trimmed);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(digest))
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+async function recordGeminiApiKeyTier(apiKey = '', tier = '') {
+    if (tier !== 'free' && tier !== 'paid') {
+        return;
+    }
+    try {
+        const fingerprint = await hashGeminiApiKey(apiKey);
+        if (!fingerprint || typeof chrome === 'undefined' || !chrome?.storage?.local?.get || !chrome?.storage?.local?.set) {
+            return;
+        }
+        const result = await chrome.storage.local.get([GEMINI_KEY_TIERS_STORAGE]);
+        const existing = result?.[GEMINI_KEY_TIERS_STORAGE];
+        const nextTiers = existing && typeof existing === 'object' && !Array.isArray(existing)
+            ? { ...existing }
+            : {};
+        if (Object.prototype.hasOwnProperty.call(nextTiers, fingerprint) && nextTiers[fingerprint] === tier) {
+            return;
+        }
+        nextTiers[fingerprint] = tier;
+        await chrome.storage.local.set({ [GEMINI_KEY_TIERS_STORAGE]: nextTiers });
+    } catch (storageError) {
+        console.warn('[AskPage] Failed to persist Gemini API key tier:', storageError);
+    }
+}
+
+function appendGeminiFreeTierSearchWarning(error) {
+    if (!error || typeof error !== 'object') {
+        return error;
+    }
+    const warningText = getLocalizedText('geminiGoogleSearchEnabledWarning');
+    if (!warningText) {
+        return error;
+    }
+    const baseMessage = String(error.userMessage || error.message || '');
+    if (!baseMessage.includes(warningText)) {
+        error.userMessage = baseMessage ? `${baseMessage}\n${warningText}` : warningText;
+    }
+    return error;
+}
+
 // Map a provider type to its localized display label.
 const PROVIDER_LABEL_KEYS = Object.freeze({
     gemini: 'providerGemini',
@@ -10340,6 +10407,9 @@ async function createDialog() {
     }
 
     function isQuotaExceededError(error) {
+        if (isGeminiFreeTierQuotaError(error)) {
+            return true;
+        }
         const content = `${error?.message || ''}\n${error?.apiMessage || ''}\n${error?.body || ''}`.toLowerCase();
         return [
             'quota exceeded',
@@ -14366,6 +14436,7 @@ async function createDialog() {
                 }
             };
             const tools = getGeminiToolDefinitions(selectedModel, enableTools, googleSearchEnabled);
+            const hasGoogleSearchTool = tools.some((tool) => tool?.type === 'google_search');
             if (tools.length) {
                 requestBody.tools = tools;
             }
@@ -14399,35 +14470,49 @@ async function createDialog() {
                     maxRetries: retryInfo.maxRetries
                 })
             ));
-            const responseData = streamingEnabled
-                ? await fetchGeminiStream({
-                    apiKey,
-                    fetchImpl: providerFetch,
-                    requestBody,
-                    buildHttpError: buildGeminiHttpError,
-                    onRetry: handleRetry,
-                    onAnswerDelta,
-                    onReasoningDelta,
-                    providerLabel,
-                    signal
-                })
-                : await fetchJsonWithRetry({
-                    providerLabel,
-                    url: GEMINI_INTERACTIONS_URL,
-                    fetchImpl: providerFetch,
-                    options: {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-goog-api-key': apiKey,
-                            'Api-Revision': GEMINI_API_REVISION
+            let responseData;
+            try {
+                responseData = streamingEnabled
+                    ? await fetchGeminiStream({
+                        apiKey,
+                        fetchImpl: providerFetch,
+                        requestBody,
+                        buildHttpError: buildGeminiHttpError,
+                        onRetry: handleRetry,
+                        onAnswerDelta,
+                        onReasoningDelta,
+                        providerLabel,
+                        signal
+                    })
+                    : await fetchJsonWithRetry({
+                        providerLabel,
+                        url: GEMINI_INTERACTIONS_URL,
+                        fetchImpl: providerFetch,
+                        options: {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-goog-api-key': apiKey,
+                                'Api-Revision': GEMINI_API_REVISION
+                            },
+                            body: JSON.stringify(requestBody)
                         },
-                        body: JSON.stringify(requestBody)
-                    },
-                    buildHttpError: buildGeminiHttpError,
-                    onRetry: handleRetry,
-                    signal
-                });
+                        buildHttpError: buildGeminiHttpError,
+                        onRetry: handleRetry,
+                        signal
+                    });
+            } catch (error) {
+                if (isGeminiFreeTierQuotaError(error)) {
+                    await recordGeminiApiKeyTier(apiKey, 'free');
+                    if (hasGoogleSearchTool) {
+                        appendGeminiFreeTierSearchWarning(error);
+                    }
+                }
+                throw error;
+            }
+            if (hasGoogleSearchTool) {
+                await recordGeminiApiKeyTier(apiKey, 'paid');
+            }
             throwIfAskTaskCancelled(cancellationContext);
             if (responseData.usage) {
                 console.log('[AskPage] Gemini interaction usage:', responseData.usage);
