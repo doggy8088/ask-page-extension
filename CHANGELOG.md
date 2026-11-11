@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-11-11
+
+### 新增 / 改進（v0.51.0）
+
+- **Google Gemini 預設模型新增 `gemini-4-carbon`**：設定頁的 Google Gemini 預設模型清單最前方新增 `gemini-4-carbon`（位於 `gemini-4-argon` 之前），新增 Google Gemini 提供者時預設勾選第一項；既有已儲存的提供者設定不受影響。`gemini-4-carbon` 完整支援 Interactions API 串流與非串流回應、65536 最大輸出 Token 上限、等級型推理強度控制（`low`、`medium`、`high`，預設 `medium`；舊版已儲存的 `minimal` 自動正規化為 `low`），以及代理模式下同時啟用內建 `google_search` 與自訂函式工具。
+- **Gemini Google Search 免費方案警示改為依 API Key 方案層級精準顯示**：設定頁勾選「啟用 Grounding with Google Search 工具」、輸入金鑰或開啟既有 Gemini 提供者時，會對 `gemini-3.5-flash-lite` 發送一次極小 Interactions 探測請求（`input: 'OK'`、`thinking_level: 'minimal'`、`max_output_tokens: 1`、`store: false`，不觸發實際搜尋查詢、不留存伺服器紀錄），並以 API Key 的 SHA-256 雜湊指紋快取判定結果（`GEMINI_KEY_TIERS`），不儲存任何明文金鑰。僅在回應為 `429`／`403`／`400` 且錯誤內容包含 `free_tier` 指標時才顯示免費方案警示；Tier 1+ 付費金鑰或付費方案偶發的一般速率限制均保持隱藏，不再無條件顯示警告。點擊「測試連線」會強制重新驗證金鑰層級，讓升級至 Tier 1+ 的同把金鑰能即時更新狀態並隱藏警告；對話執行期啟用 `google_search` 成功或觸發免費方案配額錯誤時也會同步更新快取（免費方案配額錯誤不再重複重試，並僅在免費方案且啟用 `google_search` 時附加該提醒）。
+- **測試與文件**：新增 `tests/gemini-tier-detection.test.js` 驗證 Gemini 方案層級探測、快取指紋保護、設定頁警示顯示時機與執行期同步，並擴充 `tests/reasoning-effort.test.js`、`tests/streaming-mode.test.js` 與 `tests/prompt-cache-conversation.test.js`；同步更新 `README.md` 與 `docs/目前推理強度對應表.md`。
+
 ## [0.50.4] - 2026-11-01
 
 ### 新增 / 改進（v0.50.4）
