@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.51.2] - 2026-11-14
+
+### 新增 / 改進（v0.51.2）
+
+- **Ollama Cloud 內建模型新增 `inkling-2-small`**：設定頁的 Ollama Cloud 精選模型清單在最後一項 `gemma4:31b` 之後新增 Thinking Machines Lab 的 `inkling-2-small`，內建清單由 9 個增加為 10 個。新增 Ollama Cloud 提供者時預設勾選的第一項維持 `deepseek-v4.1-flash:1017`，既有已儲存的提供者設定不受影響。
+- **`inkling-2-small` 推理開關**：提供「關閉」（`none`）與「開啟」（`high`）兩段推理強度，預設開啟，request 送出 `reasoning_effort`；`inkling-2-small:cloud` 也適用，本機 Ollama 不套用。模型頁沒有列出可選等級，2026-11-14 實測確認：省略參數時會思考；`none` 時完全不思考，completion tokens 由約 500 降至約 140；`low`、`medium`、`high`、`max` 都會思考但看不出分級差異，連不存在的等級值也會被接受，因此只提供開關，不加入未經證實的中間等級。
+- **測試與文件**：擴充 `tests/ollama-cloud-provider.test.js` 與 `tests/reasoning-effort.test.js`；`README.md` 的 Ollama Cloud 內建模型數量更新為 10，`docs/目前推理強度對應表.md` 同步更新預設模型清單、可完全關閉模型總表與 Ollama Cloud 能力表，並記錄實測依據。
+
 ## [0.51.1] - 2026-11-13
 
 ### 新增 / 改進（v0.51.1）
