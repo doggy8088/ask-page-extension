@@ -6966,6 +6966,7 @@ async function createDialog() {
     let dialogDimTimer = 0;
     let promptHistory = [];
     let historyIndex = 0;
+    let promptDraft = '';
     let isInputComposing = false;
     let justEndedComposition = false;
     let compositionEndGuardTimer = null;
@@ -8148,6 +8149,27 @@ async function createDialog() {
         return false;
     }
 
+    // direction: -1 往較舊的歷史，1 往較新的歷史；離開底部時先保存草稿，回到底部時還原，避免未送出的提示詞被清掉
+    function navigatePromptHistory(direction) {
+        if (direction < 0) {
+            if (historyIndex <= 0) {
+                return;
+            }
+            if (historyIndex === promptHistory.length) {
+                promptDraft = input.value;
+            }
+            historyIndex--;
+            setInputValue(promptHistory[historyIndex]);
+            return;
+        }
+
+        if (historyIndex >= promptHistory.length) {
+            return;
+        }
+        historyIndex++;
+        setInputValue(historyIndex === promptHistory.length ? promptDraft : promptHistory[historyIndex]);
+    }
+
     function clearCompositionEndGuard() {
         justEndedComposition = false;
         if (compositionEndGuardTimer !== null) {
@@ -9056,19 +9078,10 @@ async function createDialog() {
             handleAsk();
         } else if (e.key === 'ArrowUp' && shouldUsePromptHistoryNavigation('ArrowUp')) {
             e.preventDefault();
-            if (historyIndex > 0) {
-                historyIndex--;
-                setInputValue(promptHistory[historyIndex]);
-            }
+            navigatePromptHistory(-1);
         } else if (e.key === 'ArrowDown' && shouldUsePromptHistoryNavigation('ArrowDown')) {
             e.preventDefault();
-            if (historyIndex < promptHistory.length - 1) {
-                historyIndex++;
-                setInputValue(promptHistory[historyIndex]);
-            } else {
-                historyIndex = promptHistory.length;
-                setInputValue('', { resetToSingleLine: true });
-            }
+            navigatePromptHistory(1);
         }
     }, true);
     btn.addEventListener('click', () => {
