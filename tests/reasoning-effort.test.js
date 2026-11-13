@@ -122,7 +122,8 @@ assert.deepStrictEqual(Array.from(Object.keys(GEMINI_REASONING_CAPABILITIES)).so
     'gemini-3.7-flash',
     'gemini-3.8-flash',
     'gemini-4-argon',
-    'gemini-4-carbon'
+    'gemini-4-carbon',
+    'gemini-4-hydrogen'
 ]);
 
 assert.deepStrictEqual(Array.from(Object.keys(OPENAI_REASONING_CAPABILITIES)).sort(), [
@@ -154,6 +155,8 @@ assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-4-carbon'), ['low', '
 assert.strictEqual(getReasoningCapability('gemini', 'gemini-4-carbon').defaultValue, 'medium');
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-4-argon'), ['low', 'medium', 'high']);
 assert.strictEqual(getReasoningCapability('gemini', 'gemini-4-argon').defaultValue, 'medium');
+assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-4-hydrogen'), ['low', 'medium', 'high', 'xhigh']);
+assert.strictEqual(getReasoningCapability('gemini', 'gemini-4-hydrogen').defaultValue, 'high');
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.8-flash'), ['low', 'medium', 'high']);
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.7-flash'), ['low', 'medium', 'high']);
 assert.deepStrictEqual(capabilityOptions('gemini', 'gemini-3.6-flash'), ['minimal', 'low', 'medium', 'high']);
@@ -207,7 +210,7 @@ assert.strictEqual(getReasoningSliderConfig(gemini25Pro, -1).index, 2);
 assert.strictEqual(getReasoningSliderConfig(gemini25FlashLite, 0).index, 0);
 assert.strictEqual(getReasoningValueFromSlider(gemini25FlashLite, 0), 'default');
 assert.strictEqual(getReasoningValueFromSlider(gemini25FlashLite, 3), 'high');
-for (const model of ['gemini-4-carbon', 'gemini-4-argon', 'gemini-3.8-flash', 'gemini-3.7-flash']) {
+for (const model of ['gemini-4-carbon', 'gemini-4-argon', 'gemini-4-hydrogen', 'gemini-3.8-flash', 'gemini-3.7-flash']) {
     assert.strictEqual(normalizeReasoningValue(getReasoningCapability('gemini', model), 'minimal'), 'low');
 }
 
@@ -284,7 +287,7 @@ assert.strictEqual(getReasoningCapability('deepseek', 'deepseek-flash').defaultV
 assert.deepStrictEqual(capabilityOptions('deepseek', 'deepseek-v4-flash'), ['none', 'low', 'high', 'max']);
 assert.deepStrictEqual(capabilityOptions('deepseek', 'deepseek-v4-pro'), ['none', 'high', 'max']);
 assert.strictEqual(getReasoningCapability('deepseek', 'deepseek-chat'), null);
-assert.match(settingsScript, /gemini:\s*\[\s*'gemini-4-carbon',\s*'gemini-4-argon',\s*'gemini-3\.8-flash',\s*'gemini-3\.6-flash',\s*'gemini-3\.5-flash-lite',/);
+assert.match(settingsScript, /gemini:\s*\[\s*'gemini-4-carbon',\s*'gemini-4-argon',\s*'gemini-4-hydrogen',\s*'gemini-3\.8-flash',\s*'gemini-3\.6-flash',\s*'gemini-3\.5-flash-lite',/);
 assert.doesNotMatch(settingsScript, /gemini:\s*\[[^\]]*'gemini-3\.(?:5|7)-flash'/);
 assert.match(settingsScript, /deepseek:\s*\[\s*'deepseek-flash',\s*'deepseek-v4-pro'\s*\]/);
 assert.doesNotMatch(settingsScript, /'deepseek-chat'|'deepseek-reasoner'/);
@@ -409,6 +412,14 @@ assert.strictEqual(getReasoningCapability('openai-compatible', 'gpt-5.6-sol'), n
 assert.deepStrictEqual(
     JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemini-4-carbon', null, true))),
     { thinking_summaries: 'auto', thinking_level: 'medium' }
+);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemini-4-hydrogen', null, true))),
+    { thinking_summaries: 'auto', thinking_level: 'high' }
+);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemini-4-hydrogen', 'xhigh', true))),
+    { thinking_summaries: 'auto', thinking_level: 'xhigh' }
 );
 assert.deepStrictEqual(
     JSON.parse(JSON.stringify(buildGeminiThinkingConfig('gemini-3.6-flash', 'high', true))),

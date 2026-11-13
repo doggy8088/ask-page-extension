@@ -226,6 +226,7 @@
 
 - gemini-4-carbon
 - gemini-4-argon
+- gemini-4-hydrogen
 - gemini-3.8-flash
 - gemini-3.6-flash
 - gemini-3.5-flash-lite
@@ -292,6 +293,7 @@
 - Tool calling 採 best-effort 模式；若端點不支援，AskPage 會退回一般文字對話
 
 支援的 API 版本：
+
 - 2024-10-21
 - 2024-12-01-preview
 - 2025-01-01-preview

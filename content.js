@@ -91,6 +91,7 @@ function getSystemPromptLanguageInstruction() {
 const GEMINI_MODEL_MAX_OUTPUT_TOKENS = {
     'gemini-4-carbon': 65536,
     'gemini-4-argon': 65536,
+    'gemini-4-hydrogen': 65536,
     'gemini-3.8-flash': 65536,
     'gemini-3.7-flash': 65536,
     'gemini-3.6-flash': 65536,
@@ -1563,6 +1564,12 @@ const GEMINI_REASONING_CAPABILITIES = {
         options: ['low', 'medium', 'high'],
         valueAliases: { minimal: 'low' },
         defaultValue: 'medium'
+    },
+    'gemini-4-hydrogen': {
+        kind: 'level',
+        options: ['low', 'medium', 'high', 'xhigh'],
+        valueAliases: { minimal: 'low' },
+        defaultValue: 'high'
     },
     'gemini-3.8-flash': {
         kind: 'level',
