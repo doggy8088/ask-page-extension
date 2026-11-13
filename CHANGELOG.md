@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.51.1] - 2026-11-13
+
+### 新增 / 改進（v0.51.1）
+
+- **Google Gemini 預設模型新增 `gemini-4-hydrogen`**：設定頁的 Google Gemini 預設模型清單於 `gemini-4-argon` 之後新增 `gemini-4-hydrogen`（依官方 Carbon → Argon → Hydrogen 排列順序），新增 Google Gemini 提供者時預設勾選的第一項仍為 `gemini-4-carbon`；既有已儲存的提供者設定不受影響。`gemini-4-hydrogen` 完整支援 Interactions API 串流與非串流回應、65536 最大輸出 Token 上限、等級型推理強度控制（`low`、`medium`、`high`、`xhigh`，預設 `high`；舊版已儲存的 `minimal` 自動正規化為 `low`），以及代理模式下同時啟用內建 `google_search` 與自訂函式工具。
+- **測試與文件**：擴充 `tests/reasoning-effort.test.js`、`tests/streaming-mode.test.js` 與 `tests/prompt-cache-conversation.test.js`；同步更新 `README.md` 與 `docs/目前推理強度對應表.md`。
+
 ## [0.51.0] - 2026-11-11
 
 ### 新增 / 改進（v0.51.0）
