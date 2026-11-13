@@ -1551,6 +1551,7 @@ function isStreamingSupported(providerType = '', model = '') {
 // Ollama max effort: https://github.com/ollama/ollama/pull/15787
 // DeepSeek V4 modes: https://ollama.com/library/deepseek-v4-flash:cloud
 // Kimi K2.7 Code: https://registry.ollama.com/library/kimi-k2.7-code
+// Inkling 2 Small: https://ollama.com/library/inkling-2-small（開／關行為於 2026-11-14 實測確認）
 // Unknown providers, aliases, and model families must not inherit these capabilities.
 const GEMINI_REASONING_CAPABILITIES = {
     'gemini-4-carbon': {
@@ -1759,6 +1760,13 @@ const OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY = {
     defaultValue: 'high'
 };
 
+// Inkling 2 Small 實測只有開／關差異：none 完全不思考；省略或其他等級皆會思考，且後端不驗證等級值。
+const OLLAMA_CLOUD_INKLING_2_SMALL_REASONING_CAPABILITY = {
+    kind: 'level',
+    options: ['none', 'high'],
+    defaultValue: 'high'
+};
+
 function getAzureOpenAIModelName(deployment = '') {
     const normalizedDeployment = normalizeModelIdentifier(deployment);
     if (!normalizedDeployment) {
@@ -1819,6 +1827,9 @@ function getReasoningCapability(providerType = '', model = '') {
     }
     if (providerType === 'ollama-cloud' && ['kimi-k2.7-code', 'kimi-k2.7-code:cloud'].includes(normalizedModel)) {
         return OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY;
+    }
+    if (providerType === 'ollama-cloud' && ['inkling-2-small', 'inkling-2-small:cloud'].includes(normalizedModel)) {
+        return OLLAMA_CLOUD_INKLING_2_SMALL_REASONING_CAPABILITY;
     }
     return null;
 }

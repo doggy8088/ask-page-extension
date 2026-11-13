@@ -33,7 +33,8 @@ const expectedModels = [
     'minimax-m3.1-flash',
     'minimax-m3',
     'kimi-k3',
-    'gemma4:31b'
+    'gemma4:31b',
+    'inkling-2-small'
 ];
 
 const actualModels = Array.from(sandbox.__ollamaCloudModels);

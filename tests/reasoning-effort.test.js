@@ -57,6 +57,7 @@ vm.runInContext(`${contentScript}\nglobalThis.__askPageTestExports = {
     OLLAMA_CLOUD_DEEPSEEK_FIXED_MAX_REASONING_CAPABILITY,
     OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY,
     OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY,
+    OLLAMA_CLOUD_INKLING_2_SMALL_REASONING_CAPABILITY,
     pendingReasoningValues,
     getReasoningCapability,
     setActiveReasoningValue,
@@ -87,6 +88,7 @@ const {
     OLLAMA_CLOUD_DEEPSEEK_FIXED_MAX_REASONING_CAPABILITY,
     OLLAMA_CLOUD_GLM_5_2_REASONING_CAPABILITY,
     OLLAMA_CLOUD_KIMI_K2_7_CODE_REASONING_CAPABILITY,
+    OLLAMA_CLOUD_INKLING_2_SMALL_REASONING_CAPABILITY,
     pendingReasoningValues,
     getReasoningCapability,
     setActiveReasoningValue,
@@ -350,6 +352,13 @@ assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'kimi-k2.7-code'), ['no
 assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'kimi-k2.7-code:cloud'), ['none', 'low', 'medium', 'high', 'max']);
 assert.strictEqual(getReasoningCapability('ollama', 'kimi-k2.7-code'), null);
 
+// Ollama Cloud Inkling 2 Small only exposes reasoning on/off: none disables thinking, high enables it.
+assert.deepStrictEqual(Array.from(OLLAMA_CLOUD_INKLING_2_SMALL_REASONING_CAPABILITY.options), ['none', 'high']);
+assert.strictEqual(OLLAMA_CLOUD_INKLING_2_SMALL_REASONING_CAPABILITY.defaultValue, 'high');
+assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'inkling-2-small'), ['none', 'high']);
+assert.deepStrictEqual(capabilityOptions('ollama-cloud', 'inkling-2-small:cloud'), ['none', 'high']);
+assert.strictEqual(getReasoningCapability('ollama', 'inkling-2-small'), null);
+
 // DeepSeek V4 Pro 與 V4.1 Flash 固定使用 max：不提供 none／high 選項，也無法由使用者調整。
 assert.strictEqual(OLLAMA_CLOUD_DEEPSEEK_FIXED_MAX_REASONING_CAPABILITY.locked, true);
 assert.strictEqual(OLLAMA_CLOUD_DEEPSEEK_FIXED_MAX_REASONING_CAPABILITY.defaultValue, 'max');
@@ -510,6 +519,11 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(ollamaCloudOffBody)), {
 const ollamaCloudGlmOffBody = applyOpenAIReasoningEffort({ model: 'glm-5.2' }, 'none', false);
 assert.deepStrictEqual(JSON.parse(JSON.stringify(ollamaCloudGlmOffBody)), {
     model: 'glm-5.2',
+    reasoning_effort: 'none'
+});
+const ollamaCloudInklingOffBody = applyOpenAIReasoningEffort({ model: 'inkling-2-small' }, 'none', false);
+assert.deepStrictEqual(JSON.parse(JSON.stringify(ollamaCloudInklingOffBody)), {
+    model: 'inkling-2-small',
     reasoning_effort: 'none'
 });
 const deepSeekOffBody = applyDeepSeekReasoningConfig({ model: 'deepseek-v4-flash' }, 'none');
