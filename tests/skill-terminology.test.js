@@ -67,7 +67,7 @@ function stripMessagePlaceholders(message) {
 }
 
 for (const [locale, expectations] of Object.entries(localeExpectations)) {
-    const catalogPath = path.join(rootDir, '_locales', locale, 'messages.json');
+    const catalogPath = path.join(rootDir, 'src', '_locales', locale, 'messages.json');
     const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
 
     for (const [key, expectedMessage] of Object.entries(expectations)) {
@@ -80,7 +80,7 @@ for (const [locale, expectations] of Object.entries(localeExpectations)) {
     assert.doesNotMatch(visibleMessages, legacyPatterns[locale], `${locale} must not expose legacy command terminology`);
 }
 
-const settingsHtml = fs.readFileSync(path.join(rootDir, 'settings.html'), 'utf8')
+const settingsHtml = fs.readFileSync(path.join(rootDir, 'src', 'settings.html'), 'utf8')
     .replace(/<!--[^]*?-->/g, '')
     .replace(/\/\*[^]*?\*\//g, '');
 assert.match(settingsHtml, /data-i18n="customSlashCommands">技能管理</);

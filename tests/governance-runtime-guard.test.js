@@ -8,19 +8,19 @@ const fs = require('fs');
 const path = require('path');
 
 const contentSource = fs.readFileSync(
-    path.join(__dirname, '..', 'content.js'),
+    path.join(__dirname, '..', 'src', 'content.js'),
     'utf8'
 );
 const governanceSource = fs.readFileSync(
-    path.join(__dirname, '..', 'lib', 'tool-governance.js'),
+    path.join(__dirname, '..', 'src', 'lib', 'tool-governance.js'),
     'utf8'
 );
 const policySource = fs.readFileSync(
-    path.join(__dirname, '..', 'lib', 'tool-policy.js'),
+    path.join(__dirname, '..', 'src', 'lib', 'tool-policy.js'),
     'utf8'
 );
 const manifest = JSON.parse(
-    fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8')
+    fs.readFileSync(path.join(__dirname, '..', 'dist', 'chrome', 'manifest.json'), 'utf8')
 );
 
 // ===== content.js 必須把執行交給治理層 =====
@@ -85,7 +85,7 @@ assert.ok(
 
 // ===== 政策層必須對未知工具採保守分類 =====
 // 以實際行為驗證，不依賴原始碼字串，避免實作調整後守護失效。
-const { classifyToolRisk, TOOL_RISK } = require('../lib/tool-policy');
+const { classifyToolRisk, TOOL_RISK } = require('../src/lib/tool-policy');
 
 assert.ok(
     policySource.includes('TOOL_RISK.UNKNOWN'),

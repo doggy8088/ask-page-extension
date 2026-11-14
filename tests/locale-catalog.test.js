@@ -9,7 +9,7 @@ const locales = ['zh_TW', 'en', 'zh_CN', 'ja', 'ko'];
 const catalogs = Object.fromEntries(
     locales.map((locale) => [
         locale,
-        JSON.parse(fs.readFileSync(path.join(rootDir, '_locales', locale, 'messages.json'), 'utf8'))
+        JSON.parse(fs.readFileSync(path.join(rootDir, 'src', '_locales', locale, 'messages.json'), 'utf8'))
     ])
 );
 const referenceKeys = Object.keys(catalogs.zh_TW).sort();

@@ -6,9 +6,9 @@ const path = require('path');
 const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
-const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
-const styleSheet = fs.readFileSync(path.join(rootDir, 'style.css'), 'utf8');
-const zhTwCatalog = JSON.parse(fs.readFileSync(path.join(rootDir, '_locales', 'zh_TW', 'messages.json'), 'utf8'));
+const contentScript = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
+const styleSheet = fs.readFileSync(path.join(rootDir, 'src', 'style.css'), 'utf8');
+const zhTwCatalog = JSON.parse(fs.readFileSync(path.join(rootDir, 'src', '_locales', 'zh_TW', 'messages.json'), 'utf8'));
 
 function sliceSource(startMarker, endMarker) {
     const start = contentScript.indexOf(startMarker);

@@ -9,7 +9,7 @@ const {
     planToolExecution,
     buildToolAuditRecord,
     shouldBlockWithoutApproval
-} = require('../lib/tool-governance');
+} = require('../src/lib/tool-governance');
 
 const safePolicy = { risk: 'read-only', requiresExplicitApproval: false };
 const riskyPolicy = { risk: 'high-impact', requiresExplicitApproval: true };

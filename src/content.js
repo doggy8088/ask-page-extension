@@ -10572,6 +10572,15 @@ async function createDialog() {
             };
         }
 
+        if (error?.name === 'HostPermissionError') {
+            return {
+                shouldRetry: false,
+                reasonCode: 'forbidden',
+                shortReason: getLocalizedText('retryReasonForbidden'),
+                userMessage: error.message || getLocalizedText('providerRequestForbidden', { provider: providerLabel })
+            };
+        }
+
         if (isLikelyNetworkError(error)) {
             return {
                 shouldRetry: true,

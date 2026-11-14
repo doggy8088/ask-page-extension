@@ -1,6 +1,6 @@
 # AskPage (頁問) 擴充功能
 
-使用 Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Meta AI、Ollama 或 OpenAI Compatible API 詢問關於目前頁面的問題。這是一個 Chrome 擴充功能，讓您可以快速與頁面內容互動，支援多種 AI 提供者。
+使用 Gemini、OpenAI、Azure OpenAI、Anthropic、DeepSeek、OpenRouter、Groq、Mistral、Meta AI、Ollama 或 OpenAI Compatible API 詢問關於目前頁面的問題。支援 **Chrome**、**Microsoft Edge** 與 **macOS Safari**（共用核心架構），讓您可以快速與頁面內容互動，支援多種 AI 提供者。
 
 ## ✨ 功能特色
 
@@ -34,14 +34,34 @@
 
 如果你按下 `Ctrl+Shift+Y` 無法啟動對話框的話，那就代表這個 `Ctrl+Shift+Y` 快速鍵可能與其他 Chrome 擴充套件的快速鍵衝突，你要開啟 `chrome://extensions/shortcuts` 頁面，並手動重新指派你希望設定的快速鍵。
 
-### 手動安裝開發版本
+### 手動安裝與從原始碼建置（Chrome / MS Edge / Safari）
 
-1. 下載最新的 [Release](https://github.com/doggy8088/ask-page-extension/releases)
+#### 使用 Release 套件安裝
+1. 下載最新的 [Release](https://github.com/doggy8088/ask-page-extension/releases)，依瀏覽器挑選對應檔案：
+   - Chrome：`AskPageExtension-chrome_v*.zip`
+   - Microsoft Edge：`AskPageExtension-edge_v*.zip`
 2. 解壓縮 ZIP 檔案
-3. 開啟 Chrome 瀏覽器，前往 `chrome://extensions/`
-4. 開啟「開發者模式」
-5. 點擊「載入未封裝項目」
-6. 選擇解壓縮後的資料夾
+3. **Chrome** 前往 `chrome://extensions/`、**MS Edge** 前往 `edge://extensions/`
+4. 開啟「開發人員模式 / 開發者模式」
+5. 點擊「載入未封裝項目」並選擇解壓縮後的資料夾
+
+#### 從原始碼建置各瀏覽器版本
+
+```bash
+npm install
+npm run build        # 檢查 ESLint 並輸出至 dist/chrome、dist/edge、dist/safari
+npm run package      # 同步產出三平台 ZIP 套件於 dist/
+```
+
+- **Chrome**：載入 `dist/chrome/`
+- **MS Edge**：載入 `dist/edge/`
+- **macOS Safari**：
+  1. 執行 `npm run build:safari`
+  2. 開啟 `platforms/safari/xcode/AskPage/AskPage.xcodeproj` 並在 Xcode 中建置執行 **AskPage** App
+  3. 若執行未簽署開發版本，請在 Safari 勾選「開發」→「允許未簽署的延伸功能」，再到 Safari「設定 → 延伸功能」啟用 **AskPage**，並點擊 **「永遠允許於每個網站…」(Always Allow on Every Website…)**，以免跨網域呼叫 AI API（例如 Ollama Cloud、Gemini、Anthropic）時被 Safari 權限阻擋
+
+> [!NOTE]
+> Safari 擴充功能環境不支援 Chrome 的 `userScripts` API，因此 Agent 模式的 `run_js` 在 Safari 上會安全降級並提示不支援；其餘問答、頁面摘要、Page Tools 與多 Provider 串流等功能皆可在三平台正常使用。
 
 ## 📖 使用指南
 
@@ -99,11 +119,11 @@
 
 > Gemini 使用 Interactions API（`Api-Revision: 2026-05-20`），詢問與代理模式皆啟用可用的思考摘要。對話採 `store: false`，在本機保留並重送完整 thought、內建工具與 function steps，包含原始 signature；`/clear` 會一併清除。Gemini 2.5 改用 `low`／`medium`／`high` 等級，Flash-Lite 另有「模型預設」（省略等級，官方預設 Off）；Gemini 3.8／3.7 Flash 不提供 `minimal`。
 >
-> `run_js` 現在會透過 `chrome.userScripts.execute(..., { world: 'MAIN' })` 在頁面主世界執行任意 JavaScript，專門用來處理 GitHub 這類會阻擋 `unsafe-eval` 與 `data:` script 的網站。這項功能需要：
+> `run_js` 現在會透過 `chrome.userScripts.execute(..., { world: 'MAIN' })` 在頁面主世界執行任意 JavaScript（支援 Chrome 與 Microsoft Edge），專門用來處理 GitHub 這類會阻擋 `unsafe-eval` 與 `data:` script 的網站。這項功能需要：
 >
-> 1. Chrome 135 以上版本
+> 1. Chrome 135 以上或 Microsoft Edge 135 以上版本（Safari 不支援 `userScripts` API，將安全降級提示）
 > 2. 擴充功能已取得網站 `host_permissions`
-> 3. 啟用 User Scripts（Chrome 138+ 為擴充功能詳細資料頁的 **Allow User Scripts**；較舊版本則需開啟 **開發人員模式**）
+> 3. 啟用 User Scripts（Chrome 138+ / Edge 138+ 為擴充功能詳細資料頁的 **Allow User Scripts**；較舊版本則需開啟 **開發人員模式**）
 
 ### 內建技能
 

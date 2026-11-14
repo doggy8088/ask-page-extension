@@ -67,3 +67,9 @@ key.pem
 tasks/
 
 *.local.json
+
+# Xcode 使用者與建置產物
+xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.xcuserstate

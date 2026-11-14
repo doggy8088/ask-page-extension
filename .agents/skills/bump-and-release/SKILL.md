@@ -43,7 +43,7 @@ description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語�
 
 ### 1. 讀取專案狀態
 
-先讀取根目錄 AGENTS.md、package.json、manifest.json、CHANGELOG.md、scripts/bump-version.js 與 .github/workflows/release.yml。確認目前分支、遠端狀態、版本號和最近一次版本標籤：
+先讀取根目錄 AGENTS.md、package.json、platforms/base/manifest.base.json、CHANGELOG.md、scripts/bump-version.js 與 .github/workflows/release.yml。確認目前分支、遠端狀態、版本號和最近一次版本標籤：
 
 ~~~sh
 git status --short --branch
@@ -54,7 +54,7 @@ git tag --sort=-v:refname | head -20
 
 第一個發行閘門是目前分支必須完全等於 `main`。若 `git branch --show-current` 輸出不是 `main`，包括 detached HEAD 或輸出為空，立即終止發行流程，要求使用者先切換回 `main`；不得在此情況下修改檔案、提交、pull、同步 tag、執行 bump、推送或觸發 CI。
 
-以 manifest.json 的 version 作為主要版本來源，並確認 package.json 的 version 相同。若兩者不同、版本格式不是三段式語意化版本，或無法辨識上一版與本次變更範圍，先停止並說明問題。
+以 platforms/base/manifest.base.json 的 version 作為主要版本來源，並確認 package.json 的 version 相同。若兩者不同、版本格式不是三段式語意化版本，或無法辨識上一版與本次變更範圍，先停止並說明問題。
 
 ### 2. 先提交既有未提交變更
 
@@ -103,7 +103,7 @@ git fetch --tags --force --prune
 
 ### 4. 決定版本並更新版本檔案
 
-本技能每次執行都必須從目前 `manifest.json` 版本實際提升一次，且只執行一次版本 bump。版本類型依以下規則決定：
+本技能每次執行都必須從目前 `platforms/base/manifest.base.json` 版本實際提升一次，且只執行一次版本 bump。版本類型依以下規則決定：
 
 - 先依「版本類型解析」判斷；`minor version`、`minor`、`minor bump`、`次版本` 等都算明確指定 minor，`major version` 與 `major` 同等。
 - 若使用者直接指定目標版本，依「版本類型解析」判定；例如目前 `0.49.1` 指定 `0.50.0` 時執行 minor bump。
@@ -121,12 +121,12 @@ npm run bump:minor
 npm run bump:major
 ~~~
 
-腳本會同步更新 manifest.json 與 package.json。執行後檢查：
+腳本會同步更新 platforms/base/manifest.base.json、package.json 與 platforms/safari/xcode/AskPage/AskPage.xcodeproj/project.xcproj。執行後檢查：
 
 ~~~sh
-node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.json')); const p=JSON.parse(fs.readFileSync('package.json')); if(m.version!==p.version) throw new Error('版本號不同步'); console.log(m.version)"
+node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('platforms/base/manifest.base.json')); const p=JSON.parse(fs.readFileSync('package.json')); if(m.version!==p.version) throw new Error('版本號不同步'); console.log(m.version)"
 git diff --check
-git diff -- manifest.json package.json
+git diff -- platforms/base/manifest.base.json package.json platforms/safari/xcode/AskPage/AskPage.xcodeproj/project.xcproj
 ~~~
 
 若先行提交已經包含版本變更，仍以該提交後的目前版本作為本次執行基準，再依上述規則提升一次；不得把既有版本變更視為本次 bump 的替代品。
@@ -144,11 +144,11 @@ git diff -- manifest.json package.json
 - 保留歷史版本順序、原有語氣與 Markdown 格式，不任意改寫無關的歷史記錄。
 - 每個條目以正體中文說明使用者可見行為、影響範圍與必要的相容性限制；技術名稱、模型 ID、檔案名與 API 欄位保留原文。
 
-版本標題中的版本號必須與 manifest.json、package.json 完全一致。完成後檢查：
+版本標題中的版本號必須與 platforms/base/manifest.base.json、package.json 完全一致。完成後檢查：
 
 ~~~sh
 git diff --check
-git diff -- CHANGELOG.md manifest.json package.json
+git diff -- CHANGELOG.md platforms/base/manifest.base.json package.json platforms/safari/xcode/AskPage/AskPage.xcodeproj/project.xcproj
 ~~~
 
 ### 6. 驗證、提交、推送並確認 CI
@@ -209,10 +209,10 @@ CI 驗證必須同時符合以下條件：
 
 GitHub Actions workflow 成功後，確認本次發布的 GitHub Release 已由 `.github/workflows/release.yml` 建立。即使 Release 已經有預設內容或 commit log 產生的 notes，也必須將其更新為 `CHANGELOG.md` 中對應版本的完整區段；不得使用 commit log、`--generate-notes` 或其他自動產生內容取代 CHANGELOG。
 
-依 `manifest.json` 的版本擷取從 `## [X.Y.Z] - YYYY-MM-DD` 開始、到下一個 `## [` 之前的完整 Markdown 區段，包含版本標題、分類標題與所有條目。確認擷取結果確實對應本次版本後，以 UTF-8 暫存檔更新既有 Release：
+依 `platforms/base/manifest.base.json` 的版本擷取從 `## [X.Y.Z] - YYYY-MM-DD` 開始、到下一個 `## [` 之前的完整 Markdown 區段，包含版本標題、分類標題與所有條目。確認擷取結果確實對應本次版本後，以 UTF-8 暫存檔更新既有 Release：
 
 ~~~sh
-release_version="$(node -p "require('./manifest.json').version")"
+release_version="$(node -p "require('./platforms/base/manifest.base.json').version")"
 release_tag="v${release_version}"
 release_notes_file="$(mktemp -t codex-release-notes)"
 awk -v heading="## [${release_version}] - " '
@@ -247,7 +247,7 @@ diff -u "$release_notes_file" "$verified_notes_file"
 
 **Agent 不用自己建立或推送 Git tag。** 可以唯讀查詢既有 tag 來辨識版本，但不要執行建立新 tag 的指令，例如 git tag vX.Y.Z 或 git push origin vX.Y.Z，也不要把手動建立 tag 當作完成條件。
 
-目前 .github/workflows/release.yml 會在推送到 main 時讀取 manifest.json 版本、建立對應的 GitHub Release 與 tag、打包擴充功能，並透過 Chrome Web Store API 發布到 CWS。**只要版本 bump、變更日誌、驗證與發布提交全部完成，技能就必須執行 `git push origin main`，不再把推送視為可選步驟。** 不要建立或推送 Git tag；由 `release.yml` 在 CI 中建立對應 tag、GitHub Release、套件並發布至 Chrome Web Store。CI 成功後，Agent 必須以該版本 `CHANGELOG.md` 區段覆寫 GitHub Release notes，並以 `gh release view` 與內容差異檢查驗證；不得保留只由 commit log 或自動產生的 Release notes。CWS 發布與 Release notes 更新仍取決於 GitHub Actions、GitHub CLI 及所需 Secrets 均正常；未完成 CI 與 Release notes 驗證前不可結束流程或宣稱已上架。
+目前 .github/workflows/release.yml 會在推送到 main 時讀取 platforms/base/manifest.base.json 版本、建立對應的 GitHub Release 與 tag、打包三平台擴充功能，並透過 Chrome Web Store API 發布到 CWS（若已設定 Edge secrets 亦會同步發布至 Edge Add-ons）。**只要版本 bump、變更日誌、驗證與發布提交全部完成，技能就必須執行 `git push origin main`，不再把推送視為可選步驟。** 不要建立或推送 Git tag；由 `release.yml` 在 CI 中建立對應 tag、GitHub Release、套件並發布至 Chrome Web Store。CI 成功後，Agent 必須以該版本 `CHANGELOG.md` 區段覆寫 GitHub Release notes，並以 `gh release view` 與內容差異檢查驗證；不得保留只由 commit log 或自動產生的 Release notes。CWS 發布與 Release notes 更新仍取決於 GitHub Actions、GitHub CLI 及所需 Secrets 均正常；未完成 CI 與 Release notes 驗證前不可結束流程或宣稱已上架。
 
 * * *
 

@@ -15,6 +15,7 @@ jobs:
 
     outputs:
       should_publish: ${{ steps.check.outputs.should_publish }}
+      version: ${{ steps.check.outputs.version }}
 
     steps:
     - name: 取出程式碼
@@ -26,7 +27,8 @@ jobs:
         EVENT_NAME: ${{ github.event_name }}
         RUN_ATTEMPT: ${{ github.run_attempt }}
       run: |
-        version=$(jq -r '.version' manifest.json)
+        version=$(jq -r '.version' platforms/base/manifest.base.json)
+        echo "version=$version" >> "$GITHUB_OUTPUT"
         tag="v$version"
 
         # 手動觸發或重新執行時一律發布，保留補救失敗發布的途徑
@@ -45,7 +47,7 @@ jobs:
             echo "should_publish=false" >> "$GITHUB_OUTPUT"
             echo "## 略過發布" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "標籤 $tag 已存在，表示 manifest.json 版本 $version 已發布過，本次推送不重新建立 Release 或上傳 Chrome Web Store。" >> "$GITHUB_STEP_SUMMARY"
+            echo "標籤 $tag 已存在，表示版本 $version 已發布過，本次推送不重新建立 Release 或上傳商店。" >> "$GITHUB_STEP_SUMMARY"
             echo "若需重新發布此版本，請重新執行此 workflow 或以 workflow_dispatch 手動觸發。" >> "$GITHUB_STEP_SUMMARY"
             ;;
           2)
@@ -73,32 +75,30 @@ jobs:
       uses: actions/setup-node@v6
       with:
         node-version: '24'
+        cache: 'npm'
 
-    - name: Get version
-      id: get_version
+    - name: 安裝相依套件與打包三平台套件
       run: |
-        version=$(jq -r '.version' manifest.json)
-        echo "version=$version" >> $GITHUB_OUTPUT
+        npm ci
+        npm run package
 
     - name: 建立 GitHub Release
       id: create_release
       uses: softprops/action-gh-release@v3
       with:
-        tag_name: v${{ steps.get_version.outputs.version }}
-        name: 頁問 v${{ steps.get_version.outputs.version }}
+        tag_name: v${{ needs.check-release.outputs.version }}
+        name: 頁問 v${{ needs.check-release.outputs.version }}
         draft: false
         prerelease: false
 
-    - name: Create ZIP package
-      run: |
-        filePath="AskPageExtension_v${{ steps.get_version.outputs.version }}.zip"
-        zip -r "$filePath" manifest.json background.js content.js popup.html popup.js settings.html settings.js codepen.html codepen.js i18n.js endpoint-utils.js agent-glow.js style.css icons lib _locales CHANGELOG.md README.md
-
-    - name: Upload Release Asset
+    - name: Upload Release Assets (Chrome / MS Edge / Safari)
       uses: softprops/action-gh-release@v3
       with:
-        tag_name: v${{ steps.get_version.outputs.version }}
-        files: ./AskPageExtension_v${{ steps.get_version.outputs.version }}.zip
+        tag_name: v${{ needs.check-release.outputs.version }}
+        files: |
+          ./dist/AskPageExtension-chrome_v${{ needs.check-release.outputs.version }}.zip
+          ./dist/AskPageExtension-edge_v${{ needs.check-release.outputs.version }}.zip
+          ./dist/AskPageExtension-safari_v${{ needs.check-release.outputs.version }}.zip
 
     - name: Check Chrome Web Store Secrets
       run: |
@@ -132,7 +132,7 @@ jobs:
     - name: Upload to Chrome Web Store
       uses: mnao305/chrome-extension-upload@v6.0.0
       with:
-        file-path: 'AskPageExtension_v${{ steps.get_version.outputs.version }}.zip'
+        file-path: 'dist/AskPageExtension-chrome_v${{ needs.check-release.outputs.version }}.zip'
         extension-id: ${{ secrets.EXTENSION_ID }}
         client-id: ${{ secrets.CLIENT_ID }}
         client-secret: ${{ secrets.CLIENT_SECRET }}
@@ -143,3 +143,134 @@ jobs:
       run: |
         echo "Chrome Web Store 套件已上傳。" >> $GITHUB_STEP_SUMMARY
         echo "已透過 Chrome Web Store API 送出發布。" >> $GITHUB_STEP_SUMMARY
+
+  publish-edge:
+    needs: [check-release, publish]
+    if: needs.check-release.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check Edge Add-ons Secrets
+      id: check_edge
+      env:
+        EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+        EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+        EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+      run: |
+        missing=()
+        [ -z "$EDGE_PRODUCT_ID" ] && missing+=("EDGE_PRODUCT_ID")
+        [ -z "$EDGE_CLIENT_ID" ] && missing+=("EDGE_CLIENT_ID")
+        [ -z "$EDGE_API_KEY" ] && missing+=("EDGE_API_KEY")
+
+        if [ ${#missing[@]} -gt 0 ]; then
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "## 略過 MS Edge Add-ons 自動上架" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "尚未設定所有必要的 Edge Add-ons API secrets（缺少: $(IFS=', '; echo "${missing[*]}")）。" >> "$GITHUB_STEP_SUMMARY"
+          echo "MS Edge 封裝檔已附於 GitHub Release，可手動下載上傳或設定 secrets 後自動發布。" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: 取出程式碼
+      if: steps.check_edge.outputs.configured == 'true'
+      uses: actions/checkout@v7
+
+    - name: Set up Node.js
+      if: steps.check_edge.outputs.configured == 'true'
+      uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+        cache: 'npm'
+
+    - name: 打包 MS Edge 套件
+      if: steps.check_edge.outputs.configured == 'true'
+      run: |
+        npm ci
+        node scripts/package.js --target=edge
+
+    - name: Upload & Publish to MS Edge Add-ons
+      if: steps.check_edge.outputs.configured == 'true'
+      env:
+        EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+        EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+        EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+        VERSION: ${{ needs.check-release.outputs.version }}
+      run: |
+        node -e '
+        const fs = require("fs");
+        const path = require("path");
+
+        const productId = process.env.EDGE_PRODUCT_ID;
+        const clientId = process.env.EDGE_CLIENT_ID;
+        const apiKey = process.env.EDGE_API_KEY;
+        const version = process.env.VERSION;
+        const zipPath = path.join("dist", `AskPageExtension-edge_v${version}.zip`);
+        const baseUrl = `https://api.addons.microsoftedge.microsoft.com/v1/products/${productId}`;
+        const authHeaders = {
+          "Authorization": `ApiKey ${apiKey}`,
+          "X-ClientID": clientId
+        };
+
+        async function pollOperation(locationHeader, operationsBaseUrl, label) {
+          if (!locationHeader) {
+            throw new Error(`${label} 未回傳 Location header`);
+          }
+          const operationUrl = locationHeader.startsWith("http")
+            ? locationHeader
+            : `${operationsBaseUrl}/${locationHeader}`;
+          for (let attempt = 0; attempt < 60; attempt++) {
+            const res = await fetch(operationUrl, { headers: authHeaders });
+            const body = await res.json();
+            if (body.status === "Succeeded") {
+              return body;
+            }
+            if (body.status === "Failed") {
+              throw new Error(`${label} 失敗: ${JSON.stringify(body)}`);
+            }
+            await new Promise((r) => setTimeout(r, 10000));
+          }
+          throw new Error(`${label} 逾時`);
+        }
+
+        (async () => {
+          const zipBuffer = fs.readFileSync(zipPath);
+          const uploadRes = await fetch(`${baseUrl}/submissions/draft/package`, {
+            method: "POST",
+            headers: { ...authHeaders, "Content-Type": "application/zip" },
+            body: zipBuffer
+          });
+          if (!uploadRes.ok) {
+            throw new Error(`上傳 Edge 套件失敗 (${uploadRes.status}): ${await uploadRes.text()}`);
+          }
+          await pollOperation(
+            uploadRes.headers.get("location"),
+            `${baseUrl}/submissions/draft/package/operations`,
+            "Edge 套件驗證"
+          );
+
+          const publishRes = await fetch(`${baseUrl}/submissions`, {
+            method: "POST",
+            headers: { ...authHeaders, "Content-Type": "application/json" },
+            body: JSON.stringify({ notes: `Automated release v${version} from GitHub Actions` })
+          });
+          if (!publishRes.ok) {
+            throw new Error(`送出 Edge 審核失敗 (${publishRes.status}): ${await publishRes.text()}`);
+          }
+          await pollOperation(
+            publishRes.headers.get("location"),
+            `${baseUrl}/submissions/operations`,
+            "Edge 審核送出"
+          );
+          console.log(`MS Edge Add-ons v${version} 已送出審核發布。`);
+        })().catch((err) => {
+          console.error(err);
+          process.exit(1);
+        });
+        '
+
+    - name: MS Edge Add-ons publish note
+      if: steps.check_edge.outputs.configured == 'true'
+      run: |
+        echo "## MS Edge Add-ons 自動上架完成 ✅" >> "$GITHUB_STEP_SUMMARY"
+        echo "已透過 Microsoft Edge Add-ons Publish REST API 上傳並送出審核。" >> "$GITHUB_STEP_SUMMARY"

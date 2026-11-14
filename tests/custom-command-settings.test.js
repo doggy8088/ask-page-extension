@@ -6,8 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
-const settingsScript = fs.readFileSync(path.join(rootDir, 'settings.js'), 'utf8');
-const zhTwCatalog = JSON.parse(fs.readFileSync(path.join(rootDir, '_locales/zh_TW/messages.json'), 'utf8'));
+const settingsScript = fs.readFileSync(path.join(rootDir, 'src', 'settings.js'), 'utf8');
+const zhTwCatalog = JSON.parse(fs.readFileSync(path.join(rootDir, 'src/_locales/zh_TW/messages.json'), 'utf8'));
 
 function extractFunctionSource(source, functionName, nextFunctionName) {
     const start = source.indexOf(`function ${functionName}(`);

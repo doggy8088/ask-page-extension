@@ -31,122 +31,84 @@ jobs:
     - name: 檢查程式碼風格 (ESLint)
       run: npm run lint
 
+    - name: 建置多平台擴充功能
+      run: npm run build
+
     - name: 執行測試套件
       run: npm test
 
-    - name: 驗證擴充功能 (基本檢查，無 web-ext)
+    - name: 驗證各平台 Manifest 與檔案完整性
       run: |
-        echo "檢查 Chrome 擴充功能 Manifest V3 相容性..."
+        TARGETS=("chrome" "edge" "safari")
+        FILES=("manifest.json" "background.js" "platform-adapter.js" "content.js" "popup.html" "popup.js" "settings.html" "settings.js" "codepen.html" "codepen.js" "i18n.js" "endpoint-utils.js" "agent-glow.js" "style.css" "_locales/en/messages.json" "_locales/zh_TW/messages.json" "icons/icon16.png" "icons/icon48.png" "icons/icon128.png" "lib/marked.min.js" "lib/purify.min.js")
 
-        # 檢查 manifest.json 是否符合 Manifest V3
-        MANIFEST_VERSION=$(jq -r '.manifest_version' manifest.json)
-        if [ "$MANIFEST_VERSION" != "3" ]; then
-          echo "❌ 不是 Manifest V3"
-          exit 1
-        fi
-        echo "✅ Manifest V3 格式正確"
+        for target in "${TARGETS[@]}"; do
+          dir="dist/$target"
+          manifest="$dir/manifest.json"
+          echo "檢查 $target 擴充功能 ($manifest)..."
 
-        # 檢查必要權限
-        PERMISSIONS=$(jq -r '.permissions[]' manifest.json 2>/dev/null || echo "")
-        if echo "$PERMISSIONS" | grep -q "storage\|activeTab\|scripting"; then
-          echo "✅ 基本權限設定正確"
-        else
-          echo "⚠️ 可能缺少必要權限"
-        fi
-
-        # 檢查 service worker
-        SERVICE_WORKER=$(jq -r '.background.service_worker' manifest.json 2>/dev/null || echo "null")
-        if [ "$SERVICE_WORKER" != "null" ] && [ -f "$SERVICE_WORKER" ]; then
-          echo "✅ Service Worker 檔案存在"
-        else
-          echo "❌ Service Worker 設定錯誤"
-          exit 1
-        fi
-
-    - name: 檢查 manifest.json
-      run: |
-        # 檢查 manifest.json 格式是否正確
-        echo "檢查 manifest.json 格式..."
-        if ! jq empty manifest.json 2>/dev/null; then
-          echo "❌ manifest.json 格式錯誤"
-          exit 1
-        else
-          echo "✅ manifest.json 格式正確"
-        fi
-
-        # 檢查必要欄位
-        echo "檢查必要欄位..."
-        REQUIRED_FIELDS=("manifest_version" "name" "version")
-        for field in "${REQUIRED_FIELDS[@]}"; do
-          if ! jq -e ".$field" manifest.json > /dev/null; then
-            echo "❌ manifest.json 缺少必要欄位: $field"
+          if ! jq empty "$manifest" 2>/dev/null; then
+            echo "❌ $manifest 格式錯誤"
             exit 1
           fi
-        done
-        echo "✅ 所有必要欄位都存在"
 
-    - name: 檢查檔案完整性
+          MANIFEST_VERSION=$(jq -r '.manifest_version' "$manifest")
+          if [ "$MANIFEST_VERSION" != "3" ]; then
+            echo "❌ $target 不是 Manifest V3"
+            exit 1
+          fi
+
+          for field in "manifest_version" "name" "version"; do
+            if ! jq -e ".$field" "$manifest" > /dev/null; then
+              echo "❌ $manifest 缺少必要欄位: $field"
+              exit 1
+            fi
+          done
+
+          if [ "$target" = "safari" ]; then
+            if ! jq -e '.background.scripts | type == "array" and length > 0' "$manifest" > /dev/null; then
+              echo "❌ $target background.scripts 設定錯誤或為空"
+              exit 1
+            fi
+            while IFS= read -r bg_script; do
+              if [ ! -f "$dir/$bg_script" ]; then
+                echo "❌ $target 缺少背景腳本: $dir/$bg_script"
+                exit 1
+              fi
+            done < <(jq -r '.background.scripts[]' "$manifest")
+          else
+            SERVICE_WORKER=$(jq -r '.background.service_worker' "$manifest" 2>/dev/null || echo "null")
+            if [ "$SERVICE_WORKER" = "null" ] || [ ! -f "$dir/$SERVICE_WORKER" ]; then
+              echo "❌ $target Service Worker 設定錯誤或檔案缺失"
+              exit 1
+            fi
+          fi
+
+          for file in "${FILES[@]}"; do
+            if [ ! -f "$dir/$file" ]; then
+              echo "❌ $target 缺少檔案: $dir/$file"
+              exit 1
+            fi
+          done
+        done
+
+        echo "✅ Chrome / Edge / Safari 建置驗證全數通過"
+
+    - name: 建立多平台測試套件
       run: |
-        echo "檢查檔案完整性..."
-
-        # 檢查基本檔案是否存在
-        FILES=("manifest.json" "background.js" "content.js" "popup.html" "popup.js" "settings.html" "settings.js" "codepen.html" "codepen.js" "i18n.js" "endpoint-utils.js" "agent-glow.js" "style.css" "_locales/en/messages.json" "_locales/zh_TW/messages.json")
-        for file in "${FILES[@]}"; do
-          if [ ! -f "$file" ]; then
-            echo "❌ 缺少檔案: $file"
+        npm run package
+        for target in chrome edge safari; do
+          zip_file=$(ls dist/AskPageExtension-${target}_v*.zip | head -n 1)
+          if [ ! -f "$zip_file" ]; then
+            echo "❌ 找不到 $target 打包產物"
             exit 1
           fi
-        done
-
-        # 檢查圖示檔案
-        ICONS=("icons/icon16.png" "icons/icon48.png" "icons/icon128.png")
-        for icon in "${ICONS[@]}"; do
-          if [ ! -f "$icon" ]; then
-            echo "❌ 缺少圖示檔案: $icon"
-            exit 1
+          SIZE=$(du -k "$zip_file" | cut -f1)
+          echo "$target 套件: $zip_file (${SIZE}KB)"
+          if [ "$SIZE" -gt 10240 ]; then
+            echo "⚠️ 警告: $zip_file 大小超過 10MB"
           fi
         done
-
-        # 檢查函式庫檔案
-        LIBS=("lib/marked.min.js" "lib/purify.min.js")
-        for lib in "${LIBS[@]}"; do
-          if [ ! -f "$lib" ]; then
-            echo "❌ 缺少函式庫檔案: $lib"
-            exit 1
-          fi
-        done
-
-        echo "✅ 所有檔案都存在"
-
-    - name: 建立測試套件
-      run: |
-        echo "建立測試套件..."
-        zip -r test-package.zip \
-          manifest.json \
-          background.js \
-          content.js \
-          popup.html \
-          popup.js \
-          settings.html \
-          settings.js \
-          codepen.html \
-          codepen.js \
-          i18n.js \
-          endpoint-utils.js \
-          agent-glow.js \
-          style.css \
-          icons/ \
-          lib/ \
-          _locales/ \
-          -x "*.git*" "*.DS_Store*" "*node_modules*"
-
-        # 檢查套件大小
-        SIZE=$(du -k test-package.zip | cut -f1)
-        echo "套件大小: ${SIZE}KB"
-
-        if [ $SIZE -gt 10240 ]; then  # 10MB
-          echo "⚠️ 警告: 套件大小超過 10MB"
-        fi
 
     - name: 程式碼品質總結
       run: |
@@ -154,8 +116,7 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 檢查項目:" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ ESLint 程式碼風格檢查" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ 單元測試套件 (npm test)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ 基本 Manifest/檔案檢查 (無 web-ext)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ manifest.json 格式檢查" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ 檔案完整性檢查" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ 套件建構測試" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ 多平台建置 (Chrome / MS Edge / Safari)" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ 單元與整合測試套件 (npm test)" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ 各平台 manifest.json 與檔案完整性檢查" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ 三平台套件打包測試 (npm run package)" >> $GITHUB_STEP_SUMMARY

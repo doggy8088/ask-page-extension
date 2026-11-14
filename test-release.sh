@@ -1,16 +1,17 @@
 #!/bin/bash
 
 # 測試發布指令碼
-# 用於本機測試 CI/CD 流程
+# 用於本機測試多平台 CI/CD 建置與打包流程
 
 set -e  # 遇到錯誤立即停止
 
-echo "🚀 開始測試發布流程..."
+echo "🚀 開始測試多平台發布打包流程..."
 
 # 檢查必要工具
 echo "📋 檢查必要工具..."
-command -v jq >/dev/null 2>&1 || { echo "❌ 需要安裝 jq"; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "❌ 需要安裝 Node.js"; exit 1; }
 command -v zip >/dev/null 2>&1 || { echo "❌ 需要安裝 zip"; exit 1; }
+command -v unzip >/dev/null 2>&1 || { echo "❌ 需要安裝 unzip"; exit 1; }
 
 # 檢查版本參數
 if [ -z "$1" ]; then
@@ -24,63 +25,32 @@ VERSION_NUMBER="${VERSION#v}"
 echo "📦 版本: $VERSION"
 echo "📦 版本號: $VERSION_NUMBER"
 
-# 備份原始 manifest.json
-echo "💾 備份原始 manifest.json..."
-cp manifest.json manifest.json.backup
+# 建置並打包三平台套件
+echo "📦 建置並打包 Chrome / MS Edge / Safari 套件..."
+node scripts/package.js --version="$VERSION_NUMBER"
 
-# 更新版本號
-echo "🔄 更新 manifest.json 版本號..."
-jq --arg version "$VERSION_NUMBER" '.version = $version' manifest.json > manifest_tmp.json
-mv manifest_tmp.json manifest.json
+for target in chrome edge safari; do
+    PACKAGE_NAME="dist/AskPageExtension-${target}_v${VERSION_NUMBER}.zip"
+    if [ -f "$PACKAGE_NAME" ]; then
+        SIZE=$(du -h "$PACKAGE_NAME" | cut -f1)
+        echo "✅ ${target} 套件建立成功: $PACKAGE_NAME ($SIZE)"
+    else
+        echo "❌ ${target} 套件建立失敗: $PACKAGE_NAME"
+        exit 1
+    fi
+done
 
-echo "✅ 已更新版本號到 $VERSION_NUMBER"
-
-# 建立套件
-echo "📦 建立套件..."
-PACKAGE_NAME="AskPageExtension_${VERSION}.zip"
-
-zip -r "$PACKAGE_NAME" \
-  manifest.json \
-  background.js \
-  content.js \
-  popup.html \
-  popup.js \
-  settings.html \
-  settings.js \
-  codepen.html \
-  codepen.js \
-  i18n.js \
-  endpoint-utils.js \
-  style.css \
-  icons/ \
-  lib/ \
-  _locales/ \
-  -x "*.git*" "*.DS_Store*" "*node_modules*" "*.backup*"
-
-# 檢查套件
-if [ -f "$PACKAGE_NAME" ]; then
-    SIZE=$(du -h "$PACKAGE_NAME" | cut -f1)
-    echo "✅ 套件建立成功: $PACKAGE_NAME ($SIZE)"
-
-    # 列出套件內容
-    echo "📋 套件內容:"
-    unzip -l "$PACKAGE_NAME"
-else
-    echo "❌ 套件建立失敗"
-    exit 1
-fi
-
-# 恢復原始 manifest.json
-echo "🔄 恢復原始 manifest.json..."
-mv manifest.json.backup manifest.json
+echo "📋 Chrome 套件內容預覽:"
+unzip -l "dist/AskPageExtension-chrome_v${VERSION_NUMBER}.zip"
 
 echo ""
-echo "🎉 測試發布完成！"
-echo "📦 套件檔案: $PACKAGE_NAME"
+echo "🎉 測試打包完成！"
+echo "📦 產物位於 dist/："
+echo "   - dist/AskPageExtension-chrome_v${VERSION_NUMBER}.zip"
+echo "   - dist/AskPageExtension-edge_v${VERSION_NUMBER}.zip"
+echo "   - dist/AskPageExtension-safari_v${VERSION_NUMBER}.zip"
 echo ""
 echo "下一步:"
-echo "1. 檢查套件內容是否正確"
-echo "2. 在 Chrome 中載入測試"
-echo "3. 確認無誤後可推送標籤觸發正式發布:"
-echo "   git tag $VERSION"
-echo "   git push origin $VERSION"
+echo "1. 於 chrome://extensions 載入 dist/chrome/ 測試"
+echo "2. 於 edge://extensions 載入 dist/edge/ 測試"
+echo "3. 於 macOS Safari 載入 dist/safari/ 或使用 platforms/safari/xcode/AskPage/AskPage.xcodeproj 建置測試"

@@ -4,8 +4,8 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const source = fs.readFileSync(path.join(__dirname, '..', 'lib/debug-logger.js'), 'utf8');
-const bridge = fs.readFileSync(path.join(__dirname, '..', 'lib/debug-console.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'src/lib/debug-logger.js'), 'utf8');
+const bridge = fs.readFileSync(path.join(__dirname, '..', 'src/lib/debug-console.js'), 'utf8');
 let storageListener;
 let enabled = false;
 let downloaded;
@@ -86,7 +86,7 @@ const setEnabled = (value) => {
     assert.strictEqual(JSON.parse(await downloaded.text()).schemaVersion, 1);
     assert(!Object.hasOwn(sandbox.window.askpageDebug, 'exportData'), 'The page gets a signal-only helper');
     // Exercise the actual JSON and streaming transport hooks with credential-bearing requests.
-    const content = fs.readFileSync(path.join(__dirname, '..', 'content.js'), 'utf8');
+    const content = fs.readFileSync(path.join(__dirname, '..', 'src', 'content.js'), 'utf8');
     Object.assign(sandbox, {
         throwIfAskTaskCancelled() {}, isAskTaskCancellationError: () => false,
         isAskTaskCancelled: () => false, MAX_LLM_API_SERVICE_RETRIES: 0,
@@ -143,7 +143,7 @@ const setEnabled = (value) => {
     // Export objects must not give callers a mutable reference to retained entries.
     const first = api.exportData().events[0]; first.type = 'tampered';
     assert.notStrictEqual(api.exportData().events[0].type, 'tampered');
-    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8'));
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'dist', 'chrome', 'manifest.json'), 'utf8'));
     const collector = manifest.content_scripts.find((entry) => entry.js.includes('lib/debug-logger.js'));
     const consoleHelper = manifest.content_scripts.find((entry) => entry.js.includes('lib/debug-console.js'));
     assert.strictEqual(collector.world || 'ISOLATED', 'ISOLATED');

@@ -1,161 +1,141 @@
 # 發布說明文件
 
-本文件說明如何設定和使用 AskPage (頁問) 擴充功能的 CI/CD 自動化流程。
+本文件說明如何設定和使用 AskPage (頁問) 多瀏覽器擴充功能（Chrome / MS Edge / macOS Safari）的 CI/CD 自動化流程。
 
 ## 功能概述
 
-### 自動化發布 (release.yml)
-- **觸發條件**: 推送標籤 (例如 `v1.0.0`) 或手動觸發
+### 自動化發布 (`release.yml`)
+- **觸發條件**: 推送到 `main` 分支（當 `platforms/base/manifest.base.json` 的版本尚未建立遠端 Git tag 時）或手動觸發 (`workflow_dispatch`)
 - **功能**:
-  - 自動更新 `manifest.json` 中的版本號
-  - 建立 ZIP 套件
-  - 建立 GitHub Release
-  - 自動發布到 Chrome Web Store (可選)
+  - 建置並打包三平台 ZIP 套件：
+    - `dist/AskPageExtension-chrome_v{version}.zip`
+    - `dist/AskPageExtension-edge_v{version}.zip`
+    - `dist/AskPageExtension-safari_v{version}.zip`
+  - 建立 GitHub Release 與對應標籤 `v{version}`，並附上三平台 ZIP 產物
+  - 自動發布 Chrome 版到 Chrome Web Store
+  - 條件式自動發布 MS Edge 版到 Microsoft Edge Add-ons（需設定對應 Secrets，未設定時安全略過）
 
-### 程式碼品質檢查 (quality-check.yml)
-- **觸發條件**: 推送到 main/develop 分支或建立 Pull Request
+### Safari 自動打包與上架 (`publish-safari.yml`)
+- **觸發條件**: GitHub Release 發布後 (`release: types: [published]`) 或手動觸發 (`workflow_dispatch`)
 - **功能**:
-  - ESLint 程式碼風格檢查
-  - 基本檢查（ESLint）
-  - manifest.json 格式檢查
-  - 檔案完整性檢查
-  - 套件建構測試
+  - 先於 `ubuntu-latest` 檢查 Apple 簽署與 App Store Connect Secrets 是否完整；未設定時直接略過，不會消耗 `macos-latest` runner 配額
+  - 若 Secrets 齊全，於 `macos-latest` 建置 `dist/safari/`、封存並匯出 `platforms/safari/xcode/AskPage/AskPage.xcodeproj` 為 `.pkg`，並透過 `xcrun altool` 上傳至 App Store Connect
+
+### 程式碼品質檢查 (`quality-check.yml`)
+- **觸發條件**: 推送到 `main` / `develop` 分支或建立 Pull Request
+- **功能**:
+  - ESLint 程式碼風格檢查 (`npm run lint`)
+  - 多平台建置 (`npm run build`)
+  - 完整單元與整合測試套件 (`npm test`)
+  - 三平台 `manifest.json` 與檔案完整性檢查
+  - 三平台 ZIP 套件打包測試 (`npm run package`)
+
+---
 
 ## 設定步驟
 
 ### 1. GitHub Secrets 設定
 
 #### 基本設定 (必要)
-在 GitHub 儲存庫的 Settings → Secrets and variables → Actions 中新增：
+
+在 GitHub 儲存庫的 **Settings → Secrets and variables → Actions** 中：
+
+- `GITHUB_TOKEN`：GitHub Actions 自動提供，用於建立 Release 與上傳產物。
+
+#### Chrome Web Store 自動發布設定
 
 | Secret 名稱 | 說明 |
 |------------|------|
-| `GITHUB_TOKEN` | GitHub 自動提供，用於建立 Release |
+| `EXTENSION_ID` | Chrome Web Store 擴充功能 ID |
+| `CLIENT_ID` | Google OAuth 用戶端 ID |
+| `CLIENT_SECRET` | Google OAuth 用戶端密鑰 |
+| `REFRESH_TOKEN` | Google OAuth 重新整理權杖 |
 
-#### Chrome Web Store 自動發布設定 (可選)
-如需自動發布到 Chrome Web Store，請依照以下步驟申請 API 存取權限：
+#### MS Edge Add-ons 自動發布設定 (選填)
+
+若已於 Microsoft Partner Center 建立擴充功能並啟用 Publish API v1.1，可新增以下 Secrets 啟用 `release.yml` 中的 `publish-edge` job：
 
 | Secret 名稱 | 說明 |
 |------------|------|
-| `CHROME_CLIENT_ID` | Google OAuth 用戶端 ID |
-| `CHROME_CLIENT_SECRET` | Google OAuth 用戶端密鑰 |
-| `CHROME_REFRESH_TOKEN` | Google OAuth 重新整理權杖 |
-| `CHROME_EXTENSION_ID` | Chrome Web Store 擴充功能 ID |
+| `EDGE_PRODUCT_ID` | Microsoft Partner Center 擴充功能 Product ID |
+| `EDGE_CLIENT_ID` | Partner Center Publish API Client ID |
+| `EDGE_API_KEY` | Partner Center Publish API Key（注意：通常約 72 天到期，需定期輪換） |
+
+#### macOS Safari App Store Connect 自動發布設定 (選填)
+
+若具備付費 Apple Developer Program 帳號，可新增以下 Secrets 啟用 `publish-safari.yml`：
+
+| Secret 名稱 | 說明 |
+|------------|------|
+| `APPLE_TEAM_ID` | Apple Developer 10 碼 Team ID |
+| `CERTIFICATE_P12_BASE64` | Mac App Distribution 憑證 `.p12` 的 Base64 字串 |
+| `CERTIFICATE_PASSWORD` | `.p12` 憑證匯出密碼 |
+| `PROVISIONING_PROFILE_BASE64` | 主 App (`com.doggy8088.AskPage`) Distribution Provisioning Profile 的 Base64 字串 |
+| `EXTENSION_PROVISIONING_PROFILE_BASE64` | Extension (`com.doggy8088.AskPage.Extension`) Distribution Provisioning Profile 的 Base64 字串 |
+| `APPSTORE_KEY_ID` | App Store Connect API Key ID |
+| `APPSTORE_ISSUER_ID` | App Store Connect API Issuer ID |
+| `APPSTORE_PRIVATE_KEY` | App Store Connect `.p8` 私鑰完整文字內容 |
+
+---
 
 ### 2. Chrome Web Store API 設定步驟
 
-#### 步驟 1: 建立 Google Cloud Project
-1. 前往 [Google Cloud Console](https://console.cloud.google.com/)
-2. 建立新專案
-3. 啟用 Chrome Web Store API
+1. 前往 [Google Cloud Console](https://console.cloud.google.com/) 建立專案並啟用 **Chrome Web Store API**。
+2. 設定 **OAuth 同意畫面**，建立「桌面應用程式」類型的 OAuth 用戶端憑證，取得 `CLIENT_ID` 與 `CLIENT_SECRET`。
+3. 透過 [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/) 使用 scope `https://www.googleapis.com/auth/chromewebstore` 完成授權並取得 `REFRESH_TOKEN`。
+4. 從 [Chrome Web Store 開發者控制台](https://chrome.google.com/webstore/developer/dashboard) 取得 `EXTENSION_ID`。
 
-#### 步驟 2: 設定 OAuth 同意畫面
-1. 側邊選單選擇「OAuth 同意畫面」
-2. 選擇「外部」使用者類型
-3. 填寫必要資訊：
-   - 應用程式名稱
-   - 使用者支援電子郵件
-   - 開發人員聯絡資訊
+---
 
-#### 步驟 3: 取得 CLIENT_ID 和 CLIENT_SECRET
-1. 側邊選單選擇「憑證」
-2. 點選「建立憑證」→「OAuth 用戶端 ID」
-3. 應用程式類型選擇「桌面應用程式」
-4. 記下 `CLIENT_ID` 和 `CLIENT_SECRET`
+## 本機建置、測試與版號管理
 
-#### 步驟 4: 取得 REFRESH_TOKEN
-透過 [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/) 取得 Refresh Token：
-
-1. 在右上角設定中輸入您的 OAuth 用戶端 ID 和密鑰
-2. 在左側輸入 scope: `https://www.googleapis.com/auth/chromewebstore`
-3. 按照流程完成授權
-4. 取得 `refresh_token`
-
-#### 步驟 5: 取得擴充功能 ID
-1. 前往 [Chrome Web Store 開發者控制台](https://chrome.google.com/webstore/developer/dashboard)
-2. 找到您的擴充功能
-3. 從 URL 或詳細資訊中取得擴充功能 ID
-
-## 使用方法
-
-### 手動觸發發布
-1. 前往 GitHub Actions 頁面
-2. 選擇「自動化發布」工作流程
-3. 點擊「Run workflow」
-4. 輸入版本號 (例如: v1.0.0)
-5. 點擊「Run workflow」
-
-### 標籤觸發發布
-```bash
-# 建立並推送標籤
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-### 套件建構
-自動化流程會建立以下格式的套件：
-- 檔案名稱: `AskPageExtension_v1.0.0.zip`
-- 包含檔案:
-  - manifest.json (版本號已更新)
-  - background.js
-  - content.js
-  - endpoint-utils.js
-  - popup.html
-  - popup.js
-  - style.css
-  - icons/ 資料夾
-  - lib/ 資料夾
-
-## 注意事項
-
-### Chrome Web Store 發布
-- OAuth 同意畫面需要等待 Google 審核
-- `REFRESH_TOKEN` 具有長期有效性，請妥善保管
-- 建議在本機測試 API 呼叫是否正常運作
-- Chrome Web Store 發布失敗不會影響 GitHub Release 的建立
-
-### 版本號管理
-- 使用語意化版本 (Semantic Versioning): `v主版本.次版本.修訂版本`
-- 例如: `v1.0.0`, `v1.1.0`, `v1.1.1`
-- 版本號會自動更新到 `manifest.json` 中
-
-### 檔案大小限制
-- Chrome Web Store 套件大小限制為 128MB
-- 建議保持套件精簡，移除不必要的檔案
-
-## 疑難排解
-
-### 常見問題
-
-#### 1. Chrome Web Store API 權限錯誤
-- 檢查 OAuth 設定是否正確
-- 確認 REFRESH_TOKEN 是否有效
-- 檢查擴充功能 ID 是否正確
-
-#### 2. 套件建構失敗
-- 檢查所有必要檔案是否存在
-- 確認 manifest.json 格式正確
-- 檢查檔案路徑是否正確
-
-#### 3. ESLint 檢查失敗
-- 執行行 `npm run lint:fix` 自動修正程式碼風格
-- 檢查程式碼是否符合 ESLint 規則
-
-### 本機測試
 ```bash
 # 安裝開發相依套件
 npm install
 
-# 執行行程式碼檢查
+# 程式碼風格檢查
 npm run lint
 
-# 建立測試套件（手動壓縮需上傳至 CWS 的檔案）
-zip -r test-package.zip manifest.json background.js content.js popup.html popup.js settings.html settings.js endpoint-utils.js style.css icons/ lib/
+# 建置三平台輸出至 dist/chrome、dist/edge、dist/safari
+npm run build
+
+# 執行完整測試套件（會先建置三平台產物）
+npm test
+
+# 打包三平台 ZIP 套件至 dist/
+npm run package
+
+# 同步提升版號（更新 package.json、platforms/base/manifest.base.json 與 Xcode MARKETING_VERSION）
+npm run bump:patch   # 或 bump:minor / bump:major
 ```
+
+### Safari Xcode 專案開發與建置（macOS）
+
+Safari 包裝專案位於 `platforms/safari/xcode/AskPage/AskPage.xcodeproj`，資源檔直接參照 `dist/safari/`：
+
+```bash
+npm run build:safari
+open platforms/safari/xcode/AskPage/AskPage.xcodeproj
+```
+
+或在終端機驗證編譯（未簽署檢查）：
+
+```bash
+xcodebuild -project platforms/safari/xcode/AskPage/AskPage.xcodeproj -scheme "AskPage" -configuration Debug CODE_SIGNING_ALLOWED=NO build
+```
+
+---
+
+## 疑難排解
+
+- **ESLint 檢查失敗**：執行 `npm run lint:fix` 自動修正風格問題。
+- **Chrome / Edge `run_js` 權限**：Chrome 138+ 與 Edge 138+ 需在擴充功能詳細資料頁啟用「Allow User Scripts / 允許使用者指令碼」。
+- **Edge API 401/403 錯誤**：請檢查 `EDGE_API_KEY` 是否已過期（預設約 72 天效期）。
+- **Safari 無法載入未簽署延伸功能**：請於 Safari「設定 → 進階」勾選「為網頁開發者顯示功能」，再於「開發」選單啟用「允許未簽署的延伸功能」。
+- **Safari 顯示權限不足或呼叫 Ollama Cloud / Gemini / Anthropic 出現網路連線異常**：請開啟 Safari「設定 → 延伸功能 → AskPage」，點擊 **「永遠允許於每個網站…」(Always Allow on Every Website…)**（或於「設定 → 網站 → 延伸功能 → AskPage」將「對於其他網站」設為「允許」），讓背景腳本可連線至 AI API 網域。
 
 ## 參考資源
 
 - [Chrome Web Store API 文件](https://developer.chrome.com/docs/webstore/using-api)
-- [GitHub Actions 文件](https://docs.github.com/en/actions)
-- [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/)
-- [Google Cloud Console](https://console.cloud.google.com/)
+- [Microsoft Edge Add-ons Publish REST API 文件](https://learn.microsoft.com/en-us/microsoft-edge/extensions-chromium/publish/api/using-addons-api)
+- [Packaging and Distributing Safari Web Extensions](https://developer.apple.com/documentation/safariservices/safari-web-extensions)

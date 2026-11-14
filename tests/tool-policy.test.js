@@ -8,7 +8,7 @@ const {
     classifyToolCallRisk,
     requiresExplicitApproval,
     buildToolPolicy
-} = require('../lib/tool-policy');
+} = require('../src/lib/tool-policy');
 
 // ===== 基礎風險分類 =====
 assert.strictEqual(classifyToolRisk('read_page'), TOOL_RISK.READ_ONLY);

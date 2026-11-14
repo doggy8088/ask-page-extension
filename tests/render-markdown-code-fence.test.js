@@ -6,9 +6,9 @@ const path = require('path');
 const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
-const marked = require(path.join(rootDir, 'lib', 'marked.min.js'));
-const zhTwMessages = require(path.join(rootDir, '_locales', 'zh_TW', 'messages.json'));
-const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
+const marked = require(path.join(rootDir, 'src', 'lib', 'marked.min.js'));
+const zhTwMessages = require(path.join(rootDir, 'src', '_locales', 'zh_TW', 'messages.json'));
+const contentScript = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
 
 function localizeMessage(key, substitutions = {}) {
     const message = zhTwMessages[key]?.message || key;

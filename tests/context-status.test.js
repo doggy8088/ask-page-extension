@@ -5,8 +5,8 @@ const fs = require('fs');
 const path = require('path');
 
 const rootDir = path.resolve(__dirname, '..');
-const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
-const i18nScript = fs.readFileSync(path.join(rootDir, 'i18n.js'), 'utf8');
+const contentScript = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
+const i18nScript = fs.readFileSync(path.join(rootDir, 'src', 'i18n.js'), 'utf8');
 
 assert.doesNotMatch(contentScript, /正在整理圖片與頁面上下文/);
 assert.doesNotMatch(contentScript, /正在整理頁面上下文/);

@@ -6,10 +6,10 @@ const path = require('path');
 const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
-const settingsHtml = fs.readFileSync(path.join(rootDir, 'settings.html'), 'utf8');
-const settingsScript = fs.readFileSync(path.join(rootDir, 'settings.js'), 'utf8');
-const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
-const anthropicToolsModule = require('../lib/anthropic-tools.js');
+const settingsHtml = fs.readFileSync(path.join(rootDir, 'src', 'settings.html'), 'utf8');
+const settingsScript = fs.readFileSync(path.join(rootDir, 'src', 'settings.js'), 'utf8');
+const contentScript = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
+const anthropicToolsModule = require('../src/lib/anthropic-tools.js');
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
 

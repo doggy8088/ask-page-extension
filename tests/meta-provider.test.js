@@ -6,9 +6,9 @@ const path = require('path');
 const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
-const settingsScript = fs.readFileSync(path.join(rootDir, 'settings.js'), 'utf8');
-const settingsHtml = fs.readFileSync(path.join(rootDir, 'settings.html'), 'utf8');
-const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
+const settingsScript = fs.readFileSync(path.join(rootDir, 'src', 'settings.js'), 'utf8');
+const settingsHtml = fs.readFileSync(path.join(rootDir, 'src', 'settings.html'), 'utf8');
+const contentScript = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
 
 const sandbox = {
     console,
@@ -51,7 +51,7 @@ assert.match(contentScript, /'meta'/);
 
 // Locales verification
 ['zh_TW', 'en', 'zh_CN', 'ja', 'ko'].forEach(locale => {
-    const localePath = path.join(rootDir, '_locales', locale, 'messages.json');
+    const localePath = path.join(rootDir, 'src', '_locales', locale, 'messages.json');
     const messages = JSON.parse(fs.readFileSync(localePath, 'utf8'));
     assert.ok(messages.providerMeta, `Missing providerMeta in ${locale}`);
     assert.strictEqual(messages.providerMeta.message, 'Meta AI');

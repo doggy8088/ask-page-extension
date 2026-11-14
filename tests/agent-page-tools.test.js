@@ -136,7 +136,7 @@ assert.deepStrictEqual(plain(emptyTagging.missingRefs), []);
 emptyTagging.cleanup();
 
 // ===== background.js 主世界腳本：語法正確且 askpage.ref() 可用 =====
-const backgroundSource = fs.readFileSync(path.join(__dirname, '..', 'background.js'), 'utf8');
+const backgroundSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'background.js'), 'utf8');
 const builderMatch = backgroundSource.match(/\n {4}function buildMainWorldExecutionScript\(sourceCode\) \{[\s\S]*?\n {4}\}\n/);
 assert.ok(builderMatch, '應能從 background.js 擷取 buildMainWorldExecutionScript');
 const buildMainWorldExecutionScript = new Function(`${builderMatch[0]}\nreturn buildMainWorldExecutionScript;`)();

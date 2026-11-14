@@ -4,8 +4,8 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const source = fs.readFileSync(path.join(__dirname, '..', 'content.js'), 'utf8');
-const settings = fs.readFileSync(path.join(__dirname, '..', 'settings.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'content.js'), 'utf8');
+const settings = fs.readFileSync(path.join(__dirname, '..', 'src', 'settings.js'), 'utf8');
 function section(text, start, end) {
     return text.slice(text.indexOf(start), text.indexOf(end, text.indexOf(start)));
 }

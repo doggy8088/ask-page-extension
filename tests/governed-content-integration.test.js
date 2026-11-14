@@ -9,9 +9,9 @@ const path = require('path');
 const vm = require('vm');
 
 const rootDir = path.join(__dirname, '..');
-const contentSource = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
-const policySource = fs.readFileSync(path.join(rootDir, 'lib', 'tool-policy.js'), 'utf8');
-const governanceSource = fs.readFileSync(path.join(rootDir, 'lib', 'tool-governance.js'), 'utf8');
+const contentSource = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
+const policySource = fs.readFileSync(path.join(rootDir, 'src', 'lib', 'tool-policy.js'), 'utf8');
+const governanceSource = fs.readFileSync(path.join(rootDir, 'src', 'lib', 'tool-governance.js'), 'utf8');
 
 function section(source, start, end) {
     const first = source.indexOf(start);

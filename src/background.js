@@ -1,3 +1,11 @@
+if (typeof globalThis.AskPagePlatform === 'undefined' && typeof importScripts === 'function') {
+    try {
+        importScripts('platform-adapter.js');
+    } catch (error) {
+        console.warn('[AskPage] Failed to load platform-adapter.js:', error);
+    }
+}
+
 function isIgnorableConnectionError(error) {
     const message = error?.message || String(error || '');
     return message.includes('Could not establish connection') ||
@@ -33,13 +41,22 @@ async function rememberPendingOptionsTab(tabId) {
     }
 }
 
+function getSessionStorageArea() {
+    return chrome.storage?.session || chrome.storage?.local;
+}
+
 async function rememberOptionsSourceTab(tab) {
     if (!tab || typeof tab.id !== 'number') {
         return;
     }
 
+    const storageArea = getSessionStorageArea();
+    if (!storageArea) {
+        return;
+    }
+
     try {
-        await chrome.storage.session.set({
+        await storageArea.set({
             [OPTIONS_SOURCE_TAB_STORAGE]: { id: tab.id }
         });
     } catch (error) {
@@ -48,8 +65,20 @@ async function rememberOptionsSourceTab(tab) {
 }
 
 async function reloadOptionsSourceTab() {
-    const result = await chrome.storage.session.get([OPTIONS_SOURCE_TAB_STORAGE]);
-    const sourceTab = result[OPTIONS_SOURCE_TAB_STORAGE];
+    const storageArea = getSessionStorageArea();
+    if (!storageArea) {
+        return { success: false, reason: 'source-tab-not-found' };
+    }
+
+    let result;
+    try {
+        result = await storageArea.get([OPTIONS_SOURCE_TAB_STORAGE]);
+    } catch (error) {
+        console.warn('[AskPage] Failed to read options source tab:', error);
+        return { success: false, reason: 'source-tab-not-found' };
+    }
+
+    const sourceTab = result?.[OPTIONS_SOURCE_TAB_STORAGE];
     if (!sourceTab || typeof sourceTab.id !== 'number') {
         return { success: false, reason: 'source-tab-not-found' };
     }
@@ -462,6 +491,16 @@ async function executeMainWorldJavaScript(tabId, code) {
         ].join('\n');
     }
 
+    const wrappedCode = buildMainWorldExecutionScript(code);
+    if (globalThis.AskPagePlatform && typeof globalThis.AskPagePlatform.executeMainWorldScript === 'function') {
+        return globalThis.AskPagePlatform.executeMainWorldScript({
+            tabId,
+            code,
+            wrappedCode,
+            createErrorResult
+        });
+    }
+
     const userScriptsError = await getUserScriptsAvailabilityError();
     if (userScriptsError) {
         return createErrorResult(userScriptsError, 'UserScriptsUnavailableError');
@@ -473,7 +512,7 @@ async function executeMainWorldJavaScript(tabId, code) {
         world: 'MAIN',
         js: [
             {
-                code: buildMainWorldExecutionScript(code)
+                code: wrappedCode
             }
         ]
     });
@@ -596,6 +635,34 @@ function postOllamaCloudProxyMessage(port, message) {
     }
 }
 
+async function getMissingHostPermissionError(requestUrl) {
+    const originMatch = String(requestUrl || '').match(/^https?:\/\/[^/]+/i);
+    if (!originMatch) {
+        return null;
+    }
+
+    if (typeof chrome === 'undefined' || !chrome.permissions || typeof chrome.permissions.contains !== 'function') {
+        return null;
+    }
+
+    const origin = originMatch[0];
+    try {
+        const hasPermission = await chrome.permissions.contains({ origins: [origin + '/*'] });
+        if (hasPermission !== false) {
+            return null;
+        }
+    } catch (_) {
+        return null;
+    }
+
+    const platformMessage = globalThis.AskPagePlatform?.getMissingHostPermissionMessage?.(origin);
+    const permissionError = new Error(
+        platformMessage || `AskPage 尚未取得連線至 ${origin} 的網站權限，請在瀏覽器的擴充功能設定中允許存取所有網站後再試一次。`
+    );
+    permissionError.name = 'HostPermissionError';
+    return permissionError;
+}
+
 chrome.runtime.onConnect.addListener((port) => {
     if (port.name !== LLM_API_FETCH_PORT) {
         return;
@@ -626,6 +693,7 @@ chrome.runtime.onConnect.addListener((port) => {
         requestStarted = true;
 
         (async () => {
+            let requestUrl = '';
             try {
                 let proxyRequest;
                 if (!message?.providerType || message.providerType === 'ollama-cloud') {
@@ -634,7 +702,8 @@ chrome.runtime.onConnect.addListener((port) => {
                     proxyRequest = getServiceWorkerProxyRequest(message);
                 }
                 const { providerType, endpoint, apiKey, requestBody } = proxyRequest;
-                const response = await fetch(getServiceWorkerRequestUrl(providerType, endpoint), {
+                requestUrl = getServiceWorkerRequestUrl(providerType, endpoint);
+                const response = await fetch(requestUrl, {
                     method: 'POST',
                     headers: getServiceWorkerRequestHeaders(providerType, apiKey),
                     body: JSON.stringify(requestBody),
@@ -693,11 +762,13 @@ chrome.runtime.onConnect.addListener((port) => {
                     return;
                 }
 
+                const missingPermissionError = await getMissingHostPermissionError(requestUrl);
+                const resolvedError = missingPermissionError || error;
                 postOllamaCloudProxyMessage(port, {
                     type: 'error',
                     error: {
-                        name: error?.name || 'Error',
-                        message: error?.message || 'Service Worker 請求失敗。'
+                        name: resolvedError?.name || 'Error',
+                        message: resolvedError?.message || 'Service Worker 請求失敗。'
                     }
                 });
             }

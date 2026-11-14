@@ -5,8 +5,8 @@ const fs = require('fs');
 const path = require('path');
 
 const rootDir = path.resolve(__dirname, '..');
-const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
-const backgroundScript = fs.readFileSync(path.join(rootDir, 'background.js'), 'utf8');
+const contentScript = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
+const backgroundScript = fs.readFileSync(path.join(rootDir, 'src', 'background.js'), 'utf8');
 const anthropicSectionStart = contentScript.indexOf('async function askAnthropic');
 const anthropicSection = contentScript.slice(anthropicSectionStart);
 

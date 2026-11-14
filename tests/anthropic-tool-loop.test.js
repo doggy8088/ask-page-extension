@@ -10,9 +10,9 @@ const {
 } = require('./helpers/mock-dom');
 
 const rootDir = path.resolve(__dirname, '..');
-const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
-const anthropicToolsModule = require('../lib/anthropic-tools.js');
-const toolPolicyModule = require('../lib/tool-policy.js');
+const contentScript = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
+const anthropicToolsModule = require('../src/lib/anthropic-tools.js');
+const toolPolicyModule = require('../src/lib/tool-policy.js');
 
 const body = createElement('body');
 const documentRef = createDocument(body, 'Anthropic 工具測試頁');

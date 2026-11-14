@@ -4,7 +4,7 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 ## Project Overview
 
-This is a Chrome extension called "頁問" (AskPage) that integrates with the Gemini AI API to answer questions about the current web page. The extension uses Manifest V3 and is written in vanilla JavaScript with no build framework.
+This is a multi-browser extension called "頁問" (AskPage) targeting **Chrome**, **MS Edge**, and **macOS Safari**, integrating with Gemini, OpenAI, Azure OpenAI, Anthropic, and other AI APIs to answer questions about the current web page. The extension uses Manifest V3 and is written in vanilla JavaScript with zero bundler dependencies, assembled per browser via Node.js scripts.
 
 ## Development Commands
 
@@ -15,21 +15,20 @@ npm run lint
 
 # Auto-fix ESLint issues
 npm run lint:fix
-
-# Validate extension structure (limited Manifest V3 support)
-npm run validate
 ```
 
 ### Building & Packaging
 ```bash
-# Complete build process (lint + validate + package)
+# Run lint + build all browser targets (dist/chrome, dist/edge, dist/safari)
 npm run build
 
-# Create distribution package
-npm run package
+# Build a single browser target without running lint
+npm run build:chrome
+npm run build:edge
+npm run build:safari
 
-# Run extension in development mode
-npm run dev
+# Build and create ZIP distribution packages for all targets
+npm run package
 
 # Clean build artifacts
 npm run clean
@@ -37,7 +36,7 @@ npm run clean
 
 ### Testing
 ```bash
-# Run the full test suite (41 test files, no external network required)
+# Build all targets and run the full test suite (42 test files, no external network required)
 npm test
 ```
 
@@ -45,26 +44,28 @@ npm test
 
 ### Core Components
 
-1. **Manifest V3 Structure** (`manifest.json`)
-   - Service worker background script
-   - Content script injection
-   - Popup action interface
-   - Keyboard shortcuts (Ctrl+I/MacCtrl+I)
+1. **Manifest V3 Structure** (`platforms/base/manifest.base.json` + `platforms/<target>/manifest.override.json`)
+   - Service worker background script (`src/background.js`)
+   - Content script injection (`src/content.js` and shared `src/lib/` modules)
+   - Popup action interface (`src/popup.html`, `src/popup.js`)
+   - Options page (`src/settings.html`, `src/settings.js`)
+   - Built per target into `dist/{chrome,edge,safari}/manifest.json`
 
-2. **Background Script** (`background.js`)
-   - Handles keyboard command events
-   - Sends messages to content script to toggle dialog
+2. **Background Script & Platform Adapters** (`src/background.js`, `platforms/*/platform-adapter.js`)
+   - Handles keyboard command events (`chrome.commands`)
+   - Proxies service-worker LLM API requests and captures screenshots
+   - Loads `platform-adapter.js` via `importScripts` to handle browser-specific `run_js` main-world execution (`chrome.userScripts` on Chrome/Edge; graceful fallback on Safari) and `chrome.storage.session` fallback
 
-3. **Content Script** (`content.js`)
+3. **Content Script** (`src/content.js`)
    - Main dialog UI creation and management
-   - Gemini API integration
+   - Multi-provider AI integration
    - Text selection handling
-   - Command system (`/clear`, `/summary`)
+   - Skill system (`/clear`, `/summary`, `/screenshot`, `/agent`, and user skills)
    - Prompt history management
    - Markdown rendering with DOMPurify sanitization
 
-4. **Popup Interface** (`popup.js`, `popup.html`)
-   - API key configuration
+4. **Popup & Settings Interface** (`src/popup.js`, `src/popup.html`, `src/settings.js`, `src/settings.html`)
+   - API key configuration and encryption
    - Settings management via Chrome storage API
 
 ### Key Features
@@ -93,14 +94,27 @@ npm test
 
 ### File Structure
 ```
-├── manifest.json          # Extension manifest
-├── background.js          # Service worker
-├── content.js            # Content script (main functionality)
-├── popup.html/popup.js   # Settings popup
-├── style.css             # Dialog styling
-├── icons/                # Extension icons
-├── lib/                  # External libraries
-└── dist/                 # Build output
+├── src/                      # Shared core extension source (all browsers)
+│   ├── background.js         # Service worker
+│   ├── content.js            # Content script (main functionality)
+│   ├── popup.html/popup.js   # Popup action
+│   ├── settings.html/js      # Options page
+│   ├── codepen.html/js       # CodePen preview helper
+│   ├── i18n.js               # Internationalization helper
+│   ├── endpoint-utils.js     # Endpoint validation
+│   ├── agent-glow.js         # Agent visual glow effect
+│   ├── style.css             # Dialog styling
+│   ├── icons/                # Extension icons
+│   ├── lib/                  # Third-party & shared libraries
+│   └── _locales/             # Locale catalogs
+├── platforms/                # Browser-specific overrides & adapters
+│   ├── base/manifest.base.json
+│   ├── chrome/               # Chrome manifest override + platform-adapter.js
+│   ├── edge/                 # MS Edge manifest override + platform-adapter.js
+│   └── safari/               # Safari manifest override, adapter, and xcode/ wrapper
+├── scripts/                  # Build, package, and version bump scripts
+├── tests/                    # Automated test suite
+└── dist/                     # Per-target build & ZIP output (gitignored)
 ```
 
 ## Development Notes

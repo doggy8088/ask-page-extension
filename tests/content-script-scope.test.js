@@ -10,7 +10,7 @@ const path = require('path');
 const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
-const manifest = JSON.parse(fs.readFileSync(path.join(rootDir, 'manifest.json'), 'utf8'));
+const manifest = JSON.parse(fs.readFileSync(path.join(rootDir, 'dist', 'chrome', 'manifest.json'), 'utf8'));
 const contentScriptFiles = manifest.content_scripts
     .filter((entry) => !entry.world || entry.world === 'ISOLATED')
     .flatMap((entry) => entry.js);
@@ -70,7 +70,7 @@ sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 
 for (const file of contentScriptFiles) {
-    const source = fs.readFileSync(path.join(rootDir, file), 'utf8');
+    const source = fs.readFileSync(path.join(rootDir, 'src', file), 'utf8');
     assert.doesNotThrow(
         () => vm.runInContext(source, sandbox, { filename: file }),
         `${file} 載入到共用作用域時不應拋出錯誤`

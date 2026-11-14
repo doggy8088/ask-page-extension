@@ -6,9 +6,9 @@ const path = require('path');
 const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
-const marked = require(path.join(rootDir, 'lib', 'marked.min.js'));
-const katex = require(path.join(rootDir, 'lib', 'katex', 'katex.min.js'));
-const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
+const marked = require(path.join(rootDir, 'src', 'lib', 'marked.min.js'));
+const katex = require(path.join(rootDir, 'src', 'lib', 'katex', 'katex.min.js'));
+const contentScript = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
 const renderCalls = [];
 
 const sandbox = {
@@ -182,7 +182,7 @@ const renderedFormula = katex.renderToString(screenshotFormula, {
 assert.match(renderedFormula, /class="katex"/);
 assert.doesNotMatch(renderedFormula, /class="katex-error"/);
 
-const manifest = JSON.parse(fs.readFileSync(path.join(rootDir, 'manifest.json'), 'utf8'));
+const manifest = JSON.parse(fs.readFileSync(path.join(rootDir, 'dist', 'chrome', 'manifest.json'), 'utf8'));
 const contentScripts = manifest.content_scripts[0].js;
 const katexIndex = contentScripts.indexOf('lib/katex/katex.min.js');
 const autoRenderIndex = contentScripts.indexOf('lib/katex/auto-render.min.js');
@@ -224,7 +224,7 @@ quirksSandbox.window = quirksSandbox;
 quirksSandbox.globalThis = quirksSandbox;
 
 vm.createContext(quirksSandbox);
-const katexSource = fs.readFileSync(path.join(rootDir, 'lib', 'katex', 'katex.min.js'), 'utf8');
+const katexSource = fs.readFileSync(path.join(rootDir, 'src', 'lib', 'katex', 'katex.min.js'), 'utf8');
 vm.runInContext(katexSource, quirksSandbox, { filename: 'katex.min.js' });
 
 assert.strictEqual(quirksWarnings.length, 0);

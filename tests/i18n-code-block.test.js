@@ -6,11 +6,11 @@ const path = require('path');
 const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
-const i18nScript = fs.readFileSync(path.join(rootDir, 'i18n.js'), 'utf8');
+const i18nScript = fs.readFileSync(path.join(rootDir, 'src', 'i18n.js'), 'utf8');
 const catalogs = Object.fromEntries(
     ['zh_TW', 'en', 'zh_CN', 'ja', 'ko'].map((locale) => [
         locale,
-        JSON.parse(fs.readFileSync(path.join(rootDir, '_locales', locale, 'messages.json'), 'utf8'))
+        JSON.parse(fs.readFileSync(path.join(rootDir, 'src', '_locales', locale, 'messages.json'), 'utf8'))
     ])
 );
 const expectedSystemPromptLanguageInstructions = {

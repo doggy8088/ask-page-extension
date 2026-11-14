@@ -6,17 +6,14 @@ const path = require('path');
 const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
-const source = fs.readFileSync(path.join(rootDir, 'endpoint-utils.js'), 'utf8');
-const manifest = JSON.parse(fs.readFileSync(path.join(rootDir, 'manifest.json'), 'utf8'));
+const source = fs.readFileSync(path.join(rootDir, 'src', 'endpoint-utils.js'), 'utf8');
+const manifest = JSON.parse(fs.readFileSync(path.join(rootDir, 'dist', 'chrome', 'manifest.json'), 'utf8'));
 const packageJson = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
-const settingsHtml = fs.readFileSync(path.join(rootDir, 'settings.html'), 'utf8');
-const settingsScript = fs.readFileSync(path.join(rootDir, 'settings.js'), 'utf8');
-const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
-const backgroundScript = fs.readFileSync(path.join(rootDir, 'background.js'), 'utf8');
-const releaseWorkflow = fs.readFileSync(path.join(rootDir, '.github/workflows/release.yml'), 'utf8');
-const manualBuildWorkflow = fs.readFileSync(path.join(rootDir, '.github/workflows/manual-build.yml'), 'utf8');
-const testReleaseScript = fs.readFileSync(path.join(rootDir, 'test-release.sh'), 'utf8');
-const publishDoc = fs.readFileSync(path.join(rootDir, 'PUBLISH.md'), 'utf8');
+const settingsHtml = fs.readFileSync(path.join(rootDir, 'src', 'settings.html'), 'utf8');
+const settingsScript = fs.readFileSync(path.join(rootDir, 'src', 'settings.js'), 'utf8');
+const contentScript = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
+const backgroundScript = fs.readFileSync(path.join(rootDir, 'src', 'background.js'), 'utf8');
+const buildScript = fs.readFileSync(path.join(rootDir, 'scripts', 'build.js'), 'utf8');
 
 const sandbox = { URL, console };
 sandbox.globalThis = sandbox;
@@ -183,12 +180,12 @@ assert.ok(
     && settingsHtml.indexOf('endpoint-utils.js') < settingsHtml.indexOf('settings.js'),
     'endpoint-utils.js must load before settings.js'
 );
-assert.match(packageJson.scripts.package, /endpoint-utils\.js/);
-for (const [name, content] of Object.entries({ releaseWorkflow, manualBuildWorkflow, testReleaseScript, publishDoc })) {
-    assert.ok(content.includes('endpoint-utils.js'), `${name} must package endpoint-utils.js`);
+assert.match(packageJson.scripts.package, /scripts\/package\.js/);
+assert.match(buildScript, /copyDirRecursive\(SRC_DIR,\s*targetDistDir/);
+for (const target of ['chrome', 'edge', 'safari']) {
+    const builtEndpointUtils = fs.readFileSync(path.join(rootDir, 'dist', target, 'endpoint-utils.js'), 'utf8');
+    assert.strictEqual(builtEndpointUtils, source, `${target} build must copy src/endpoint-utils.js`);
 }
-assert.match(manualBuildWorkflow, /FILES=\([^)]*"endpoint-utils\.js"/);
-assert.match(publishDoc, /zip -r test-package\.zip[^\n]*endpoint-utils\.js/);
 
 assert.match(settingsScript, /function validateEndpointOrThrow\(endpoint\)/);
 assert.match(settingsScript, /throw new Error\(t\(result\.messageKey\)\);/);

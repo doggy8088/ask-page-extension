@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const contentScript = fs.readFileSync(path.join(__dirname, '..', 'content.js'), 'utf8');
+const contentScript = fs.readFileSync(path.join(__dirname, '..', 'src', 'content.js'), 'utf8');
 
 function sliceSource(startMarker, endMarker) {
     const start = contentScript.indexOf(startMarker);

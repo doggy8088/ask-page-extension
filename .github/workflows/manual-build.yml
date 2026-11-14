@@ -20,6 +20,17 @@ jobs:
     steps:
     - name: 檢出程式碼
       uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 設定 Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+        cache: 'npm'
+
+    - name: 安裝相依套件
+      run: npm ci
 
     - name: 設定版本號
       id: version
@@ -28,90 +39,26 @@ jobs:
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "version_number=${VERSION#v}" >> $GITHUB_OUTPUT
 
-    - name: 更新 manifest.json 版本
+    - name: 建置並打包三平台套件
       run: |
         VERSION_NUMBER="${{ steps.version.outputs.version_number }}"
-        jq --arg version "$VERSION_NUMBER" '.version = $version' manifest.json > manifest_tmp.json
-        mv manifest_tmp.json manifest.json
-        echo "已更新版本號到: $VERSION_NUMBER"
+        node scripts/package.js --version="$VERSION_NUMBER"
 
-    - name: 檢查檔案完整性
-      run: |
-        echo "檢查檔案完整性..."
-
-        # 檢查基本檔案
-        FILES=("manifest.json" "background.js" "content.js" "popup.html" "popup.js" "settings.html" "settings.js" "codepen.html" "codepen.js" "i18n.js" "endpoint-utils.js" "agent-glow.js" "style.css" "_locales/en/messages.json" "_locales/zh_TW/messages.json")
-        for file in "${FILES[@]}"; do
-          if [ ! -f "$file" ]; then
-            echo "❌ 缺少檔案: $file"
+        for target in chrome edge safari; do
+          pkg="dist/AskPageExtension-${target}_v${VERSION_NUMBER}.zip"
+          if [ ! -f "$pkg" ]; then
+            echo "❌ 缺少打包產物: $pkg"
             exit 1
           fi
+          SIZE=$(du -k "$pkg" | cut -f1)
+          echo "$target 套件大小: ${SIZE}KB ($pkg)"
         done
-
-        # 檢查圖示檔案
-        ICONS=("icons/icon16.png" "icons/icon48.png" "icons/icon128.png")
-        for icon in "${ICONS[@]}"; do
-          if [ ! -f "$icon" ]; then
-            echo "❌ 缺少圖示檔案: $icon"
-            exit 1
-          fi
-        done
-
-        # 檢查函式庫檔案
-        LIBS=("lib/marked.min.js" "lib/purify.min.js")
-        for lib in "${LIBS[@]}"; do
-          if [ ! -f "$lib" ]; then
-            echo "❌ 缺少函式庫檔案: $lib"
-            exit 1
-          fi
-        done
-
-        echo "✅ 所有檔案檢查通過"
-
-    - name: 建立套件
-      run: |
-        VERSION="${{ steps.version.outputs.version }}"
-        PACKAGE_NAME="AskPageExtension_${VERSION}.zip"
-
-        # 建立 ZIP 套件
-        zip -r "$PACKAGE_NAME" \
-          manifest.json \
-          background.js \
-          content.js \
-          popup.html \
-          popup.js \
-          settings.html \
-          settings.js \
-          codepen.html \
-          codepen.js \
-          i18n.js \
-          endpoint-utils.js \
-          agent-glow.js \
-          style.css \
-          icons/ \
-          lib/ \
-          _locales/ \
-          -x "*.git*" "*.DS_Store*" "*node_modules*"
-
-        # 檢查套件大小
-        SIZE=$(du -k "$PACKAGE_NAME" | cut -f1)
-        echo "套件大小: ${SIZE}KB"
-
-        if [ $SIZE -gt 20480 ]; then  # 20MB
-          echo "⚠️ 警告: 套件大小較大 (${SIZE}KB)"
-        fi
-
-        echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-
-        # 顯示套件內容
-        echo "套件內容:"
-        unzip -l "$PACKAGE_NAME"
 
     - name: 上傳套件到 Artifacts
       uses: actions/upload-artifact@v7
       with:
-        name: extension-package-${{ steps.version.outputs.version }}
-        path: ${{ env.PACKAGE_NAME }}
+        name: extension-packages-${{ steps.version.outputs.version }}
+        path: dist/AskPageExtension-*_v${{ steps.version.outputs.version_number }}.zip
 
     - name: 建立 GitHub Release
       if: ${{ github.event.inputs.create_release == 'true' }}
@@ -119,7 +66,10 @@ jobs:
       with:
         tag_name: ${{ steps.version.outputs.version }}
         name: 頁問 ${{ steps.version.outputs.version }}
-        files: ${{ env.PACKAGE_NAME }}
+        files: |
+          dist/AskPageExtension-chrome_v${{ steps.version.outputs.version_number }}.zip
+          dist/AskPageExtension-edge_v${{ steps.version.outputs.version_number }}.zip
+          dist/AskPageExtension-safari_v${{ steps.version.outputs.version_number }}.zip
         generate_release_notes: true
         draft: true
         prerelease: false
@@ -128,14 +78,16 @@ jobs:
 
     - name: 建構總結
       run: |
-        echo "## 套件建構完成 ✅" >> $GITHUB_STEP_SUMMARY
+        VERSION_NUMBER="${{ steps.version.outputs.version_number }}"
+        echo "## 多平台套件建構完成 ✅" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 套件資訊:" >> $GITHUB_STEP_SUMMARY
-        echo "- 📦 檔案名稱: \`${{ env.PACKAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- 🏷️ 版本號: \`${{ steps.version.outputs.version_number }}\`" >> $GITHUB_STEP_SUMMARY
-
-        SIZE=$(du -k "${{ env.PACKAGE_NAME }}" | cut -f1)
-        echo "- 📏 檔案大小: ${SIZE}KB" >> $GITHUB_STEP_SUMMARY
+        echo "- 🏷️ 版本號: \`${VERSION_NUMBER}\`" >> $GITHUB_STEP_SUMMARY
+        for target in chrome edge safari; do
+          pkg="dist/AskPageExtension-${target}_v${VERSION_NUMBER}.zip"
+          SIZE=$(du -k "$pkg" | cut -f1)
+          echo "- 📦 ${target}: \`${pkg}\` (${SIZE}KB)" >> $GITHUB_STEP_SUMMARY
+        done
         echo "" >> $GITHUB_STEP_SUMMARY
 
         if [ "${{ github.event.inputs.create_release }}" = "true" ]; then
@@ -143,5 +95,5 @@ jobs:
           echo "已建立草稿 Release，請前往 [Releases](../../releases) 頁面檢查並發布" >> $GITHUB_STEP_SUMMARY
         else
           echo "### 📥 下載套件" >> $GITHUB_STEP_SUMMARY
-          echo "套件已上傳到 Artifacts，請到 Actions 頁面下載" >> $GITHUB_STEP_SUMMARY
+          echo "三平台套件已上傳到 Artifacts，請到 Actions 頁面下載" >> $GITHUB_STEP_SUMMARY
         fi

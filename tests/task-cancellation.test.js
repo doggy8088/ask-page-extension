@@ -6,8 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const rootDir = path.resolve(__dirname, '..');
-const contentScript = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
-const styleSheet = fs.readFileSync(path.join(rootDir, 'style.css'), 'utf8');
+const contentScript = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
+const styleSheet = fs.readFileSync(path.join(rootDir, 'src', 'style.css'), 'utf8');
 
 assert.match(contentScript, /let activeAskTask = null;/);
 assert.match(contentScript, /const controller = new AbortController\(\);/);

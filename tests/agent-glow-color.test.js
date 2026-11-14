@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const root = path.join(__dirname, '..');
-const content = fs.readFileSync(path.join(root, 'content.js'), 'utf8');
+const content = fs.readFileSync(path.join(root, 'src', 'content.js'), 'utf8');
 const nodes = new Map();
 let storedColor;
 let finishFade;
@@ -35,7 +35,7 @@ const sandbox = {
     }
 };
 vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.join(root, 'agent-glow.js'), 'utf8'), sandbox);
+vm.runInContext(fs.readFileSync(path.join(root, 'src', 'agent-glow.js'), 'utf8'), sandbox);
 const api = sandbox.AskPageAgentGlow;
 const start = content.indexOf('async function getAgentGlowEffectEnabled(');
 const end = content.indexOf('async function captureViewportScreenshot(', start);
@@ -94,10 +94,10 @@ vm.runInContext(content.slice(content.indexOf('    async function askAI('), cont
             assert(!nodes.has(sandbox.AGENT_GLOW_OVERLAY_ID));
         }
     }
-    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'dist', 'chrome', 'manifest.json'), 'utf8'));
     const scripts = manifest.content_scripts[0].js;
     assert(scripts.indexOf('agent-glow.js') >= 0 && scripts.indexOf('agent-glow.js') < scripts.indexOf('content.js'));
-    const html = fs.readFileSync(path.join(root, 'settings.html'), 'utf8');
+    const html = fs.readFileSync(path.join(root, 'src', 'settings.html'), 'utf8');
     assert(html.indexOf('src="agent-glow.js"') < html.indexOf('src="settings.js"'));
     console.log('agent-glow-color: ok');
 })().catch((error) => {

@@ -1,0 +1,147 @@
+name: Safari 自動打包與上架 (App Store Connect)
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+jobs:
+  check-safari-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+
+    steps:
+    - name: Check Apple Signing & App Store Connect Secrets
+      id: check
+      env:
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
+        CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+        EXTENSION_PROVISIONING_PROFILE_BASE64: ${{ secrets.EXTENSION_PROVISIONING_PROFILE_BASE64 }}
+        APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+        APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+      run: |
+        missing=()
+        [ -z "$APPLE_TEAM_ID" ] && missing+=("APPLE_TEAM_ID")
+        [ -z "$CERTIFICATE_P12_BASE64" ] && missing+=("CERTIFICATE_P12_BASE64")
+        [ -z "$CERTIFICATE_PASSWORD" ] && missing+=("CERTIFICATE_PASSWORD")
+        [ -z "$PROVISIONING_PROFILE_BASE64" ] && missing+=("PROVISIONING_PROFILE_BASE64")
+        [ -z "$EXTENSION_PROVISIONING_PROFILE_BASE64" ] && missing+=("EXTENSION_PROVISIONING_PROFILE_BASE64")
+        [ -z "$APPSTORE_KEY_ID" ] && missing+=("APPSTORE_KEY_ID")
+        [ -z "$APPSTORE_ISSUER_ID" ] && missing+=("APPSTORE_ISSUER_ID")
+        [ -z "$APPSTORE_PRIVATE_KEY" ] && missing+=("APPSTORE_PRIVATE_KEY")
+
+        if [ ${#missing[@]} -gt 0 ]; then
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "## 略過 Safari App Store Connect 自動上架" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "尚未設定完整的 Apple 簽署與 App Store Connect secrets（缺少: $(IFS=', '; echo "${missing[*]}")）。" >> "$GITHUB_STEP_SUMMARY"
+          echo "已略過 macos-latest 建置工作；請參考 PUBLISH.md 補齊憑證與 secrets 後即可啟用。" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+        fi
+
+  publish-safari:
+    needs: check-safari-secrets
+    if: needs.check-safari-secrets.outputs.configured == 'true'
+    runs-on: macos-latest
+
+    steps:
+    - name: 取出程式碼
+      uses: actions/checkout@v7
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+        cache: 'npm'
+
+    - name: 建置 Safari 擴充功能資源
+      run: |
+        npm ci
+        npm run build:safari
+
+    - name: 安裝 Apple 簽署憑證與 Provisioning Profiles
+      env:
+        CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
+        CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+        EXTENSION_PROVISIONING_PROFILE_BASE64: ${{ secrets.EXTENSION_PROVISIONING_PROFILE_BASE64 }}
+      run: |
+        CERT_PATH="$RUNNER_TEMP/mac-app-dist.p12"
+        PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+        mkdir -p "$PROFILE_DIR"
+
+        echo "$CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
+        echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_DIR/AskPageApp.provisionprofile"
+        echo "$EXTENSION_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_DIR/AskPageExtension.provisionprofile"
+
+        KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+        KEYCHAIN_PASS="askpage-ci-temp-keychain"
+        security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 3600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+        security import "$CERT_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+        security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+    - name: 封存與匯出 macOS Safari App (.pkg)
+      env:
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>method</key>
+          <string>app-store-connect</string>
+          <key>teamID</key>
+          <string>${APPLE_TEAM_ID}</string>
+        </dict>
+        </plist>
+        EOF
+
+        xcodebuild clean archive \
+          -project platforms/safari/xcode/AskPage/AskPage.xcodeproj \
+          -scheme "AskPage" \
+          -configuration Release \
+          -archivePath "$RUNNER_TEMP/AskPage.xcarchive" \
+          DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+
+        xcodebuild -exportArchive \
+          -archivePath "$RUNNER_TEMP/AskPage.xcarchive" \
+          -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+          -exportPath "$RUNNER_TEMP/export"
+
+    - name: 上傳至 App Store Connect
+      env:
+        APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+        APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+      run: |
+        mkdir -p "$HOME/.appstoreconnect/private_keys"
+        printf '%s\n' "$APPSTORE_PRIVATE_KEY" > "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+
+        PKG_PATH=$(find "$RUNNER_TEMP/export" -name "*.pkg" | head -n 1)
+        if [ -z "$PKG_PATH" ]; then
+          echo "❌ 找不到匯出的 .pkg 檔案"
+          exit 1
+        fi
+
+        xcrun altool --upload-app \
+          -f "$PKG_PATH" \
+          -t osx \
+          --apiKey "$APPSTORE_KEY_ID" \
+          --apiIssuer "$APPSTORE_ISSUER_ID"
+
+    - name: 清理臨時憑證與金鑰
+      if: always()
+      run: |
+        security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
+        rm -f "$RUNNER_TEMP/mac-app-dist.p12" "$RUNNER_TEMP/ExportOptions.plist"
+        rm -rf "$HOME/.appstoreconnect/private_keys"

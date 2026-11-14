@@ -60,22 +60,22 @@ module.exports = {
   },
   overrides: [
     {
-      // 針對 background.js 的特殊規則
-      files: ['background.js'],
+      // 針對 background.js 與各瀏覽器平台適配器
+      files: ['src/background.js', 'platforms/*/platform-adapter.js'],
       env: {
         serviceworker: true
       }
     },
     {
       // 針對 content.js 的特殊規則
-      files: ['content.js'],
+      files: ['src/content.js'],
       env: {
         browser: true
       }
     },
     {
       // 針對 popup.js 的特殊規則
-      files: ['popup.js'],
+      files: ['src/popup.js'],
       env: {
         browser: true
       },
@@ -86,9 +86,16 @@ module.exports = {
     },
     {
       // 治理層同時在瀏覽器（content script）與 Node（測試）中使用
-      files: ['lib/tool-policy.js', 'lib/tool-governance.js', 'lib/anthropic-tools.js'],
+      files: ['src/lib/tool-policy.js', 'src/lib/tool-governance.js', 'src/lib/anthropic-tools.js'],
       env: {
         browser: true,
+        node: true
+      }
+    },
+    {
+      // 建置與版本工具腳本執行於 Node.js
+      files: ['scripts/*.js'],
+      env: {
         node: true
       }
     }

@@ -6,13 +6,11 @@
   "default_locale": "zh_TW",
   "permissions": [
     "storage",
-    "activeTab",
-    "userScripts"
+    "activeTab"
   ],
   "host_permissions": [
     "*://*/*"
   ],
-  "minimum_chrome_version": "135",
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",

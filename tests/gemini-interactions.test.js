@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'content.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'content.js'), 'utf8');
 const plain = (value) => JSON.parse(JSON.stringify(value));
 function section(start, end) {
     const first = source.indexOf(start);
@@ -52,7 +52,7 @@ const sandbox = {
 };
 // Exercise the real content-to-worker transport while page-origin fetch is blocked.
 let onWorkerConnect;
-const backgroundSource = fs.readFileSync(path.join(__dirname, '..', 'background.js'), 'utf8');
+const backgroundSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'background.js'), 'utf8');
 const workerSandbox = {
     AbortController, TextDecoder,
     fetch: async (url, options) => {

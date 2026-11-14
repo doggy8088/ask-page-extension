@@ -7,10 +7,10 @@ const vm = require('vm');
 const { webcrypto } = require('crypto');
 
 const rootDir = path.resolve(__dirname, '..');
-const settingsSource = fs.readFileSync(path.join(rootDir, 'settings.js'), 'utf8');
-const contentSource = fs.readFileSync(path.join(rootDir, 'content.js'), 'utf8');
-const backgroundSource = fs.readFileSync(path.join(rootDir, 'background.js'), 'utf8');
-const zhTwCatalog = JSON.parse(fs.readFileSync(path.join(rootDir, '_locales/zh_TW/messages.json'), 'utf8'));
+const settingsSource = fs.readFileSync(path.join(rootDir, 'src', 'settings.js'), 'utf8');
+const contentSource = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
+const backgroundSource = fs.readFileSync(path.join(rootDir, 'src', 'background.js'), 'utf8');
+const zhTwCatalog = JSON.parse(fs.readFileSync(path.join(rootDir, 'src/_locales/zh_TW/messages.json'), 'utf8'));
 
 function section(source, start, end) {
     const first = source.indexOf(start);

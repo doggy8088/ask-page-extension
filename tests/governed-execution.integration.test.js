@@ -1,10 +1,10 @@
 'use strict';
 
 const assert = require('assert');
-const { buildToolPolicy } = require('../lib/tool-policy');
+const { buildToolPolicy } = require('../src/lib/tool-policy');
 const {
     executeGovernedToolCall
-} = require('../lib/tool-governance');
+} = require('../src/lib/tool-governance');
 
 // 依治理層的 createBlockedResult 契約，把阻擋結果轉成既有工具結果格式。
 function blockedResult({
