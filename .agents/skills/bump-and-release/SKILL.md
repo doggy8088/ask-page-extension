@@ -121,12 +121,12 @@ npm run bump:minor
 npm run bump:major
 ~~~
 
-腳本會同步更新 platforms/base/manifest.base.json、package.json 與 platforms/safari/xcode/AskPage/AskPage.xcodeproj/project.xcproj。執行後檢查：
+腳本會同步更新 platforms/base/manifest.base.json、package.json 與 platforms/safari/xcode/AskPage/AskPage.xcodeproj/project.pbxproj。執行後檢查：
 
 ~~~sh
 node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('platforms/base/manifest.base.json')); const p=JSON.parse(fs.readFileSync('package.json')); if(m.version!==p.version) throw new Error('版本號不同步'); console.log(m.version)"
 git diff --check
-git diff -- platforms/base/manifest.base.json package.json platforms/safari/xcode/AskPage/AskPage.xcodeproj/project.xcproj
+git diff -- platforms/base/manifest.base.json package.json platforms/safari/xcode/AskPage/AskPage.xcodeproj/project.pbxproj
 ~~~
 
 若先行提交已經包含版本變更，仍以該提交後的目前版本作為本次執行基準，再依上述規則提升一次；不得把既有版本變更視為本次 bump 的替代品。
@@ -148,7 +148,7 @@ git diff -- platforms/base/manifest.base.json package.json platforms/safari/xcod
 
 ~~~sh
 git diff --check
-git diff -- CHANGELOG.md platforms/base/manifest.base.json package.json platforms/safari/xcode/AskPage/AskPage.xcodeproj/project.xcproj
+git diff -- CHANGELOG.md platforms/base/manifest.base.json package.json platforms/safari/xcode/AskPage/AskPage.xcodeproj/project.pbxproj
 ~~~
 
 ### 6. 驗證、提交、推送並確認 CI

@@ -111,16 +111,23 @@ function createBackgroundSandbox({ userAgent, userScripts, hasSessionStorage = t
     const baseManifest = JSON.parse(
         fs.readFileSync(path.join(rootDir, 'platforms', 'base', 'manifest.base.json'), 'utf8')
     );
+    const xcodeProjectDir = path.join(rootDir, 'platforms', 'safari', 'xcode', 'AskPage', 'AskPage.xcodeproj');
+    assert.strictEqual(
+        fs.existsSync(path.join(xcodeProjectDir, 'project.xcproj')),
+        false,
+        'Safari Xcode project must not use Xcode-27-only project.xcproj format'
+    );
     const xcodeProject = fs.readFileSync(
-        path.join(rootDir, 'platforms', 'safari', 'xcode', 'AskPage', 'AskPage.xcodeproj', 'project.xcproj'),
+        path.join(xcodeProjectDir, 'project.pbxproj'),
         'utf8'
     );
     const expectedVersion = packageJson.version;
 
     assert.strictEqual(baseManifest.version, expectedVersion);
-    assert.ok(
-        xcodeProject.includes(`"MARKETING_VERSION": "${expectedVersion}"`),
-        'Safari Xcode MARKETING_VERSION must stay synced with package.json'
+    assert.match(
+        xcodeProject,
+        /\bobjectVersion = 56;/,
+        'Safari Xcode project must stay compatible with Xcode 26 CI runners'
     );
 
     const requiredDistFiles = [
@@ -178,16 +185,21 @@ function createBackgroundSandbox({ userAgent, userScripts, hasSessionStorage = t
     assert.strictEqual('service_worker' in manifests.safari.background, false);
     assert.deepStrictEqual(manifests.safari.background.scripts, ['platform-adapter.js', 'background.js']);
 
-    const appTargetStart = xcodeProject.indexOf('"name": "AskPage"');
-    const extensionTargetStart = xcodeProject.indexOf('"name": "AskPage Extension"');
-    const rootSettingsStart = xcodeProject.indexOf('"ALWAYS_SEARCH_USER_PATHS"');
-    assert.notStrictEqual(appTargetStart, -1);
-    assert.notStrictEqual(extensionTargetStart, -1);
-    assert.notStrictEqual(rootSettingsStart, -1);
-    const appTargetSection = xcodeProject.slice(appTargetStart, extensionTargetStart);
-    const extensionTargetSection = xcodeProject.slice(extensionTargetStart, rootSettingsStart);
-    assert.match(appTargetSection, /"ENABLE_OUTGOING_NETWORK_CONNECTIONS":\s*"YES"/);
-    assert.match(extensionTargetSection, /"ENABLE_OUTGOING_NETWORK_CONNECTIONS":\s*"YES"/);
+    const configBlocks = [...xcodeProject.matchAll(/isa = XCBuildConfiguration;\s*buildSettings = \{([\s\S]*?)\};/g)]
+        .map((match) => match[1]);
+    const appConfigs = configBlocks.filter((block) => /\bPRODUCT_BUNDLE_IDENTIFIER = com\.doggy8088\.AskPage;/.test(block));
+    const extConfigs = configBlocks.filter((block) => /\bPRODUCT_BUNDLE_IDENTIFIER = com\.doggy8088\.AskPage\.Extension;/.test(block));
+    assert.strictEqual(appConfigs.length, 2, 'Expected Debug and Release configs for AskPage');
+    assert.strictEqual(extConfigs.length, 2, 'Expected Debug and Release configs for AskPage Extension');
+    for (const block of [...appConfigs, ...extConfigs]) {
+        assert.ok(
+            block.includes(`MARKETING_VERSION = ${expectedVersion};`),
+            'Safari Xcode MARKETING_VERSION must stay synced with package.json'
+        );
+        assert.match(block, /\bENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;/);
+        assert.match(block, /\bENABLE_APP_SANDBOX = YES;/);
+        assert.match(block, /\bENABLE_HARDENED_RUNTIME = YES;/);
+    }
 
     // Safari builds must escape non-ASCII in .js files to pure 7-bit ASCII so WebKit's charset-less
     // _generated_background_page.html never triggers Big5-HKSCS mojibake.

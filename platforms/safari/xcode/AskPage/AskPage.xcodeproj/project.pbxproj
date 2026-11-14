@@ -1,0 +1,656 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		063720051C25CE53F0AEE146 /* endpoint-utils.js in Resources */ = {isa = PBXBuildFile; fileRef = 4E4ECADA86E93BC24590A4CC /* endpoint-utils.js */; };
+		09F5A38C5E09268271C6EBC3 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 7692766135C15194FC79D24E /* manifest.json */; };
+		12B62E8A6B966CF2E5E42850 /* AskPage Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BE9BE48230A8D23300F62CDA /* AskPage Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		15A46E4B7511DDB355AE907D /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = 06225783F4DE08619E740DF4 /* Style.css */; };
+		1C4765119B6120C8E3F2C11D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 1A4A424A31C150EA9826A369 /* Main.storyboard */; };
+		1EE12DED8E6B1A94A12B93E0 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 591CE1D4A1F72C7C3ACD1EEA /* Icon.png */; };
+		22A6099F435A56BCD87C4BF3 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07329972DED3E7DA1B905B17 /* SafariWebExtensionHandler.swift */; };
+		236817D8E39E83A2E04FD1B4 /* settings.js in Resources */ = {isa = PBXBuildFile; fileRef = D6779A67050FBD2962E76B98 /* settings.js */; };
+		262D1B73534673F71BE5CC84 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 46638929A181934E0890C87F /* README.md */; };
+		30D7B8B79BE68C4266C4C888 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFA579ADD2CA8CA9D37AFA4E /* AppDelegate.swift */; };
+		37910505D8464606CB839044 /* settings.html in Resources */ = {isa = PBXBuildFile; fileRef = 2B5DEFE041229390EC217510 /* settings.html */; };
+		4AA688CDC322EE8335C03B12 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4701C0EE7DEBE89274C2E667 /* Assets.xcassets */; };
+		4BB238999AD767E5B90CD865 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = F3A764879688A657C83CFE79 /* background.js */; };
+		62D25F92C260A526C6E69040 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = 08D53C56A5B93AFD125F9640 /* Main.html */; };
+		6A60C82C8A7E885D96DA38DA /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = DA9DC8811D69C98B417BBEE0 /* popup.js */; };
+		7D45EB2B04143A9D83D49CB8 /* CHANGELOG.md in Resources */ = {isa = PBXBuildFile; fileRef = 6522E231EA17707E02F71708 /* CHANGELOG.md */; };
+		854CBA5FB7CFEEE109BA0D04 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 39B6ACA733840BF762AA8D2E /* popup.html */; };
+		888435795C4C8445E3717097 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37ACAFB88FAC1EABBB7AA712 /* ViewController.swift */; };
+		8D37D0378A5CD8B99C20296D /* style.css in Resources */ = {isa = PBXBuildFile; fileRef = 3B1479082CAEA52AA95C3F4A /* style.css */; };
+		8F1CCC8E907B2536F6A6B6B5 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = B42F2BE56906F5C5A328A8D6 /* Script.js */; };
+		98040E23A9605EC2CD3124B0 /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 1C4C0DFE06250AC548C5CBCB /* content.js */; };
+		AD9D2E3200C14B1AC1C88ACB /* agent-glow.js in Resources */ = {isa = PBXBuildFile; fileRef = 3574C39B53DEBCF398A3C659 /* agent-glow.js */; };
+		B0FF8A418DB999FD6DF7C168 /* i18n.js in Resources */ = {isa = PBXBuildFile; fileRef = 2E0539A5F0D935B6B8908B18 /* i18n.js */; };
+		BEFB293A2DF6B7C841E4DADB /* icons in Resources */ = {isa = PBXBuildFile; fileRef = 6E0CB5A2940E4D1432B00805 /* icons */; };
+		C0B02B83437055DFAA9530D8 /* platform-adapter.js in Resources */ = {isa = PBXBuildFile; fileRef = CECCC9308609E780E83AD873 /* platform-adapter.js */; };
+		C8C51ABAF4F11B75DA417AF0 /* codepen.js in Resources */ = {isa = PBXBuildFile; fileRef = 91478FA333D30C8290A2EA2A /* codepen.js */; };
+		DA8E03E79307700EE3457519 /* lib in Resources */ = {isa = PBXBuildFile; fileRef = 0906E01FD4C2DD860E54012C /* lib */; };
+		DD2F645750B0E695AD667F31 /* codepen.html in Resources */ = {isa = PBXBuildFile; fileRef = A330E62F9387B34626136563 /* codepen.html */; };
+		ECB2B9A14E68C5CB247F1741 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 3DF7EDA9212525F75398B25D /* _locales */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		ECE708B79EEC7AFCC765F56E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 09ECEF83103ACDBA3D708564 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BE9BE48130A8D23300F62CDA;
+			remoteInfo = "AskPage Extension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		833F62B772CD39D9D4F4DFA2 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				12B62E8A6B966CF2E5E42850 /* AskPage Extension.appex in Embed Foundation Extensions */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			name = "Embed Foundation Extensions";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		06225783F4DE08619E740DF4 /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
+		07329972DED3E7DA1B905B17 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		0906E01FD4C2DD860E54012C /* lib */ = {isa = PBXFileReference; lastKnownFileType = folder; name = lib; path = ../../../../../dist/safari/lib; sourceTree = "<group>"; };
+		1C4C0DFE06250AC548C5CBCB /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = content.js; path = ../../../../../dist/safari/content.js; sourceTree = "<group>"; };
+		2B5DEFE041229390EC217510 /* settings.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = settings.html; path = ../../../../../dist/safari/settings.html; sourceTree = "<group>"; };
+		2E0539A5F0D935B6B8908B18 /* i18n.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = i18n.js; path = ../../../../../dist/safari/i18n.js; sourceTree = "<group>"; };
+		3574C39B53DEBCF398A3C659 /* agent-glow.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "agent-glow.js"; path = "../../../../../dist/safari/agent-glow.js"; sourceTree = "<group>"; };
+		37ACAFB88FAC1EABBB7AA712 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		39B6ACA733840BF762AA8D2E /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = popup.html; path = ../../../../../dist/safari/popup.html; sourceTree = "<group>"; };
+		3B1479082CAEA52AA95C3F4A /* style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = style.css; path = ../../../../../dist/safari/style.css; sourceTree = "<group>"; };
+		3DF7EDA9212525F75398B25D /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; name = _locales; path = ../../../../../dist/safari/_locales; sourceTree = "<group>"; };
+		46638929A181934E0890C87F /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = ../../../../../dist/safari/README.md; sourceTree = "<group>"; };
+		4670092D8D033909474ACAC6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4701C0EE7DEBE89274C2E667 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		4E4ECADA86E93BC24590A4CC /* endpoint-utils.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "endpoint-utils.js"; path = "../../../../../dist/safari/endpoint-utils.js"; sourceTree = "<group>"; };
+		591CE1D4A1F72C7C3ACD1EEA /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		6522E231EA17707E02F71708 /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = CHANGELOG.md; path = ../../../../../dist/safari/CHANGELOG.md; sourceTree = "<group>"; };
+		67C030A95A5975CA0FC8AEB2 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		6A6C80F87DCE72D571E09C22 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
+		6E0CB5A2940E4D1432B00805 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = ../../../../../dist/safari/icons; sourceTree = "<group>"; };
+		7692766135C15194FC79D24E /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = ../../../../../dist/safari/manifest.json; sourceTree = "<group>"; };
+		8C630FBFE2C0AB8EBBBDF66F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		91478FA333D30C8290A2EA2A /* codepen.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = codepen.js; path = ../../../../../dist/safari/codepen.js; sourceTree = "<group>"; };
+		A330E62F9387B34626136563 /* codepen.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = codepen.html; path = ../../../../../dist/safari/codepen.html; sourceTree = "<group>"; };
+		B42F2BE56906F5C5A328A8D6 /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
+		BE9BE46730A8D23200F62CDA /* AskPage.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AskPage.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE9BE48230A8D23300F62CDA /* AskPage Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "AskPage Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CECCC9308609E780E83AD873 /* platform-adapter.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "platform-adapter.js"; path = "../../../../../dist/safari/platform-adapter.js"; sourceTree = "<group>"; };
+		D6779A67050FBD2962E76B98 /* settings.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = settings.js; path = ../../../../../dist/safari/settings.js; sourceTree = "<group>"; };
+		DA9DC8811D69C98B417BBEE0 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = popup.js; path = ../../../../../dist/safari/popup.js; sourceTree = "<group>"; };
+		DFA579ADD2CA8CA9D37AFA4E /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		F3A764879688A657C83CFE79 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = ../../../../../dist/safari/background.js; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		37FC84FD081F6DBF50C0CEBB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A29ED87460AB249CE3973F90 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0193E3AE33385D83EDC18F7B = {
+			isa = PBXGroup;
+			children = (
+				5F6BAF507A9E009FEE8EE6CF /* AskPage */,
+				652B1A5275BFB186AE7A8AD2 /* AskPage Extension */,
+				464AD41A688F61F8984CA7A8 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		464AD41A688F61F8984CA7A8 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BE9BE46730A8D23200F62CDA /* AskPage.app */,
+				BE9BE48230A8D23300F62CDA /* AskPage Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5F6BAF507A9E009FEE8EE6CF /* AskPage */ = {
+			isa = PBXGroup;
+			children = (
+				DFA579ADD2CA8CA9D37AFA4E /* AppDelegate.swift */,
+				37ACAFB88FAC1EABBB7AA712 /* ViewController.swift */,
+				1A4A424A31C150EA9826A369 /* Main.storyboard */,
+				4701C0EE7DEBE89274C2E667 /* Assets.xcassets */,
+				4670092D8D033909474ACAC6 /* Info.plist */,
+				FDA4416DCA4FD25288CAE168 /* Resources */,
+			);
+			path = AskPage;
+			sourceTree = "<group>";
+		};
+		652B1A5275BFB186AE7A8AD2 /* AskPage Extension */ = {
+			isa = PBXGroup;
+			children = (
+				C2B9B26420D45E322F2A7264 /* Resources */,
+				07329972DED3E7DA1B905B17 /* SafariWebExtensionHandler.swift */,
+				8C630FBFE2C0AB8EBBBDF66F /* Info.plist */,
+			);
+			path = "AskPage Extension";
+			sourceTree = "<group>";
+		};
+		C2B9B26420D45E322F2A7264 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				DA9DC8811D69C98B417BBEE0 /* popup.js */,
+				4E4ECADA86E93BC24590A4CC /* endpoint-utils.js */,
+				6522E231EA17707E02F71708 /* CHANGELOG.md */,
+				F3A764879688A657C83CFE79 /* background.js */,
+				39B6ACA733840BF762AA8D2E /* popup.html */,
+				91478FA333D30C8290A2EA2A /* codepen.js */,
+				CECCC9308609E780E83AD873 /* platform-adapter.js */,
+				46638929A181934E0890C87F /* README.md */,
+				6E0CB5A2940E4D1432B00805 /* icons */,
+				3B1479082CAEA52AA95C3F4A /* style.css */,
+				7692766135C15194FC79D24E /* manifest.json */,
+				0906E01FD4C2DD860E54012C /* lib */,
+				3DF7EDA9212525F75398B25D /* _locales */,
+				1C4C0DFE06250AC548C5CBCB /* content.js */,
+				A330E62F9387B34626136563 /* codepen.html */,
+				2B5DEFE041229390EC217510 /* settings.html */,
+				3574C39B53DEBCF398A3C659 /* agent-glow.js */,
+				2E0539A5F0D935B6B8908B18 /* i18n.js */,
+				D6779A67050FBD2962E76B98 /* settings.js */,
+			);
+			name = Resources;
+			path = "AskPage Extension";
+			sourceTree = SOURCE_ROOT;
+		};
+		FDA4416DCA4FD25288CAE168 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				08D53C56A5B93AFD125F9640 /* Main.html */,
+				591CE1D4A1F72C7C3ACD1EEA /* Icon.png */,
+				06225783F4DE08619E740DF4 /* Style.css */,
+				B42F2BE56906F5C5A328A8D6 /* Script.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		BE9BE46630A8D23200F62CDA /* AskPage */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C7B16F4CDF59EA626BE8CEB9 /* Build configuration list for PBXNativeTarget "AskPage" */;
+			buildPhases = (
+				036BDA7F8191052CB15C22C1 /* Sources */,
+				A29ED87460AB249CE3973F90 /* Frameworks */,
+				8A2683288500BABC4B9F811F /* Resources */,
+				833F62B772CD39D9D4F4DFA2 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8E7FD83BF200A618885FCC8B /* PBXTargetDependency */,
+			);
+			name = AskPage;
+			productName = AskPage;
+			productReference = BE9BE46730A8D23200F62CDA /* AskPage.app */;
+			productType = "com.apple.product-type.application";
+		};
+		BE9BE48130A8D23300F62CDA /* AskPage Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D2DAF5ED1361E4B5D21C82C2 /* Build configuration list for PBXNativeTarget "AskPage Extension" */;
+			buildPhases = (
+				221462A58BFDFA3669AFA5F1 /* Sources */,
+				37FC84FD081F6DBF50C0CEBB /* Frameworks */,
+				93B0D61B69E542B49DCDAA6F /* Resources */,
+			);
+			buildRules = (
+			);
+			name = "AskPage Extension";
+			productName = "AskPage Extension";
+			productReference = BE9BE48230A8D23300F62CDA /* AskPage Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		09ECEF83103ACDBA3D708564 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+			};
+			buildConfigurationList = A46576198B9B8D6501275DD5 /* Build configuration list for PBXProject "AskPage" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 0193E3AE33385D83EDC18F7B;
+			minimizedProjectReferenceProxies = 1;
+			productRefGroup = 464AD41A688F61F8984CA7A8 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				BE9BE46630A8D23200F62CDA /* AskPage */,
+				BE9BE48130A8D23300F62CDA /* AskPage Extension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		8A2683288500BABC4B9F811F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4AA688CDC322EE8335C03B12 /* Assets.xcassets in Resources */,
+				1EE12DED8E6B1A94A12B93E0 /* Icon.png in Resources */,
+				62D25F92C260A526C6E69040 /* Main.html in Resources */,
+				1C4765119B6120C8E3F2C11D /* Main.storyboard in Resources */,
+				8F1CCC8E907B2536F6A6B6B5 /* Script.js in Resources */,
+				15A46E4B7511DDB355AE907D /* Style.css in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		93B0D61B69E542B49DCDAA6F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7D45EB2B04143A9D83D49CB8 /* CHANGELOG.md in Resources */,
+				262D1B73534673F71BE5CC84 /* README.md in Resources */,
+				ECB2B9A14E68C5CB247F1741 /* _locales in Resources */,
+				AD9D2E3200C14B1AC1C88ACB /* agent-glow.js in Resources */,
+				4BB238999AD767E5B90CD865 /* background.js in Resources */,
+				DD2F645750B0E695AD667F31 /* codepen.html in Resources */,
+				C8C51ABAF4F11B75DA417AF0 /* codepen.js in Resources */,
+				98040E23A9605EC2CD3124B0 /* content.js in Resources */,
+				063720051C25CE53F0AEE146 /* endpoint-utils.js in Resources */,
+				B0FF8A418DB999FD6DF7C168 /* i18n.js in Resources */,
+				BEFB293A2DF6B7C841E4DADB /* icons in Resources */,
+				DA8E03E79307700EE3457519 /* lib in Resources */,
+				09F5A38C5E09268271C6EBC3 /* manifest.json in Resources */,
+				C0B02B83437055DFAA9530D8 /* platform-adapter.js in Resources */,
+				854CBA5FB7CFEEE109BA0D04 /* popup.html in Resources */,
+				6A60C82C8A7E885D96DA38DA /* popup.js in Resources */,
+				37910505D8464606CB839044 /* settings.html in Resources */,
+				236817D8E39E83A2E04FD1B4 /* settings.js in Resources */,
+				8D37D0378A5CD8B99C20296D /* style.css in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		036BDA7F8191052CB15C22C1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				30D7B8B79BE68C4266C4C888 /* AppDelegate.swift in Sources */,
+				888435795C4C8445E3717097 /* ViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		221462A58BFDFA3669AFA5F1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				22A6099F435A56BCD87C4BF3 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8E7FD83BF200A618885FCC8B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BE9BE48130A8D23300F62CDA /* AskPage Extension */;
+			targetProxy = ECE708B79EEC7AFCC765F56E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		08D53C56A5B93AFD125F9640 /* Main.html */ = {
+			isa = PBXVariantGroup;
+			children = (
+				6A6C80F87DCE72D571E09C22 /* Base */,
+			);
+			name = Main.html;
+			sourceTree = "<group>";
+		};
+		1A4A424A31C150EA9826A369 /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				67C030A95A5975CA0FC8AEB2 /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		00DE45D8D1D4DD6A95CC36FA /* Debug configuration for PBXNativeTarget "AskPage Extension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "AskPage Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "AskPage Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 0.52.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.doggy8088.AskPage.Extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		04E6AE6DE16E9D7AD6928A61 /* Debug configuration for PBXNativeTarget "AskPage" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AskPage/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AskPage;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				INFOPLIST_KEY_NSViewGestureRecognizerIsExclusive = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.52.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.doggy8088.AskPage;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		320AE638A6C8FB6BF83E1235 /* Release configuration for PBXNativeTarget "AskPage" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AskPage/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AskPage;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				INFOPLIST_KEY_NSViewGestureRecognizerIsExclusive = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.52.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.doggy8088.AskPage;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		4F43596873EF69737C999674 /* Release configuration for PBXNativeTarget "AskPage Extension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "AskPage Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "AskPage Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 0.52.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.doggy8088.AskPage.Extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		9316CED05542AE1BD149F509 /* Debug configuration for PBXProject "AskPage" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		DB1780571D61756E3E64A430 /* Release configuration for PBXProject "AskPage" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A46576198B9B8D6501275DD5 /* Build configuration list for PBXProject "AskPage" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9316CED05542AE1BD149F509 /* Debug configuration for PBXProject "AskPage" */,
+				DB1780571D61756E3E64A430 /* Release configuration for PBXProject "AskPage" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		C7B16F4CDF59EA626BE8CEB9 /* Build configuration list for PBXNativeTarget "AskPage" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				04E6AE6DE16E9D7AD6928A61 /* Debug configuration for PBXNativeTarget "AskPage" */,
+				320AE638A6C8FB6BF83E1235 /* Release configuration for PBXNativeTarget "AskPage" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		D2DAF5ED1361E4B5D21C82C2 /* Build configuration list for PBXNativeTarget "AskPage Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00DE45D8D1D4DD6A95CC36FA /* Debug configuration for PBXNativeTarget "AskPage Extension" */,
+				4F43596873EF69737C999674 /* Release configuration for PBXNativeTarget "AskPage Extension" */,
+			);
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 09ECEF83103ACDBA3D708564 /* Project object */;
+}
