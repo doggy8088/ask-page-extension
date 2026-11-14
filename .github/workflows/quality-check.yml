@@ -5,6 +5,7 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,6 +13,8 @@ permissions:
 jobs:
   quality-check:
     runs-on: ubuntu-latest
+    outputs:
+      run_safari_xcode: ${{ steps.safari_filter.outputs.run_safari_xcode }}
 
     steps:
     - name: 檢出程式碼
@@ -110,6 +113,45 @@ jobs:
           fi
         done
 
+    - name: 判斷是否需執行 macOS Safari Xcode 編譯檢查
+      id: safari_filter
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        BEFORE_SHA: ${{ github.event.before }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        CURRENT_SHA: ${{ github.sha }}
+      run: |
+        PATTERN='^(src/|platforms/safari/|platforms/base/|scripts/build\.js|scripts/build-safari-dmg\.sh|\.github/workflows/quality-check\.yml$)'
+
+        if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          echo "run_safari_xcode=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE_SHA" ]; then
+          BASE_SHA="$PR_BASE_SHA"
+        elif [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+          BASE_SHA="$BEFORE_SHA"
+        else
+          echo "run_safari_xcode=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+          git fetch --no-tags --depth=1 origin "$BASE_SHA" >/dev/null 2>&1 || true
+        fi
+
+        if ! CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$CURRENT_SHA" 2>/dev/null); then
+          echo "run_safari_xcode=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if printf '%s\n' "$CHANGED_FILES" | grep -Eq "$PATTERN"; then
+          echo "run_safari_xcode=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "run_safari_xcode=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: 程式碼品質總結
       run: |
         echo "## 程式碼品質檢查完成 ✅" >> $GITHUB_STEP_SUMMARY
@@ -120,3 +162,45 @@ jobs:
         echo "- ✅ 單元與整合測試套件 (npm test)" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ 各平台 manifest.json 與檔案完整性檢查" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ 三平台套件打包測試 (npm run package)" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ steps.safari_filter.outputs.run_safari_xcode }}" = "true" ]; then
+          echo "- ⏳ 將接續於 macOS Runner 驗證 Safari Xcode 編譯" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ⏭️ 本次未異動 Safari 相關檔案，略過 macOS Xcode 編譯檢查" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  safari-xcode-check:
+    needs: quality-check
+    if: needs.quality-check.outputs.run_safari_xcode == 'true'
+    runs-on: macos-latest
+
+    steps:
+    - name: 檢出程式碼
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 設定 Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+        cache: 'npm'
+
+    - name: 安裝相依套件與建置 Safari 資源
+      run: |
+        npm ci
+        npm run build:safari
+
+    - name: 驗證 macOS Safari Xcode 專案編譯
+      run: |
+        xcodebuild \
+          -project platforms/safari/xcode/AskPage/AskPage.xcodeproj \
+          -scheme "AskPage" \
+          -configuration Debug \
+          -destination "generic/platform=macOS" \
+          CODE_SIGNING_ALLOWED=NO \
+          build
+
+    - name: Safari Xcode 檢查總結
+      run: |
+        echo "## macOS Safari Xcode 編譯檢查通過 ✅" >> "$GITHUB_STEP_SUMMARY"
+        echo "- ✅ \`npm run build:safari\` 與 \`xcodebuild\`（未簽署檢查）皆成功。" >> "$GITHUB_STEP_SUMMARY"

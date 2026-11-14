@@ -1,22 +1,52 @@
-name: Safari 自動打包與上架 (App Store Connect)
+name: Safari 自動打包與上架 (Developer ID DMG & App Store Connect)
 
 on:
-  release:
-    types:
-      - published
+  workflow_call:
+    inputs:
+      version:
+        description: '擴充功能版本號 (不含 v 前綴，例如 0.52.0)'
+        required: false
+        type: string
+      tag_name:
+        description: 'GitHub Release 標籤名稱 (例如 v0.52.0，提供時會將 .dmg 上傳至該 Release)'
+        required: false
+        type: string
   workflow_dispatch:
+    inputs:
+      version:
+        description: '擴充功能版本號 (選填，留空則讀取 manifest.base.json)'
+        required: false
+        type: string
+      tag_name:
+        description: '要附加 .dmg 的 GitHub Release 標籤 (選填，例如 v0.52.0)'
+        required: false
+        type: string
 
 jobs:
   check-safari-secrets:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
-      configured: ${{ steps.check.outputs.configured }}
+      version: ${{ steps.check.outputs.version }}
+      tag_name: ${{ steps.check.outputs.tag_name }}
+      dmg_configured: ${{ steps.check.outputs.dmg_configured }}
+      appstore_configured: ${{ steps.check.outputs.appstore_configured }}
 
     steps:
-    - name: Check Apple Signing & App Store Connect Secrets
+    - name: 檢出程式碼
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: 解析版本與檢查 Apple Secrets
       id: check
       env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_TAG_NAME: ${{ inputs.tag_name }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+        DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
         CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
         CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
         PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
@@ -25,34 +55,136 @@ jobs:
         APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
         APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
       run: |
-        missing=()
-        [ -z "$APPLE_TEAM_ID" ] && missing+=("APPLE_TEAM_ID")
-        [ -z "$CERTIFICATE_P12_BASE64" ] && missing+=("CERTIFICATE_P12_BASE64")
-        [ -z "$CERTIFICATE_PASSWORD" ] && missing+=("CERTIFICATE_PASSWORD")
-        [ -z "$PROVISIONING_PROFILE_BASE64" ] && missing+=("PROVISIONING_PROFILE_BASE64")
-        [ -z "$EXTENSION_PROVISIONING_PROFILE_BASE64" ] && missing+=("EXTENSION_PROVISIONING_PROFILE_BASE64")
-        [ -z "$APPSTORE_KEY_ID" ] && missing+=("APPSTORE_KEY_ID")
-        [ -z "$APPSTORE_ISSUER_ID" ] && missing+=("APPSTORE_ISSUER_ID")
-        [ -z "$APPSTORE_PRIVATE_KEY" ] && missing+=("APPSTORE_PRIVATE_KEY")
+        VERSION="${INPUT_VERSION#v}"
+        if [ -z "$VERSION" ]; then
+          VERSION=$(jq -r '.version' platforms/base/manifest.base.json)
+        fi
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "tag_name=$INPUT_TAG_NAME" >> "$GITHUB_OUTPUT"
 
-        if [ ${#missing[@]} -gt 0 ]; then
-          echo "configured=false" >> "$GITHUB_OUTPUT"
-          echo "## 略過 Safari App Store Connect 自動上架" >> "$GITHUB_STEP_SUMMARY"
+        missing_dmg=()
+        [ -z "$APPLE_TEAM_ID" ] && missing_dmg+=("APPLE_TEAM_ID")
+        [ -z "$DEVELOPER_ID_P12_BASE64" ] && missing_dmg+=("DEVELOPER_ID_P12_BASE64")
+        [ -z "$DEVELOPER_ID_P12_PASSWORD" ] && missing_dmg+=("DEVELOPER_ID_P12_PASSWORD")
+        [ -z "$APPSTORE_KEY_ID" ] && missing_dmg+=("APPSTORE_KEY_ID")
+        [ -z "$APPSTORE_ISSUER_ID" ] && missing_dmg+=("APPSTORE_ISSUER_ID")
+        [ -z "$APPSTORE_PRIVATE_KEY" ] && missing_dmg+=("APPSTORE_PRIVATE_KEY")
+
+        if [ ${#missing_dmg[@]} -gt 0 ]; then
+          echo "dmg_configured=false" >> "$GITHUB_OUTPUT"
+          echo "## 略過 Safari Developer ID .dmg 封裝" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "尚未設定完整的 Apple 簽署與 App Store Connect secrets（缺少: $(IFS=', '; echo "${missing[*]}")）。" >> "$GITHUB_STEP_SUMMARY"
-          echo "已略過 macos-latest 建置工作；請參考 PUBLISH.md 補齊憑證與 secrets 後即可啟用。" >> "$GITHUB_STEP_SUMMARY"
+          echo "尚未設定完整的 Developer ID 與公證 secrets（缺少: $(IFS=', '; echo "${missing_dmg[*]}")）。" >> "$GITHUB_STEP_SUMMARY"
         else
-          echo "configured=true" >> "$GITHUB_OUTPUT"
+          echo "dmg_configured=true" >> "$GITHUB_OUTPUT"
+          echo "- ✅ Developer ID 公證 `.dmg` secrets 齊全（將執行 \`publish-safari-dmg\`）" >> "$GITHUB_STEP_SUMMARY"
         fi
 
-  publish-safari:
+        missing_appstore=()
+        [ -z "$APPLE_TEAM_ID" ] && missing_appstore+=("APPLE_TEAM_ID")
+        [ -z "$CERTIFICATE_P12_BASE64" ] && missing_appstore+=("CERTIFICATE_P12_BASE64")
+        [ -z "$CERTIFICATE_PASSWORD" ] && missing_appstore+=("CERTIFICATE_PASSWORD")
+        [ -z "$PROVISIONING_PROFILE_BASE64" ] && missing_appstore+=("PROVISIONING_PROFILE_BASE64")
+        [ -z "$EXTENSION_PROVISIONING_PROFILE_BASE64" ] && missing_appstore+=("EXTENSION_PROVISIONING_PROFILE_BASE64")
+        [ -z "$APPSTORE_KEY_ID" ] && missing_appstore+=("APPSTORE_KEY_ID")
+        [ -z "$APPSTORE_ISSUER_ID" ] && missing_appstore+=("APPSTORE_ISSUER_ID")
+        [ -z "$APPSTORE_PRIVATE_KEY" ] && missing_appstore+=("APPSTORE_PRIVATE_KEY")
+
+        if [ ${#missing_appstore[@]} -gt 0 ]; then
+          echo "appstore_configured=false" >> "$GITHUB_OUTPUT"
+          echo "- ⏭️ 尚未設定完整 App Store Distribution secrets（缺少: $(IFS=', '; echo "${missing_appstore[*]}")），略過 \`publish-safari-appstore\`" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "appstore_configured=true" >> "$GITHUB_OUTPUT"
+          echo "- ✅ App Store Connect secrets 齊全（將執行 \`publish-safari-appstore\`）" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+  publish-safari-dmg:
     needs: check-safari-secrets
-    if: needs.check-safari-secrets.outputs.configured == 'true'
+    if: needs.check-safari-secrets.outputs.dmg_configured == 'true'
     runs-on: macos-latest
+    permissions:
+      contents: write
 
     steps:
-    - name: 取出程式碼
+    - name: 檢出程式碼
       uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+        cache: 'npm'
+
+    - name: 安裝相依套件
+      run: npm ci
+
+    - name: 安裝 Developer ID Application 憑證至臨時 Keychain
+      env:
+        DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+        DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+      run: |
+        CERT_PATH="$RUNNER_TEMP/devid.p12"
+        KEYCHAIN_PATH="$RUNNER_TEMP/build-dmg.keychain-db"
+        KEYCHAIN_PASS="askpage-ci-dmg-keychain"
+
+        printf '%s' "$DEVELOPER_ID_P12_BASE64" | tr -d '\r\n' | base64 --decode > "$CERT_PATH"
+
+        security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 3600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+        security import "$CERT_PATH" -P "$DEVELOPER_ID_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+        security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+        security find-identity -v -p codesigning
+
+    - name: 建置、Developer ID 簽署並公證 Safari DMG
+      env:
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+        APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+      run: |
+        ./scripts/build-safari-dmg.sh \
+          --version "${{ needs.check-safari-secrets.outputs.version }}" \
+          --build-number "${{ github.run_number }}"
+
+    - name: 上傳 Safari DMG Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: safari-dmg-v${{ needs.check-safari-secrets.outputs.version }}
+        path: dist/AskPageExtension-safari_v${{ needs.check-safari-secrets.outputs.version }}.dmg
+
+    - name: 上傳公證後 Safari DMG 至 GitHub Release
+      if: needs.check-safari-secrets.outputs.tag_name != ''
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG_NAME: ${{ needs.check-safari-secrets.outputs.tag_name }}
+        VERSION: ${{ needs.check-safari-secrets.outputs.version }}
+      run: |
+        gh release upload "$TAG_NAME" "dist/AskPageExtension-safari_v${VERSION}.dmg" --clobber
+        echo "✅ 已將公證簽署版 \`AskPageExtension-safari_v${VERSION}.dmg\` 上傳至 Release \`$TAG_NAME\`。" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: 清理臨時 Keychain 與憑證
+      if: always()
+      run: |
+        security delete-keychain "$RUNNER_TEMP/build-dmg.keychain-db" >/dev/null 2>&1 || true
+        security list-keychains -d user -s login.keychain-db >/dev/null 2>&1 || true
+        rm -f "$RUNNER_TEMP/devid.p12"
+
+  publish-safari-appstore:
+    needs: check-safari-secrets
+    if: needs.check-safari-secrets.outputs.appstore_configured == 'true'
+    runs-on: macos-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: 檢出程式碼
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
 
     - name: Set up Node.js
       uses: actions/setup-node@v6
@@ -76,9 +208,9 @@ jobs:
         PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
         mkdir -p "$PROFILE_DIR"
 
-        echo "$CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
-        echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_DIR/AskPageApp.provisionprofile"
-        echo "$EXTENSION_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_DIR/AskPageExtension.provisionprofile"
+        printf '%s' "$CERTIFICATE_P12_BASE64" | tr -d '\r\n' | base64 --decode > "$CERT_PATH"
+        printf '%s' "$PROVISIONING_PROFILE_BASE64" | tr -d '\r\n' | base64 --decode > "$PROFILE_DIR/AskPageApp.provisionprofile"
+        printf '%s' "$EXTENSION_PROVISIONING_PROFILE_BASE64" | tr -d '\r\n' | base64 --decode > "$PROFILE_DIR/AskPageExtension.provisionprofile"
 
         KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
         KEYCHAIN_PASS="askpage-ci-temp-keychain"
@@ -92,6 +224,8 @@ jobs:
     - name: 封存與匯出 macOS Safari App (.pkg)
       env:
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        VERSION: ${{ needs.check-safari-secrets.outputs.version }}
+        BUILD_NUMBER: ${{ github.run_number }}
       run: |
         cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
         <?xml version="1.0" encoding="UTF-8"?>
@@ -111,7 +245,9 @@ jobs:
           -scheme "AskPage" \
           -configuration Release \
           -archivePath "$RUNNER_TEMP/AskPage.xcarchive" \
-          DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+          DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+          MARKETING_VERSION="$VERSION" \
+          CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
         xcodebuild -exportArchive \
           -archivePath "$RUNNER_TEMP/AskPage.xcarchive" \
@@ -125,7 +261,8 @@ jobs:
         APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
       run: |
         mkdir -p "$HOME/.appstoreconnect/private_keys"
-        printf '%s\n' "$APPSTORE_PRIVATE_KEY" > "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+        printf '%s\n' "$APPSTORE_PRIVATE_KEY" | tr -d '\r' > "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+        chmod 600 "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
 
         PKG_PATH=$(find "$RUNNER_TEMP/export" -name "*.pkg" | head -n 1)
         if [ -z "$PKG_PATH" ]; then
@@ -142,6 +279,7 @@ jobs:
     - name: 清理臨時憑證與金鑰
       if: always()
       run: |
-        security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
+        security delete-keychain "$RUNNER_TEMP/build.keychain-db" >/dev/null 2>&1 || true
+        security list-keychains -d user -s login.keychain-db >/dev/null 2>&1 || true
         rm -f "$RUNNER_TEMP/mac-app-dist.p12" "$RUNNER_TEMP/ExportOptions.plist"
         rm -rf "$HOME/.appstoreconnect/private_keys"

@@ -148,6 +148,8 @@ jobs:
     needs: [check-release, publish]
     if: needs.check-release.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
     - name: Check Edge Add-ons Secrets
@@ -196,81 +198,21 @@ jobs:
         EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
         EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
         VERSION: ${{ needs.check-release.outputs.version }}
-      run: |
-        node -e '
-        const fs = require("fs");
-        const path = require("path");
-
-        const productId = process.env.EDGE_PRODUCT_ID;
-        const clientId = process.env.EDGE_CLIENT_ID;
-        const apiKey = process.env.EDGE_API_KEY;
-        const version = process.env.VERSION;
-        const zipPath = path.join("dist", `AskPageExtension-edge_v${version}.zip`);
-        const baseUrl = `https://api.addons.microsoftedge.microsoft.com/v1/products/${productId}`;
-        const authHeaders = {
-          "Authorization": `ApiKey ${apiKey}`,
-          "X-ClientID": clientId
-        };
-
-        async function pollOperation(locationHeader, operationsBaseUrl, label) {
-          if (!locationHeader) {
-            throw new Error(`${label} 未回傳 Location header`);
-          }
-          const operationUrl = locationHeader.startsWith("http")
-            ? locationHeader
-            : `${operationsBaseUrl}/${locationHeader}`;
-          for (let attempt = 0; attempt < 60; attempt++) {
-            const res = await fetch(operationUrl, { headers: authHeaders });
-            const body = await res.json();
-            if (body.status === "Succeeded") {
-              return body;
-            }
-            if (body.status === "Failed") {
-              throw new Error(`${label} 失敗: ${JSON.stringify(body)}`);
-            }
-            await new Promise((r) => setTimeout(r, 10000));
-          }
-          throw new Error(`${label} 逾時`);
-        }
-
-        (async () => {
-          const zipBuffer = fs.readFileSync(zipPath);
-          const uploadRes = await fetch(`${baseUrl}/submissions/draft/package`, {
-            method: "POST",
-            headers: { ...authHeaders, "Content-Type": "application/zip" },
-            body: zipBuffer
-          });
-          if (!uploadRes.ok) {
-            throw new Error(`上傳 Edge 套件失敗 (${uploadRes.status}): ${await uploadRes.text()}`);
-          }
-          await pollOperation(
-            uploadRes.headers.get("location"),
-            `${baseUrl}/submissions/draft/package/operations`,
-            "Edge 套件驗證"
-          );
-
-          const publishRes = await fetch(`${baseUrl}/submissions`, {
-            method: "POST",
-            headers: { ...authHeaders, "Content-Type": "application/json" },
-            body: JSON.stringify({ notes: `Automated release v${version} from GitHub Actions` })
-          });
-          if (!publishRes.ok) {
-            throw new Error(`送出 Edge 審核失敗 (${publishRes.status}): ${await publishRes.text()}`);
-          }
-          await pollOperation(
-            publishRes.headers.get("location"),
-            `${baseUrl}/submissions/operations`,
-            "Edge 審核送出"
-          );
-          console.log(`MS Edge Add-ons v${version} 已送出審核發布。`);
-        })().catch((err) => {
-          console.error(err);
-          process.exit(1);
-        });
-        '
+      run: node scripts/publish-edge.js --version="$VERSION"
 
     - name: MS Edge Add-ons publish note
       if: steps.check_edge.outputs.configured == 'true'
       run: |
         echo "## MS Edge Add-ons 自動上架完成 ✅" >> "$GITHUB_STEP_SUMMARY"
         echo "已透過 Microsoft Edge Add-ons Publish REST API 上傳並送出審核。" >> "$GITHUB_STEP_SUMMARY"
+
+  publish-safari:
+    needs: [check-release, publish]
+    if: needs.check-release.outputs.should_publish == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-safari.yml
+    with:
+      version: ${{ needs.check-release.outputs.version }}
+      tag_name: v${{ needs.check-release.outputs.version }}
+    secrets: inherit

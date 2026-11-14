@@ -327,6 +327,35 @@ function createBackgroundSandbox({ userAgent, userScripts, hasSessionStorage = t
     assert.strictEqual(capturedExecuteArgs.target.tabId, 7);
     assert.strictEqual(capturedExecuteArgs.world, 'MAIN');
 
+    // 4. CI/CD scripts & workflow wiring sanity checks
+    for (const relScript of ['scripts/publish-edge.js', 'scripts/build-safari-dmg.sh', 'scripts/setup-ci-secrets.sh']) {
+        const absScript = path.join(rootDir, relScript);
+        assert.ok(fs.existsSync(absScript), `Missing CI/CD script: ${relScript}`);
+        if (relScript.endsWith('.sh')) {
+            const mode = fs.statSync(absScript).mode;
+            assert.ok((mode & 0o111) !== 0, `${relScript} must be executable`);
+        }
+    }
+
+    const releaseYml = fs.readFileSync(path.join(rootDir, '.github', 'workflows', 'release.yml'), 'utf8');
+    assert.match(releaseYml, /node scripts\/publish-edge\.js/);
+    assert.match(releaseYml, /uses:\s*\.\/\.github\/workflows\/publish-safari\.yml/);
+    assert.match(releaseYml, /publish-safari:\s*\n\s*needs:\s*\[check-release,\s*publish\]/);
+
+    const publishSafariYml = fs.readFileSync(path.join(rootDir, '.github', 'workflows', 'publish-safari.yml'), 'utf8');
+    assert.match(publishSafariYml, /\bworkflow_call:/);
+    assert.match(publishSafariYml, /\bworkflow_dispatch:/);
+    assert.doesNotMatch(publishSafariYml, /types:\s*\[\s*published\s*\]/);
+    assert.match(publishSafariYml, /\bdmg_configured:/);
+    assert.match(publishSafariYml, /\bappstore_configured:/);
+    assert.match(publishSafariYml, /scripts\/build-safari-dmg\.sh/);
+    assert.match(publishSafariYml, /CURRENT_PROJECT_VERSION=/);
+
+    const qualityCheckYml = fs.readFileSync(path.join(rootDir, '.github', 'workflows', 'quality-check.yml'), 'utf8');
+    assert.match(qualityCheckYml, /safari-xcode-check:/);
+    assert.match(qualityCheckYml, /runs-on:\s*macos-latest/);
+    assert.match(qualityCheckYml, /CODE_SIGNING_ALLOWED=NO/);
+
     console.log('multi-platform-build: ok');
 })().catch((error) => {
     console.error(error);
