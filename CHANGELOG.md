@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-11-17
+
+### 新增 / 改進（v0.53.0）
+
+- **支援 MS Edge 與 macOS Safari**：同一份原始碼現在可建置 Chrome、MS Edge 與 macOS Safari 三種版本（`dist/chrome`、`dist/edge`、`dist/safari`），共用程式碼放在 `src/`，各瀏覽器的 manifest 差異與 API 轉接層放在 `platforms/`。`npm run package` 會分別產出 `AskPageExtension-{chrome,edge,safari}_<version>.zip`。
+- **Safari 相容性處理**：Safari 版改以 `background.scripts` 載入背景腳本並明確宣告 `host_permissions`，Xcode 專案開啟對外網路連線，避免 WebKit MV3 Service Worker 的 CORS 限制。尚未授權目標網域時，會直接顯示權限設定指引，不再反覆重試。建置 Safari 版時會把 `.js` 內的非 ASCII 字元轉為 `\uXXXX`，並讓 CSS 與 HTML 明確宣告 UTF-8，修正背景頁被誤判為 Big5-HKSCS 造成的中文亂碼。
+- **自動化發布擴充到 Edge 與 Safari**：推送到 `main` 的發布流程除了 Chrome Web Store，在設定對應 Secrets 後也會發布到 Microsoft Edge Add-ons（`scripts/publish-edge.js`，支援 `--dry-run`），並產出經 Developer ID 簽署、Apple 公證的 Safari Universal `.dmg`，以及上傳 App Store Connect 的 `.pkg`；未設定 Secrets 時會安全略過。Xcode 專案改用相容 Xcode 26 CI Runner 的 `project.pbxproj` 格式，部署目標為 macOS 13.0 以上。
+- **新增 `Makefile`**：提供 `make build`、`make test`、`make package`、`make safari-dmg` 等常用工作的捷徑，全部直接呼叫既有的 npm scripts 與 `scripts/` 腳本；執行 `make` 會列出所有 target 與說明。
+
+### 修正 / 更新（v0.53.0）
+
+- **對話框內輸入不再觸發網頁本身的快捷鍵**：部分網站在 `window` 的 capture 階段攔截按鍵（例如按 `/` 開啟站內搜尋、Cmd/Ctrl+K 切換搜尋），由於對話框位於 closed shadow root，網站判斷不出使用者正在輸入，導致在頁問輸入框打 `/` 時字元被吃掉、站內搜尋跳出並搶走焦點。現在新增以 `document_start` 注入的 `lib/dialog-key-isolation.js`，搶先攔下來自對話框的 keydown／keypress／keyup，網頁完全收不到，再轉送給對話框內的焦點元素，Enter 送出、方向鍵歷史、Tab 補全、Esc 關閉與 Ctrl+L 清除等原有操作不受影響。擴充功能更新前已開啟的分頁需重新整理才會生效。
+- **測試**：新增 `tests/dialog-key-isolation.test.js` 驗證事件攔截、複製事件欄位、`preventDefault` 同步與 resolver 清除；新增 `tests/multi-platform-build.test.js`、`tests/publish-edge.test.js` 驗證三平台建置產物、Safari 設定與 Edge 發布腳本。
+
 ## [0.52.0] - 2026-11-14
 
 ### 修正 / 更新（v0.52.0）
