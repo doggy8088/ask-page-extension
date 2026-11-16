@@ -55,6 +55,15 @@
         "lib/debug-console.js"
       ],
       "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://*/*"
+      ],
+      "js": [
+        "lib/dialog-key-isolation.js"
+      ],
+      "run_at": "document_start"
     }
   ],
   "commands": {

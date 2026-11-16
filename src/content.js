@@ -7526,6 +7526,16 @@ async function createDialog() {
     dialogInputEventTypes.forEach((eventType) => {
         overlay.addEventListener(eventType, stopDialogInputEventPropagation);
     });
+    // 頁面在 window capture 階段註冊的快捷鍵比上面的 overlay 攔截更早執行，
+    // 交由 document_start 注入的 dialog-key-isolation.js 先攔下，再轉送給對話框內的焦點元素。
+    const dialogKeyIsolation = globalThis.AskPageDialogKeyIsolation;
+    const resolveDialogKeyTarget = (event) => {
+        if (!host.isConnected || event.target !== host) {
+            return null;
+        }
+        return shadowRoot.activeElement || null;
+    };
+    dialogKeyIsolation?.setTargetResolver(resolveDialogKeyTarget);
 
     function closeDialog() {
         stopDialogDrag();
@@ -7533,6 +7543,9 @@ async function createDialog() {
         clearDialogDimTimer();
         window.removeEventListener('keydown', escapeKeyListener, true);
         window.removeEventListener('keydown', clearShortcutListener, true);
+        shadowRoot.removeEventListener('keydown', escapeKeyListener, true);
+        shadowRoot.removeEventListener('keydown', clearShortcutListener, true);
+        dialogKeyIsolation?.clearTargetResolver(resolveDialogKeyTarget);
         dialogInputEventTypes.forEach((eventType) => {
             overlay.removeEventListener(eventType, stopDialogInputEventPropagation);
         });
@@ -7589,6 +7602,8 @@ async function createDialog() {
         }
     };
     window.addEventListener('keydown', escapeKeyListener, true);
+    // 焦點在對話框內時，原事件會被 dialog-key-isolation.js 擋在 window，改由 shadow root 收到轉送的事件。
+    shadowRoot.addEventListener('keydown', escapeKeyListener, true);
 
     function isClearShortcutEvent(e) {
         return e.ctrlKey &&
@@ -7610,6 +7625,7 @@ async function createDialog() {
         handleAsk();
     };
     window.addEventListener('keydown', clearShortcutListener, true);
+    shadowRoot.addEventListener('keydown', clearShortcutListener, true);
 
     promptHistory = JSON.parse(await getValue(PROMPT_HISTORY_STORAGE, '[]'));
     historyIndex = promptHistory.length;
