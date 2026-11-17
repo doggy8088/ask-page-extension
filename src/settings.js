@@ -1185,7 +1185,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         toggleModalCommandModeInputs(!isBuiltIn);
         commandModal.querySelectorAll('.skill-only-field').forEach((field) => {
-            field.style.display = isBuiltIn ? 'none' : 'block';
+            field.style.display = isBuiltIn ? 'none' : '';
         });
 
         clearCommandNameValidation();
