@@ -508,6 +508,54 @@
       font-weight: 800;
     }
 
+    .skills-group-title {
+      margin: 12px 0 2px;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text-secondary);
+    }
+
+    .skills-empty {
+      color: var(--text-secondary);
+      font-size: 14px;
+      padding: 8px 2px;
+    }
+
+    .command-main {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .command-main input[type="checkbox"] {
+      margin-top: 3px;
+      width: 16px;
+      height: 16px;
+      flex: none;
+      cursor: pointer;
+    }
+
+    .skill-id {
+      margin-left: 8px;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-secondary);
+    }
+
+    .command-item.is-disabled .command-main > div {
+      opacity: 0.55;
+    }
+
+    .field-warning {
+      display: block;
+      color: #ffd5ad;
+    }
+
+    .field-warning:empty {
+      display: none;
+    }
+
     .add-command {
       border: 1px dashed rgba(117, 216, 255, 0.36);
       border-radius: 16px;
@@ -825,10 +873,17 @@
                   <span data-i18n="slashCommandManagement">技能管理</span>
                 </h2>
                 <p class="card-description" style="margin-top: 4px;" data-i18n="slashCommandManagementDescription">管理內建與自訂技能</p>
+                <p class="card-description" style="margin-top: 4px;" data-i18n="skillsIntro">技能採用 Agent Skills 格式（SKILL.md）。「自動調用」的技能由模型依描述自行載入；「僅明確調用」的技能只能輸入 /觸發名稱 執行。</p>
               </div>
-              <button id="addCommand" class="btn-primary" style="margin-top: 0; min-width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 13px;" type="button">
-                <span aria-hidden="true">➕</span> <span data-i18n="addCustomSlashCommand">新增技能</span>
-              </button>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button id="importSkill" class="btn-secondary" style="margin-top: 0; min-width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 13px;" type="button">
+                  <span aria-hidden="true">📥</span> <span data-i18n="importSkill">匯入 SKILL.md</span>
+                </button>
+                <input type="file" id="importSkillFile" accept=".md,.markdown,text/markdown" style="display: none;">
+                <button id="addCommand" class="btn-primary" style="margin-top: 0; min-width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 13px;" type="button">
+                  <span aria-hidden="true">➕</span> <span data-i18n="addCustomSlashCommand">新增技能</span>
+                </button>
+              </div>
             </div>
 
             <div class="commands-list" id="commandsList">
@@ -980,15 +1035,43 @@
 
       <div class="form-group">
         <label for="modalCommandName" data-i18n="commandName">技能名稱</label>
-        <input id="modalCommandName" type="text" data-i18n-placeholder="commandNamePlaceholder" placeholder="例如：/help" pattern="^/[a-zA-Z0-9_\-]+$" aria-describedby="modalCommandNameError">
+        <input id="modalCommandName" type="text" data-i18n-placeholder="commandNamePlaceholder" placeholder="例如：/help" aria-describedby="modalCommandNameError">
         <small id="modalCommandNameError" class="field-error"></small>
-        <small style="color: var(--text-secondary);" data-i18n="commandNameHelp">技能名稱必須以 / 開頭，只能包含字母、數字、底線和連字符</small>
+        <small style="color: var(--text-secondary);" data-i18n="commandNameHelp">使用者輸入的 /觸發名稱，可使用中文；只能包含文字、數字、底線和連字號</small>
+      </div>
+
+      <div class="form-group skill-only-field">
+        <label for="modalSkillId" data-i18n="skillIdLabel">技能 ID（name）</label>
+        <input id="modalSkillId" type="text" data-i18n-placeholder="skillIdPlaceholder" placeholder="留空自動產生，例如：translate-to-english" aria-describedby="modalSkillIdError" autocomplete="off" spellcheck="false">
+        <small id="modalSkillIdError" class="field-error"></small>
+        <small style="color: var(--text-secondary);" data-i18n="skillIdHelp">Agent Skills 的 name，供模型與匯出檔使用：小寫英文字母、數字與連字號，最多 64 個字元。</small>
+      </div>
+
+      <div class="form-group skill-only-field">
+        <label for="modalSkillDescription" data-i18n="skillDescriptionLabel">描述</label>
+        <textarea id="modalSkillDescription" rows="3" maxlength="1024" data-i18n-placeholder="skillDescriptionPlaceholder" placeholder="說明技能做什麼、何時使用，例如：將文字翻譯成自然的英文。當使用者要求翻譯成英文時使用。" aria-describedby="modalSkillDescriptionError" style="min-height: 72px;"></textarea>
+        <small id="modalSkillDescriptionError" class="field-error"></small>
+        <small style="color: var(--text-secondary);" data-i18n="skillDescriptionHelp">自動調用時，模型依這段描述判斷是否載入此技能。</small>
+      </div>
+
+      <div class="form-group skill-only-field">
+        <div style="font-weight: 600; margin-bottom: 10px;" data-i18n="skillInvocationLabel">調用方式</div>
+        <label style="display: inline-flex; align-items: center; gap: 6px; margin-right: 16px;">
+          <input type="radio" name="modalSkillInvocation" id="modalSkillInvocationAuto" value="auto" checked>
+          <span data-i18n="skillInvocationAuto">自動調用</span>
+        </label>
+        <label style="display: inline-flex; align-items: center; gap: 6px;">
+          <input type="radio" name="modalSkillInvocation" id="modalSkillInvocationExplicit" value="explicit">
+          <span data-i18n="skillInvocationExplicit">僅明確調用</span>
+        </label>
+        <small style="display: block; color: var(--text-secondary); margin-top: 8px;" data-i18n="skillInvocationHelp">自動調用：模型依描述自行載入，也可輸入 /觸發名稱 執行。僅明確調用：不會出現在模型的技能清單中，只能輸入 /觸發名稱 執行。</small>
       </div>
 
       <div class="form-group">
         <label for="modalCommandPrompt" data-i18n="promptContent">提示內容</label>
         <textarea id="modalCommandPrompt" data-i18n-placeholder="promptContentPlaceholder" aria-describedby="modalCommandPromptError modalCommandPromptHelp modalCommandPromptBuiltinHelp" placeholder="請輸入執行此技能時要傳送給 AI 的提示內容。使用 ${變數名} 產生填空，例如：Hi, I'm ${name} from ${country:TW}。"></textarea>
         <small id="modalCommandPromptError" class="field-error"></small>
+        <small id="modalSkillInstructionsWarning" class="field-warning"></small>
         <small id="modalCommandPromptHelp" style="color: var(--text-secondary);" data-i18n="promptContentHelp">在提示內容中以 ${變數名} 產生填空，使用者執行技能後可逐一填寫；用 ${變數名:預設值} 設預設值。同名變數會同步填寫，最多只能有一組預設值。</small>
         <small id="modalCommandPromptBuiltinHelp" style="color: var(--text-secondary);" data-i18n="promptContentBuiltinVariablesHelp">${SELECTED_TEXT} 是內建變數，執行時自動替換成開啟對話框時選取的文字，不會變成填空欄位；可用 ${SELECTED_TEXT:備用文字} 在沒有選取文字時改用備用文字。</small>
       </div>

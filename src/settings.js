@@ -305,6 +305,9 @@ let localePreferenceSelect;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
 let modalCommandModeAgent, modalCommandModeInquiry, modalCommandModeUnspecified, modalCommandScreenshotEnabled, modalCommandShowVariableLabels;
 let modalSave, modalCancel, modalCommandNameError, modalCommandPromptError;
+let modalSkillId, modalSkillIdError, modalSkillDescription, modalSkillDescriptionError;
+let modalSkillInvocationAuto, modalSkillInvocationExplicit, modalSkillInstructionsWarning;
+let importSkillBtn, importSkillFileInput;
 let customSystemPromptTextarea, customSystemPromptCount;
 let agentGlowEffectEnabledCheckbox;
 let toolCallMaxRoundsInput, readPageDefaultMaxCharsInput, toolResultMaxCharsInput;
@@ -332,6 +335,9 @@ let activeModel = '';
 
 // Storage keys
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
+const ASKPAGE_SKILLS_STORAGE = 'ASKPAGE_SKILLS';
+const CUSTOM_COMMAND_USAGE_STORAGE = 'CUSTOM_COMMAND_USAGE';
+const CUSTOM_SUMMARY_ENABLED_STORAGE = 'CUSTOM_SUMMARY_ENABLED';
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE = 'CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
@@ -392,13 +398,63 @@ const CUSTOM_COMMAND_MODE_UNSPECIFIED = 'unspecified';
 const DEFAULT_CUSTOM_COMMAND_MODE = CUSTOM_COMMAND_MODE_UNSPECIFIED;
 const CUSTOM_COMMAND_PREVIEW_LENGTH = 50;
 
-// Built-in commands that cannot be deleted or modified
+// 內建技能：不進 ASKPAGE_SKILLS、不可刪除；/clear 沒有停用開關，/summary 可停用
 const BUILT_IN_COMMANDS = [
     { cmd: '/clear', descKey: 'commandClearHistory', builtin: true },
-    { cmd: '/summary', descKey: 'commandSummaryPage', builtin: true, editable: true },
-    { cmd: '/screenshot', descKey: 'commandScreenshot', builtin: true },
-    { cmd: '/agent', descKey: 'commandAgent', builtin: true }
+    { cmd: '/summary', descKey: 'commandSummaryPage', builtin: true, editable: true, toggleable: true, enabled: true }
 ];
+
+const SKILL_COMMAND_ERROR_KEYS = {
+    'required': 'commandNameRequired',
+    'missing-slash': 'commandNameInvalid',
+    'too-long': 'commandNameTooLong',
+    'invalid': 'commandNameInvalid',
+    'reserved': 'commandNameBuiltinDuplicate'
+};
+const SKILL_NAME_ERROR_KEYS = {
+    'too-long': 'skillIdTooLong',
+    'invalid': 'skillIdInvalid'
+};
+const SKILL_DESCRIPTION_ERROR_KEYS = {
+    'required': 'skillDescriptionRequired',
+    'too-long': 'skillDescriptionTooLong'
+};
+
+// 技能編輯表單驗證：回傳各欄位的 locale key，空字串代表合法。
+// editingName 為正在編輯的技能 ID，比對重複時排除自己；技能 ID 留空代表自動產生，不檢查。
+function getSkillFieldErrors(fields, skills, editingName = '') {
+    const others = (Array.isArray(skills) ? skills : []).filter((skill) => skill.name !== editingName);
+    const command = String(fields.command || '').trim();
+    const name = String(fields.name || '').trim();
+    const errors = { command: '', name: '', description: '' };
+
+    const commandError = AskPageSkills.validateSkillCommand(command);
+    if (commandError) {
+        errors.command = SKILL_COMMAND_ERROR_KEYS[commandError];
+    } else if (others.some((skill) => skill.command === command)) {
+        errors.command = 'commandNameCustomDuplicate';
+    }
+
+    if (name) {
+        const nameError = AskPageSkills.validateSkillName(name);
+        if (nameError) {
+            errors.name = SKILL_NAME_ERROR_KEYS[nameError] || 'skillIdInvalid';
+        } else if (others.some((skill) => skill.name.toLowerCase() === name.toLowerCase())) {
+            errors.name = 'skillIdDuplicate';
+        }
+    }
+
+    const descriptionError = AskPageSkills.validateSkillDescription(fields.description);
+    if (descriptionError) {
+        errors.description = SKILL_DESCRIPTION_ERROR_KEYS[descriptionError];
+    }
+    return errors;
+}
+
+// 啟用開關只改這一筆的 enabled，其餘欄位（以及匯出的 SKILL.md）維持不變。
+function setSkillEnabled(skills, name, enabled) {
+    return skills.map((skill) => (skill.name === name ? { ...skill, enabled: enabled === true } : skill));
+}
 
 const PREDEFINED_MODELS = {
     gemini: [
@@ -485,7 +541,7 @@ const PREDEFINED_MODELS = {
 
 // Current edit state
 let currentEditingCommand = null;
-let customCommands = [];
+let skills = [];
 let statusMessageSource = null;
 
 // Load the saved settings when the page loads
@@ -598,6 +654,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCommandModeUnspecified = document.getElementById('modalCommandModeUnspecified');
     modalCommandScreenshotEnabled = document.getElementById('modalCommandScreenshotEnabled');
     modalCommandShowVariableLabels = document.getElementById('modalCommandShowVariableLabels');
+    modalSkillId = document.getElementById('modalSkillId');
+    modalSkillIdError = document.getElementById('modalSkillIdError');
+    modalSkillDescription = document.getElementById('modalSkillDescription');
+    modalSkillDescriptionError = document.getElementById('modalSkillDescriptionError');
+    modalSkillInvocationAuto = document.getElementById('modalSkillInvocationAuto');
+    modalSkillInvocationExplicit = document.getElementById('modalSkillInvocationExplicit');
+    modalSkillInstructionsWarning = document.getElementById('modalSkillInstructionsWarning');
+    importSkillBtn = document.getElementById('importSkill');
+    importSkillFileInput = document.getElementById('importSkillFile');
     modalSave = document.getElementById('modalSave');
     modalCancel = document.getElementById('modalCancel');
     customSystemPromptTextarea = document.getElementById('customSystemPrompt');
@@ -700,7 +765,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     modalCommandPrompt.addEventListener('input', () => {
         validateCommandPromptInput({ showEmptyError: false });
+        updateSkillInstructionsWarning();
     });
+    modalSkillId.addEventListener('input', () => {
+        validateSkillIdInput();
+    });
+    modalSkillDescription.addEventListener('input', () => {
+        validateSkillDescriptionInput({ showEmptyError: false });
+    });
+    [modalSkillInvocationAuto, modalSkillInvocationExplicit].forEach((radio) => {
+        radio.addEventListener('change', updateSkillInstructionsWarning);
+    });
+    importSkillBtn.addEventListener('click', () => importSkillFileInput.click());
+    importSkillFileInput.addEventListener('change', handleSkillImport);
     let promptSaveTimeout;
     customSystemPromptTextarea.addEventListener('input', () => {
         updateCustomSystemPromptCount();
@@ -990,6 +1067,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error('Invalid API endpoint in imported settings');
                 }
 
+                // 舊版備份只有 CUSTOM_COMMANDS：轉成技能，否則已存在的 ASKPAGE_SKILLS 會讓舊資料被忽略
+                if (Array.isArray(settings[CUSTOM_COMMANDS_STORAGE]) && !Array.isArray(settings[ASKPAGE_SKILLS_STORAGE])) {
+                    settings[ASKPAGE_SKILLS_STORAGE] = AskPageSkills.migrateLegacyCommands(settings[CUSTOM_COMMANDS_STORAGE]);
+                }
+
                 if (Object.prototype.hasOwnProperty.call(settings, 'ASKPAGE_UI_LOCALE')) {
                     settings.ASKPAGE_UI_LOCALE = window.AskPageI18n?.normalizePreference?.(settings.ASKPAGE_UI_LOCALE) || 'auto';
                 }
@@ -1063,21 +1145,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         return '';
     }
 
+    function isEditingBuiltIn() {
+        return Boolean(currentEditingCommand && currentEditingCommand.builtin);
+    }
+
     function openModal(command = null) {
         currentEditingCommand = command;
         const isBuiltIn = Boolean(command && command.builtin);
 
         if (command) {
             modalTitle.textContent = command.builtin ? t('editBuiltInCommand') : t('editCustomCommand');
-            modalCommandName.value = command.cmd;
+            modalCommandName.value = command.builtin ? command.cmd : command.command;
             modalCommandName.disabled = command.builtin;
-            modalCommandPrompt.value = command.prompt || '';
-            modalCommandShowVariableLabels.checked = Boolean(command.showVariableLabels);
+            modalCommandPrompt.value = (command.builtin ? command.prompt : command.instructions) || '';
+            modalCommandShowVariableLabels.checked = Boolean(command.builtin ? command.showVariableLabels : command.askpage.showVariableLabels);
 
             if (!isBuiltIn) {
-                const mode = normalizeCustomCommandMode(command.mode);
-                setCustomCommandMode(mode);
-                modalCommandScreenshotEnabled.checked = Boolean(command.screenshotEnabled);
+                modalSkillId.value = command.name;
+                modalSkillDescription.value = command.description;
+                setSkillInvocation(command.invocation);
+                setCustomCommandMode(normalizeCustomCommandMode(command.askpage.mode));
+                modalCommandScreenshotEnabled.checked = Boolean(command.askpage.screenshotEnabled);
             } else {
                 setCustomCommandMode(DEFAULT_CUSTOM_COMMAND_MODE);
                 modalCommandScreenshotEnabled.checked = false;
@@ -1088,14 +1176,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalCommandName.disabled = false;
             modalCommandPrompt.value = '';
             modalCommandShowVariableLabels.checked = false;
+            modalSkillId.value = '';
+            modalSkillDescription.value = '';
+            setSkillInvocation(AskPageSkills.SKILL_INVOCATION.AUTO);
             setCustomCommandMode(DEFAULT_CUSTOM_COMMAND_MODE);
             modalCommandScreenshotEnabled.checked = false;
         }
 
         toggleModalCommandModeInputs(!isBuiltIn);
+        commandModal.querySelectorAll('.skill-only-field').forEach((field) => {
+            field.style.display = isBuiltIn ? 'none' : 'block';
+        });
 
         clearCommandNameValidation();
         clearCommandPromptValidation();
+        setFieldValidationError(modalSkillId, modalSkillIdError, '');
+        setFieldValidationError(modalSkillDescription, modalSkillDescriptionError, '');
+        updateSkillInstructionsWarning();
         commandModal.style.display = 'block';
         if (!modalCommandName.disabled) {
             modalCommandName.focus();
@@ -1111,88 +1208,96 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearCommandPromptValidation();
     }
 
-    // Validate command name
-    function isValidCommandName(name) {
-        return /^\/[a-zA-Z0-9_-]+$/.test(name);
+    function getSkillInvocation() {
+        return modalSkillInvocationExplicit.checked
+            ? AskPageSkills.SKILL_INVOCATION.EXPLICIT
+            : AskPageSkills.SKILL_INVOCATION.AUTO;
     }
 
-    // Check if command already exists
-    function findExistingCommand(name, excludeCurrent = false) {
-        const allCommands = [...BUILT_IN_COMMANDS, ...customCommands];
-        return allCommands.find(cmd =>
-            cmd.cmd === name &&
-            (!excludeCurrent || !currentEditingCommand || cmd.cmd !== currentEditingCommand.cmd)
-        );
+    function setSkillInvocation(invocation) {
+        const isExplicit = invocation === AskPageSkills.SKILL_INVOCATION.EXPLICIT;
+        modalSkillInvocationExplicit.checked = isExplicit;
+        modalSkillInvocationAuto.checked = !isExplicit;
+    }
+
+    function getEditingSkillName() {
+        return currentEditingCommand && !currentEditingCommand.builtin ? currentEditingCommand.name : '';
+    }
+
+    function getSkillFormFields() {
+        return {
+            command: modalCommandName.value.trim(),
+            name: modalSkillId.value.trim(),
+            description: modalSkillDescription.value.trim()
+        };
+    }
+
+    function setFieldValidationError(field, errorElement, message) {
+        if (message) {
+            field.classList.add('input-error');
+            field.setAttribute('aria-invalid', 'true');
+        } else {
+            field.classList.remove('input-error');
+            field.removeAttribute('aria-invalid');
+        }
+        errorElement.textContent = message || '';
+        return !message;
     }
 
     function clearCommandNameValidation() {
-        modalCommandName.classList.remove('input-error');
-        modalCommandName.removeAttribute('aria-invalid');
-        modalCommandNameError.textContent = '';
+        setFieldValidationError(modalCommandName, modalCommandNameError, '');
     }
 
-    function setCommandNameValidationError(message) {
-        if (message) {
-            modalCommandName.classList.add('input-error');
-            modalCommandName.setAttribute('aria-invalid', 'true');
-            modalCommandNameError.textContent = message;
-            return false;
-        }
-
-        clearCommandNameValidation();
-        return true;
-    }
-
-    function getCommandNameValidationMessage(name, { showEmptyError = true, excludeCurrent = false } = {}) {
+    function getCommandNameValidationMessage({ showEmptyError = true } = {}) {
         if (modalCommandName.disabled) {
             return '';
         }
-
-        if (!name) {
-            return showEmptyError ? t('commandNameRequired') : '';
+        const fields = getSkillFormFields();
+        if (!fields.command && !showEmptyError) {
+            return '';
         }
-
-        if (!isValidCommandName(name)) {
-            return t('commandNameInvalid');
-        }
-
-        const existingCommand = findExistingCommand(name, excludeCurrent);
-        if (existingCommand) {
-            return existingCommand.builtin ?
-                t('commandNameBuiltinDuplicate') :
-                t('commandNameCustomDuplicate');
-        }
-
-        return '';
+        const errorKey = getSkillFieldErrors(fields, skills, getEditingSkillName()).command;
+        return errorKey ? t(errorKey) : '';
     }
 
     function validateCommandNameInput(options = {}) {
-        const name = modalCommandName.value.trim();
-        const excludeCurrent = Boolean(currentEditingCommand && !currentEditingCommand.builtin);
-        const message = getCommandNameValidationMessage(name, {
-            showEmptyError: options.showEmptyError !== false,
-            excludeCurrent
-        });
+        const message = getCommandNameValidationMessage({ showEmptyError: options.showEmptyError !== false });
+        return setFieldValidationError(modalCommandName, modalCommandNameError, message);
+    }
 
-        return setCommandNameValidationError(message);
+    function validateSkillIdInput() {
+        if (isEditingBuiltIn()) {
+            return true;
+        }
+        const errorKey = getSkillFieldErrors(getSkillFormFields(), skills, getEditingSkillName()).name;
+        return setFieldValidationError(modalSkillId, modalSkillIdError, errorKey ? t(errorKey) : '');
+    }
+
+    function validateSkillDescriptionInput({ showEmptyError = true } = {}) {
+        if (isEditingBuiltIn()) {
+            return true;
+        }
+        const fields = getSkillFormFields();
+        const errorKey = !fields.description && !showEmptyError
+            ? ''
+            : getSkillFieldErrors(fields, skills, getEditingSkillName()).description;
+        return setFieldValidationError(modalSkillDescription, modalSkillDescriptionError, errorKey ? t(errorKey) : '');
+    }
+
+    // 自動技能的本文經由 load_skill 工具結果回傳，超過工具結果上限時會被截斷。
+    function updateSkillInstructionsWarning() {
+        const length = modalCommandPrompt.value.trim().length;
+        const limit = normalizeToolResultMaxChars(toolResultMaxCharsInput?.value);
+        const shouldWarn = !isEditingBuiltIn()
+            && getSkillInvocation() === AskPageSkills.SKILL_INVOCATION.AUTO
+            && length > limit;
+        modalSkillInstructionsWarning.textContent = shouldWarn
+            ? t('skillInstructionsTooLong', { count: length, limit })
+            : '';
     }
 
     function clearCommandPromptValidation() {
-        modalCommandPrompt.classList.remove('input-error');
-        modalCommandPrompt.removeAttribute('aria-invalid');
-        modalCommandPromptError.textContent = '';
-    }
-
-    function setCommandPromptValidationError(message) {
-        if (message) {
-            modalCommandPrompt.classList.add('input-error');
-            modalCommandPrompt.setAttribute('aria-invalid', 'true');
-            modalCommandPromptError.textContent = message;
-            return false;
-        }
-
-        clearCommandPromptValidation();
-        return true;
+        setFieldValidationError(modalCommandPrompt, modalCommandPromptError, '');
     }
 
     function getCommandPromptValidationMessage(prompt, { showEmptyError = true } = {}) {
@@ -1214,89 +1319,186 @@ document.addEventListener('DOMContentLoaded', async () => {
         const message = getCommandPromptValidationMessage(prompt, {
             showEmptyError: options.showEmptyError !== false
         });
-        return setCommandPromptValidationError(message);
+        return setFieldValidationError(modalCommandPrompt, modalCommandPromptError, message);
+    }
+
+    // 觸發名稱改名時，把用量計數搬到新名稱，避免使用說明中的常用排序歸零。
+    async function moveSkillUsage(oldCommand, newCommand) {
+        if (!oldCommand || oldCommand === newCommand) {
+            return;
+        }
+        const result = await chrome.storage.local.get(CUSTOM_COMMAND_USAGE_STORAGE);
+        const usageMap = result[CUSTOM_COMMAND_USAGE_STORAGE];
+        if (!usageMap || typeof usageMap !== 'object' || !Object.prototype.hasOwnProperty.call(usageMap, oldCommand)) {
+            return;
+        }
+        const nextUsageMap = { ...usageMap };
+        nextUsageMap[newCommand] = (Number(nextUsageMap[newCommand]) || 0) + (Number(nextUsageMap[oldCommand]) || 0);
+        delete nextUsageMap[oldCommand];
+        await chrome.storage.local.set({ [CUSTOM_COMMAND_USAGE_STORAGE]: nextUsageMap });
     }
 
     // Save command from modal
     function saveCommand() {
-        const name = modalCommandName.value.trim();
         const prompt = modalCommandPrompt.value.trim();
-        const mode = getCustomCommandMode();
-        const screenshotEnabled = Boolean(modalCommandScreenshotEnabled && modalCommandScreenshotEnabled.checked);
         const showVariableLabels = Boolean(modalCommandShowVariableLabels && modalCommandShowVariableLabels.checked);
 
-        if (!validateCommandNameInput({ showEmptyError: true })) {
-            return;
-        }
-
-        if (!validateCommandPromptInput({ showEmptyError: true })) {
-            return;
-        }
-
-        if (currentEditingCommand) {
-            // Editing existing command
-            if (currentEditingCommand.builtin) {
-                // Special handling for built-in commands
-                if (currentEditingCommand.cmd === '/summary') {
-                    // Save custom summary prompt
-                    chrome.storage.local.set({
-                        [CUSTOM_SUMMARY_PROMPT_STORAGE]: prompt,
-                        [CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE]: showVariableLabels
-                    });
-                    currentEditingCommand.prompt = prompt;
-                    currentEditingCommand.showVariableLabels = showVariableLabels;
-                }
-            } else {
-                // Editing custom command
-                const index = customCommands.findIndex(cmd => cmd.cmd === currentEditingCommand.cmd);
-                if (index !== -1) {
-                    customCommands[index] = {
-                        cmd: name,
-                        prompt,
-                        mode,
-                        screenshotEnabled,
-                        showVariableLabels
-                    };
-                }
+        if (isEditingBuiltIn()) {
+            if (!validateCommandPromptInput({ showEmptyError: true })) {
+                return;
             }
-        } else {
-            // Adding new command
-            customCommands.push({
-                cmd: name,
-                prompt,
-                mode,
-                screenshotEnabled,
-                showVariableLabels
-            });
+            if (currentEditingCommand.cmd === '/summary') {
+                chrome.storage.local.set({
+                    [CUSTOM_SUMMARY_PROMPT_STORAGE]: prompt,
+                    [CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE]: showVariableLabels
+                });
+                currentEditingCommand.prompt = prompt;
+                currentEditingCommand.showVariableLabels = showVariableLabels;
+            }
+            renderCommands();
+            closeModal();
+            showLocalizedStatus('commandSaved', undefined, 'success');
+            return;
         }
 
-        saveCustomCommands();
+        const isCommandValid = validateCommandNameInput({ showEmptyError: true });
+        const isIdValid = validateSkillIdInput();
+        const isDescriptionValid = validateSkillDescriptionInput({ showEmptyError: true });
+        const isPromptValid = validateCommandPromptInput({ showEmptyError: true });
+        if (!isCommandValid || !isIdValid || !isDescriptionValid || !isPromptValid) {
+            return;
+        }
+
+        const fields = getSkillFormFields();
+        const editingSkill = currentEditingCommand;
+        const editingName = getEditingSkillName();
+        const takenNames = new Set(skills.filter((skill) => skill.name !== editingName).map((skill) => skill.name));
+        const name = fields.name || AskPageSkills.makeUniqueSkillName(AskPageSkills.slugifySkillName(fields.command), takenNames);
+        const skill = AskPageSkills.normalizeSkill({
+            // 保留匯入時帶進來、但表單沒有編輯的欄位（license、metadata 等）與啟用狀態
+            ...(editingSkill || {}),
+            name,
+            command: fields.command,
+            description: fields.description,
+            instructions: prompt,
+            invocation: getSkillInvocation(),
+            askpage: {
+                mode: getCustomCommandMode(),
+                screenshotEnabled: Boolean(modalCommandScreenshotEnabled && modalCommandScreenshotEnabled.checked),
+                showVariableLabels
+            }
+        });
+
+        if (editingSkill) {
+            const index = skills.findIndex((item) => item.name === editingName);
+            if (index !== -1) {
+                skills[index] = skill;
+            }
+            moveSkillUsage(editingSkill.command, skill.command).catch((error) => {
+                console.warn('Failed to move skill usage count:', error);
+            });
+        } else {
+            skills.push(skill);
+        }
+
+        saveSkills();
         renderCommands();
         closeModal();
         showLocalizedStatus('commandSaved', undefined, 'success');
     }
 
-    // Delete custom command
-    function deleteCommand(command) {
-        if (command.builtin) {
-            showLocalizedStatus('builtInCommandCannotDelete', undefined, 'error');
-            return;
-        }
-
-        if (confirm(t('deleteCommandConfirm', { command: command.cmd }))) {
-            const index = customCommands.findIndex(cmd => cmd.cmd === command.cmd);
-            if (index !== -1) {
-                customCommands.splice(index, 1);
-                saveCustomCommands();
-                renderCommands();
-                showLocalizedStatus('commandDeleted', undefined, 'success');
-            }
+    // Delete skill
+    function deleteCommand(skill) {
+        if (confirm(t('deleteCommandConfirm', { command: skill.command }))) {
+            skills = skills.filter((item) => item.name !== skill.name);
+            saveSkills();
+            renderCommands();
+            showLocalizedStatus('commandDeleted', undefined, 'success');
         }
     }
 
-    // Save custom commands to storage
-    function saveCustomCommands() {
-        chrome.storage.local.set({ [CUSTOM_COMMANDS_STORAGE]: customCommands });
+    // ASKPAGE_SKILLS 只由設定頁寫入；內容腳本透過 storage 變更事件同步。
+    function saveSkills() {
+        chrome.storage.local.set({ [ASKPAGE_SKILLS_STORAGE]: skills });
+    }
+
+    function toggleSkillEnabled(name, enabled) {
+        const skill = AskPageSkills.findSkillByName(skills, name, { includeDisabled: true });
+        if (!skill) {
+            return;
+        }
+        skills = setSkillEnabled(skills, skill.name, enabled);
+        saveSkills();
+        renderCommands();
+        showLocalizedStatus(enabled ? 'skillEnabledStatus' : 'skillDisabledStatus', { skill: skill.command }, 'success');
+    }
+
+    function toggleSummaryEnabled(enabled) {
+        const summaryCommand = BUILT_IN_COMMANDS.find((command) => command.cmd === '/summary');
+        summaryCommand.enabled = enabled;
+        chrome.storage.local.set({ [CUSTOM_SUMMARY_ENABLED_STORAGE]: enabled });
+        renderCommands();
+        showLocalizedStatus(enabled ? 'skillEnabledStatus' : 'skillDisabledStatus', { skill: '/summary' }, 'success');
+    }
+
+    function exportSkill(skill) {
+        const markdown = AskPageSkills.serializeSkillMarkdown(skill);
+        const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${skill.name}.md`;
+        link.click();
+        URL.revokeObjectURL(url);
+    }
+
+    const SKILL_IMPORT_ERROR_KEYS = {
+        'missing-frontmatter': 'skillImportMissingFrontmatter',
+        'missing-description': 'skillImportMissingDescription',
+        'invalid-name': 'skillImportInvalidName'
+    };
+
+    function importSkillFromText(text, fileName) {
+        const fallbackName = String(fileName || '').replace(/\.(md|markdown)$/i, '');
+        const { skill, error } = AskPageSkills.createSkillFromMarkdown(text, { fallbackName });
+        if (error) {
+            showLocalizedStatus(SKILL_IMPORT_ERROR_KEYS[error] || 'skillImportReadFailed', undefined, 'error');
+            return;
+        }
+        if (AskPageSkills.validateSkillCommand(skill.command)) {
+            showLocalizedStatus('skillImportInvalidTrigger', { trigger: skill.command }, 'error');
+            return;
+        }
+        if (AskPageSkills.findSkillByName(skills, skill.name, { includeDisabled: true })) {
+            showLocalizedStatus('skillImportNameConflict', { skill: skill.name }, 'error');
+            return;
+        }
+        if (AskPageSkills.findSkillByCommand(skills, skill.command, { includeDisabled: true })) {
+            showLocalizedStatus('skillImportTriggerConflict', { trigger: skill.command }, 'error');
+            return;
+        }
+
+        skills.push(skill);
+        saveSkills();
+        renderCommands();
+        showLocalizedStatus('skillImported', { skill: skill.command }, 'success');
+    }
+
+    function handleSkillImport(event) {
+        const file = event.target.files?.[0];
+        if (!file) {
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            importSkillFromText(String(reader.result || ''), file.name);
+        };
+        reader.onerror = () => {
+            showLocalizedStatus('skillImportReadFailed', undefined, 'error');
+        };
+        reader.readAsText(file);
+        // 清空以便重複匯入同一個檔案
+        importSkillFileInput.value = '';
     }
 
     function updateCustomSystemPromptCount() {
@@ -1309,52 +1511,111 @@ document.addEventListener('DOMContentLoaded', async () => {
         await chrome.storage.local.set({ [CUSTOM_SYSTEM_PROMPT_STORAGE]: customSystemPrompt });
     }
 
-    // Render commands list
+    function createSkillsGroupTitle(key) {
+        const title = document.createElement('div');
+        title.className = 'skills-group-title';
+        title.textContent = t(key);
+        return title;
+    }
+
+    // Render skills list
     function renderCommands() {
         commandsList.innerHTML = '';
 
-        // Render built-in commands
+        commandsList.appendChild(createSkillsGroupTitle('builtInSkillsGroup'));
         BUILT_IN_COMMANDS.forEach(command => {
-            const commandElement = createCommandElement(command);
-            commandsList.appendChild(commandElement);
+            commandsList.appendChild(createCommandElement(command));
         });
 
-        // Render custom commands
-        customCommands.forEach(command => {
-            const commandElement = createCommandElement(command);
-            commandsList.appendChild(commandElement);
+        commandsList.appendChild(createSkillsGroupTitle('userSkillsGroup'));
+        if (!skills.length) {
+            const empty = document.createElement('div');
+            empty.className = 'skills-empty';
+            empty.textContent = t('noUserSkills');
+            commandsList.appendChild(empty);
+        }
+        skills.forEach(skill => {
+            commandsList.appendChild(createSkillElement(skill));
         });
     }
 
-    // Create command element
+    function createEnabledToggleHtml(label, enabled, dataAttributes) {
+        const escapedLabel = escapeHtml(t('skillEnabledToggleLabel', { skill: label }));
+        return `<input type="checkbox" data-action="toggle" ${dataAttributes} ${enabled ? 'checked' : ''} title="${escapedLabel}" aria-label="${escapedLabel}">`;
+    }
+
+    // Create built-in skill element
     function createCommandElement(command) {
         const div = document.createElement('div');
-        div.className = 'command-item';
+        const isDisabled = command.toggleable && command.enabled === false;
+        div.className = `command-item${isDisabled ? ' is-disabled' : ''}`;
 
-        const isBuiltIn = command.builtin;
-        const isEditable = command.editable || !isBuiltIn;
-        const desc = getCommandListDescription(command);
         const escapedCommand = escapeHtml(command.cmd);
-        const escapedDescription = escapeHtml(desc);
+        const toggleHtml = command.toggleable
+            ? createEnabledToggleHtml(command.cmd, command.enabled !== false, `data-command="${escapedCommand}"`)
+            : '';
 
         div.innerHTML = `
             <div class="command-header">
-                <div>
-                    <div class="command-name">${escapedCommand}</div>
-                    <div style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">
-                        ${escapedDescription}
+                <div class="command-main">
+                    ${toggleHtml}
+                    <div>
+                        <div class="command-name">${escapedCommand}</div>
+                        <div style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">
+                            ${escapeHtml(getCommandListDescription(command))}
+                        </div>
                     </div>
                 </div>
                 <div class="command-actions">
-                    ${isEditable ? `<button class="btn-secondary btn-small" data-action="edit" data-command="${command.cmd}">
+                    ${isDisabled ? `<span class="built-in-badge">${escapeHtml(t('skillDisabledBadge'))}</span>` : ''}
+                    ${command.editable ? `<button class="btn-secondary btn-small" data-action="edit" data-command="${escapedCommand}">
                         <span class="icon">✏️</span>
                         ${escapeHtml(t('edit'))}
                     </button>` : ''}
-                    ${isBuiltIn ? `<span class="built-in-badge">${escapeHtml(t('builtin'))}</span>` : ''}
-                    ${!isBuiltIn ? `<button class="btn-danger btn-small" data-action="delete" data-command="${command.cmd}">
+                    <span class="built-in-badge">${escapeHtml(t('builtin'))}</span>
+                </div>
+            </div>
+        `;
+
+        return div;
+    }
+
+    function createSkillElement(skill) {
+        const div = document.createElement('div');
+        div.className = `command-item${skill.enabled ? '' : ' is-disabled'}`;
+
+        const escapedName = escapeHtml(skill.name);
+        const skillData = `data-skill="${escapedName}"`;
+        const invocationBadgeKey = skill.invocation === AskPageSkills.SKILL_INVOCATION.AUTO
+            ? 'skillInvocationAutoBadge'
+            : 'skillInvocationExplicitBadge';
+
+        div.innerHTML = `
+            <div class="command-header">
+                <div class="command-main">
+                    ${createEnabledToggleHtml(skill.command, skill.enabled, skillData)}
+                    <div>
+                        <div class="command-name">${escapeHtml(skill.command)}<span class="skill-id">name: ${escapedName}</span></div>
+                        <div style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">
+                            ${escapeHtml(getPromptPreview(AskPageSkills.getSkillDescription(skill), 160))}
+                        </div>
+                    </div>
+                </div>
+                <div class="command-actions">
+                    <span class="built-in-badge">${escapeHtml(t(invocationBadgeKey))}</span>
+                    ${skill.enabled ? '' : `<span class="built-in-badge">${escapeHtml(t('skillDisabledBadge'))}</span>`}
+                    <button class="btn-secondary btn-small" data-action="edit" ${skillData}>
+                        <span class="icon">✏️</span>
+                        ${escapeHtml(t('edit'))}
+                    </button>
+                    <button class="btn-secondary btn-small" data-action="export" ${skillData}>
+                        <span class="icon">📤</span>
+                        ${escapeHtml(t('exportSkill'))}
+                    </button>
+                    <button class="btn-danger btn-small" data-action="delete" ${skillData}>
                         <span class="icon">✕</span>
                         ${escapeHtml(t('delete'))}
-                    </button>` : ''}
+                    </button>
                 </div>
             </div>
         `;
@@ -1370,38 +1631,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         return DEFAULT_CUSTOM_COMMAND_MODE;
     }
 
-    function normalizeCustomCommand(command) {
-        if (!command || typeof command !== 'object') {
-            return null;
-        }
-
-        const cmd = String(command.cmd || '').trim();
-        if (!cmd) {
-            return null;
-        }
-
-        return {
-            cmd: cmd,
-            prompt: String(command.prompt || ''),
-            mode: normalizeCustomCommandMode(command.mode),
-            screenshotEnabled: command.screenshotEnabled === true,
-            showVariableLabels: command.showVariableLabels === true
-        };
-    }
-
-    function normalizeCustomCommands(commands) {
-        if (!Array.isArray(commands)) {
-            return [];
-        }
-
-        return commands
-            .map(normalizeCustomCommand)
-            .filter(Boolean);
-    }
-
     function getCustomCommandMode() {
         if (modalCommandModeInquiry && modalCommandModeInquiry.checked) {
             return CUSTOM_COMMAND_MODE_INQUIRY;
+        }
+        if (modalCommandModeAgent && modalCommandModeAgent.checked) {
+            return CUSTOM_COMMAND_MODE_AGENT;
         }
         if (modalCommandModeUnspecified && modalCommandModeUnspecified.checked) {
             return CUSTOM_COMMAND_MODE_UNSPECIFIED;
@@ -1466,29 +1701,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         return getPromptPreview(promptText);
     }
 
-    // Add event delegation for command buttons
+    // Add event delegation for skill buttons
     commandsList.addEventListener('click', (e) => {
-        const button = e.target.closest('[data-action]');
+        const button = e.target.closest('button[data-action]');
         if (!button) {
             return;
         }
 
         const action = button.dataset.action;
-        const cmdName = button.dataset.command;
-
-        if (action === 'edit') {
-            let command = BUILT_IN_COMMANDS.find(cmd => cmd.cmd === cmdName);
-            if (!command) {
-                command = customCommands.find(cmd => cmd.cmd === cmdName);
-            }
-            if (command) {
+        if (button.dataset.command) {
+            const command = BUILT_IN_COMMANDS.find(cmd => cmd.cmd === button.dataset.command);
+            if (command && action === 'edit') {
                 openModal(command);
             }
+            return;
+        }
+
+        const skill = AskPageSkills.findSkillByName(skills, button.dataset.skill, { includeDisabled: true });
+        if (!skill) {
+            return;
+        }
+        if (action === 'edit') {
+            openModal(skill);
+        } else if (action === 'export') {
+            exportSkill(skill);
         } else if (action === 'delete') {
-            const command = customCommands.find(cmd => cmd.cmd === cmdName);
-            if (command) {
-                deleteCommand(command);
-            }
+            deleteCommand(skill);
+        }
+    });
+
+    // 啟用開關直接寫入，不需按儲存
+    commandsList.addEventListener('change', (e) => {
+        const toggle = e.target.closest('input[data-action="toggle"]');
+        if (!toggle) {
+            return;
+        }
+        if (toggle.dataset.command === '/summary') {
+            toggleSummaryEnabled(toggle.checked);
+        } else if (toggle.dataset.skill) {
+            toggleSkillEnabled(toggle.dataset.skill, toggle.checked);
         }
     });
 
@@ -1516,7 +1767,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.storage.local.get([
         'PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL',
         CUSTOM_SUMMARY_PROMPT_STORAGE, CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE,
-        CUSTOM_COMMANDS_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
+        CUSTOM_COMMANDS_STORAGE, ASKPAGE_SKILLS_STORAGE, CUSTOM_SUMMARY_ENABLED_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
         LAST_ACTIVE_TAB_STORAGE, PENDING_OPTIONS_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE,
         AGENT_CONTEXT_FORMAT_STORAGE, AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE, TOOL_CALL_MAX_ROUNDS_STORAGE,
         READ_PAGE_DEFAULT_MAX_CHARS_STORAGE, TOOL_RESULT_MAX_CHARS_STORAGE,
@@ -1537,8 +1788,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Render providers list
         renderProviders(activeProviderId, activeModel);
 
-        // Load custom commands
-        customCommands = normalizeCustomCommands(result[CUSTOM_COMMANDS_STORAGE]);
+        // 載入技能；ASKPAGE_SKILLS 不存在時由舊版 CUSTOM_COMMANDS 遷移並寫入（設定頁是唯一的遷移寫入者）。
+        // 已存在的空陣列代表使用者刪光了技能，不可再從舊資料復活。
+        if (Array.isArray(result[ASKPAGE_SKILLS_STORAGE])) {
+            skills = AskPageSkills.normalizeSkills(result[ASKPAGE_SKILLS_STORAGE]);
+        } else {
+            skills = AskPageSkills.migrateLegacyCommands(result[CUSTOM_COMMANDS_STORAGE]);
+            saveSkills();
+        }
 
         // Load custom summary prompt for built-in /summary command
         const summaryCommand = BUILT_IN_COMMANDS.find(cmd => cmd.cmd === '/summary');
@@ -1548,6 +1805,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 summaryCommand.prompt = customSummaryPrompt;
             }
             summaryCommand.showVariableLabels = result[CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE] === true;
+            summaryCommand.enabled = result[CUSTOM_SUMMARY_ENABLED_STORAGE] !== false;
         }
 
         renderCommands();
@@ -1586,6 +1844,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         const pendingTab = consumePendingOptionsTab(result[PENDING_OPTIONS_TAB_STORAGE]);
         if (!activateTab(pendingTab)) {
             activateTab(result[LAST_ACTIVE_TAB_STORAGE]);
+        }
+    });
+
+    // 其他設定分頁修改了技能或 /summary 開關時同步畫面；以 JSON 比對略過自己剛寫入的變更。
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName !== 'local') {
+            return;
+        }
+        let shouldRender = false;
+        if (changes[ASKPAGE_SKILLS_STORAGE] && Array.isArray(changes[ASKPAGE_SKILLS_STORAGE].newValue)) {
+            const nextSkills = AskPageSkills.normalizeSkills(changes[ASKPAGE_SKILLS_STORAGE].newValue);
+            if (JSON.stringify(nextSkills) !== JSON.stringify(skills)) {
+                skills = nextSkills;
+                shouldRender = true;
+            }
+        }
+        if (changes[CUSTOM_SUMMARY_ENABLED_STORAGE]) {
+            const summaryCommand = BUILT_IN_COMMANDS.find(cmd => cmd.cmd === '/summary');
+            const nextEnabled = changes[CUSTOM_SUMMARY_ENABLED_STORAGE].newValue !== false;
+            if (summaryCommand && summaryCommand.enabled !== nextEnabled) {
+                summaryCommand.enabled = nextEnabled;
+                shouldRender = true;
+            }
+        }
+        if (shouldRender) {
+            renderCommands();
         }
     });
 

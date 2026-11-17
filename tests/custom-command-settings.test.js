@@ -62,4 +62,57 @@ assert.match(
     /重複預設值不一致/
 );
 
+// ---------- 技能表單驗證與啟用開關 ----------
+const AskPageSkills = require(path.join(rootDir, 'src', 'lib', 'skill-schema.js'));
+const skillHelpersStart = settingsScript.indexOf('const SKILL_COMMAND_ERROR_KEYS');
+const skillHelpersEnd = settingsScript.indexOf('const PREDEFINED_MODELS');
+assert.ok(skillHelpersStart !== -1 && skillHelpersEnd > skillHelpersStart, '找不到技能驗證函式');
+const skillSandbox = { AskPageSkills };
+skillSandbox.globalThis = skillSandbox;
+vm.createContext(skillSandbox);
+vm.runInContext(
+    `${settingsScript.slice(skillHelpersStart, skillHelpersEnd)}
+globalThis.__skillHelpers = { getSkillFieldErrors, setSkillEnabled };`,
+    skillSandbox,
+    { filename: 'settings.js' }
+);
+const { getSkillFieldErrors, setSkillEnabled } = skillSandbox.__skillHelpers;
+
+const existingSkills = AskPageSkills.normalizeSkills([
+    { name: 'translate', command: '/翻譯', description: 'Translate', instructions: 'Translate ${SELECTED_TEXT}', invocation: 'auto' },
+    { name: 'summarize-report', command: '/report', description: 'Report', instructions: 'Report', invocation: 'explicit' }
+]);
+const validFields = { command: '/新技能', name: '', description: 'Does things' };
+assert.deepStrictEqual({ ...getSkillFieldErrors(validFields, existingSkills) }, { command: '', name: '', description: '' }, '中文觸發名稱、ID 留空可通過');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '' }, existingSkills).command, 'commandNameRequired');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '新技能' }, existingSkills).command, 'commandNameInvalid');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '/有 空白' }, existingSkills).command, 'commandNameInvalid');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '/summary' }, existingSkills).command, 'commandNameBuiltinDuplicate');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '/agent' }, existingSkills).command, 'commandNameBuiltinDuplicate');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '/翻譯' }, existingSkills).command, 'commandNameCustomDuplicate');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '/翻譯' }, existingSkills, 'translate').command, '', '編輯自己時不算重複');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: `/${'a'.repeat(64)}` }, existingSkills).command, 'commandNameTooLong');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, name: 'Bad_Name' }, existingSkills).name, 'skillIdInvalid');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, name: 'a'.repeat(65) }, existingSkills).name, 'skillIdTooLong');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, name: 'translate' }, existingSkills).name, 'skillIdDuplicate');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, name: 'translate' }, existingSkills, 'translate').name, '');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, description: '   ' }, existingSkills).description, 'skillDescriptionRequired');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, description: 'x'.repeat(1025) }, existingSkills).description, 'skillDescriptionTooLong');
+
+const exportedBefore = AskPageSkills.serializeSkillMarkdown(existingSkills[0]);
+const toggledSkills = setSkillEnabled(existingSkills, 'translate', false);
+assert.strictEqual(toggledSkills[0].enabled, false);
+assert.strictEqual(existingSkills[0].enabled, true, '不修改原陣列');
+assert.deepStrictEqual({ ...toggledSkills[0], enabled: true }, existingSkills[0], '只改 enabled');
+assert.strictEqual(toggledSkills[1], existingSkills[1]);
+assert.strictEqual(AskPageSkills.serializeSkillMarkdown(toggledSkills[0]), exportedBefore, '停用不影響匯出的 SKILL.md');
+
+for (const key of [
+    'commandNameRequired', 'commandNameInvalid', 'commandNameTooLong', 'commandNameBuiltinDuplicate',
+    'commandNameCustomDuplicate', 'skillIdInvalid', 'skillIdTooLong', 'skillIdDuplicate',
+    'skillDescriptionRequired', 'skillDescriptionTooLong'
+]) {
+    assert.ok(zhTwCatalog[key], `zh_TW 缺少 ${key}`);
+}
+
 console.log('custom-command-settings: ok');
