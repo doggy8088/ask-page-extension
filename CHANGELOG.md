@@ -6,6 +6,29 @@
 
 ## [Unreleased]
 
+### 新增 / 改進
+
+- **技能改用 Agent Skills 格式**：每個技能對應一份 `SKILL.md`（YAML frontmatter + Markdown 本文），具備技能 ID（`name`）、描述（`description`）與使用者輸入的 `/觸發名稱`（可使用中文）。資料存在新的 `ASKPAGE_SKILLS`，由新的 `src/lib/skill-schema.js` 負責解析、序列化、正規化與驗證。
+- **自動調用與僅明確調用**：每個技能可設定調用方式。自動調用的技能只把 ID 與描述放進系統提示，模型判斷相關時呼叫新的唯讀工具 `load_skill` 載入本文；詢問模式與代理模式都有效，詢問模式仍不開放頁面工具。僅明確調用的技能不進模型清單、`load_skill` 也拒絕載入，只能輸入 `/觸發名稱` 執行。沒有自動技能時，送給模型的請求與過去相同。
+- **技能啟用開關**：技能清單每一列都有啟用開關，切換立即生效；停用的技能不進模型清單、`/` 自動完成與使用說明，輸入 `/觸發名稱` 只會顯示「技能已停用」。開關是本機偏好，不會寫進匯出的 `SKILL.md`。
+- **匯入／匯出 SKILL.md**：技能頁新增「匯入 SKILL.md」，每個技能可「匯出 SKILL.md」，可與其他支援 Agent Skills 的工具互通。
+- **詢問模式的工具邊界**：模型在詢問模式呼叫頁面工具時直接拒絕不執行；OpenAI、Azure OpenAI 在詢問模式因技能而開啟工具時，若模型不支援工具會退回純聊天。
+- **測試與文件**：新增 `tests/skill-schema.test.js`、`tests/skill-runtime.test.js`、`tests/builtin-skills.test.js`，擴充 `tests/custom-command-settings.test.js`；新增 `docs/AGENT_SKILLS.md`，更新 `README.md`、`docs/TOOLS.md`、`docs/頁問-詢問模式與代理模式.html` 與 `docs/目前提示詞管理邏輯與提問動態結構.md`。
+
+### 變更
+
+- **既有技能自動遷移**：升級後第一次開啟設定頁時，舊版 `CUSTOM_COMMANDS` 會轉成「僅明確調用」的技能，觸發名稱、提示內容、模式、截圖與變數標籤設定都不變；`CUSTOM_COMMANDS` 原值保留不刪。匯入只含 `CUSTOM_COMMANDS` 的舊版設定備份時也會一併轉換。
+- **`/summary` 可停用**：技能管理頁的內建 `/summary` 新增啟用開關（`CUSTOM_SUMMARY_ENABLED`），停用後不出現在 `/` 自動完成、使用說明與複製文字中，輸入 `/summary` 只會顯示「技能已停用」；自訂的摘要提示詞不受影響。`/clear` 維持不變，沒有停用開關。
+- **觸發名稱允許 Unicode**：觸發名稱可使用各語言文字、數字、底線與連字號，不可包含空白。
+
+### 移除
+
+- **`/screenshot`、`/agent` 斜線技能**：截圖模式與代理模式本身不變，改用對話框工具列的截圖按鈕與模式切換按鈕切換。輸入 `/screenshot` 或 `/agent` 現在會當成一般提問送出。對應的語系字串 `commandScreenshot`、`commandAgent`、`enableScreenshot`、`disableScreenshot`、`switchToInquiryMode`、`switchToAgentMode`、`builtInCommandCopyText` 一併移除。
+
+### 修正
+
+- **技能模式選「代理」無法儲存**：編輯技能時選擇「代理」模式會被存成「不指定」，現在會正確儲存。
+
 ## [0.53.0] - 2026-11-17
 
 ### 新增 / 改進（v0.53.0）

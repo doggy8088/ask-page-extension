@@ -878,7 +878,7 @@ html[data-theme="paper"] .am-md table { font-family: var(--font-sans); }
 <header class="am-panel-head"><span class="am-panel-id">A</span><h2>核心結論</h2></header>
 <div class="am-panel-body"><div class="am-callout am-callout--ok" role="note"><div class="am-callout-title">一句話</div><div class="am-callout-body am-md"><p>詢問模式只讀頁面並回答，代理模式才帶著頁面工具去讀、點、填、改。</p>
 </div></div>
-<dl class="am-kv" style="--kv-cols: 2"><div class="am-kv-cell"><dt>切換方式</dt><dd>對話框輸入 /agent，或點模式切換按鈕</dd></div><div class="am-kv-cell"><dt>儲存位置</dt><dd>chrome.storage.local 的 HTML_MODE_ENABLED</dd></div><div class="am-kv-cell"><dt>作用範圍</dt><dd>目前頁面的 content script</dd></div><div class="am-kv-cell"><dt>自訂指令</dt><dd>設定頁可指定每個指令用詢問或代理模式</dd></div></dl></div>
+<dl class="am-kv" style="--kv-cols: 2"><div class="am-kv-cell"><dt>切換方式</dt><dd>點擊對話框的模式切換按鈕</dd></div><div class="am-kv-cell"><dt>儲存位置</dt><dd>chrome.storage.local 的 HTML_MODE_ENABLED</dd></div><div class="am-kv-cell"><dt>作用範圍</dt><dd>目前頁面的 content script</dd></div><div class="am-kv-cell"><dt>自訂指令</dt><dd>設定頁可指定每個指令用詢問或代理模式</dd></div></dl></div>
 </section>
 <section class="am-panel am-span-wide" id="panel-B" style="grid-column: span 2">
 <header class="am-panel-head"><span class="am-panel-id">B</span><h2>兩種模式對照</h2></header>
@@ -1078,7 +1078,7 @@ html[data-theme="paper"] .am-md table { font-family: var(--font-sans); }
 </div></div>
 <div class="am-md"><ol>
 <li>用詢問模式摘要、翻譯、比對頁面內容。</li>
-<li>需要動手前先輸入 /agent 切換模式。</li>
+<li>需要動手前先點擊對話框的模式切換按鈕切換模式。</li>
 <li>說明目標、範圍與驗收條件，一次一項。</li>
 <li>代理模式完成後檢查頁面結果。</li>
 <li>需要重來時用 /clear 清掉對話與工具輪次。</li>
@@ -1126,7 +1126,7 @@ source: content.js · lib/anthropic-tools.js · lib/tool-policy.js · docs/TOOLS
 ```
 
 ```kv cols=2
-切換方式: 對話框輸入 /agent，或點模式切換按鈕
+切換方式: 點擊對話框的模式切換按鈕
 儲存位置: chrome.storage.local 的 HTML_MODE_ENABLED
 作用範圍: 目前頁面的 content script
 自訂指令: 設定頁可指定每個指令用詢問或代理模式
@@ -1235,7 +1235,7 @@ source: content.js · lib/anthropic-tools.js · lib/tool-policy.js · docs/TOOLS
 ```
 
 1. 用詢問模式摘要、翻譯、比對頁面內容。
-2. 需要動手前先輸入 /agent 切換模式。
+2. 需要動手前先點擊對話框的模式切換按鈕切換模式。
 3. 說明目標、範圍與驗收條件，一次一項。
 4. 代理模式完成後檢查頁面結果。
 5. 需要重來時用 /clear 清掉對話與工具輪次。
