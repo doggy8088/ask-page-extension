@@ -519,7 +519,7 @@
     "skillInvocationAuto": { "message": "Auto invocation" },
     "skillInvocationExplicit": { "message": "Explicit only" },
     "skillInvocationHelp": { "message": "Auto invocation: the model loads the skill when the description matches, and you can still type its /trigger. Explicit only: the skill is hidden from the model and runs only when you type its /trigger." },
-    "skillInstructionsTooLong": { "message": "The skill body has $count$ characters, more than the $limit$-character tool result limit, so it may be truncated when auto-loaded.", "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } } },
+    "skillInstructionsTooLong": { "message": "When auto-loaded, the tool result is about $count$ characters, more than the $limit$-character tool result limit, so the end of the skill body may be truncated.", "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } } },
     "skillImported": { "message": "Imported skill $skill$", "placeholders": { "skill": { "content": "$1" } } },
     "skillImportMissingFrontmatter": { "message": "Import failed: the file has no YAML frontmatter." },
     "skillImportMissingDescription": { "message": "Import failed: the frontmatter has no description." },

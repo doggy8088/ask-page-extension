@@ -519,7 +519,7 @@
     "skillInvocationAuto": { "message": "自动调用" },
     "skillInvocationExplicit": { "message": "仅显式调用" },
     "skillInvocationHelp": { "message": "自动调用：模型根据描述自行加载，也可输入 /触发名称 执行。仅显式调用：不会出现在模型的技能列表中，只能输入 /触发名称 执行。" },
-    "skillInstructionsTooLong": { "message": "技能正文共 $count$ 个字符，超过工具结果上限 $limit$ 字符，自动加载时可能被截断。", "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } } },
+    "skillInstructionsTooLong": { "message": "自动加载时的工具结果约 $count$ 个字符，超过工具结果上限 $limit$ 字符，正文末尾可能被截断。", "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } } },
     "skillImported": { "message": "已导入技能 $skill$", "placeholders": { "skill": { "content": "$1" } } },
     "skillImportMissingFrontmatter": { "message": "导入失败：文件缺少 YAML frontmatter" },
     "skillImportMissingDescription": { "message": "导入失败：frontmatter 缺少 description" },

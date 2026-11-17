@@ -5897,9 +5897,24 @@ function isSummarySkillEnabled() {
     return skillsRuntime.summaryEnabled !== false;
 }
 
+const skillsChangeListeners = new Set();
+
+// 已開啟的對話框用來重繪使用說明；回傳取消訂閱函式，比照 AskPageI18n.onLocaleChanged。
+function onSkillsChanged(listener) {
+    skillsChangeListeners.add(listener);
+    return () => skillsChangeListeners.delete(listener);
+}
+
 function invalidateSkillsRuntime() {
     skillsRuntimePromise = null;
     clearInquiryConversationContext();
+    skillsChangeListeners.forEach((listener) => {
+        try {
+            listener();
+        } catch (error) {
+            console.warn('[AskPage] Skills change listener failed:', error);
+        }
+    });
 }
 
 globalThis.chrome?.storage?.onChanged?.addListener?.((changes, areaName) => {
@@ -5946,16 +5961,18 @@ function buildLoadSkillResult(args, skills, { selectedText = '', agentModeEnable
         ? `已載入技能 ${skill.name}。本文含未填變數（${unfilledVariables.map((variable) => variable.name).join(', ')}），請先向使用者確認這些值再依 instructions 執行。`
         : `已載入技能 ${skill.name}，請依 instructions 完成本輪任務。`;
 
+    // 送回模型前會把整個結果 JSON 化後依 TOOL_RESULT_MAX_CHARS 截斷；warnings 與 unfilledVariables
+    // 放在本文之前，本文過長時只會截掉本文尾端。
     return {
         success: true,
         message,
+        warnings,
         data: {
             name: skill.name,
+            unfilledVariables,
             description: skillsLibrary.getSkillDescription(skill),
-            instructions: resolveBuiltinTemplateKeepingVariables(skill.instructions, builtinValues),
-            unfilledVariables
+            instructions: resolveBuiltinTemplateKeepingVariables(skill.instructions, builtinValues)
         },
-        warnings,
         matchedTargets: []
     };
 }
@@ -6976,6 +6993,12 @@ async function createDialog() {
     }
     let dialogLocaleReady = false;
     let removeDialogLocaleListener = () => {};
+    // 技能或 /summary 開關變更時，重繪已顯示的使用說明（/ 自動完成每次輸入都會重新讀取）。
+    const removeDialogSkillsListener = onSkillsChanged(() => {
+        refreshUsagePromptMessage().catch((error) => {
+            console.warn('[AskPage] Failed to refresh usage prompt after skills change:', error);
+        });
+    });
     function refreshLocalizedDialogControls() {
         shadowRoot.querySelectorAll('.askpage-code-block-language').forEach((element) => {
             element.textContent = formatCodeLanguageLabel(
@@ -7735,6 +7758,7 @@ async function createDialog() {
             activeDialogState = null;
         }
         removeDialogLocaleListener();
+        removeDialogSkillsListener();
         isDialogVisible = false;
     }
     if (activeDialogState && activeDialogState.host === host) {

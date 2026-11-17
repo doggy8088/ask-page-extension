@@ -772,6 +772,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     modalSkillDescription.addEventListener('input', () => {
         validateSkillDescriptionInput({ showEmptyError: false });
+        updateSkillInstructionsWarning();
     });
     [modalSkillInvocationAuto, modalSkillInvocationExplicit].forEach((radio) => {
         radio.addEventListener('change', updateSkillInstructionsWarning);
@@ -1284,15 +1285,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         return setFieldValidationError(modalSkillDescription, modalSkillDescriptionError, errorKey ? t(errorKey) : '');
     }
 
-    // 自動技能的本文經由 load_skill 工具結果回傳，超過工具結果上限時會被截斷。
+    // 自動技能的本文經由 load_skill 工具結果回傳；內容腳本會把整個結果 JSON 化（換行、引號會被跳脫）
+    // 後依工具結果上限截斷。這裡以同樣的 JSON 化方式估算，另外保留訊息、技能名稱與欄位結構的額度。
+    const LOAD_SKILL_RESULT_OVERHEAD_CHARS = 400;
     function updateSkillInstructionsWarning() {
-        const length = modalCommandPrompt.value.trim().length;
+        const estimatedLength = JSON.stringify({
+            description: modalSkillDescription.value.trim(),
+            instructions: modalCommandPrompt.value.trim()
+        }, null, 2).length + LOAD_SKILL_RESULT_OVERHEAD_CHARS;
         const limit = normalizeToolResultMaxChars(toolResultMaxCharsInput?.value);
         const shouldWarn = !isEditingBuiltIn()
             && getSkillInvocation() === AskPageSkills.SKILL_INVOCATION.AUTO
-            && length > limit;
+            && estimatedLength > limit;
         modalSkillInstructionsWarning.textContent = shouldWarn
-            ? t('skillInstructionsTooLong', { count: length, limit })
+            ? t('skillInstructionsTooLong', { count: estimatedLength, limit })
             : '';
     }
 

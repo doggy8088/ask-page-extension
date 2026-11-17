@@ -519,7 +519,7 @@
     "skillInvocationAuto": { "message": "자동 호출" },
     "skillInvocationExplicit": { "message": "명시적 호출만" },
     "skillInvocationHelp": { "message": "자동 호출: 설명이 맞으면 모델이 불러오며 /트리거 이름으로도 실행할 수 있습니다. 명시적 호출만: 모델의 스킬 목록에 나타나지 않고 /트리거 이름을 입력할 때만 실행됩니다." },
-    "skillInstructionsTooLong": { "message": "스킬 본문이 $count$자로 도구 결과 한도 $limit$자를 넘어 자동으로 불러올 때 잘릴 수 있습니다.", "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } } },
+    "skillInstructionsTooLong": { "message": "자동으로 불러올 때 도구 결과가 약 $count$자로 도구 결과 한도 $limit$자를 넘어 본문 끝부분이 잘릴 수 있습니다.", "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } } },
     "skillImported": { "message": "스킬 $skill$을(를) 가져왔습니다", "placeholders": { "skill": { "content": "$1" } } },
     "skillImportMissingFrontmatter": { "message": "가져오기 실패: YAML frontmatter가 없습니다." },
     "skillImportMissingDescription": { "message": "가져오기 실패: frontmatter에 description이 없습니다." },

@@ -519,7 +519,7 @@
     "skillInvocationAuto": { "message": "自動呼び出し" },
     "skillInvocationExplicit": { "message": "明示的な呼び出しのみ" },
     "skillInvocationHelp": { "message": "自動呼び出し：説明が合えばモデルが読み込みます。/トリガー名 でも実行できます。明示的な呼び出しのみ：モデルのスキル一覧に表示されず、/トリガー名 を入力したときだけ実行されます。" },
-    "skillInstructionsTooLong": { "message": "スキル本文は $count$ 文字で、ツール結果の上限 $limit$ 文字を超えています。自動読み込み時に切り詰められる場合があります。", "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } } },
+    "skillInstructionsTooLong": { "message": "自動読み込み時のツール結果は約 $count$ 文字で、ツール結果の上限 $limit$ 文字を超えています。本文の末尾が切り詰められる場合があります。", "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } } },
     "skillImported": { "message": "スキル $skill$ をインポートしました", "placeholders": { "skill": { "content": "$1" } } },
     "skillImportMissingFrontmatter": { "message": "インポート失敗：YAML frontmatter がありません。" },
     "skillImportMissingDescription": { "message": "インポート失敗：frontmatter に description がありません。" },

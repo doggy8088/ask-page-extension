@@ -71,11 +71,13 @@ globalThis.__runtime = {
     ensureSkillsRuntime,
     hasAutoSkills,
     getRuntimeSkills,
-    isSummarySkillEnabled
+    isSummarySkillEnabled,
+    onSkillsChanged
 };`, sandbox, { filename: 'content.js' });
 vm.runInContext(`${section(contentSource, '    async function executeToolCallUngoverned(', '    function getToolDefinitionsForRequest(')}
 ${section(contentSource, '    function getToolDefinitionsForRequest(', '    function parseToolArguments(')}
-globalThis.__tools = { executeToolCall, getToolDefinitionsForRequest, getGeminiToolDefinitions, getOpenAIToolDefinitions };`,
+${section(contentSource, '    // 送回模型的工具結果受使用者設定的長度上限控制', '    function escapeSelectorValue(')}
+globalThis.__tools = { executeToolCall, getToolDefinitionsForRequest, getGeminiToolDefinitions, getOpenAIToolDefinitions, getModelToolResultText, buildModelToolResultPayload };`,
 sandbox, { filename: 'content.js#tools' });
 
 const runtime = sandbox.__runtime;
@@ -197,6 +199,49 @@ const autoSkills = Skills.getAutoSkills(skills);
     );
 }
 
+// ---------- 送給模型的工具結果：本文過長時只截掉本文尾端 ----------
+{
+    const AskPageAnthropicTools = require(path.join(rootDir, 'src', 'lib', 'anthropic-tools.js'));
+    const longSkills = Skills.normalizeSkills([{
+        name: 'long-agent-skill',
+        description: 'Long skill.',
+        instructions: `Ask for \${project}.\n${'長本文'.repeat(3000)}TAIL-MARKER`,
+        invocation: 'auto',
+        askpage: { mode: 'agent' }
+    }]);
+    const result = runtime.buildLoadSkillResult({ name: 'long-agent-skill' }, longSkills, { agentModeEnabled: false });
+    vm.runInContext('toolResultMaxChars = 1000;', sandbox);
+    const modelTexts = {
+        openai: tools.getModelToolResultText(result),
+        gemini: JSON.stringify(tools.buildModelToolResultPayload(result)),
+        anthropic: AskPageAnthropicTools.buildAnthropicToolResultBlock({ id: 't1', result }, 1000).content
+    };
+    for (const [provider, text] of Object.entries(modelTexts)) {
+        assert.ok(!text.includes('TAIL-MARKER'), `${provider}：本文尾端被截斷`);
+        assert.ok(text.includes('此技能需要代理模式'), `${provider}：warnings 不會被截掉`);
+        assert.ok(text.includes('unfilledVariables') && text.includes('project'), `${provider}：未填變數不會被截掉`);
+        assert.ok(text.includes('Ask for'), `${provider}：本文開頭仍在`);
+    }
+    vm.runInContext('toolResultMaxChars = 6000;', sandbox);
+    const shortResult = runtime.buildLoadSkillResult({ name: 'translate-to-english' }, skills, { selectedText: 'abc' });
+    assert.deepStrictEqual(JSON.parse(tools.getModelToolResultText(shortResult)), plain(shortResult), '未超過上限時完整送出');
+}
+
+// ---------- provider 呼叫端接線 ----------
+{
+    assert.ok(!/getOpenAIToolDefinitions\(\)/.test(contentSource), '不可再以預設值（含頁面工具）取得 OpenAI 工具定義');
+    const initialUseToolsLines = [...contentSource.matchAll(/initialUseTools: (agentModeEnabled[^,\n]*)/g)].map((match) => match[1]);
+    assert.strictEqual(initialUseToolsLines.length, 4, 'OpenAI、Azure、相容端點、Anthropic 四個呼叫端');
+    initialUseToolsLines.forEach((line) => assert.match(line, /\|\| hasAutoSkills\(\)$/, `有自動技能時開啟工具：${line}`));
+    assert.match(contentSource, /enableTools: agentModeEnabled \|\| skillToolsEnabled,\n\s+agentModeEnabled,\n\s+includeSkillTools: skillToolsEnabled,/);
+    const responsesBodies = [...contentSource.matchAll(/buildResponsesApiRequestBody\(messages, \{[^}]*\}/g)].map((match) => match[0]);
+    assert.strictEqual(responsesBodies.length, 3);
+    responsesBodies.forEach((body) => assert.match(body, /toolOptions/, 'Responses API 必須帶 toolOptions'));
+    const toolContexts = contentSource.match(/toolContext: \{\n\s+selectedText: capturedSelectedText,\n\s+agentModeEnabled/g) || [];
+    assert.strictEqual(toolContexts.length, 5, '五個 provider 路徑都把選取文字與模式交給工具');
+    assert.strictEqual((contentSource.match(/includePageTools: agentModeEnabled,\n\s+includeSkillTools: true/g) || []).length, 3);
+}
+
 // ---------- 工具定義與治理分類 ----------
 assert.strictEqual(AskPageToolPolicy.TOOL_RISK_MAP.load_skill, 'read-only');
 assert.strictEqual(AskPageToolPolicy.buildToolPolicy('load_skill').requiresExplicitApproval, false);
@@ -236,9 +281,16 @@ assert.strictEqual(AskPageToolPolicy.buildToolPolicy('load_skill').requiresExpli
     storageListeners.forEach((listener) => listener({ SOMETHING_ELSE: { newValue: 1 } }, 'local'));
     await runtime.ensureSkillsRuntime();
     assert.strictEqual(runtime.hasAutoSkills(), false, '無關 key 不失效');
+    let usageRefreshCount = 0;
+    const unsubscribe = runtime.onSkillsChanged(() => { usageRefreshCount += 1; });
     storageListeners.forEach((listener) => listener({ ASKPAGE_SKILLS: { newValue: skillRecords } }, 'local'));
     await runtime.ensureSkillsRuntime();
     assert.strictEqual(runtime.hasAutoSkills(), true);
+    assert.strictEqual(usageRefreshCount, 1, '技能變更時通知已開啟的對話框重繪使用說明');
+    unsubscribe();
+    storageListeners.forEach((listener) => listener({ CUSTOM_SUMMARY_ENABLED: { newValue: true } }, 'local'));
+    assert.strictEqual(usageRefreshCount, 1, '關閉對話框後不再通知');
+    await runtime.ensureSkillsRuntime();
 
     // ---------- 工具清單：詢問模式只有 load_skill ----------
     const inquiryTools = plain(tools.getToolDefinitionsForRequest({ includePageTools: false, includeSkillTools: true }));

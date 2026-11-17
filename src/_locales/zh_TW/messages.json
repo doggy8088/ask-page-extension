@@ -519,7 +519,7 @@
     "skillInvocationAuto": { "message": "自動調用" },
     "skillInvocationExplicit": { "message": "僅明確調用" },
     "skillInvocationHelp": { "message": "自動調用：模型依描述自行載入，也可輸入 /觸發名稱 執行。僅明確調用：不會出現在模型的技能清單中，只能輸入 /觸發名稱 執行。" },
-    "skillInstructionsTooLong": { "message": "技能本文共 $count$ 個字元，超過工具結果上限 $limit$ 字元，自動載入時可能被截斷。", "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } } },
+    "skillInstructionsTooLong": { "message": "自動載入時的工具結果約 $count$ 個字元，超過工具結果上限 $limit$ 字元，本文尾端可能被截斷。", "placeholders": { "count": { "content": "$1" }, "limit": { "content": "$2" } } },
     "skillImported": { "message": "已匯入技能 $skill$", "placeholders": { "skill": { "content": "$1" } } },
     "skillImportMissingFrontmatter": { "message": "匯入失敗：檔案缺少 YAML frontmatter" },
     "skillImportMissingDescription": { "message": "匯入失敗：frontmatter 缺少 description" },
