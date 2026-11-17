@@ -9,7 +9,8 @@
     "activeTab"
   ],
   "host_permissions": [
-    "*://*/*"
+    "*://*/*",
+    "file:///*"
   ],
   "action": {
     "default_icon": {
@@ -29,7 +30,8 @@
   "content_scripts": [
     {
       "matches": [
-        "*://*/*"
+        "*://*/*",
+        "file:///*"
       ],
       "js": [
         "lib/highlight.min.js",
@@ -49,7 +51,8 @@
     },
     {
       "matches": [
-        "*://*/*"
+        "*://*/*",
+        "file:///*"
       ],
       "js": [
         "lib/debug-console.js"
@@ -58,7 +61,8 @@
     },
     {
       "matches": [
-        "*://*/*"
+        "*://*/*",
+        "file:///*"
       ],
       "js": [
         "lib/dialog-key-isolation.js"
