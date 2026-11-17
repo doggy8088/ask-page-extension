@@ -160,6 +160,7 @@ function createContentScriptSandbox(documentRef, exportsExpression) {
     const vm = require('vm');
     const rootDir = path.resolve(__dirname, '..', '..');
     const contentScript = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
+    const skillSchemaScript = fs.readFileSync(path.join(rootDir, 'src', 'lib', 'skill-schema.js'), 'utf8');
 
     const sandbox = {
         console,
@@ -176,7 +177,8 @@ function createContentScriptSandbox(documentRef, exportsExpression) {
                 local: {
                     async get() { return {}; },
                     async set() {}
-                }
+                },
+                onChanged: { addListener() {} }
             }
         },
         document: documentRef,
@@ -192,6 +194,7 @@ function createContentScriptSandbox(documentRef, exportsExpression) {
 
     sandbox.globalThis = sandbox;
     vm.createContext(sandbox);
+    vm.runInContext(skillSchemaScript, sandbox, { filename: 'lib/skill-schema.js' });
     vm.runInContext(`${contentScript}\nglobalThis.__testExports = ${exportsExpression};`, sandbox, { filename: 'content.js' });
     return sandbox.__testExports;
 }

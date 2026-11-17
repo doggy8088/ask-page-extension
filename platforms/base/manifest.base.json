@@ -44,6 +44,7 @@
         "lib/tool-policy.js",
         "lib/tool-governance.js",
         "lib/anthropic-tools.js",
+        "lib/skill-schema.js",
         "agent-glow.js",
         "lib/debug-logger.js",
         "content.js"
