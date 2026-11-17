@@ -19,6 +19,7 @@ const sandbox = {
     console: { log() {} },
     getActiveProviderConfig: async () => ({ type: 'ollama-cloud' }),
     getAgentModeEnabled: async () => true,
+    ensureSkillsRuntime: async () => ({ skills: [], autoSkills: [], summaryEnabled: true }),
     throwIfAskTaskCancelled() {},
     requestAnimationFrame: (callback) => callback(),
     setTimeout: (callback) => { finishFade = callback; return 1; },

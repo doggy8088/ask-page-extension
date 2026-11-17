@@ -1016,6 +1016,8 @@ const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE = 'CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS';
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
 const CUSTOM_COMMAND_USAGE_STORAGE = 'CUSTOM_COMMAND_USAGE';
+const ASKPAGE_SKILLS_STORAGE = 'ASKPAGE_SKILLS';
+const CUSTOM_SUMMARY_ENABLED_STORAGE = 'CUSTOM_SUMMARY_ENABLED';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
 const pendingReasoningValues = new Map();
 
@@ -1315,6 +1317,18 @@ function getMissingBuiltinTemplateVariables(template, builtinValues) {
 // 沒有使用者變數時直接把保留變數替換掉，得到可送出的提示詞。
 function resolveBuiltinTemplate(template, builtinValues) {
     return expandSnippetTemplate(template, {}, false, builtinValues).prompt;
+}
+
+// 只替換保留變數，使用者變數維持 ${名稱} 原文，讓模型看得到哪些值還需要向使用者確認。
+function resolveBuiltinTemplateKeepingVariables(template, builtinValues) {
+    return tokenizeSnippetTemplate(template, builtinValues)
+        .map((token) => {
+            if (token.type === 'literal') {
+                return token.text;
+            }
+            return token.hasDefault ? `\${${token.name}:${token.defaultValue}}` : `\${${token.name}}`;
+        })
+        .join('');
 }
 
 // 重用 expandSnippetTemplate 已算出的 hint/value 邊界，避免重新解析變數語意。
@@ -5820,6 +5834,132 @@ function getActiveSelectedText(capturedSelectedText = '') {
     return capturedSelectedText || conversationSelectedText;
 }
 
+/* --------------------------------------------------
+    Agent Skills runtime
+-------------------------------------------------- */
+// 每個分頁一份快取；ASKPAGE_SKILLS 或 /summary 開關變更時失效。內容腳本只讀，不寫回 storage。
+let skillsRuntime = { skills: [], autoSkills: [], summaryEnabled: true };
+let skillsRuntimePromise = null;
+
+function getSkillsLibrary() {
+    return globalThis.AskPageSkills || null;
+}
+
+async function loadSkillsRuntime() {
+    const result = await chrome.storage.local.get([
+        ASKPAGE_SKILLS_STORAGE,
+        CUSTOM_COMMANDS_STORAGE,
+        CUSTOM_SUMMARY_ENABLED_STORAGE
+    ]);
+    const summaryEnabled = result?.[CUSTOM_SUMMARY_ENABLED_STORAGE] !== false;
+    const skillsLibrary = getSkillsLibrary();
+    if (!skillsLibrary) {
+        return { skills: [], autoSkills: [], summaryEnabled };
+    }
+    // 設定頁尚未遷移時只在記憶體中轉換舊資料，避免多個分頁同時寫入。
+    const skills = Array.isArray(result?.[ASKPAGE_SKILLS_STORAGE])
+        ? skillsLibrary.normalizeSkills(result[ASKPAGE_SKILLS_STORAGE])
+        : skillsLibrary.migrateLegacyCommands(result?.[CUSTOM_COMMANDS_STORAGE]);
+    return { skills, autoSkills: skillsLibrary.getAutoSkills(skills), summaryEnabled };
+}
+
+async function ensureSkillsRuntime({ force = false } = {}) {
+    if (force || !skillsRuntimePromise) {
+        const runtimePromise = loadSkillsRuntime()
+            .then((runtime) => {
+                if (skillsRuntimePromise === runtimePromise) {
+                    skillsRuntime = runtime;
+                }
+                return runtime;
+            })
+            .catch((error) => {
+                console.warn('[AskPage] Failed to load skills:', error);
+                if (skillsRuntimePromise === runtimePromise) {
+                    skillsRuntimePromise = null;
+                }
+                return skillsRuntime;
+            });
+        skillsRuntimePromise = runtimePromise;
+    }
+    return await skillsRuntimePromise;
+}
+
+// 含停用技能的完整清單；停用技能只用來判斷 /名稱 是否該顯示「已停用」。
+function getRuntimeSkills() {
+    return skillsRuntime.skills;
+}
+
+function hasAutoSkills() {
+    return skillsRuntime.autoSkills.length > 0;
+}
+
+function isSummarySkillEnabled() {
+    return skillsRuntime.summaryEnabled !== false;
+}
+
+function invalidateSkillsRuntime() {
+    skillsRuntimePromise = null;
+    clearInquiryConversationContext();
+}
+
+globalThis.chrome?.storage?.onChanged?.addListener?.((changes, areaName) => {
+    if (areaName === 'local' && (changes?.[ASKPAGE_SKILLS_STORAGE] || changes?.[CUSTOM_SUMMARY_ENABLED_STORAGE])) {
+        invalidateSkillsRuntime();
+    }
+});
+
+// load_skill 工具：只接受啟用中的自動技能，明確或停用技能一律拒絕且不洩漏內容。
+function buildLoadSkillResult(args, skills, { selectedText = '', agentModeEnabled = false } = {}) {
+    const requestedName = String(args?.name ?? '').trim();
+    const skillsLibrary = getSkillsLibrary();
+    const skill = skillsLibrary ? skillsLibrary.findSkillByName(skills, requestedName) : null;
+    if (!skill || skill.invocation !== skillsLibrary.SKILL_INVOCATION.AUTO) {
+        return {
+            success: false,
+            message: `找不到可自動載入的技能「${requestedName}」。只能載入系統提示 Available skills 清單中的名稱；其他技能只能由使用者輸入 /觸發名稱 執行。`,
+            data: { name: requestedName },
+            warnings: [],
+            matchedTargets: []
+        };
+    }
+
+    const builtinValues = { [BUILTIN_TEMPLATE_VARIABLE_SELECTED_TEXT]: selectedText || '' };
+    const missingBuiltinVariables = getMissingBuiltinTemplateVariables(skill.instructions, builtinValues);
+    if (missingBuiltinVariables.length) {
+        return {
+            success: false,
+            message: `技能 ${skill.name} 需要使用者先在頁面選取文字（${missingBuiltinVariables.join(', ')}）。請告訴使用者先選取文字再重新提問。`,
+            data: { name: skill.name, missingVariables: missingBuiltinVariables },
+            warnings: [],
+            matchedTargets: []
+        };
+    }
+
+    const unfilledVariables = extractTemplateVariables(skill.instructions, builtinValues).map((variable) => (
+        variable.hasDefault ? { name: variable.name, defaultValue: variable.defaultValue } : { name: variable.name }
+    ));
+    const warnings = [];
+    if (skill.askpage.mode === CUSTOM_COMMAND_MODE_AGENT && !agentModeEnabled) {
+        warnings.push('此技能需要代理模式；請提示使用者切換到代理模式後再執行，不要聲稱已完成頁面操作。');
+    }
+    const message = unfilledVariables.length
+        ? `已載入技能 ${skill.name}。本文含未填變數（${unfilledVariables.map((variable) => variable.name).join(', ')}），請先向使用者確認這些值再依 instructions 執行。`
+        : `已載入技能 ${skill.name}，請依 instructions 完成本輪任務。`;
+
+    return {
+        success: true,
+        message,
+        data: {
+            name: skill.name,
+            description: skillsLibrary.getSkillDescription(skill),
+            instructions: resolveBuiltinTemplateKeepingVariables(skill.instructions, builtinValues),
+            unfilledVariables
+        },
+        warnings,
+        matchedTargets: []
+    };
+}
+
 function buildSystemPrompt({
     hasSelectedText = false,
     includeScreenshot = false,
@@ -5828,9 +5968,14 @@ function buildSystemPrompt({
     pageContextFormat = 'text',
     pageContextIsFiltered = false,
     pageContextIsTruncated = false,
-    customSystemPrompt = ''
+    customSystemPrompt = '',
+    autoSkills = [],
+    skillToolsEnabled = false
 } = {}) {
     const isAgentMode = isAgentPageContextFormat(pageContextFormat);
+    const skillCatalogText = autoSkills.length
+        ? (getSkillsLibrary()?.buildSkillCatalogText(autoSkills) || '')
+        : '';
     const isSnapshotContext = pageContextFormat === 'agent-snapshot';
     const pageContextDescription = pageContextFormat === 'html'
         ? `The page context is provided as ${pageContextIsTruncated ? 'filtered HTML markup' : 'filtered full-page HTML markup'} from the page container rather than plain text.${pageContextIsFiltered ? ' Script/style blocks, template-like noise, inline JavaScript URLs, inline event handlers, and inline styles have already been removed so you can focus on useful DOM structure for web automation.' : ''}`
@@ -5876,7 +6021,8 @@ function buildSystemPrompt({
             ? (isSnapshotContext
                 ? 'You are in agent mode. Use the available page tools whenever the user asks you to inspect or modify the current page, selected text, or form fields. Prefer the ref-based tools (click, type, select_option, fill_form_fields, read_page, find); run_js remains available to read or modify the DOM, inline styles, classes, attributes, text, layout, and behavior when those tools are not enough.'
                 : 'You are in agent mode. Use the available page tools whenever the user asks you to inspect or modify the current page, selected text, or form fields. In particular, you can use run_js to read or modify the current page DOM, inline styles, classes, attributes, text, layout, and behavior.')
-            : 'You are in inquiry mode. Do not use page tools in this mode. Answer only from the provided page content, selected text, and screenshot context. If the user asks for page modifications, say that agent mode can do it rather than claiming the page cannot be modified at all.',
+            : `You are in inquiry mode. Do not use page tools in this mode.${skillToolsEnabled ? ' Skill tools (load_skill) are allowed in this mode; page tools remain unavailable.' : ''} Answer only from the provided page content, selected text, and screenshot context. If the user asks for page modifications, say that agent mode can do it rather than claiming the page cannot be modified at all.`,
+        skillCatalogText,
         toolLadderDescription,
         isSnapshotContext
             ? 'Refs stay valid while the element remains on the page, including across turns. If a tool reports a stale or unknown ref, call find or read_page to obtain a fresh one instead of guessing.'
@@ -5957,6 +6103,7 @@ async function preparePageConversationContext(capturedSelectedText = '', options
     const customSystemPrompt = await getValue(CUSTOM_SYSTEM_PROMPT_STORAGE, '');
     const includeScreenshot = options.includeScreenshot === true;
     const inputImageCount = normalizeInputImageDataUrls(options.inputImageDataUrls).length;
+    const { autoSkills } = await ensureSkillsRuntime();
     const contextMode = [
         hasSelectedText ? 'Selected text' : null,
         pageContext.format === 'html'
@@ -5978,7 +6125,9 @@ async function preparePageConversationContext(capturedSelectedText = '', options
             pageContextFormat: pageContext.format,
             pageContextIsFiltered: pageContext.isFiltered,
             pageContextIsTruncated: pageContext.isTruncated,
-            customSystemPrompt
+            customSystemPrompt,
+            autoSkills,
+            skillToolsEnabled: autoSkills.length > 0
         }),
         conversationContextText: buildConversationContextText(pageContext, capturedSelectedText),
         contextMode
@@ -6724,6 +6873,15 @@ async function createDialog() {
         return getMissingBuiltinTemplateVariables(template, getTemplateBuiltinValues()).length > 0;
     }
 
+    // 停用的技能命中 /名稱 時只提示，不把字串當一般提示詞送出。
+    function rejectDisabledSkill(command) {
+        appendMessage('user', command);
+        appendMessage('assistant', getLocalizedText('skillDisabled', { skill: command }));
+        clearInputContextImages();
+        setInputValue('', { resetToSingleLine: true });
+        input.focus();
+    }
+
     // 沒有選取文字時的處理政策集中在此：目前是擋下並提示，不送出。
     function rejectForMissingSelectedText(command) {
         appendMessage('user', command);
@@ -6733,34 +6891,44 @@ async function createDialog() {
         input.focus();
     }
 
+    // / 自動完成、使用說明與 /名稱 執行共用：只看啟用中且允許使用者呼叫的技能。
+    function getUserInvocableSkills() {
+        const skillsLibrary = getSkillsLibrary();
+        if (!skillsLibrary) {
+            return [];
+        }
+        return skillsLibrary.getEnabledSkills(getRuntimeSkills()).filter((skill) => skill.userInvocable !== false);
+    }
+
     async function getIntelliCommands() {
         if (typeof AskPageI18n !== 'undefined') {
             await AskPageI18n.ready;
         }
-        const screenshotEnabled = await getScreenshotEnabled();
-        const agentModeEnabled = await getAgentModeEnabled();
-        const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+        await ensureSkillsRuntime();
         const builtInSummaryPrompt = await getValue(CUSTOM_SUMMARY_PROMPT_STORAGE, '');
         const summaryShowVariableLabels = await getValue(CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE, false);
         const summaryTemplate = builtInSummaryPrompt || getLocalizedText('summaryPrompt');
         const builtinValues = getTemplateBuiltinValues();
 
         const builtInCommands = [
-            { cmd: '/clear', desc: getLocalizedText('commandClearHistory') },
-            { cmd: '/summary', desc: getLocalizedText('commandSummaryPage'), template: summaryTemplate, hasVariables: extractTemplateVariables(summaryTemplate, builtinValues).length > 0, showVariableLabels: summaryShowVariableLabels === true },
-            { cmd: '/screenshot', desc: screenshotEnabled ? getLocalizedText('disableScreenshot') : getLocalizedText('enableScreenshot') },
-            { cmd: '/agent', desc: agentModeEnabled ? getLocalizedText('switchToInquiryMode') : getLocalizedText('switchToAgentMode') }
+            { cmd: '/clear', desc: getLocalizedText('commandClearHistory') }
         ];
+        if (isSummarySkillEnabled()) {
+            builtInCommands.push({ cmd: '/summary', desc: getLocalizedText('commandSummaryPage'), template: summaryTemplate, hasVariables: extractTemplateVariables(summaryTemplate, builtinValues).length > 0, showVariableLabels: summaryShowVariableLabels === true });
+        }
 
-        const customCommandsForIntellisense = customCommands.map(cmd => ({
-            cmd: cmd.cmd,
-            desc: cmd.prompt ? cmd.prompt.substring(0, 50) + (cmd.prompt.length > 50 ? '...' : '') : getLocalizedText('customCommand'),
-            template: cmd.prompt || '',
-            hasVariables: extractTemplateVariables(cmd.prompt || '', builtinValues).length > 0,
-            mode: cmd.mode,
-            screenshotEnabled: cmd.screenshotEnabled === true,
-            showVariableLabels: cmd.showVariableLabels === true
-        }));
+        const customCommandsForIntellisense = getUserInvocableSkills().map((skill) => {
+            const description = getSkillsLibrary().getSkillDescription(skill);
+            return {
+                cmd: skill.command,
+                desc: description ? description.substring(0, 50) + (description.length > 50 ? '...' : '') : getLocalizedText('customCommand'),
+                template: skill.instructions,
+                hasVariables: extractTemplateVariables(skill.instructions, builtinValues).length > 0,
+                mode: skill.askpage.mode,
+                screenshotEnabled: skill.askpage.screenshotEnabled === true,
+                showVariableLabels: skill.askpage.showVariableLabels === true
+            };
+        });
 
         return [...builtInCommands, ...customCommandsForIntellisense];
     }
@@ -7250,8 +7418,12 @@ async function createDialog() {
         return `<li class="askpage-usage-command-item"><span class="askpage-usage-command">${commandHtml}</span><span class="askpage-usage-command-desc" title="${escapedDescription}">${escapedDescription}</span></li>`;
     }
 
-    function buildPromptCommandListCopyText() {
-        return getLocalizedText('builtInCommandCopyText');
+    function buildPromptCommandListCopyText(options = {}) {
+        const lines = [`- /clear - ${getLocalizedText('clearHistoryShortcut')}`];
+        if (options.summaryEnabled !== false) {
+            lines.push(`- /summary - ${getLocalizedText('commandSummaryPage')}`);
+        }
+        return `**${getLocalizedText('builtInSkillsCopyHeading')}**\n${lines.join('\n')}`;
     }
 
     function buildUsageModeNotice(options = {}) {
@@ -7305,7 +7477,7 @@ async function createDialog() {
         const hiddenCustomCommandCount = Math.max(0, customCommands.length - visibleCustomCommands.length);
         const customCommandListHtml = visibleCustomCommands
             .map((cmd) => {
-                const description = `${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`;
+                const description = `${cmd.desc.substring(0, 30)}${cmd.desc.length > 30 ? '...' : ''}`;
                 return createUsageCommandHtml(cmd.cmd, description);
             })
             .join('');
@@ -7329,7 +7501,7 @@ async function createDialog() {
                     <div class="askpage-usage-subtitle">${escapeHtml(getLocalizedText('builtin'))}</div>
                     <ul class="askpage-usage-command-list">
                         ${createUsageCommandHtml('/clear', getLocalizedText('clearHistoryShortcut'))}
-                        ${createUsageCommandHtml('/summary', getLocalizedText('commandSummaryPage'))}
+                        ${options.summaryEnabled !== false ? createUsageCommandHtml('/summary', getLocalizedText('commandSummaryPage')) : ''}
                     </ul>
                 </div>
                 ${customCommandItems}
@@ -7352,7 +7524,8 @@ async function createDialog() {
             ? `<pre class="askpage-selected-text-preview">${escapeHtml(selectedTextPreview)}</pre>`
             : '';
         const usageCommandsHtml = buildUsageCommandsHtml(options.customCommands || [], {
-            customCommandUsageMap: options.customCommandUsageMap || {}
+            customCommandUsageMap: options.customCommandUsageMap || {},
+            summaryEnabled: options.summaryEnabled
         });
         const html = `
             <div class="askpage-usage-card">
@@ -7380,7 +7553,7 @@ async function createDialog() {
         }
 
         return `\n\n**${getLocalizedText('customCommandsCopyHeading')}**\n` + commands
-            .map((cmd) => `- ${cmd.cmd} - ${cmd.prompt.substring(0, 30)}${cmd.prompt.length > 30 ? '...' : ''}`)
+            .map((cmd) => `- ${cmd.cmd} - ${cmd.desc.substring(0, 30)}${cmd.desc.length > 30 ? '...' : ''}`)
             .join('\n');
     }
 
@@ -7431,15 +7604,21 @@ async function createDialog() {
         const showUsageTipOnly = options.showUsageTipOnly || false;
         const screenshotEnabled = await getScreenshotEnabled();
         const agentModeEnabled = await getAgentModeEnabled();
-        const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
+        await ensureSkillsRuntime();
+        const summaryEnabled = isSummarySkillEnabled();
+        const customCommands = getUserInvocableSkills().map((skill) => ({
+            cmd: skill.command,
+            desc: getSkillsLibrary().getSkillDescription(skill)
+        }));
         const customCommandUsageMap = await getCustomCommandUsageMap();
         const customCommandsCopyText = buildCustomCommandListCopyText(customCommands);
         const activeSelectedText = showUsageTipOnly ? '' : getActiveSelectedText(capturedSelectedText);
         const modeNotice = buildUsageModeNotice({ screenshotEnabled, agentModeEnabled });
-        const builtInCommandsCopyText = buildPromptCommandListCopyText();
+        const builtInCommandsCopyText = buildPromptCommandListCopyText({ summaryEnabled });
         const renderedHtml = buildUsagePromptHtml({
             screenshotEnabled,
             agentModeEnabled,
+            summaryEnabled,
             customCommands,
             customCommandUsageMap,
             selectedText: activeSelectedText,
@@ -8363,6 +8542,15 @@ async function createDialog() {
                 return;
             }
 
+            if (question.startsWith('/')) {
+                await ensureSkillsRuntime();
+            }
+
+            if (question === '/summary' && !isSummarySkillEnabled()) {
+                rejectDisabledSkill(question);
+                return;
+            }
+
             if (question === '/summary') {
                 if (typeof AskPageI18n !== 'undefined') {
                     await AskPageI18n.ready;
@@ -8387,30 +8575,24 @@ async function createDialog() {
                 displayedQuestion = question;
             }
 
-            if (question === '/screenshot') {
-                appendMessage('user', question);
-                clearInputContextImages();
-                setInputValue('', { resetToSingleLine: true });
-                input.focus();
-
-                await handleScreenshotModeToggle({ feedback: 'detailed' });
-                return;
-            }
-
-            if (question === '/agent') {
-                appendMessage('user', question);
-                clearInputContextImages();
-                setInputValue('', { resetToSingleLine: true });
-                input.focus();
-
-                await handleAgentModeToggle({ feedback: 'detailed' });
-                return;
-            }
-
-            // Handle custom commands
-            if (question.startsWith('/')) {
-                const customCommands = await getValue(CUSTOM_COMMANDS_STORAGE, []);
-                const customCommand = customCommands.find(cmd => cmd.cmd === question);
+            // Handle user skills
+            if (question.startsWith('/') && question !== '/summary') {
+                const skillsLibrary = getSkillsLibrary();
+                const matchedSkill = skillsLibrary
+                    ? skillsLibrary.findSkillByCommand(getRuntimeSkills(), question, { includeDisabled: true })
+                    : null;
+                if (matchedSkill && (!matchedSkill.enabled || matchedSkill.userInvocable === false)) {
+                    rejectDisabledSkill(question);
+                    return;
+                }
+                const customCommand = matchedSkill
+                    ? {
+                        cmd: matchedSkill.command,
+                        prompt: matchedSkill.instructions,
+                        mode: matchedSkill.askpage.mode,
+                        screenshotEnabled: matchedSkill.askpage.screenshotEnabled
+                    }
+                    : null;
 
                 if (customCommand) {
                     const customPromptTemplate = customCommand.prompt || '';
@@ -12753,6 +12935,17 @@ async function createDialog() {
                 };
             }
 
+            if (name === 'load_skill') {
+                return {
+                    id,
+                    name,
+                    result: buildLoadSkillResult(toolArgs, getRuntimeSkills(), {
+                        selectedText: toolContext.selectedText || '',
+                        agentModeEnabled: toolContext.agentModeEnabled === true
+                    })
+                };
+            }
+
             if (name === 'get_page_metadata') {
                 const metadata = collectPageMetadata();
                 return {
@@ -13076,6 +13269,15 @@ async function createDialog() {
         const { id = '', name = '', args = {} } = toolCall || {};
         const governance = globalThis.AskPageToolGovernance;
 
+        // 詢問模式只提供技能與網路搜尋工具；模型若仍呼叫頁面工具（例如被頁面內容誘導），直接拒絕不執行。
+        if (toolContext.agentModeEnabled === false && name !== 'load_skill' && name !== 'web_search') {
+            return {
+                id,
+                name,
+                result: createToolResult(false, `詢問模式不提供工具 ${name}；只有代理模式可以讀取或操作頁面。`)
+            };
+        }
+
         // 治理模組不可用時，enforce 模式必須擋下，不可放行。
         if (typeof governance?.executeGovernedToolCall !== 'function') {
             if (toolContext.governanceMode === 'enforce') {
@@ -13175,7 +13377,7 @@ async function createDialog() {
         });
     }
 
-    function getToolDefinitionsForRequest({ includePageTools = true, includeWebSearch = false } = {}) {
+    function getToolDefinitionsForRequest({ includePageTools = true, includeWebSearch = false, includeSkillTools = false } = {}) {
         // 所有 provider 共用同一份風險標註，確保模型看到一致的工具描述。
         const annotateRisk = (tool) => {
             const policy = globalThis.AskPageToolPolicy?.buildToolPolicy?.(tool.name);
@@ -13191,6 +13393,10 @@ async function createDialog() {
         const tools = includePageTools ? getToolDefinitions().map(annotateRisk) : [];
         if (includeWebSearch) {
             tools.push(annotateRisk(getWebSearchToolDefinition()));
+        }
+        // 沒有自動技能時不送 load_skill，避免無意義的工具呼叫成本。
+        if (includeSkillTools && hasAutoSkills()) {
+            tools.push(annotateRisk(getSkillsLibrary().buildLoadSkillToolDefinition()));
         }
         return tools;
     }
@@ -13223,11 +13429,12 @@ async function createDialog() {
         }));
     }
 
-    function getGeminiToolDefinitions(model = '', includePageTools = false, googleSearchEnabled = false) {
-        const pageTools = includePageTools
+    function getGeminiToolDefinitions(model = '', includePageTools = false, googleSearchEnabled = false, includeSkillTools = false) {
+        const functionTools = includePageTools || includeSkillTools
             ? getToolDefinitionsForRequest({
-                includePageTools: true,
-                includeWebSearch: false
+                includePageTools,
+                includeWebSearch: false,
+                includeSkillTools
             }).map((tool) => ({
                 type: 'function',
                 name: tool.name,
@@ -13235,8 +13442,9 @@ async function createDialog() {
                 parameters: tool.parameters
             }))
             : [];
-        const includeGoogleSearch = googleSearchEnabled && (!includePageTools || doesGeminiModelSupportCombinedTools(model));
-        return buildGeminiRequestTools(pageTools, includeGoogleSearch);
+        // 不支援合併工具的模型沿用既有慣例：function tools 優先，省略 google_search。
+        const includeGoogleSearch = googleSearchEnabled && (!functionTools.length || doesGeminiModelSupportCombinedTools(model));
+        return buildGeminiRequestTools(functionTools, includeGoogleSearch);
     }
 
     function parseToolArguments(rawArguments) {
@@ -14432,6 +14640,9 @@ async function createDialog() {
         screenshotDataUrl = null,
         inputImageDataUrls = [],
         enableTools = true,
+        // 工具迴圈可能只為了技能而開啟；頁面上下文與頁面工具仍以代理模式為準。
+        agentModeEnabled = enableTools,
+        includeSkillTools = false,
         googleSearchEnabled = false,
         streamingEnabled = false,
         onStatusUpdate = () => {},
@@ -14447,7 +14658,7 @@ async function createDialog() {
         const pageConversationContext = await getPageConversationContext(capturedSelectedText, {
             includeScreenshot: !!screenshotDataUrl,
             inputImageDataUrls: normalizedInputImages
-        }, enableTools);
+        }, agentModeEnabled);
         const cancellationContext = task || signal;
         throwIfAskTaskCancelled(cancellationContext);
         console.log('[AskPage] Gemini context mode:', pageConversationContext.contextMode);
@@ -14491,7 +14702,7 @@ async function createDialog() {
                     ...buildGeminiThinkingConfig(selectedModel, reasoningValue, true)
                 }
             };
-            const tools = getGeminiToolDefinitions(selectedModel, enableTools, googleSearchEnabled);
+            const tools = getGeminiToolDefinitions(selectedModel, agentModeEnabled, googleSearchEnabled, includeSkillTools);
             const hasGoogleSearchTool = tools.some((tool) => tool?.type === 'google_search');
             if (tools.length) {
                 requestBody.tools = tools;
@@ -14687,6 +14898,7 @@ async function createDialog() {
         const handleStatusUpdate = createProgressStatusHandler(traceReporter);
 
         const agentModeEnabled = await getAgentModeEnabled();
+        const skillToolsEnabled = hasAutoSkills();
         const streamingEnabled = isStreamingSupported('gemini', selectedModel);
         const streamedAnswer = streamingEnabled ? createStreamingAssistantMessageRenderer() : null;
         console.log('[AskPage] Gemini streaming enabled:', streamingEnabled, 'model:', selectedModel);
@@ -14699,7 +14911,9 @@ async function createDialog() {
                 capturedSelectedText,
                 screenshotDataUrl,
                 inputImageDataUrls,
-                enableTools: agentModeEnabled,
+                enableTools: agentModeEnabled || skillToolsEnabled,
+                agentModeEnabled,
+                includeSkillTools: skillToolsEnabled,
                 googleSearchEnabled: !!activeConfig?.googleSearchEnabled,
                 streamingEnabled,
                 onStatusUpdate: handleStatusUpdate,
@@ -14708,7 +14922,11 @@ async function createDialog() {
                 onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta }),
                 providerLabel,
                 signal: taskContext?.signal,
-                task: taskContext
+                task: taskContext,
+                toolContext: {
+                    selectedText: capturedSelectedText,
+                    agentModeEnabled
+                }
             });
 
             throwIfAskTaskCancelled(taskContext);
@@ -14789,17 +15007,27 @@ async function createDialog() {
         const supportsTemperature = !isReasoningModel(selectedModel);
         const maxOutputTokens = getOpenAIStyleMaxOutputTokens(selectedModel);
         const useResponsesApi = shouldUseResponsesApi(selectedModel);
+        const toolOptions = {
+            includePageTools: agentModeEnabled,
+            includeSkillTools: true
+        };
         console.log('[AskPage] OpenAI max output tokens:', maxOutputTokens, 'model:', selectedModel, 'responses_api:', useResponsesApi, 'reasoning_effort:', reasoningEffort || 'default', 'streaming:', streamingEnabled);
 
         try {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
-                initialUseTools: agentModeEnabled,
+                initialUseTools: agentModeEnabled || hasAutoSkills(),
+                // 詢問模式的工具只為了技能而開啟，模型不支援工具時退回純聊天
+                allowToolFallback: !agentModeEnabled,
                 signal: taskContext?.signal,
                 task: taskContext,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
+                toolContext: {
+                    selectedText: capturedSelectedText,
+                    agentModeEnabled
+                },
                 buildRequestBody: (messages, useTools, maxOutputTokens) => {
                     assertGpt56ChatCompletionsToolCompatibility(selectedModel, useResponsesApi, useTools);
 
@@ -14808,7 +15036,8 @@ async function createDialog() {
                             model: selectedModel,
                             maxOutputTokens,
                             useTools,
-                            reasoningEffort
+                            reasoningEffort,
+                            toolOptions
                         }), {
                             providerType: 'openai',
                             agentModeEnabled,
@@ -14834,7 +15063,7 @@ async function createDialog() {
                     applyOpenAIReasoningEffort(requestBody, reasoningEffort, false);
 
                     if (useTools) {
-                        requestBody.tools = getOpenAIToolDefinitions();
+                        requestBody.tools = getOpenAIToolDefinitions(toolOptions);
                     }
 
                     return applyPromptCacheRequestOptions(requestBody, {
@@ -15004,6 +15233,10 @@ async function createDialog() {
         const useResponsesApi = shouldUseResponsesApi(deployment);
         const azureApiVersionForRequest = useResponsesApi ? getAzureResponsesApiVersion(apiVersion) : apiVersion;
         console.log('[AskPage] Azure OpenAI max output tokens:', maxOutputTokens, 'deployment:', deployment, 'responses_api:', useResponsesApi, 'reasoning_effort:', effectiveReasoningEffort || 'default', 'streaming:', streamingEnabled);
+        const toolOptions = {
+            includePageTools: agentModeEnabled,
+            includeSkillTools: true
+        };
         const azureEndpoint = endpoint.trim().replace(/\/$/, '');
         const apiUrl = useResponsesApi
             ? `${azureEndpoint}/openai/v1/responses?api-version=${azureApiVersionForRequest}`
@@ -15013,11 +15246,17 @@ async function createDialog() {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
-                initialUseTools: agentModeEnabled,
+                initialUseTools: agentModeEnabled || hasAutoSkills(),
+                // 詢問模式的工具只為了技能而開啟，模型不支援工具時退回純聊天
+                allowToolFallback: !agentModeEnabled,
                 signal: taskContext?.signal,
                 task: taskContext,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
+                toolContext: {
+                    selectedText: capturedSelectedText,
+                    agentModeEnabled
+                },
                 buildRequestBody: (messages, useTools, maxOutputTokens) => {
                     assertGpt56ChatCompletionsToolCompatibility(deployment, useResponsesApi, useTools);
 
@@ -15026,7 +15265,8 @@ async function createDialog() {
                             model: deployment,
                             maxOutputTokens,
                             useTools,
-                            reasoningEffort: effectiveReasoningEffort
+                            reasoningEffort: effectiveReasoningEffort,
+                            toolOptions
                         }), {
                             providerType: 'azure',
                             agentModeEnabled,
@@ -15050,7 +15290,7 @@ async function createDialog() {
                     }
 
                     if (useTools) {
-                        requestBody.tools = getOpenAIToolDefinitions();
+                        requestBody.tools = getOpenAIToolDefinitions(toolOptions);
                     }
 
                     return applyPromptCacheRequestOptions(requestBody, {
@@ -15234,7 +15474,8 @@ async function createDialog() {
         const webSearchEnabled = providerType === 'ollama-cloud' && !!activeConfig?.webSearchEnabled;
         const toolOptions = {
             includePageTools: agentModeEnabled,
-            includeWebSearch: webSearchEnabled
+            includeWebSearch: webSearchEnabled,
+            includeSkillTools: true
         };
         console.log(`[AskPage] ${providerLabel} max output tokens:`, maxOutputTokens, 'model:', selectedModel || '(unspecified)', 'responses_api:', useResponsesApi, 'reasoning_effort:', reasoningEffort || 'default', 'streaming:', streamingEnabled);
 
@@ -15242,12 +15483,14 @@ async function createDialog() {
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
-                initialUseTools: agentModeEnabled || webSearchEnabled,
+                initialUseTools: agentModeEnabled || webSearchEnabled || hasAutoSkills(),
                 signal: taskContext?.signal,
                 task: taskContext,
                 initialMaxOutputTokens: maxOutputTokens,
                 retryMaxOutputTokens: maxOutputTokens,
                 toolContext: {
+                    selectedText: capturedSelectedText,
+                    agentModeEnabled,
                     webSearch: {
                         fetchImpl: providerFetch,
                         signal: taskContext?.signal,
@@ -15835,9 +16078,13 @@ async function createDialog() {
             const answer = await runAnthropicToolLoop({
                 providerLabel,
                 initialMessages: messages,
-                initialUseTools: agentModeEnabled || anthropicWebSearchEnabled,
+                initialUseTools: agentModeEnabled || anthropicWebSearchEnabled || hasAutoSkills(),
                 signal: taskContext?.signal,
                 task: taskContext,
+                toolContext: {
+                    selectedText: capturedSelectedText,
+                    agentModeEnabled
+                },
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
                 buildRequestBody: (currentMessages, useTools) => {
@@ -15858,7 +16105,8 @@ async function createDialog() {
 
                     if (useTools) {
                         const tools = getAnthropicToolDefinitions({
-                            includePageTools: agentModeEnabled
+                            includePageTools: agentModeEnabled,
+                            includeSkillTools: true
                         });
                         if (anthropicWebSearchEnabled) {
                             tools.push(buildAnthropicWebSearchTool());
@@ -15966,6 +16214,8 @@ async function createDialog() {
 
     async function askAI(question, capturedSelectedText = '', screenshotDataUrl = null, inputImageDataUrls = [], taskContext = null) {
         throwIfAskTaskCancelled(taskContext);
+        // 各 provider 以同步的 hasAutoSkills() 決定是否開啟工具，必須先載入技能才不會漏送 load_skill。
+        await ensureSkillsRuntime();
         const activeConfig = await getActiveProviderConfig();
         throwIfAskTaskCancelled(taskContext);
         if (!activeConfig) {

@@ -21,6 +21,8 @@ const TOOL_RISK_MAP = Object.freeze({
     read_page: TOOL_RISK.READ_ONLY,
     find: TOOL_RISK.READ_ONLY,
     get_page_text: TOOL_RISK.READ_ONLY,
+    // 只回傳使用者自己撰寫的技能本文，不讀取也不改動頁面。
+    load_skill: TOOL_RISK.READ_ONLY,
     // 點擊會觸發頁面自身的 click 處理器，可能送出表單或導向外部資源。
     click: TOOL_RISK.EXTERNAL_SIDE_EFFECT,
     // type / select_option / fill_form_fields 雖然只是填值，但實作會派發

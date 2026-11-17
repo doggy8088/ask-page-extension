@@ -389,7 +389,8 @@ function toPlainValue(value) {
     );
 
     assert.doesNotMatch(contentScript, /cachedContents|explicitCacheName|geminiCacheEntries/);
-    assert.match(contentScript, /const tools = getGeminiToolDefinitions\(selectedModel, enableTools, googleSearchEnabled\)/);
+    // 工具迴圈可能只為技能開啟；頁面工具與 google_search 判斷仍以代理模式為準。
+    assert.match(contentScript, /const tools = getGeminiToolDefinitions\(selectedModel, agentModeEnabled, googleSearchEnabled, includeSkillTools\)/);
     assert.match(contentScript, /\.\.\.buildGeminiConversationSteps\(\)/);
     assert.match(contentScript, /delete fallbackRequestBody\.prompt_cache_key/);
 
