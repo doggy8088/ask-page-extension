@@ -508,43 +508,303 @@
       font-weight: 800;
     }
 
+    .skills-toolbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px 20px;
+      flex-wrap: wrap;
+    }
+
+    .skills-toolbar-text {
+      flex: 1 1 360px;
+      min-width: 0;
+    }
+
+    .skills-toolbar-text .card-description {
+      text-wrap: balance;
+    }
+
+    .skills-toolbar-actions {
+      display: flex;
+      gap: 8px;
+      flex: none;
+    }
+
+    .skills-toolbar-actions button {
+      min-width: auto;
+      padding: 8px 16px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
     .skills-group-title {
-      margin: 12px 0 2px;
+      margin: 14px 0 0;
       font-size: 13px;
       font-weight: 800;
+      letter-spacing: 0.02em;
       color: var(--text-secondary);
     }
 
     .skills-empty {
       color: var(--text-secondary);
       font-size: 14px;
-      padding: 8px 2px;
+      padding: 12px 14px;
+      border: 1px dashed rgba(117, 216, 255, 0.24);
+      border-radius: 16px;
     }
 
-    .command-main {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
+    /* 技能列：開關｜內容｜操作，操作區不參與壓縮，避免按鈕文字被擠成直排 */
+    .skill-row {
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr) auto;
+      column-gap: 12px;
+      align-items: center;
+    }
+
+    .skill-toggle-cell {
+      align-self: start;
+      padding-top: 1px;
+    }
+
+    .skill-body {
       min-width: 0;
     }
 
-    .command-main input[type="checkbox"] {
-      margin-top: 3px;
-      width: 16px;
-      height: 16px;
-      flex: none;
-      cursor: pointer;
+    .skill-title-line {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      min-width: 0;
+    }
+
+    .skill-title-line .command-name {
+      overflow-wrap: anywhere;
+    }
+
+    .skill-id-label {
+      margin-right: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: rgba(142, 162, 188, 0.75);
     }
 
     .skill-id {
-      margin-left: 8px;
+      padding: 0 6px;
+      font-family: var(--font-code);
       font-size: 12px;
-      font-weight: 400;
+      line-height: 1.6;
       color: var(--text-secondary);
+      border: 1px dashed rgba(140, 160, 186, 0.4);
+      border-radius: 6px;
     }
 
-    .command-item.is-disabled .command-main > div {
-      opacity: 0.55;
+    .skill-desc {
+      margin: 6px 0 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.55;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+    }
+
+    .skill-desc.is-expanded {
+      -webkit-line-clamp: unset;
+    }
+
+    .skill-desc-toggle {
+      display: inline-flex;
+      min-width: auto;
+      margin-top: 4px;
+      padding: 0;
+      background: none;
+      border: none;
+      box-shadow: none;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .skill-desc-toggle:hover {
+      text-decoration: underline;
+    }
+
+    .skill-desc-toggle[hidden] {
+      display: none;
+    }
+
+    .skill-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .skill-actions button {
+      white-space: nowrap;
+    }
+
+    .skill-actions:empty {
+      display: none;
+    }
+
+    .skill-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.5;
+      white-space: nowrap;
+    }
+
+    .skill-badge--auto {
+      color: #9fe7ff;
+      background: rgba(117, 216, 255, 0.12);
+      border-color: rgba(117, 216, 255, 0.36);
+    }
+
+    .skill-badge--explicit {
+      color: #c9d6e4;
+      background: rgba(140, 160, 186, 0.12);
+      border-color: rgba(140, 160, 186, 0.34);
+    }
+
+    .skill-badge--disabled {
+      color: #ffb4bd;
+      background: rgba(255, 107, 122, 0.1);
+      border-color: rgba(255, 107, 122, 0.32);
+    }
+
+    .skill-badge--builtin {
+      color: #ffd5ad;
+      background: rgba(255, 154, 74, 0.16);
+      border-color: rgba(255, 154, 74, 0.32);
+    }
+
+    .btn-ghost-danger {
+      background: transparent;
+      color: #ff9aa6;
+      border: 1px solid rgba(255, 107, 122, 0.45);
+      box-shadow: none;
+    }
+
+    .btn-ghost-danger:hover {
+      background: rgba(255, 107, 122, 0.14);
+      border-color: rgba(255, 139, 153, 0.8);
+      transform: translateY(-1px);
+    }
+
+    /* 啟用開關：沿用 checkbox 語意與事件，只改外觀 */
+    input[type="checkbox"].skill-switch {
+      appearance: none;
+      -webkit-appearance: none;
+      position: relative;
+      width: 40px;
+      height: 24px;
+      margin: 0;
+      flex: none;
+      border-radius: 999px;
+      background: rgba(111, 140, 173, 0.3);
+      border: 1px solid rgba(111, 140, 173, 0.55);
+      cursor: pointer;
+      transition: background 0.18s ease, border-color 0.18s ease;
+    }
+
+    input[type="checkbox"].skill-switch::before {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #b8c8da;
+      transition: transform 0.18s ease, background 0.18s ease;
+    }
+
+    input[type="checkbox"].skill-switch:checked {
+      background: var(--primary-color);
+      border-color: rgba(107, 181, 255, 0.88);
+    }
+
+    input[type="checkbox"].skill-switch:checked::before {
+      transform: translateX(16px);
+      background: #ffffff;
+    }
+
+    input[type="checkbox"].skill-switch:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    /* /clear 永遠啟用：維持開啟的配色，只降低飽和度，避免看起來像關閉或壞掉 */
+    input[type="checkbox"].skill-switch:disabled:checked {
+      opacity: 1;
+      background: rgba(22, 135, 255, 0.45);
+      border-color: rgba(107, 181, 255, 0.5);
+    }
+
+    input[type="checkbox"].skill-switch:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
+    }
+
+    .command-item.is-disabled .command-name,
+    .command-item.is-disabled .skill-id,
+    .command-item.is-disabled .skill-desc {
+      opacity: 0.7;
+    }
+
+    @media (max-width: 720px) {
+      .skill-row {
+        grid-template-columns: 40px minmax(0, 1fr);
+        row-gap: 10px;
+      }
+
+      .skill-actions {
+        grid-column: 2;
+        flex-wrap: wrap;
+      }
+
+      .skill-desc {
+        -webkit-line-clamp: unset;
+      }
+    }
+
+    /* 技能編輯視窗：空的錯誤訊息不佔位、錯誤欄位聚焦時仍顯示紅框、按鈕列固定在底部 */
+    #commandModal .field-error:empty {
+      min-height: 0;
+      margin-top: 0;
+    }
+
+    #commandModal .input-error,
+    #commandModal .input-error:hover,
+    #commandModal .input-error:focus {
+      border-color: var(--danger-color);
+      box-shadow: 0 0 0 4px rgba(255, 107, 122, 0.14);
+    }
+
+    #commandModal .modal-actions {
+      position: sticky;
+      bottom: -24px;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin: 24px -24px -24px;
+      padding: 16px 24px 24px;
+      background: rgb(7, 13, 24);
+      border-top: 1px solid var(--border-color);
+    }
+
+    #commandModal .field-error:not(:empty) + small {
+      display: none;
     }
 
     .field-warning {
@@ -866,8 +1126,8 @@
         <!-- Custom Commands Tab -->
         <div id="commands-tab" class="tab-pane">
           <div class="card">
-            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
-              <div>
+            <div class="card-header skills-toolbar">
+              <div class="skills-toolbar-text">
                 <h2 class="card-title">
                   <span class="icon">⚡</span>
                   <span data-i18n="slashCommandManagement">技能管理</span>
@@ -875,12 +1135,12 @@
                 <p class="card-description" style="margin-top: 4px;" data-i18n="slashCommandManagementDescription">管理內建與自訂技能</p>
                 <p class="card-description" style="margin-top: 4px;" data-i18n="skillsIntro">技能採用 Agent Skills 格式（SKILL.md）。「自動調用」的技能由模型依描述自行載入；「僅明確調用」的技能只能輸入 /觸發名稱 執行。</p>
               </div>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <button id="importSkill" class="btn-secondary" style="margin-top: 0; min-width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 13px;" type="button">
+              <div class="skills-toolbar-actions">
+                <button id="importSkill" class="btn-secondary" type="button">
                   <span aria-hidden="true">📥</span> <span data-i18n="importSkill">匯入 SKILL.md</span>
                 </button>
                 <input type="file" id="importSkillFile" accept=".md,.markdown,text/markdown" style="display: none;">
-                <button id="addCommand" class="btn-primary" style="margin-top: 0; min-width: auto; padding: 8px 16px; display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 13px;" type="button">
+                <button id="addCommand" class="btn-primary" type="button">
                   <span aria-hidden="true">➕</span> <span data-i18n="addCustomSlashCommand">新增技能</span>
                 </button>
               </div>
@@ -1109,7 +1369,7 @@
         <small style="color: var(--text-secondary);" data-i18n="enableScreenshotModeHelp">執行技能時會自動套用截圖模式。</small>
       </div>
 
-      <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+      <div class="modal-actions">
         <button id="modalCancel" class="btn-secondary" data-i18n="cancel">取消</button>
         <button id="modalSave" class="btn-primary" data-i18n="save">儲存</button>
       </div>

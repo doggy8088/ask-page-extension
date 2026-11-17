@@ -748,6 +748,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             tabPanes.forEach(pane => pane.classList.remove('active'));
             document.getElementById(`${targetTab}-tab`).classList.add('active');
 
+            if (targetTab === 'commands') {
+                scheduleSkillDescriptionToggleUpdate();
+            }
+
             // Save active tab
             chrome.storage.local.set({ [LAST_ACTIVE_TAB_STORAGE]: targetTab });
         });
@@ -1543,90 +1547,93 @@ document.addEventListener('DOMContentLoaded', async () => {
         skills.forEach(skill => {
             commandsList.appendChild(createSkillElement(skill));
         });
+        scheduleSkillDescriptionToggleUpdate();
     }
 
     function createEnabledToggleHtml(label, enabled, dataAttributes) {
         const escapedLabel = escapeHtml(t('skillEnabledToggleLabel', { skill: label }));
-        return `<input type="checkbox" data-action="toggle" ${dataAttributes} ${enabled ? 'checked' : ''} title="${escapedLabel}" aria-label="${escapedLabel}">`;
+        return `<input type="checkbox" class="skill-switch" role="switch" data-action="toggle" ${dataAttributes} ${enabled ? 'checked' : ''} title="${escapedLabel}" aria-label="${escapedLabel}">`;
+    }
+
+    // /clear 不能停用：顯示鎖定在開啟狀態的開關，讓每列左側都有同樣的控制項
+    function createLockedToggleHtml() {
+        const escapedLabel = escapeHtml(t('skillAlwaysEnabled'));
+        return `<input type="checkbox" class="skill-switch" role="switch" checked disabled title="${escapedLabel}" aria-label="${escapedLabel}">`;
+    }
+
+    function createSkillBadgeHtml(variant, labelKey) {
+        return `<span class="skill-badge skill-badge--${variant}">${escapeHtml(t(labelKey))}</span>`;
+    }
+
+    // 內建與使用者技能共用同一個三欄版面：開關｜標題與描述｜操作按鈕
+    function createSkillRowElement({ isDisabled, toggleHtml, titleHtml, description, actionsHtml }) {
+        const div = document.createElement('div');
+        div.className = `command-item skill-row${isDisabled ? ' is-disabled' : ''}`;
+        const escapedDescription = escapeHtml(description);
+        div.innerHTML = `
+            <div class="skill-toggle-cell">${toggleHtml}</div>
+            <div class="skill-body">
+                <div class="skill-title-line">${titleHtml}</div>
+                ${escapedDescription ? `<p class="skill-desc">${escapedDescription}</p>
+                <button type="button" class="skill-desc-toggle" data-action="toggle-description" aria-expanded="false" hidden>${escapeHtml(t('skillDescriptionShowMore'))}</button>` : ''}
+            </div>
+            <div class="skill-actions">${actionsHtml}</div>
+        `;
+        return div;
+    }
+
+    // 每列都有同名的「編輯」「刪除」，可及名稱帶上觸發名稱，螢幕閱讀器才分得出是哪個技能
+    function createSkillActionButtonHtml(action, dataAttributes, labelKey, { icon, className = 'btn-secondary', ariaLabelKey = '', skillLabel = '' } = {}) {
+        const ariaLabel = ariaLabelKey ? escapeHtml(t(ariaLabelKey, { skill: skillLabel })) : '';
+        const title = ariaLabel ? ` title="${ariaLabel}" aria-label="${ariaLabel}"` : '';
+        return `<button type="button" class="${className} btn-small" data-action="${action}" ${dataAttributes}${title}>
+            <span class="icon" aria-hidden="true">${icon}</span>${escapeHtml(t(labelKey))}
+        </button>`;
     }
 
     // Create built-in skill element
     function createCommandElement(command) {
-        const div = document.createElement('div');
         const isDisabled = command.toggleable && command.enabled === false;
-        div.className = `command-item${isDisabled ? ' is-disabled' : ''}`;
-
         const escapedCommand = escapeHtml(command.cmd);
-        const toggleHtml = command.toggleable
-            ? createEnabledToggleHtml(command.cmd, command.enabled !== false, `data-command="${escapedCommand}"`)
-            : '';
+        const commandData = `data-command="${escapedCommand}"`;
 
-        div.innerHTML = `
-            <div class="command-header">
-                <div class="command-main">
-                    ${toggleHtml}
-                    <div>
-                        <div class="command-name">${escapedCommand}</div>
-                        <div style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">
-                            ${escapeHtml(getCommandListDescription(command))}
-                        </div>
-                    </div>
-                </div>
-                <div class="command-actions">
-                    ${isDisabled ? `<span class="built-in-badge">${escapeHtml(t('skillDisabledBadge'))}</span>` : ''}
-                    ${command.editable ? `<button class="btn-secondary btn-small" data-action="edit" data-command="${escapedCommand}">
-                        <span class="icon">✏️</span>
-                        ${escapeHtml(t('edit'))}
-                    </button>` : ''}
-                    <span class="built-in-badge">${escapeHtml(t('builtin'))}</span>
-                </div>
-            </div>
-        `;
-
-        return div;
+        return createSkillRowElement({
+            isDisabled,
+            toggleHtml: command.toggleable
+                ? createEnabledToggleHtml(command.cmd, command.enabled !== false, commandData)
+                : createLockedToggleHtml(),
+            titleHtml: `
+                <span class="command-name">${escapedCommand}</span>
+                ${createSkillBadgeHtml('builtin', 'builtin')}
+                ${isDisabled ? createSkillBadgeHtml('disabled', 'skillDisabledBadge') : ''}
+            `,
+            description: getCommandListDescription(command),
+            actionsHtml: command.editable
+                ? createSkillActionButtonHtml('edit', commandData, 'edit', { icon: '✏️', ariaLabelKey: 'skillEditLabel', skillLabel: command.cmd })
+                : ''
+        });
     }
 
     function createSkillElement(skill) {
-        const div = document.createElement('div');
-        div.className = `command-item${skill.enabled ? '' : ' is-disabled'}`;
+        const skillData = `data-skill="${escapeHtml(skill.name)}"`;
+        const isAuto = skill.invocation === AskPageSkills.SKILL_INVOCATION.AUTO;
 
-        const escapedName = escapeHtml(skill.name);
-        const skillData = `data-skill="${escapedName}"`;
-        const invocationBadgeKey = skill.invocation === AskPageSkills.SKILL_INVOCATION.AUTO
-            ? 'skillInvocationAutoBadge'
-            : 'skillInvocationExplicitBadge';
-
-        div.innerHTML = `
-            <div class="command-header">
-                <div class="command-main">
-                    ${createEnabledToggleHtml(skill.command, skill.enabled, skillData)}
-                    <div>
-                        <div class="command-name">${escapeHtml(skill.command)}<span class="skill-id">name: ${escapedName}</span></div>
-                        <div style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">
-                            ${escapeHtml(getPromptPreview(AskPageSkills.getSkillDescription(skill), 160))}
-                        </div>
-                    </div>
-                </div>
-                <div class="command-actions">
-                    <span class="built-in-badge">${escapeHtml(t(invocationBadgeKey))}</span>
-                    ${skill.enabled ? '' : `<span class="built-in-badge">${escapeHtml(t('skillDisabledBadge'))}</span>`}
-                    <button class="btn-secondary btn-small" data-action="edit" ${skillData}>
-                        <span class="icon">✏️</span>
-                        ${escapeHtml(t('edit'))}
-                    </button>
-                    <button class="btn-secondary btn-small" data-action="export" ${skillData}>
-                        <span class="icon">📤</span>
-                        ${escapeHtml(t('exportSkill'))}
-                    </button>
-                    <button class="btn-danger btn-small" data-action="delete" ${skillData}>
-                        <span class="icon">✕</span>
-                        ${escapeHtml(t('delete'))}
-                    </button>
-                </div>
-            </div>
-        `;
-
-        return div;
+        return createSkillRowElement({
+            isDisabled: !skill.enabled,
+            toggleHtml: createEnabledToggleHtml(skill.command, skill.enabled, skillData),
+            titleHtml: `
+                <span class="command-name">${escapeHtml(skill.command)}</span>
+                <span class="skill-id"><span class="skill-id-label">ID</span>${escapeHtml(skill.name)}</span>
+                ${isAuto ? createSkillBadgeHtml('auto', 'skillInvocationAutoBadge') : createSkillBadgeHtml('explicit', 'skillInvocationExplicitBadge')}
+                ${skill.enabled ? '' : createSkillBadgeHtml('disabled', 'skillDisabledBadge')}
+            `,
+            description: AskPageSkills.getSkillDescription(skill),
+            actionsHtml: [
+                createSkillActionButtonHtml('edit', skillData, 'edit', { icon: '✏️', ariaLabelKey: 'skillEditLabel', skillLabel: skill.command }),
+                createSkillActionButtonHtml('export', skillData, 'exportSkillButton', { icon: '📤', ariaLabelKey: 'skillExportLabel', skillLabel: skill.command }),
+                createSkillActionButtonHtml('delete', skillData, 'delete', { icon: '✕', className: 'btn-ghost-danger', ariaLabelKey: 'skillDeleteLabel', skillLabel: skill.command })
+            ].join('')
+        });
     }
 
     function normalizeCustomCommandMode(mode) {
@@ -1707,8 +1714,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         return getPromptPreview(promptText);
     }
 
+    // 描述預設最多三行；只有實際被截斷時才顯示「顯示全文」按鈕。
+    // 頁籤隱藏時量不到高度，因此在切到技能頁籤與視窗縮放時重新判斷。
+    function updateSkillDescriptionToggles() {
+        commandsList.querySelectorAll('.skill-desc-toggle').forEach((toggle) => {
+            const description = toggle.previousElementSibling;
+            if (description.classList.contains('is-expanded')) {
+                toggle.hidden = false;
+                return;
+            }
+            if (!description.clientHeight) {
+                return;
+            }
+            toggle.hidden = description.scrollHeight <= description.clientHeight + 1;
+        });
+    }
+
+    let descriptionToggleFrame = 0;
+    function scheduleSkillDescriptionToggleUpdate() {
+        cancelAnimationFrame(descriptionToggleFrame);
+        descriptionToggleFrame = requestAnimationFrame(updateSkillDescriptionToggles);
+    }
+    window.addEventListener('resize', scheduleSkillDescriptionToggleUpdate);
+
+    function toggleSkillDescription(toggle) {
+        const expanded = toggle.previousElementSibling.classList.toggle('is-expanded');
+        toggle.setAttribute('aria-expanded', String(expanded));
+        toggle.textContent = t(expanded ? 'skillDescriptionShowLess' : 'skillDescriptionShowMore');
+    }
+
     // Add event delegation for skill buttons
     commandsList.addEventListener('click', (e) => {
+        const descriptionToggle = e.target.closest('[data-action="toggle-description"]');
+        if (descriptionToggle) {
+            toggleSkillDescription(descriptionToggle);
+            return;
+        }
+
         const button = e.target.closest('button[data-action]');
         if (!button) {
             return;
