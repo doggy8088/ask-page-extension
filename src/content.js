@@ -912,6 +912,23 @@ function scrollActiveMessagesToBottom(fallbackMessagesEl, options = {}) {
     scrollMessagesToBottom(getActiveMessagesElement(fallbackMessagesEl), options);
 }
 
+// 「/」技能提示框的位置：預設貼在輸入框下方；下方放不下而上方空間較大時改放到上方，
+// 並依可用空間縮小最大高度，避免提示框超出視窗、使用者看不到可用的技能。
+const INTELLI_BOX_MAX_HEIGHT = 180;
+const INTELLI_BOX_GAP = 2;
+const INTELLI_BOX_VIEWPORT_MARGIN = 8;
+function computeIntelliBoxPlacement({ anchorTop, anchorBottom, viewportHeight, contentHeight }) {
+    const naturalHeight = Math.min(Math.max(Number(contentHeight) || 0, 0), INTELLI_BOX_MAX_HEIGHT);
+    const spaceBelow = Math.max(viewportHeight - anchorBottom - INTELLI_BOX_GAP - INTELLI_BOX_VIEWPORT_MARGIN, 0);
+    const spaceAbove = Math.max(anchorTop - INTELLI_BOX_GAP - INTELLI_BOX_VIEWPORT_MARGIN, 0);
+    if (naturalHeight <= spaceBelow || spaceBelow >= spaceAbove) {
+        const height = Math.min(naturalHeight, spaceBelow) || naturalHeight;
+        return { placement: 'below', top: anchorBottom + INTELLI_BOX_GAP, maxHeight: height };
+    }
+    const height = Math.min(naturalHeight, spaceAbove);
+    return { placement: 'above', top: anchorTop - INTELLI_BOX_GAP - height, maxHeight: height };
+}
+
 function closeActiveDialog() {
     if (typeof activeScreenAnnotationCancel === 'function') {
         activeScreenAnnotationCancel();
@@ -6956,7 +6973,7 @@ async function createDialog() {
         display: 'none', position: 'fixed', left: '0', top: '0', zIndex: '2147483648',
         border: '1px solid #ccc', borderRadius: '8px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)', minWidth: '180px', fontSize: '14px',
-        maxHeight: '180px', overflowY: 'auto', overscrollBehavior: 'contain', padding: '4px 0',
+        maxHeight: `${INTELLI_BOX_MAX_HEIGHT}px`, boxSizing: 'border-box', overflowY: 'auto', overscrollBehavior: 'contain', padding: '4px 0',
         fontFamily: 'system-ui, -apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji',
         cursor: 'pointer', userSelect: 'none',
         background: '#ffffff',
@@ -8696,11 +8713,35 @@ async function createDialog() {
             });
             intelliBox.appendChild(el);
         });
-        const rect = input.getBoundingClientRect();
-        intelliBox.style.left = rect.left + 'px';
-        intelliBox.style.top = rect.bottom + 2 + 'px';
-        intelliBox.style.display = 'block';
+        positionIntelliBox();
         intelliActive = true;
+    }
+    function positionIntelliBox() {
+        const rect = input.getBoundingClientRect();
+        // 先以預設最大高度顯示，量出內容實際需要的高度，再決定放在輸入框上方或下方
+        intelliBox.style.maxHeight = `${INTELLI_BOX_MAX_HEIGHT}px`;
+        intelliBox.style.display = 'block';
+        const placement = computeIntelliBoxPlacement({
+            anchorTop: rect.top,
+            anchorBottom: rect.bottom,
+            viewportHeight: window.innerHeight,
+            contentHeight: intelliBox.offsetHeight
+        });
+        intelliBox.style.left = rect.left + 'px';
+        intelliBox.style.top = placement.top + 'px';
+        intelliBox.style.maxHeight = placement.maxHeight + 'px';
+        intelliBox.dataset.placement = placement.placement;
+        // 方向鍵選到可視範圍外的項目時，只捲動提示框本身（不用 scrollIntoView，以免連帶捲動網頁）
+        const activeItem = intelliBox.children[intelliIndex];
+        if (activeItem) {
+            const itemTop = activeItem.offsetTop;
+            const itemBottom = itemTop + activeItem.offsetHeight;
+            if (itemTop < intelliBox.scrollTop) {
+                intelliBox.scrollTop = itemTop;
+            } else if (itemBottom > intelliBox.scrollTop + intelliBox.clientHeight) {
+                intelliBox.scrollTop = itemBottom - intelliBox.clientHeight;
+            }
+        }
     }
     function completeIntelliCommand(item) {
         hideIntelliBox();
