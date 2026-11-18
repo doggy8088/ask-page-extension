@@ -1123,6 +1123,30 @@
   visibility: hidden;
   z-index: 0;
 }
+/* / 選單按 Tab 補上「/技能名稱 」後的 [變數] 提示：疊在輸入框上方，前段透明文字對齊輸入內容 */
+#gemini-qna-arg-hint {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  border-color: transparent;
+  background: transparent;
+  color: transparent;
+  z-index: 2;
+}
+#gemini-qna-input-wrapper.askpage-arg-hint-active #gemini-qna-arg-hint {
+  display: block;
+}
+#gemini-qna-arg-hint .askpage-arg-hint-mirror {
+  color: transparent;
+}
+#gemini-qna-arg-hint .askpage-arg-hint-text {
+  color: #7d8a9c;
+}
 #gemini-qna-input-wrapper.askpage-snippet-active #gemini-qna-snippet-overlay {
   visibility: visible;
 }

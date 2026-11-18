@@ -192,6 +192,42 @@ async function ask(question) {
         assert.strictEqual(modeCalls.length, 0);
     }
 
+    // ---------- 執行：/技能名稱 後面接補充文字 ----------
+    await setStorage({ ASKPAGE_SKILLS: skillRecords });
+    await ask('/secret 語氣輕鬆一點');
+    assert.deepStrictEqual(askCalls, ['TOP SECRET BODY\n\n語氣輕鬆一點'], '補充文字接在提示詞最後面，前面補兩個換行');
+    assert.strictEqual(modeCalls.length, 1, '仍套用技能的模式設定');
+
+    await ask('/summary 重點放在價格');
+    assert.deepStrictEqual(askCalls, [`${zhTw.summaryPrompt.message}\n\n重點放在價格`], '/summary 也接受補充文字');
+
+    await ask('/paused 補充');
+    assert.strictEqual(askCalls.length, 0, '停用的技能帶補充文字也不送出');
+    assert.strictEqual(messages[1].text, translate('skillDisabled', { skill: '/paused' }));
+
+    await ask('/unknown 補充文字');
+    assert.deepStrictEqual(askCalls, ['/unknown 補充文字'], '找不到技能時原文送出');
+    assert.strictEqual(modeCalls.length, 0);
+
+    await setStorage({ ASKPAGE_SKILLS: skillRecords, CUSTOM_SUMMARY_ENABLED: false });
+    await ask('/summary 重點放在價格');
+    assert.strictEqual(askCalls.length, 0, '/summary 停用時帶補充文字也不送出');
+    assert.strictEqual(messages[1].text, translate('skillDisabled', { skill: '/summary' }));
+
+    // ---------- 執行：有變數的技能，補充文字依序填入變數 ----------
+    await setStorage({ ASKPAGE_SKILLS: [
+        { name: 'stylebot', command: '/stylebot', description: 'Restyle', instructions: 'Restyle ${site} so that ${what}', invocation: 'explicit' },
+        { name: 'greet', command: '/greet', description: 'Greet', instructions: 'Hi ${name} from ${country:TW}', invocation: 'explicit' }
+    ] });
+    await ask('/stylebot example.com make the header blue');
+    assert.deepStrictEqual(askCalls, ['Restyle example.com so that make the header blue']);
+    await ask('/greet Will');
+    assert.deepStrictEqual(askCalls, ['Hi Will from TW'], '沒給的變數用預設值');
+    await ask('/stylebot example.com');
+    assert.strictEqual(askCalls.length, 0, '缺少必填變數時不送出');
+    assert.strictEqual(messages[1].text, translate('customCommandTemplateVariablesError', { command: '/stylebot', usage: '/stylebot [site] [what]' }));
+    assert.ok(!messages[1].text.includes('Tab'), '錯誤訊息不再要求按 Tab 展開');
+
     // ---------- 語系 ----------
     const removedKeys = ['builtInCommandCopyText', 'commandScreenshot', 'commandAgent', 'enableScreenshot', 'disableScreenshot', 'switchToInquiryMode', 'switchToAgentMode'];
     for (const locale of locales) {

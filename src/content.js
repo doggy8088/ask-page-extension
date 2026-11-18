@@ -1448,6 +1448,128 @@ function getSnippetExecution(state) {
     return state.executeCustomCommand;
 }
 
+// ---------- 「/技能名稱 補充文字」 ----------
+
+// 第一個空白之前是技能名稱，之後（去掉前後空白）是使用者補充的文字；不是以 / 開頭時整段都是 command。
+function splitSkillInvocation(text) {
+    const value = String(text ?? '').trim();
+    const match = value.match(/^(\/\S+)(?:\s+([\s\S]*))?$/);
+    if (!match) {
+        return { command: value, args: '' };
+    }
+    return { command: match[1], args: (match[2] || '').trim() };
+}
+
+// 補充文字接在技能提示詞全文的最後面；提示詞不是以換行結尾時，先補兩個換行再接上。
+function appendSkillArguments(prompt, args) {
+    const extra = String(args ?? '').trim();
+    const base = String(prompt ?? '');
+    if (!extra) {
+        return base;
+    }
+    if (!base) {
+        return extra;
+    }
+    return base.endsWith('\n') ? `${base}${extra}` : `${base}\n\n${extra}`;
+}
+
+// 以 shell 風格切分參數（與 Claude Code 相同）：空白分隔，單引號或雙引號包住的內容算一個參數。
+// 回傳每個參數的值與它在原字串中的起訖位置。
+function tokenizeSkillArguments(args) {
+    const text = String(args ?? '');
+    const tokens = [];
+    let index = 0;
+    while (index < text.length) {
+        while (index < text.length && /\s/.test(text[index])) {
+            index += 1;
+        }
+        if (index >= text.length) {
+            break;
+        }
+        const start = index;
+        let value = '';
+        while (index < text.length && !/\s/.test(text[index])) {
+            const char = text[index];
+            if (char === '"' || char === '\'') {
+                const close = text.indexOf(char, index + 1);
+                if (close === -1) {
+                    value += text.slice(index + 1);
+                    index = text.length;
+                    break;
+                }
+                value += text.slice(index + 1, close);
+                index = close + 1;
+            } else {
+                value += char;
+                index += 1;
+            }
+        }
+        tokens.push({ value, start, end: index });
+    }
+    return tokens;
+}
+
+// 依序把參數填入變數。最後一個變數接收剩下的全部文字（含空白），
+// 所以「/stylebot example.com make the header blue」會得到 site=example.com、what=make the header blue。
+// 沒有對應參數的變數使用預設值；沒有預設值的列入 missing。
+function assignSkillArguments(variables, args) {
+    const list = Array.isArray(variables) ? variables : [];
+    const text = String(args ?? '');
+    const tokens = tokenizeSkillArguments(text);
+    const values = {};
+    const missing = [];
+    list.forEach((variable, index) => {
+        let value = '';
+        if (index < tokens.length) {
+            const isLast = index === list.length - 1;
+            value = isLast && tokens.length - index > 1
+                ? text.slice(tokens[index].start).trim()
+                : tokens[index].value;
+        }
+        if (value === '' && variable.hasDefault) {
+            value = variable.defaultValue;
+        }
+        if (value === '' && !variable.hasDefault) {
+            missing.push(variable.name);
+        }
+        values[variable.name] = value;
+    });
+    return { values, missing };
+}
+
+function formatSkillArgumentHint(variable) {
+    return variable.hasDefault ? `[${variable.name}:${variable.defaultValue}]` : `[${variable.name}]`;
+}
+
+// 輸入框中「/技能名稱 」後面顯示的灰色提示：只列出還沒開始輸入的變數。
+// rawArgs 是技能名稱與一個空白之後的原始文字（不 trim，才知道使用者是否已經打了下一個空白）。
+function buildSkillArgumentHint(variables, rawArgs) {
+    const list = Array.isArray(variables) ? variables : [];
+    const text = String(rawArgs ?? '');
+    const started = tokenizeSkillArguments(text).length;
+    const remaining = list.slice(started);
+    if (!remaining.length) {
+        return '';
+    }
+    const hint = remaining.map(formatSkillArgumentHint).join(' ');
+    return text === '' || /\s$/.test(text) ? hint : ` ${hint}`;
+}
+
+// 技能提示詞加上使用者補充的文字：有變數時依序填入變數，沒有變數時接在全文最後面。
+// missing 不為空時代表有必填變數沒有值，不可送出；usage 是給使用者看的用法範例。
+function resolveSkillPromptWithArguments(command, template, args, builtinValues) {
+    const variables = extractTemplateVariables(template, builtinValues);
+    if (!variables.length) {
+        return { prompt: appendSkillArguments(resolveBuiltinTemplate(template, builtinValues), args), missing: [], usage: command };
+    }
+    const usage = `${command} ${variables.map(formatSkillArgumentHint).join(' ')}`;
+    const { values, missing } = assignSkillArguments(variables, args);
+    if (missing.length) {
+        return { prompt: '', missing, usage };
+    }
+    return { prompt: expandSnippetTemplate(template, values, false, builtinValues).prompt, missing: [], usage };
+}
+
 // API key masking for console output
 function maskApiKey(apiKey) {
     if (!apiKey || apiKey.length < 8) { return apiKey; }
@@ -6819,10 +6941,18 @@ async function createDialog() {
     snippetOverlay.id = 'gemini-qna-snippet-overlay';
     snippetOverlay.setAttribute('aria-hidden', 'true');
 
+    // 技能變數提示 overlay：在 / 選單按 Tab 補上「/技能名稱 」後，於游標後方以灰字顯示 [變數]。
+    // 只是視覺提示，永遠不寫進 input.value；overlay 疊在 textarea 上方，前段以透明文字對齊輸入內容。
+    const skillArgumentHintOverlay = document.createElement('div');
+    skillArgumentHintOverlay.id = 'gemini-qna-arg-hint';
+    skillArgumentHintOverlay.setAttribute('aria-hidden', 'true');
+    let skillArgumentHintState = null;
+
     const inputWrapper = document.createElement('div');
     inputWrapper.id = 'gemini-qna-input-wrapper';
     inputWrapper.appendChild(snippetOverlay);
     inputWrapper.appendChild(input);
+    inputWrapper.appendChild(skillArgumentHintOverlay);
 
     const inputStack = document.createElement('div');
     inputStack.id = 'gemini-qna-input-stack';
@@ -7905,6 +8035,7 @@ async function createDialog() {
             const caretPosition = input.value.length;
             input.setSelectionRange(caretPosition, caretPosition);
         }
+        updateSkillArgumentHint();
     }
 
     function setInputImageNotice(message = '', level = 'info', source = null) {
@@ -8596,12 +8727,15 @@ async function createDialog() {
                 await ensureSkillsRuntime();
             }
 
-            if (question === '/summary' && !isSummarySkillEnabled()) {
-                rejectDisabledSkill(question);
+            // 「/技能名稱 補充文字」：以第一個空白前的名稱比對技能，補充文字依序填入變數或接在提示詞最後面
+            const { command: invokedCommand, args: skillArgs } = splitSkillInvocation(question);
+
+            if (invokedCommand === '/summary' && !isSummarySkillEnabled()) {
+                rejectDisabledSkill(invokedCommand);
                 return;
             }
 
-            if (question === '/summary') {
+            if (invokedCommand === '/summary') {
                 if (typeof AskPageI18n !== 'undefined') {
                     await AskPageI18n.ready;
                 }
@@ -8612,27 +8746,28 @@ async function createDialog() {
                     return;
                 }
                 const summaryBuiltinValues = getTemplateBuiltinValues();
-                if (extractTemplateVariables(summaryPromptTemplate, summaryBuiltinValues).length > 0) {
-                // 有變數的範本應由 snippet 流程展開，不應直接以 /summary 送出
+                const summaryResolution = resolveSkillPromptWithArguments('/summary', summaryPromptTemplate, skillArgs, summaryBuiltinValues);
+                if (summaryResolution.missing.length) {
+                    // 有必填變數卻沒有給值：提示用法，不送出
                     appendMessage('user', question);
-                    appendMessage('assistant', getLocalizedText('summaryTemplateVariablesError'));
+                    appendMessage('assistant', getLocalizedText('summaryTemplateVariablesError', { usage: summaryResolution.usage }));
                     clearInputContextImages();
                     setInputValue('', { resetToSingleLine: true });
                     input.focus();
                     return;
                 }
-                question = resolveBuiltinTemplate(summaryPromptTemplate, summaryBuiltinValues);
+                question = summaryResolution.prompt;
                 displayedQuestion = question;
             }
 
             // Handle user skills
-            if (question.startsWith('/') && question !== '/summary') {
+            if (invokedCommand.startsWith('/') && invokedCommand !== '/summary') {
                 const skillsLibrary = getSkillsLibrary();
                 const matchedSkill = skillsLibrary
-                    ? skillsLibrary.findSkillByCommand(getRuntimeSkills(), question, { includeDisabled: true })
+                    ? skillsLibrary.findSkillByCommand(getRuntimeSkills(), invokedCommand, { includeDisabled: true })
                     : null;
                 if (matchedSkill && (!matchedSkill.enabled || matchedSkill.userInvocable === false)) {
-                    rejectDisabledSkill(question);
+                    rejectDisabledSkill(invokedCommand);
                     return;
                 }
                 const customCommand = matchedSkill
@@ -8651,9 +8786,11 @@ async function createDialog() {
                         return;
                     }
                     const customBuiltinValues = getTemplateBuiltinValues();
-                    if (extractTemplateVariables(customPromptTemplate, customBuiltinValues).length > 0) {
+                    const customResolution = resolveSkillPromptWithArguments(customCommand.cmd, customPromptTemplate, skillArgs, customBuiltinValues);
+                    if (customResolution.missing.length) {
+                        // 有必填變數卻沒有給值：提示用法，不送出
                         appendMessage('user', question);
-                        appendMessage('assistant', getLocalizedText('customCommandTemplateVariablesError', { command: question }));
+                        appendMessage('assistant', getLocalizedText('customCommandTemplateVariablesError', { command: customCommand.cmd, usage: customResolution.usage }));
                         clearInputContextImages();
                         setInputValue('', { resetToSingleLine: true });
                         input.focus();
@@ -8661,8 +8798,8 @@ async function createDialog() {
                     }
                     await applyCustomCommandExecutionMode(customCommand);
                     await incrementCustomCommandUsage(customCommand.cmd);
-                    // Replace the command with its prompt, resolving built-in variables such as ${SELECTED_TEXT}
-                    question = resolveBuiltinTemplate(customPromptTemplate, customBuiltinValues);
+                    // 以技能提示詞取代輸入，展開 ${SELECTED_TEXT} 等保留變數，並套用使用者補充的文字
+                    question = customResolution.prompt;
                     displayedQuestion = question;
                 // Continue with AI processing using the custom prompt
                 }
@@ -8769,6 +8906,55 @@ async function createDialog() {
         }
         setInputValue(item.cmd);
         handleAsk();
+    }
+
+    // 在 / 選單按 Tab：只補上「/技能名稱 」，不展開提示詞也不送出，使用者可以接著輸入補充文字。
+    // 技能有變數時，在游標後方顯示 [變數] 提示（與 Claude Code 的 argument-hint 相同）。
+    function completeIntelliCommandName(item) {
+        hideIntelliBox();
+        const builtinValues = getTemplateBuiltinValues();
+        const variables = item.hasVariables && item.template
+            ? extractTemplateVariables(item.template, builtinValues)
+            : [];
+        skillArgumentHintState = variables.length ? { command: item.cmd, variables } : null;
+        setInputValue(`${item.cmd} `);
+        input.focus();
+    }
+
+    // 提示只在「Tab 補全後、輸入框仍以 /技能名稱 加空白開頭」時顯示；其餘情況一律清除。
+    function updateSkillArgumentHint() {
+        const state = skillArgumentHintState;
+        const prefix = state ? `${state.command} ` : '';
+        if (!state || snippetState || !input.value.startsWith(prefix) || input.value.includes('\n')) {
+            skillArgumentHintState = null;
+            inputWrapper.classList.remove('askpage-arg-hint-active');
+            skillArgumentHintOverlay.textContent = '';
+            return;
+        }
+        const hint = buildSkillArgumentHint(state.variables, input.value.slice(prefix.length));
+        if (!hint) {
+            inputWrapper.classList.remove('askpage-arg-hint-active');
+            skillArgumentHintOverlay.textContent = '';
+            return;
+        }
+        const computedStyle = window.getComputedStyle(input);
+        skillArgumentHintOverlay.style.font = computedStyle.font;
+        skillArgumentHintOverlay.style.lineHeight = computedStyle.lineHeight;
+        skillArgumentHintOverlay.style.letterSpacing = computedStyle.letterSpacing;
+        skillArgumentHintOverlay.style.padding = computedStyle.padding;
+        skillArgumentHintOverlay.style.borderStyle = computedStyle.borderStyle;
+        skillArgumentHintOverlay.style.borderWidth = computedStyle.borderWidth;
+        skillArgumentHintOverlay.style.boxSizing = computedStyle.boxSizing;
+        const mirror = document.createElement('span');
+        mirror.className = 'askpage-arg-hint-mirror';
+        mirror.textContent = input.value;
+        const hintText = document.createElement('span');
+        hintText.className = 'askpage-arg-hint-text';
+        hintText.textContent = hint;
+        skillArgumentHintOverlay.replaceChildren(mirror, hintText);
+        skillArgumentHintOverlay.scrollTop = input.scrollTop;
+        skillArgumentHintOverlay.scrollLeft = input.scrollLeft;
+        inputWrapper.classList.add('askpage-arg-hint-active');
     }
 
     function startSnippetMode(item, origin) {
@@ -9189,6 +9375,7 @@ async function createDialog() {
     });
     input.addEventListener('input', async () => {
         resizeQuestionInput();
+        updateSkillArgumentHint();
         if (snippetState) {
             syncSnippetFromInput();
             return;
@@ -9196,6 +9383,8 @@ async function createDialog() {
         await refreshIntelliSuggestionsForValue(input.value);
     });
     input.addEventListener('scroll', () => {
+        skillArgumentHintOverlay.scrollTop = input.scrollTop;
+        skillArgumentHintOverlay.scrollLeft = input.scrollLeft;
         if (!snippetState) {
             return;
         }
@@ -9305,18 +9494,25 @@ async function createDialog() {
         clearCompositionEndGuard();
 
         if (intelliActive) {
+            const isMenuKey = e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey);
+            if (isMenuKey) {
+                e.preventDefault();
+            }
             const filtered = await filterIntelli(input.value);
             if (e.key === 'ArrowDown') {
-                e.preventDefault();
                 intelliIndex = (intelliIndex + 1) % filtered.length;
                 showIntelliBox(filtered);
             } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
                 intelliIndex = (intelliIndex - 1 + filtered.length) % filtered.length;
                 showIntelliBox(filtered);
-            } else if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+            } else if (e.key === 'Tab') {
                 if (filtered.length) {
-                    e.preventDefault();
+                    completeIntelliCommandName(filtered[intelliIndex]);
+                } else {
+                    input.focus();
+                }
+            } else if (e.key === 'Enter' && !e.shiftKey) {
+                if (filtered.length) {
                     completeIntelliCommand(filtered[intelliIndex]);
                 }
             } else if (e.key === 'Enter' && e.shiftKey) {
