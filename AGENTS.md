@@ -36,7 +36,7 @@ npm run clean
 
 ### Testing
 ```bash
-# Build all targets and run the full test suite (42 test files, no external network required)
+# Build all targets and run the full test suite (all test files under tests/, no external network required)
 npm test
 ```
 
