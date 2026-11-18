@@ -7800,6 +7800,15 @@ async function createDialog() {
             return;
         }
 
+        // 技能提示框開著時，Esc 只關閉提示框。此 listener 掛在 capture 階段，會比輸入框的 keydown 先執行，
+        // 所以要在這裡先處理並攔下，否則會直接關掉整個對話框。
+        if (intelliActive) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            hideIntelliBox();
+            return;
+        }
+
         const activeElement = shadowRoot.activeElement;
         const activeEditingCancelBtn = activeElement
             ?.closest?.('.askpage-user-edit-container')

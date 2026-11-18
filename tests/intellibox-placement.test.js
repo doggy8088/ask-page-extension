@@ -67,4 +67,48 @@ assert.ok(!showSource.includes("rect.bottom + 2 + 'px'"), '不再固定放在輸
 assert.match(showSource, /computeIntelliBoxPlacement\(\{\s*anchorTop: rect\.top,\s*anchorBottom: rect\.bottom,\s*viewportHeight: window\.innerHeight,\s*contentHeight: intelliBox\.offsetHeight/);
 assert.ok(!showSource.includes('.scrollIntoView('), '只捲動提示框本身，不捲動網頁');
 
+// ---------- Esc：提示框開著時只關閉提示框，不關閉對話框 ----------
+{
+    const calls = [];
+    const escSandbox = {
+        intelliActive: false,
+        hideIntelliBox() { calls.push('hideIntelliBox'); escSandbox.intelliActive = false; },
+        closeDialog() { calls.push('closeDialog'); },
+        shadowRoot: { activeElement: null },
+        dialog: { contains: () => true },
+        intelliBox: { contains: () => false },
+        document: { activeElement: null, body: {}, documentElement: {} }
+    };
+    escSandbox.shadowRoot.activeElement = { closest: () => null };
+    vm.createContext(escSandbox);
+    vm.runInContext(`${section(contentSource, '    const escapeKeyListener = (e) => {', "    window.addEventListener('keydown', escapeKeyListener, true);")}
+globalThis.escapeKeyListener = escapeKeyListener;`, escSandbox, { filename: 'content.js#escape' });
+    const press = (key = 'Escape') => {
+        const event = {
+            key,
+            target: {},
+            defaultPrevented: false,
+            stopped: false,
+            preventDefault() { this.defaultPrevented = true; },
+            stopImmediatePropagation() { this.stopped = true; }
+        };
+        escSandbox.escapeKeyListener(event);
+        return event;
+    };
+
+    escSandbox.intelliActive = true;
+    let event = press();
+    assert.deepStrictEqual(calls, ['hideIntelliBox'], '提示框開著：只關閉提示框');
+    assert.ok(event.defaultPrevented && event.stopped, '攔下事件，不再往輸入框與網頁傳');
+
+    calls.length = 0;
+    event = press();
+    assert.deepStrictEqual(calls, ['closeDialog'], '提示框關閉後再按 Esc 才關閉對話框');
+
+    calls.length = 0;
+    escSandbox.intelliActive = true;
+    press('a');
+    assert.deepStrictEqual(calls, [], '其他按鍵不處理');
+}
+
 console.log('intellibox-placement: ok');
