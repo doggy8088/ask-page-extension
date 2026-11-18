@@ -778,6 +778,27 @@
       }
     }
 
+    /* 技能名稱欄位前方固定顯示 /，使用者只需輸入名稱本身 */
+    .command-name-field {
+      position: relative;
+    }
+
+    .command-name-field .command-name-prefix {
+      position: absolute;
+      top: 50%;
+      left: 13px;
+      transform: translateY(-50%);
+      font-family: var(--font-code);
+      font-size: 14px;
+      color: var(--text-secondary);
+      pointer-events: none;
+    }
+
+    .command-name-field input#modalCommandName {
+      width: 100%;
+      padding-left: 26px;
+    }
+
     /* 技能編輯視窗：空的錯誤訊息不佔位、錯誤欄位聚焦時仍顯示紅框、按鈕列固定在底部 */
     #commandModal .field-error:empty {
       min-height: 0;
@@ -1295,16 +1316,12 @@
 
       <div class="form-group">
         <label for="modalCommandName" data-i18n="commandName">技能名稱</label>
-        <input id="modalCommandName" type="text" data-i18n-placeholder="commandNamePlaceholder" placeholder="例如：/help" aria-describedby="modalCommandNameError">
+        <div class="command-name-field">
+          <span class="command-name-prefix" aria-hidden="true">/</span>
+          <input id="modalCommandName" type="text" data-i18n-placeholder="commandNamePlaceholder" placeholder="例如：translate" aria-describedby="modalCommandNameError" autocomplete="off" spellcheck="false">
+        </div>
         <small id="modalCommandNameError" class="field-error"></small>
-        <small style="color: var(--text-secondary);" data-i18n="commandNameHelp">使用者輸入的 /觸發名稱，可使用中文；只能包含文字、數字、底線和連字號</small>
-      </div>
-
-      <div class="form-group skill-only-field">
-        <label for="modalSkillId" data-i18n="skillIdLabel">技能 ID（name）</label>
-        <input id="modalSkillId" type="text" data-i18n-placeholder="skillIdPlaceholder" placeholder="留空自動產生，例如：translate-to-english" aria-describedby="modalSkillIdError" autocomplete="off" spellcheck="false">
-        <small id="modalSkillIdError" class="field-error"></small>
-        <small style="color: var(--text-secondary);" data-i18n="skillIdHelp">Agent Skills 的 name，供模型與匯出檔使用：小寫英文字母、數字與連字號，最多 64 個字元。</small>
+        <small style="color: var(--text-secondary);" data-i18n="commandNameHelp">在對話框輸入「/技能名稱」即可執行，這裡不用輸入 /。可使用中文，只能包含文字、數字、底線和連字號。</small>
       </div>
 
       <div class="form-group skill-only-field">

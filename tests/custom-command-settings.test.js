@@ -82,20 +82,20 @@ const existingSkills = AskPageSkills.normalizeSkills([
     { name: 'translate', command: '/翻譯', description: 'Translate', instructions: 'Translate ${SELECTED_TEXT}', invocation: 'auto' },
     { name: 'summarize-report', command: '/report', description: 'Report', instructions: 'Report', invocation: 'explicit' }
 ]);
-const validFields = { command: '/新技能', name: '', description: 'Does things' };
-assert.deepStrictEqual({ ...getSkillFieldErrors(validFields, existingSkills) }, { command: '', name: '', description: '' }, '中文觸發名稱、ID 留空可通過');
+const validFields = { command: '/新技能', description: 'Does things' };
+assert.deepStrictEqual({ ...getSkillFieldErrors(validFields, existingSkills) }, { command: '', description: '' }, '中文技能名稱可通過');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '新技能' }, existingSkills).command, '', '不需要輸入 /');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '／新技能' }, existingSkills).command, '', '全形斜線也接受');
 assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '' }, existingSkills).command, 'commandNameRequired');
-assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '新技能' }, existingSkills).command, 'commandNameInvalid');
-assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '/有 空白' }, existingSkills).command, 'commandNameInvalid');
-assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '/summary' }, existingSkills).command, 'commandNameBuiltinDuplicate');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '/' }, existingSkills).command, 'commandNameRequired', '只有 / 視為空白');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '有 空白' }, existingSkills).command, 'commandNameInvalid');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: 'summary' }, existingSkills).command, 'commandNameBuiltinDuplicate', '沒打 / 也擋內建技能');
 assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '/agent' }, existingSkills).command, 'commandNameBuiltinDuplicate');
-assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '/翻譯' }, existingSkills).command, 'commandNameCustomDuplicate');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: 'clear' }, existingSkills).command, 'commandNameBuiltinDuplicate');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '翻譯' }, existingSkills).command, 'commandNameCustomDuplicate', '沒打 / 也比對重複');
 assert.strictEqual(getSkillFieldErrors({ ...validFields, command: '/翻譯' }, existingSkills, 'translate').command, '', '編輯自己時不算重複');
-assert.strictEqual(getSkillFieldErrors({ ...validFields, command: `/${'a'.repeat(64)}` }, existingSkills).command, 'commandNameTooLong');
-assert.strictEqual(getSkillFieldErrors({ ...validFields, name: 'Bad_Name' }, existingSkills).name, 'skillIdInvalid');
-assert.strictEqual(getSkillFieldErrors({ ...validFields, name: 'a'.repeat(65) }, existingSkills).name, 'skillIdTooLong');
-assert.strictEqual(getSkillFieldErrors({ ...validFields, name: 'translate' }, existingSkills).name, 'skillIdDuplicate');
-assert.strictEqual(getSkillFieldErrors({ ...validFields, name: 'translate' }, existingSkills, 'translate').name, '');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: 'a'.repeat(64) }, existingSkills).command, '', '64 個字元（不含 /）可通過');
+assert.strictEqual(getSkillFieldErrors({ ...validFields, command: 'a'.repeat(65) }, existingSkills).command, 'commandNameTooLong');
 assert.strictEqual(getSkillFieldErrors({ ...validFields, description: '   ' }, existingSkills).description, 'skillDescriptionRequired');
 assert.strictEqual(getSkillFieldErrors({ ...validFields, description: 'x'.repeat(1025) }, existingSkills).description, 'skillDescriptionTooLong');
 
@@ -109,10 +109,20 @@ assert.strictEqual(AskPageSkills.serializeSkillMarkdown(toggledSkills[0]), expor
 
 for (const key of [
     'commandNameRequired', 'commandNameInvalid', 'commandNameTooLong', 'commandNameBuiltinDuplicate',
-    'commandNameCustomDuplicate', 'skillIdInvalid', 'skillIdTooLong', 'skillIdDuplicate',
+    'commandNameCustomDuplicate',
     'skillDescriptionRequired', 'skillDescriptionTooLong'
 ]) {
     assert.ok(zhTwCatalog[key], `zh_TW 缺少 ${key}`);
 }
+for (const key of ['skillIdLabel', 'skillIdPlaceholder', 'skillIdHelp', 'skillIdInvalid', 'skillIdTooLong', 'skillIdDuplicate', 'skillImportNameConflict']) {
+    assert.ok(!(key in zhTwCatalog), `技能 ID 欄位已合併進技能名稱，不應保留 ${key}`);
+}
+
+// ---------- 設定頁不再有技能 ID 欄位，技能名稱欄位前方固定顯示 / ----------
+const settingsHtml = fs.readFileSync(path.join(rootDir, 'src', 'settings.html'), 'utf8');
+assert.ok(!settingsHtml.includes('modalSkillId'), '技能 ID 欄位已移除');
+assert.ok(!settingsScript.includes('modalSkillId'), 'settings.js 不再參照技能 ID 欄位');
+assert.match(settingsHtml, /<span class="command-name-prefix" aria-hidden="true">\/<\/span>\s*<input id="modalCommandName"/);
+assert.match(settingsScript, /resolveSkillNameForCommand\(fields\.command, \{ previous: editingSkill, takenNames \}\)/, '儲存時由技能名稱決定 name');
 
 console.log('custom-command-settings: ok');

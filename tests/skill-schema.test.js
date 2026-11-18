@@ -129,7 +129,8 @@ assert.strictEqual(Skills.validateSkillCommand('翻譯'), 'missing-slash');
 assert.strictEqual(Skills.validateSkillCommand('/two words'), 'invalid');
 assert.strictEqual(Skills.validateSkillCommand('/a/b'), 'invalid');
 assert.strictEqual(Skills.validateSkillCommand('/'), 'invalid');
-assert.strictEqual(Skills.validateSkillCommand(`/${'a'.repeat(64)}`), 'too-long');
+assert.strictEqual(Skills.validateSkillCommand(`/${'a'.repeat(64)}`), '', '長度上限不含開頭的 /');
+assert.strictEqual(Skills.validateSkillCommand(`/${'a'.repeat(65)}`), 'too-long');
 ['/clear', '/summary', '/screenshot', '/agent'].forEach((command) => {
     assert.strictEqual(Skills.validateSkillCommand(command), 'reserved');
 });
@@ -158,7 +159,8 @@ assert.strictEqual(Skills.makeUniqueSkillName('a'.repeat(64), new Set(['a'.repea
         null,
         { name: 'Three Words', command: '/three' }
     ]);
-    assert.deepStrictEqual(skills.map((skill) => skill.name), ['one', 'three-words']);
+    assert.deepStrictEqual(skills.map((skill) => skill.name), ['one', 'one-2', 'three-words'], 'name 重複時加後綴而不是丟掉');
+    assert.deepStrictEqual(skills.map((skill) => skill.command), ['/one', '/other', '/three'], '觸發名稱重複時只保留第一筆');
     assert.strictEqual(skills[0].enabled, true, 'enabled 預設 true');
     assert.strictEqual(skills[0].invocation, 'explicit', '未指定調用方式時預設為僅明確');
     assert.strictEqual(Skills.normalizeSkill({ name: 'x', enabled: false }).enabled, false);
@@ -167,6 +169,69 @@ assert.strictEqual(Skills.makeUniqueSkillName('a'.repeat(64), new Set(['a'.repea
         true,
         '僅明確 + user-invocable:false 會正規化為可由使用者呼叫'
     );
+}
+
+// ---------- 觸發名稱容錯與舊格式升級 ----------
+assert.strictEqual(Skills.normalizeSkillCommand('post'), '/post');
+assert.strictEqual(Skills.normalizeSkillCommand('  /post  '), '/post');
+assert.strictEqual(Skills.normalizeSkillCommand('／翻譯'), '/翻譯', '全形斜線');
+assert.strictEqual(Skills.normalizeSkillCommand('//post'), '/post');
+assert.strictEqual(Skills.normalizeSkillCommand('/ post'), '/post');
+assert.strictEqual(Skills.normalizeSkillCommand('/'), '');
+assert.strictEqual(Skills.normalizeSkillCommand(undefined), '');
+{
+    const upgraded = Skills.normalizeSkills([
+        { name: 'post', command: 'post', description: '少了 /' },
+        { command: '翻譯', description: '沒有 name' },
+        { name: 'Bad_Name', command: '/bad', description: 'name 不合規則' },
+        { name: 'dup', command: '／dup', description: '全形斜線' },
+        { name: 'dup2', command: '/dup', description: '正規化後與上一筆相同' }
+    ]);
+    assert.deepStrictEqual(upgraded.map((skill) => skill.command), ['/post', '/翻譯', '/bad', '/dup']);
+    assert.strictEqual(upgraded[0].name, 'post');
+    assert.strictEqual(upgraded[1].name, Skills.slugifySkillName('/翻譯'));
+    assert.strictEqual(upgraded[2].name, 'bad-name');
+    assert.strictEqual(Skills.findSkillByCommand(upgraded, '/post').name, 'post', '升級後以 /post 找得到');
+    assert.strictEqual(Skills.findSkillByCommand(upgraded, 'post'), null, '查詢精確比對：一般文字不會對到技能');
+    assert.strictEqual(Skills.findSkillByCommand(upgraded, '//post'), null);
+    const again = Skills.normalizeSkills(upgraded);
+    assert.strictEqual(JSON.stringify(again), JSON.stringify(upgraded), '已正規化的資料再正規化結果不變，設定頁不會重複寫回');
+}
+{
+    const migrated = Skills.migrateLegacyCommands([{ cmd: 'post', prompt: 'Post it' }, { cmd: '/post', prompt: 'dup' }]);
+    assert.deepStrictEqual(migrated.map((skill) => skill.command), ['/post'], '舊版沒有 / 的指令也能遷移，且與有 / 的視為同一個');
+}
+{
+    const { skill } = Skills.createSkillFromMarkdown('---\nname: translate-to-english\ndescription: T\nmetadata:\n  askpage-command: 翻譯\n---\nBody');
+    assert.strictEqual(skill.command, '/翻譯', '匯入檔的 askpage-command 沒有 / 也接受');
+    assert.strictEqual(skill.name, 'translate-to-english');
+}
+
+// ---------- 由技能名稱決定 name ----------
+{
+    assert.strictEqual(Skills.isAutoSkillName('post', '/post'), true);
+    assert.strictEqual(Skills.isAutoSkillName('post-2', '/post'), true, '去重後綴');
+    assert.strictEqual(Skills.isAutoSkillName('post-draft', '/post'), false);
+    assert.strictEqual(Skills.isAutoSkillName(Skills.slugifySkillName('/翻譯'), '/翻譯'), true);
+    assert.strictEqual(Skills.isAutoSkillName('translate-to-english', '/翻譯'), false);
+
+    const resolve = Skills.resolveSkillNameForCommand;
+    assert.strictEqual(resolve('post'), 'post', '新增：由技能名稱產生');
+    assert.strictEqual(resolve('/Post Draft'), 'post-draft');
+    assert.strictEqual(resolve('翻譯'), Skills.slugifySkillName('/翻譯'));
+    assert.strictEqual(resolve('post', { takenNames: ['post'] }), 'post-2', '新增：與其他技能重複時加後綴');
+    assert.strictEqual(resolve('post', { takenNames: new Set(['POST']) }), 'post-2', '比對不分大小寫');
+
+    const imported = { name: 'translate-to-english', command: '/翻譯' };
+    assert.strictEqual(resolve('翻譯', { previous: imported }), 'translate-to-english', '編輯未改名：保留匯入的 name');
+    assert.strictEqual(resolve('英譯', { previous: imported }), 'translate-to-english', '改名：匯入的 name 不是自動產生的，保留');
+
+    const auto = { name: 'post', command: '/post' };
+    assert.strictEqual(resolve('post', { previous: auto, takenNames: ['other'] }), 'post', '編輯未改名：沿用');
+    assert.strictEqual(resolve('blog', { previous: auto }), 'blog', '改名：自動產生的 name 跟著改');
+    assert.strictEqual(resolve('blog', { previous: { name: 'post-2', command: '/post' }, takenNames: ['post'] }), 'blog', '去重後綴也視為自動產生');
+    assert.strictEqual(resolve('blog', { previous: auto, takenNames: ['blog'] }), 'blog-2', '改名後與其他技能重複時加後綴');
+    assert.strictEqual(resolve('posts', { previous: { name: 'Bad_Name', command: '/post' } }), 'posts', '原 name 不合規則時重新產生');
 }
 
 // ---------- 啟用狀態與查詢 ----------

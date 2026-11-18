@@ -305,7 +305,7 @@ let localePreferenceSelect;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
 let modalCommandModeAgent, modalCommandModeInquiry, modalCommandModeUnspecified, modalCommandScreenshotEnabled, modalCommandShowVariableLabels;
 let modalSave, modalCancel, modalCommandNameError, modalCommandPromptError;
-let modalSkillId, modalSkillIdError, modalSkillDescription, modalSkillDescriptionError;
+let modalSkillDescription, modalSkillDescriptionError;
 let modalSkillInvocationAuto, modalSkillInvocationExplicit, modalSkillInstructionsWarning;
 let importSkillBtn, importSkillFileInput;
 let customSystemPromptTextarea, customSystemPromptCount;
@@ -411,37 +411,23 @@ const SKILL_COMMAND_ERROR_KEYS = {
     'invalid': 'commandNameInvalid',
     'reserved': 'commandNameBuiltinDuplicate'
 };
-const SKILL_NAME_ERROR_KEYS = {
-    'too-long': 'skillIdTooLong',
-    'invalid': 'skillIdInvalid'
-};
 const SKILL_DESCRIPTION_ERROR_KEYS = {
     'required': 'skillDescriptionRequired',
     'too-long': 'skillDescriptionTooLong'
 };
 
 // 技能編輯表單驗證：回傳各欄位的 locale key，空字串代表合法。
-// editingName 為正在編輯的技能 ID，比對重複時排除自己；技能 ID 留空代表自動產生，不檢查。
+// 技能名稱欄位不需要輸入 /（輸入了也接受）；editingName 為正在編輯的技能 name，比對重複時排除自己。
 function getSkillFieldErrors(fields, skills, editingName = '') {
     const others = (Array.isArray(skills) ? skills : []).filter((skill) => skill.name !== editingName);
-    const command = String(fields.command || '').trim();
-    const name = String(fields.name || '').trim();
-    const errors = { command: '', name: '', description: '' };
+    const command = AskPageSkills.normalizeSkillCommand(fields.command);
+    const errors = { command: '', description: '' };
 
     const commandError = AskPageSkills.validateSkillCommand(command);
     if (commandError) {
         errors.command = SKILL_COMMAND_ERROR_KEYS[commandError];
     } else if (others.some((skill) => skill.command === command)) {
         errors.command = 'commandNameCustomDuplicate';
-    }
-
-    if (name) {
-        const nameError = AskPageSkills.validateSkillName(name);
-        if (nameError) {
-            errors.name = SKILL_NAME_ERROR_KEYS[nameError] || 'skillIdInvalid';
-        } else if (others.some((skill) => skill.name.toLowerCase() === name.toLowerCase())) {
-            errors.name = 'skillIdDuplicate';
-        }
     }
 
     const descriptionError = AskPageSkills.validateSkillDescription(fields.description);
@@ -654,8 +640,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCommandModeUnspecified = document.getElementById('modalCommandModeUnspecified');
     modalCommandScreenshotEnabled = document.getElementById('modalCommandScreenshotEnabled');
     modalCommandShowVariableLabels = document.getElementById('modalCommandShowVariableLabels');
-    modalSkillId = document.getElementById('modalSkillId');
-    modalSkillIdError = document.getElementById('modalSkillIdError');
     modalSkillDescription = document.getElementById('modalSkillDescription');
     modalSkillDescriptionError = document.getElementById('modalSkillDescriptionError');
     modalSkillInvocationAuto = document.getElementById('modalSkillInvocationAuto');
@@ -770,9 +754,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCommandPrompt.addEventListener('input', () => {
         validateCommandPromptInput({ showEmptyError: false });
         updateSkillInstructionsWarning();
-    });
-    modalSkillId.addEventListener('input', () => {
-        validateSkillIdInput();
     });
     modalSkillDescription.addEventListener('input', () => {
         validateSkillDescriptionInput({ showEmptyError: false });
@@ -1160,13 +1141,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (command) {
             modalTitle.textContent = command.builtin ? t('editBuiltInCommand') : t('editCustomCommand');
-            modalCommandName.value = command.builtin ? command.cmd : command.command;
+            // 欄位前方固定顯示 /，這裡只填名稱本身
+            modalCommandName.value = (command.builtin ? command.cmd : command.command).replace(/^\//, '');
             modalCommandName.disabled = command.builtin;
             modalCommandPrompt.value = (command.builtin ? command.prompt : command.instructions) || '';
             modalCommandShowVariableLabels.checked = Boolean(command.builtin ? command.showVariableLabels : command.askpage.showVariableLabels);
 
             if (!isBuiltIn) {
-                modalSkillId.value = command.name;
                 modalSkillDescription.value = command.description;
                 setSkillInvocation(command.invocation);
                 setCustomCommandMode(normalizeCustomCommandMode(command.askpage.mode));
@@ -1181,7 +1162,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalCommandName.disabled = false;
             modalCommandPrompt.value = '';
             modalCommandShowVariableLabels.checked = false;
-            modalSkillId.value = '';
             modalSkillDescription.value = '';
             setSkillInvocation(AskPageSkills.SKILL_INVOCATION.AUTO);
             setCustomCommandMode(DEFAULT_CUSTOM_COMMAND_MODE);
@@ -1195,7 +1175,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         clearCommandNameValidation();
         clearCommandPromptValidation();
-        setFieldValidationError(modalSkillId, modalSkillIdError, '');
         setFieldValidationError(modalSkillDescription, modalSkillDescriptionError, '');
         updateSkillInstructionsWarning();
         commandModal.style.display = 'block';
@@ -1231,8 +1210,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function getSkillFormFields() {
         return {
-            command: modalCommandName.value.trim(),
-            name: modalSkillId.value.trim(),
+            command: AskPageSkills.normalizeSkillCommand(modalCommandName.value),
             description: modalSkillDescription.value.trim()
         };
     }
@@ -1268,14 +1246,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     function validateCommandNameInput(options = {}) {
         const message = getCommandNameValidationMessage({ showEmptyError: options.showEmptyError !== false });
         return setFieldValidationError(modalCommandName, modalCommandNameError, message);
-    }
-
-    function validateSkillIdInput() {
-        if (isEditingBuiltIn()) {
-            return true;
-        }
-        const errorKey = getSkillFieldErrors(getSkillFormFields(), skills, getEditingSkillName()).name;
-        return setFieldValidationError(modalSkillId, modalSkillIdError, errorKey ? t(errorKey) : '');
     }
 
     function validateSkillDescriptionInput({ showEmptyError = true } = {}) {
@@ -1332,7 +1302,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return setFieldValidationError(modalCommandPrompt, modalCommandPromptError, message);
     }
 
-    // 觸發名稱改名時，把用量計數搬到新名稱，避免使用說明中的常用排序歸零。
+    // 技能名稱改名時，把用量計數搬到新名稱，避免使用說明中的常用排序歸零。
     async function moveSkillUsage(oldCommand, newCommand) {
         if (!oldCommand || oldCommand === newCommand) {
             return;
@@ -1372,18 +1342,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const isCommandValid = validateCommandNameInput({ showEmptyError: true });
-        const isIdValid = validateSkillIdInput();
         const isDescriptionValid = validateSkillDescriptionInput({ showEmptyError: true });
         const isPromptValid = validateCommandPromptInput({ showEmptyError: true });
-        if (!isCommandValid || !isIdValid || !isDescriptionValid || !isPromptValid) {
+        if (!isCommandValid || !isDescriptionValid || !isPromptValid) {
             return;
         }
 
         const fields = getSkillFormFields();
         const editingSkill = currentEditingCommand;
         const editingName = getEditingSkillName();
-        const takenNames = new Set(skills.filter((skill) => skill.name !== editingName).map((skill) => skill.name));
-        const name = fields.name || AskPageSkills.makeUniqueSkillName(AskPageSkills.slugifySkillName(fields.command), takenNames);
+        const takenNames = skills.filter((skill) => skill.name !== editingName).map((skill) => skill.name);
+        const name = AskPageSkills.resolveSkillNameForCommand(fields.command, { previous: editingSkill, takenNames });
         const skill = AskPageSkills.normalizeSkill({
             // 保留匯入時帶進來、但表單沒有編輯的欄位（license、metadata 等）與啟用狀態
             ...(editingSkill || {}),
@@ -1479,14 +1448,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             showLocalizedStatus('skillImportInvalidTrigger', { trigger: skill.command }, 'error');
             return;
         }
-        if (AskPageSkills.findSkillByName(skills, skill.name, { includeDisabled: true })) {
-            showLocalizedStatus('skillImportNameConflict', { skill: skill.name }, 'error');
-            return;
-        }
         if (AskPageSkills.findSkillByCommand(skills, skill.command, { includeDisabled: true })) {
             showLocalizedStatus('skillImportTriggerConflict', { trigger: skill.command }, 'error');
             return;
         }
+        // name 由系統維護、使用者看不到，與既有技能重複時自動加後綴，不讓匯入失敗
+        skill.name = AskPageSkills.makeUniqueSkillName(skill.name, skills.map((item) => item.name.toLowerCase()));
 
         skills.push(skill);
         saveSkills();
@@ -1582,7 +1549,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return div;
     }
 
-    // 每列都有同名的「編輯」「刪除」，可及名稱帶上觸發名稱，螢幕閱讀器才分得出是哪個技能
+    // 每列都有同名的「編輯」「刪除」，可及名稱帶上技能名稱，螢幕閱讀器才分得出是哪個技能
     function createSkillActionButtonHtml(action, dataAttributes, labelKey, { icon, className = 'btn-secondary', ariaLabelKey = '', skillLabel = '' } = {}) {
         const ariaLabel = ariaLabelKey ? escapeHtml(t(ariaLabelKey, { skill: skillLabel })) : '';
         const title = ariaLabel ? ` title="${ariaLabel}" aria-label="${ariaLabel}"` : '';
@@ -1617,13 +1584,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     function createSkillElement(skill) {
         const skillData = `data-skill="${escapeHtml(skill.name)}"`;
         const isAuto = skill.invocation === AskPageSkills.SKILL_INVOCATION.AUTO;
+        // name 由技能名稱自動產生時（post、post-2、skill-xxxxxx）不必顯示；匯入檔自帶的 name（例如 translate-to-english）
+        // 會出現在匯出檔名與模型的技能清單中，才另外標示。
 
         return createSkillRowElement({
             isDisabled: !skill.enabled,
             toggleHtml: createEnabledToggleHtml(skill.command, skill.enabled, skillData),
             titleHtml: `
                 <span class="command-name">${escapeHtml(skill.command)}</span>
-                <span class="skill-id"><span class="skill-id-label">ID</span>${escapeHtml(skill.name)}</span>
+                ${AskPageSkills.isAutoSkillName(skill.name, skill.command) ? '' : `<span class="skill-id"><span class="skill-id-label">ID</span>${escapeHtml(skill.name)}</span>`}
                 ${isAuto ? createSkillBadgeHtml('auto', 'skillInvocationAutoBadge') : createSkillBadgeHtml('explicit', 'skillInvocationExplicitBadge')}
                 ${skill.enabled ? '' : createSkillBadgeHtml('disabled', 'skillDisabledBadge')}
             `,
@@ -1840,6 +1809,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 已存在的空陣列代表使用者刪光了技能，不可再從舊資料復活。
         if (Array.isArray(result[ASKPAGE_SKILLS_STORAGE])) {
             skills = AskPageSkills.normalizeSkills(result[ASKPAGE_SKILLS_STORAGE]);
+            // 舊格式（技能名稱少了 /、name 不合規則或重複）在正規化時已修正；有變動才寫回，避免多個設定分頁互相觸發寫入
+            if (JSON.stringify(skills) !== JSON.stringify(result[ASKPAGE_SKILLS_STORAGE])) {
+                saveSkills();
+            }
         } else {
             skills = AskPageSkills.migrateLegacyCommands(result[CUSTOM_COMMANDS_STORAGE]);
             saveSkills();

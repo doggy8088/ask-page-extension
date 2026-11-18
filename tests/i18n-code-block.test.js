@@ -193,7 +193,7 @@ vm.runInContext(i18nScript, sandbox, { filename: 'i18n.js' });
     await Promise.resolve();
 
     assert.strictEqual(marked.textContent, 'Cancel');
-    assert.strictEqual(placeholder.getAttribute('placeholder'), 'For example: /help');
+    assert.strictEqual(placeholder.getAttribute('placeholder'), 'For example: translate');
     assert.strictEqual(title.getAttribute('title'), 'Open preferences');
     assert.strictEqual(untouched.textContent, '取消');
     assert.strictEqual(root.getAttribute('lang'), 'en');

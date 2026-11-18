@@ -343,8 +343,15 @@
         return (hash >>> 0).toString(36).padStart(6, '0').slice(-6);
     }
 
+    // 觸發名稱一律存成「/名稱」。使用者不必自己打 /：去掉前後空白與開頭的半形或全形斜線（可能不只一個），
+    // 再補上一個 /。去掉斜線後是空字串時回傳空字串。
+    function normalizeSkillCommand(command) {
+        const bare = String(command ?? '').trim().replace(/^[/／]+/, '').trim();
+        return bare ? `/${bare}` : '';
+    }
+
     function slugifySkillName(command) {
-        const source = String(command || '').trim().replace(/^\/+/, '');
+        const source = normalizeSkillCommand(command).slice(1);
         const slug = source
             .normalize('NFKD')
             .replace(/\p{M}/gu, '')
@@ -371,6 +378,33 @@
         }
     }
 
+    // name 是否由觸發名稱自動產生（含 makeUniqueSkillName 加上的 -2、-3 後綴）。
+    function isAutoSkillName(name, command) {
+        const slug = slugifySkillName(command);
+        return new RegExp(`^${slug}(-\\d+)?$`).test(String(name || ''));
+    }
+
+    // 設定頁只有「技能名稱」一個欄位，name 由系統決定：
+    // - 新增：由觸發名稱產生，與其他技能重複時加後綴。
+    // - 編輯且觸發名稱沒變：沿用原本的 name（匯入的 translate-to-english 配 /翻譯 這類組合要保留）。
+    // - 編輯且改了觸發名稱：原本的 name 是由舊觸發名稱自動產生的（含 -2 這類去重後綴）才跟著重新產生，否則沿用。
+    function resolveSkillNameForCommand(command, { previous = null, takenNames = [] } = {}) {
+        const normalizedCommand = normalizeSkillCommand(command);
+        const previousName = previous ? String(previous.name || '') : '';
+        if (previousName && !validateSkillName(previousName)) {
+            const previousCommand = normalizeSkillCommand(previous.command);
+            if (previousCommand === normalizedCommand || !isAutoSkillName(previousName, previousCommand)) {
+                return previousName;
+            }
+        }
+        const taken = new Set([...(takenNames instanceof Set ? takenNames : takenNames || [])]
+            .map((name) => String(name).toLowerCase()));
+        if (previousName) {
+            taken.delete(previousName.toLowerCase());
+        }
+        return makeUniqueSkillName(slugifySkillName(normalizedCommand), taken);
+    }
+
     // 回傳錯誤碼：'' 代表合法。
     function validateSkillName(name) {
         const value = String(name ?? '');
@@ -394,7 +428,8 @@
         if (!value.startsWith('/')) {
             return 'missing-slash';
         }
-        if (value.length > LIMITS.command) {
+        // LIMITS.command 是使用者輸入的名稱長度，不含開頭的 /
+        if (value.length - 1 > LIMITS.command) {
             return 'too-long';
         }
         if (!SKILL_COMMAND_PATTERN.test(value)) {
@@ -456,7 +491,8 @@
             return null;
         }
 
-        let command = String(record.command ?? '').trim();
+        // 容錯：舊資料或手動編輯的紀錄可能缺少開頭的 /、name 不合 Agent Skills 規則或整個缺漏，一律就地修正。
+        let command = normalizeSkillCommand(record.command);
         let name = String(record.name ?? '').trim();
         if (!name && !command) {
             return null;
@@ -502,7 +538,8 @@
         };
     }
 
-    // 丟棄無效項目，重複的 name 或觸發名稱只保留第一筆。
+    // 丟棄無效項目；觸發名稱重複時只保留第一筆。name 重複時改成加上 -2、-3 等後綴，不丟資料
+    // （觸發名稱是使用者看得到的唯一識別，name 由系統維護）。
     function normalizeSkills(list) {
         if (!Array.isArray(list)) {
             return [];
@@ -516,12 +553,14 @@
                 console.warn('[AskPage] Ignored invalid skill record:', record);
                 return;
             }
-            const nameKey = skill.name.toLowerCase();
-            if (seenNames.has(nameKey) || seenCommands.has(skill.command)) {
+            if (seenCommands.has(skill.command)) {
                 console.warn('[AskPage] Ignored duplicate skill:', skill.name, skill.command);
                 return;
             }
-            seenNames.add(nameKey);
+            if (seenNames.has(skill.name.toLowerCase())) {
+                skill.name = makeUniqueSkillName(skill.name, seenNames);
+            }
+            seenNames.add(skill.name.toLowerCase());
             seenCommands.add(skill.command);
             skills.push(skill);
         });
@@ -559,7 +598,7 @@
 
         const skill = normalizeSkill({
             name,
-            command: String(metadata[ASKPAGE_METADATA_KEYS.command] || '').trim() || `/${name}`,
+            command: normalizeSkillCommand(metadata[ASKPAGE_METADATA_KEYS.command]) || `/${name}`,
             description,
             // 設定頁儲存時會 trim 本文，匯入時同樣去掉尾端空白，round-trip 才會一致。
             instructions: body.trimEnd(),
@@ -601,7 +640,7 @@
             if (!isPlainObject(legacy)) {
                 return;
             }
-            const command = String(legacy.cmd ?? '').trim();
+            const command = normalizeSkillCommand(legacy.cmd);
             if (!command || seenCommands.has(command)) {
                 return;
             }
@@ -650,6 +689,7 @@
     }
 
     function findSkillByCommand(skills, command, { includeDisabled = false } = {}) {
+        // 精確比對：儲存的觸發名稱已由 normalizeSkills 修正，查詢端不放寬，避免 //post 這類輸入誤觸技能
         const target = String(command ?? '').trim();
         if (!target) {
             return null;
@@ -716,8 +756,11 @@
         createSkillFromMarkdown,
         normalizeSkill,
         normalizeSkills,
+        normalizeSkillCommand,
         slugifySkillName,
         makeUniqueSkillName,
+        isAutoSkillName,
+        resolveSkillNameForCommand,
         validateSkillName,
         validateSkillCommand,
         validateSkillDescription,

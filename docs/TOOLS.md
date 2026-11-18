@@ -98,7 +98,7 @@ Ollama Cloud 另有可選的 `web_search` 工具。使用者在 Ollama Cloud pro
 
 | 參數 | 型別 | 說明 |
 | --- | --- | --- |
-| `name` | `string` | 必填，系統提示 Available skills 清單中的技能 ID（不是 `/觸發名稱`） |
+| `name` | `string` | 必填，系統提示 Available skills 清單中的技能 `name`（不是 `/技能名稱`） |
 
 僅明確調用或已停用的技能一律拒絕載入。詢問模式下模型若呼叫其他頁面工具，AskPage 會直接拒絕而不執行。
 

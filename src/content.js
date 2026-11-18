@@ -5931,7 +5931,7 @@ function buildLoadSkillResult(args, skills, { selectedText = '', agentModeEnable
     if (!skill || skill.invocation !== skillsLibrary.SKILL_INVOCATION.AUTO) {
         return {
             success: false,
-            message: `找不到可自動載入的技能「${requestedName}」。只能載入系統提示 Available skills 清單中的名稱；其他技能只能由使用者輸入 /觸發名稱 執行。`,
+            message: `找不到可自動載入的技能「${requestedName}」。只能載入系統提示 Available skills 清單中的名稱；其他技能只能由使用者輸入 /技能名稱 執行。`,
             data: { name: requestedName },
             warnings: [],
             matchedTargets: []

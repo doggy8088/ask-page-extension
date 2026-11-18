@@ -177,6 +177,14 @@ async function ask(question) {
     assert.strictEqual(modeCalls[0].mode, 'agent');
     assert.strictEqual(modeCalls[0].screenshotEnabled, true);
 
+    // ---------- 執行：不帶 / 的技能名稱是一般提問，不觸發技能 ----------
+    for (const question of ['secret', 'paused', '翻譯']) {
+        await ask(question);
+        assert.deepStrictEqual(askCalls, [question], `${question} 當一般提示詞送出`);
+        assert.strictEqual(modeCalls.length, 0);
+        assert.ok(!messages.some((message) => message.text === translate('skillDisabled', { skill: question })), '不顯示技能已停用');
+    }
+
     // ---------- 執行：已移除的 /screenshot、/agent 與未命中的 /字串 ----------
     for (const question of ['/agent', '/screenshot', '/unknown']) {
         await ask(question);
