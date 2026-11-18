@@ -113,6 +113,9 @@ const keydown = section("        if (intelliActive) {\n            const isMenuK
 assert.ok(keydown.indexOf('e.preventDefault();') < keydown.indexOf('await filterIntelli'), 'Tab／Enter／方向鍵在 await 之前就取消預設行為，Tab 不會移走焦點');
 assert.match(keydown, /e\.key === 'Tab'\) \{\s*if \(filtered\.length\) \{\s*completeIntelliCommandName\(/, 'Tab 只補上技能名稱');
 assert.match(keydown, /e\.key === 'Enter' && !e\.shiftKey\) \{\s*if \(filtered\.length\) \{\s*completeIntelliCommand\(/, 'Enter 維持原本的執行流程');
+const showBox = section('    async function showIntelliBox(', '    function positionIntelliBox() {');
+assert.match(showBox, /addEventListener\('click', \(e\) => \{[\s\S]*?completeIntelliCommandName\(item\);/, '滑鼠點選選單項目與 Tab 相同，只補上技能名稱');
+assert.ok(!/completeIntelliCommand\(item\)/.test(showBox), '點選不再直接執行或展開提示詞');
 const completeName = section('    function completeIntelliCommandName(item) {', '    function updateSkillArgumentHint() {');
 assert.ok(completeName.includes('setInputValue(`${item.cmd} `);'), '補上名稱與一個空白');
 assert.ok(!completeName.includes('handleAsk'), '不送出');

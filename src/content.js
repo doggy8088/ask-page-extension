@@ -8852,10 +8852,11 @@ async function createDialog() {
             Object.assign(el.style, {
                 padding: '6px 16px'
             });
+            // 滑鼠點選與按 Tab 相同：只補上「/技能名稱 」，不展開提示詞也不送出
             el.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                completeIntelliCommand(item);
+                completeIntelliCommandName(item);
             });
             intelliBox.appendChild(el);
         });
