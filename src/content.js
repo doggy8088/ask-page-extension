@@ -7875,14 +7875,15 @@ async function createDialog() {
     dialogInputEventTypes.forEach((eventType) => {
         overlay.addEventListener(eventType, stopDialogInputEventPropagation);
     });
-    // 頁面在 window capture 階段註冊的快捷鍵比上面的 overlay 攔截更早執行，
+    // 頁面在 window capture 階段註冊的快捷鍵與全域貼上處理器比上面的 overlay 攔截更早執行，
     // 交由 document_start 注入的 dialog-key-isolation.js 先攔下，再轉送給對話框內的焦點元素。
+    // 只選取回覆文字、沒有焦點元素時按 Cmd+C，複製事件改送到 overlay。
     const dialogKeyIsolation = globalThis.AskPageDialogKeyIsolation;
     const resolveDialogKeyTarget = (event) => {
         if (!host.isConnected || event.target !== host) {
             return null;
         }
-        return shadowRoot.activeElement || null;
+        return shadowRoot.activeElement || overlay;
     };
     dialogKeyIsolation?.setTargetResolver(resolveDialogKeyTarget);
 

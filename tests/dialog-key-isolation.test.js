@@ -1,7 +1,7 @@
 'use strict';
 
 // dialog-key-isolation.js 必須在 document_start 搶先註冊 window capture listener，
-// 把來自對話框的鍵盤事件擋在宿主頁面之前，再轉送給對話框內的焦點元素。
+// 把來自對話框的鍵盤與剪貼簿事件擋在宿主頁面之前，再轉送給對話框內的焦點元素。
 
 const assert = require('assert');
 const fs = require('fs');
@@ -29,6 +29,16 @@ class FakeKeyboardEvent {
     }
 }
 
+class FakeEvent extends FakeKeyboardEvent {}
+
+class FakeClipboardEvent extends FakeKeyboardEvent {
+    constructor(type, init = {}) {
+        const { clipboardData, ...rest } = init;
+        super(type, rest);
+        this.clipboardData = clipboardData || null;
+    }
+}
+
 function createTrustedEvent(type, init) {
     const event = new FakeKeyboardEvent(type, init);
     event.isTrusted = true;
@@ -47,10 +57,12 @@ function createTarget(onEvent = () => {}) {
     };
 }
 
-function loadIsolation() {
+function loadIsolation({ ClipboardEvent = FakeClipboardEvent } = {}) {
     const listeners = [];
     const sandbox = {
         KeyboardEvent: FakeKeyboardEvent,
+        ClipboardEvent,
+        Event: FakeEvent,
         window: {
             addEventListener(type, listener, capture) {
                 listeners.push({ type, listener, capture });
@@ -76,13 +88,16 @@ function loadIsolation() {
     return { sandbox, listeners, pageReceived, dispatchOnWindow };
 }
 
-// 在 window capture 階段註冊 keydown、keypress、keyup。
+// 在 window capture 階段註冊 keydown、keypress、keyup 與 paste、copy、cut。
 {
     const { sandbox, listeners } = loadIsolation();
     assert.deepStrictEqual(listeners.map((item) => [item.type, item.capture]), [
         ['keydown', true],
         ['keypress', true],
-        ['keyup', true]
+        ['keyup', true],
+        ['paste', true],
+        ['copy', true],
+        ['cut', true]
     ]);
     assert.strictEqual(typeof sandbox.AskPageDialogKeyIsolation.setTargetResolver, 'function');
 }
@@ -166,11 +181,90 @@ function loadIsolation() {
     assert.strictEqual(input.received.length, 1);
 }
 
+// 在對話框內貼上：頁面的全域 paste 處理器收不到，焦點元素收到共用同一個 clipboardData 的複製事件；
+// 對話框沒有取消時保留原事件的預設貼上行為，文字照常貼進對話框的輸入框。
+{
+    const { sandbox, pageReceived, dispatchOnWindow } = loadIsolation();
+    const host = {};
+    const input = createTarget();
+    sandbox.AskPageDialogKeyIsolation.setTargetResolver((event) => (event.target === host ? input : null));
+
+    const clipboardData = { getData: () => '剪貼簿內容' };
+    const event = createTrustedEvent('paste', { target: host, clipboardData });
+    dispatchOnWindow(event);
+
+    assert.strictEqual(pageReceived.length, 0, '頁面不應收到對話框的 paste 事件');
+    assert.strictEqual(input.received.length, 1);
+    const clone = input.received[0];
+    assert.ok(clone instanceof FakeClipboardEvent);
+    assert.strictEqual(clone.type, 'paste');
+    assert.strictEqual(clone.clipboardData, clipboardData, '複製事件要能讀到同一份剪貼簿資料');
+    assert.strictEqual(clone.composed, false, '複製事件不可離開 shadow root');
+    assert.strictEqual(clone.bubbles, true);
+    assert.strictEqual(clone.cancelable, true);
+    assert.strictEqual(event.defaultPrevented, false, '未被取消時應保留原事件的預設貼上行為');
+}
+
+// 對話框處理器取消複製事件（例如貼上圖片）時，同步取消原事件；copy、cut 也一併攔截。
+{
+    const { sandbox, pageReceived, dispatchOnWindow } = loadIsolation();
+    const host = {};
+    const input = createTarget((clone) => {
+        if (clone.type === 'paste') {
+            clone.preventDefault();
+        }
+    });
+    sandbox.AskPageDialogKeyIsolation.setTargetResolver((event) => (event.target === host ? input : null));
+
+    const paste = createTrustedEvent('paste', { target: host, clipboardData: {} });
+    dispatchOnWindow(paste);
+    assert.strictEqual(paste.defaultPrevented, true);
+
+    const copy = createTrustedEvent('copy', { target: host, clipboardData: {} });
+    const cut = createTrustedEvent('cut', { target: host, clipboardData: {} });
+    dispatchOnWindow(copy);
+    dispatchOnWindow(cut);
+    assert.strictEqual(pageReceived.length, 0);
+    assert.deepStrictEqual(input.received.map((clone) => clone.type), ['paste', 'copy', 'cut']);
+    assert.strictEqual(copy.defaultPrevented, false, '未被取消時保留原本的複製行為');
+    assert.strictEqual(cut.defaultPrevented, false, '未被取消時保留原本的剪下行為');
+
+    // 焦點不在對話框時，頁面照常收到剪貼簿事件。
+    dispatchOnWindow(createTrustedEvent('paste', { target: {}, clipboardData: {} }));
+    assert.strictEqual(pageReceived.length, 1);
+}
+
+// 不支援以 clipboardData 建立 ClipboardEvent 的瀏覽器：改用一般 Event 並掛上原本的 clipboardData。
+{
+    class ThrowingClipboardEvent {
+        constructor() {
+            throw new TypeError('Illegal constructor');
+        }
+    }
+    const { sandbox, dispatchOnWindow } = loadIsolation({ ClipboardEvent: ThrowingClipboardEvent });
+    const host = {};
+    const input = createTarget();
+    sandbox.AskPageDialogKeyIsolation.setTargetResolver((event) => (event.target === host ? input : null));
+
+    const clipboardData = {};
+    dispatchOnWindow(createTrustedEvent('paste', { target: host, clipboardData }));
+    assert.strictEqual(input.received.length, 1);
+    assert.ok(input.received[0] instanceof FakeEvent);
+    assert.strictEqual(input.received[0].clipboardData, clipboardData);
+    assert.strictEqual(input.received[0].composed, false);
+}
+
 // 重複注入時不重複註冊 listener。
 {
     const { sandbox, listeners } = loadIsolation();
     vm.runInContext(source, sandbox, { filename: 'lib/dialog-key-isolation.js' });
-    assert.strictEqual(listeners.length, 3);
+    assert.strictEqual(listeners.length, 6);
+}
+
+// content.js 的 resolver：沒有焦點元素時（例如只選取回覆文字後按 Cmd+C）改送到 overlay。
+{
+    const contentSource = fs.readFileSync(path.join(rootDir, 'src', 'content.js'), 'utf8');
+    assert.match(contentSource, /const resolveDialogKeyTarget = \(event\) => \{[\s\S]*?return shadowRoot\.activeElement \|\| overlay;/);
 }
 
 console.log('dialog-key-isolation tests passed');
