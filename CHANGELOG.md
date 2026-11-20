@@ -10,8 +10,8 @@
 
 - **技能改用 Agent Skills 格式**：每個技能對應一份 `SKILL.md`（YAML frontmatter + Markdown 本文），設定頁只需填技能名稱（可使用中文，不用輸入 `/`）、描述與本文，在對話框輸入 `/技能名稱` 執行；Agent Skills 規定的 `name` 由技能名稱自動產生，不另外顯示。資料存在新的 `ASKPAGE_SKILLS`，由新的 `src/lib/skill-schema.js` 負責解析、序列化、正規化與驗證。
 - **自動調用與僅明確調用**：每個技能可設定調用方式。自動調用的技能只把 `name` 與描述放進系統提示，模型判斷相關時呼叫新的唯讀工具 `load_skill` 載入本文；詢問模式與代理模式都有效，詢問模式仍不開放頁面工具。僅明確調用的技能不進模型清單、`load_skill` 也拒絕載入，只能輸入 `/技能名稱` 執行。沒有自動技能時，送給模型的請求與過去相同。
-- **技能啟用開關**：技能清單每一列都有啟用開關，切換立即生效；停用的技能不進模型清單、`/` 自動完成與使用說明，輸入 `/技能名稱` 只會顯示「技能已停用」。開關是本機偏好，不會寫進匯出的 `SKILL.md`。
-- **匯入／匯出 SKILL.md**：技能頁新增「匯入 SKILL.md」，每個技能可「匯出 SKILL.md」，可與其他支援 Agent Skills 的工具互通。
+- **技能啟用開關**：技能清單每一列都有啟用開關，切換立即生效；停用的技能不進模型清單、`/` 自動完成與使用說明，輸入 `/技能名稱` 只會顯示「技能已停用」。開關是本機偏好。
+- **匯入 SKILL.md**：技能頁可匯入其他支援 Agent Skills 的工具建立的 `SKILL.md`。
 - **詢問模式的工具邊界**：模型在詢問模式呼叫頁面工具時直接拒絕不執行；OpenAI、Azure OpenAI 在詢問模式因技能而開啟工具時，若模型不支援工具會退回純聊天。
 - **測試與文件**：新增 `tests/skill-schema.test.js`、`tests/skill-runtime.test.js`、`tests/builtin-skills.test.js`，擴充 `tests/custom-command-settings.test.js`；新增 `docs/AGENT_SKILLS.md`，更新 `README.md`、`docs/TOOLS.md`、`docs/頁問-詢問模式與代理模式.html` 與 `docs/目前提示詞管理邏輯與提問動態結構.md`。
 

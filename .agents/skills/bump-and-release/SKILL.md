@@ -1,19 +1,23 @@
 ---
 name: bump-and-release
-description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語意化版本、依既有 CHANGELOG.md 格式整理 Unreleased 內容，並完成主線發布。當使用者要求 bump 版本、更新 CHANGELOG.md、整理發行記錄或準備 Chrome Web Store 發布時使用；每次執行至少 bump 一次版本，未明確指定時預設使用 patch，`minor`、`minor version`、`次版本` 都視為 minor，`major`、`major version`、`主版本` 都視為 major；發行前必須位於 main 分支、執行版本 bump 前先以 git pull --rebase 更新遠端分支並同步 Git tag，發布提交後必須推送 main、驗證 GitHub Actions 成功，並以該版本 CHANGELOG 更新 GitHub Release notes；若工作區有未提交變更，必須先以完整正體中文提交訊息提交，之後才可編輯 CHANGELOG.md。
+description: 提升 AskPage 的語意化版本，或在使用者明確要求時完成主線發布。單純要求 bump 版本（例如 bump major version）時，在目前分支更新並驗證版本檔案；整理 CHANGELOG 或準備發布時，依使用者指定的範圍執行。
 ---
 
 # Bump And Release
 
-## 目的
+## 選擇流程
 
-依 AskPage 專案目前的版本腳本與 GitHub Actions 流程，完成版本提升、變更日誌整理、品質檢查、發布提交與 GitHub Release notes 更新。所有操作都必須保留可追溯的提交紀錄，不得虛構未由程式碼或提交內容支持的變更。
+- **更新版本**：`bump major version`、`bump minor` 等單純提升版本的請求走「本機版本更新」，目前分支即可執行。
+- **整理變更記錄**：單獨更新 `CHANGELOG.md` 或準備發布資料時，使用下方 CHANGELOG 格式與證據要求，依請求範圍更新工作區。
+- **執行發布**：使用者明確要求發布或推送至 `main` 以觸發發布時，才使用「主線發布流程」。該流程需要 `main`，會推送並觸發 GitHub Actions。
 
-本技能每次執行都必須至少提升一次版本號。版本類型必須先依「版本類型解析」判斷；`minor`、`minor version`、`次版本` 等說法同等，`major`、`major version`、`主版本` 等說法同等。只有完全沒有指定類型時，才預設執行 patch。
+## 本機版本更新
 
-本技能只允許在 `main` 分支執行發行流程；完成發布提交後，必須直接推送 `origin/main`，並等待對應 GitHub Actions 工作流程全部成功，再以該版本的 `CHANGELOG.md` 區段更新並驗證 GitHub Release notes 後才能結束。
+- 確認 `platforms/base/manifest.base.json` 與 `package.json` 的目前版本一致，依下方規則選擇並執行一次 `npm run bump:*`。
+- 驗證 manifest、`package.json` 與 Safari Xcode 專案的 `MARKETING_VERSION` 一致。同步 `package-lock.json` 的頂層與 `packages[""]` 版本欄位，保留既有相依套件鎖定內容。
+- 執行 `npm run build` 和 `git diff --check`，確認三個瀏覽器目標版本一致。將修改留在工作區供檢查，保留 `CHANGELOG.md` 的 Unreleased 條目。分支切換、遠端同步、提交和發布皆由使用者另行指定。
 
-**核心順序：先解析使用者指定的版本類型並確認位於 main，再處理並提交既有未提交變更、同步遠端分支與 Git tag，接著執行版本 bump、整理 CHANGELOG.md、檢查並提交發布內容、推送 main，最後驗證 CI 成功，再以 CHANGELOG 更新並驗證 GitHub Release notes。**
+本機版本更新完成後即可回報版本、修改範圍與驗證結果。
 
 * * *
 
@@ -26,7 +30,7 @@ description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語�
 1. 忽略大小寫、前後空白、slash command 名稱（`/bump-and-release`），以及 `bump`、`version`、`release`、`update`、`版本`、`升級`、`發布` 等修飾詞。
 2. 只要請求中出現下表任一說法，就採用該類型；不要求該說法必須單獨成句或緊接在指令後。
 3. 若同時出現兩種以上不同類型（例如同時提到 `minor` 與 `major`），停止並要求使用者確認，不可自行挑選。
-4. 若使用者直接指定目標版本（例如 `0.50.0`），先與目前版本比較：只提升 major、只提升 minor 或只提升 patch，且其餘層級依語意化版本規則歸零時，採用該層級。若目標版本不是合法的單一層級提升，停止並要求使用者確認。
+4. 若使用者直接指定目標版本（例如 `0.50.0`），先與目前版本比較。若目標等於目前版本，且使用者明確要求發行該版本，依主線發布步驟 4 檢查。其餘目標須為合法的單次 major、minor 或 patch 提升，否則要求使用者確認。
 5. 若完全沒有出現任何類型說法，才使用預設 patch。
 
 | 版本類型 | 可辨識說法（大小寫不拘） | 執行指令 |
@@ -39,7 +43,9 @@ description: 在 AskPage 專案中提升 manifest.json 與 package.json 的語�
 
 * * *
 
-## 執行流程
+## 主線發布流程
+
+此節及後續 Git、商店發布與發布檢查只適用於已獲明確授權的主線發布。完成的條件是主線推送所觸發的 GitHub Actions 成功，且對應 Release notes 與 `CHANGELOG.md` 一致。
 
 ### 1. 讀取專案狀態
 
@@ -103,7 +109,7 @@ git fetch --tags --force --prune
 
 ### 4. 決定版本並更新版本檔案
 
-本技能每次執行都必須從目前 `platforms/base/manifest.base.json` 版本實際提升一次，且只執行一次版本 bump。版本類型依以下規則決定：
+若使用者明確指定發布目前工作區已準備好的版本，確認版本檔案一致且遠端尚無同版標籤後，沿用該版本並繼續整理 CHANGELOG。其餘發布請求從目前 `platforms/base/manifest.base.json` 版本提升一次。版本類型依以下規則決定：
 
 - 先依「版本類型解析」判斷；`minor version`、`minor`、`minor bump`、`次版本` 等都算明確指定 minor，`major version` 與 `major` 同等。
 - 若使用者直接指定目標版本，依「版本類型解析」判定；例如目前 `0.49.1` 指定 `0.50.0` 時執行 minor bump。
@@ -129,7 +135,7 @@ git diff --check
 git diff -- platforms/base/manifest.base.json package.json platforms/safari/xcode/AskPage/AskPage.xcodeproj/project.pbxproj
 ~~~
 
-若先行提交已經包含版本變更，仍以該提交後的目前版本作為本次執行基準，再依上述規則提升一次；不得把既有版本變更視為本次 bump 的替代品。
+同步 `package-lock.json` 的兩個根套件版本欄位，保留既有相依套件鎖定內容。
 
 ### 5. 準備 CHANGELOG.md
 

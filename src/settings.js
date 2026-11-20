@@ -437,7 +437,7 @@ function getSkillFieldErrors(fields, skills, editingName = '') {
     return errors;
 }
 
-// 啟用開關只改這一筆的 enabled，其餘欄位（以及匯出的 SKILL.md）維持不變。
+// 啟用開關只改這一筆的 enabled。
 function setSkillEnabled(skills, name, enabled) {
     return skills.map((skill) => (skill.name === name ? { ...skill, enabled: enabled === true } : skill));
 }
@@ -1420,17 +1420,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         showLocalizedStatus(enabled ? 'skillEnabledStatus' : 'skillDisabledStatus', { skill: '/summary' }, 'success');
     }
 
-    function exportSkill(skill) {
-        const markdown = AskPageSkills.serializeSkillMarkdown(skill);
-        const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${skill.name}.md`;
-        link.click();
-        URL.revokeObjectURL(url);
-    }
-
     const SKILL_IMPORT_ERROR_KEYS = {
         'missing-frontmatter': 'skillImportMissingFrontmatter',
         'missing-description': 'skillImportMissingDescription',
@@ -1584,8 +1573,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function createSkillElement(skill) {
         const skillData = `data-skill="${escapeHtml(skill.name)}"`;
         const isAuto = skill.invocation === AskPageSkills.SKILL_INVOCATION.AUTO;
-        // name 由技能名稱自動產生時（post、post-2、skill-xxxxxx）不必顯示；匯入檔自帶的 name（例如 translate-to-english）
-        // 會出現在匯出檔名與模型的技能清單中，才另外標示。
+        // 另外標示匯入檔自帶的 name，方便對照模型的技能清單。
 
         return createSkillRowElement({
             isDisabled: !skill.enabled,
@@ -1599,7 +1587,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             description: AskPageSkills.getSkillDescription(skill),
             actionsHtml: [
                 createSkillActionButtonHtml('edit', skillData, 'edit', { icon: '✏️', ariaLabelKey: 'skillEditLabel', skillLabel: skill.command }),
-                createSkillActionButtonHtml('export', skillData, 'exportSkillButton', { icon: '📤', ariaLabelKey: 'skillExportLabel', skillLabel: skill.command }),
                 createSkillActionButtonHtml('delete', skillData, 'delete', { icon: '✕', className: 'btn-ghost-danger', ariaLabelKey: 'skillDeleteLabel', skillLabel: skill.command })
             ].join('')
         });
@@ -1740,8 +1727,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (action === 'edit') {
             openModal(skill);
-        } else if (action === 'export') {
-            exportSkill(skill);
         } else if (action === 'delete') {
             deleteCommand(skill);
         }
