@@ -40,6 +40,17 @@ npm run clean
 npm test
 ```
 
+## Git Workflow
+
+### Auto-Commit on Task Completion
+After completing any task that modifies repository files, create a local Git commit automatically once all checks pass:
+1. Run `npm run lint` and `npm test` and confirm both exit with zero errors.
+2. Check `git status` and stage only the files changed for the task.
+3. Commit with a clear, descriptive commit message summarizing the changes and verification.
+4. Keep the commit local—push to a remote only when the user explicitly asks.
+
+Skip auto-commit if the task has unresolved errors, failing lint/tests, no file changes, or if the user explicitly requests not to commit.
+
 ## Architecture Overview
 
 ### Core Components
