@@ -1031,6 +1031,7 @@ const CUSTOM_COMMAND_MODE_DEFAULT = CUSTOM_COMMAND_MODE_UNSPECIFIED;
 // Storage keys for custom slash command prompts
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE = 'CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS';
+const CUSTOM_SUMMARY_AUTO_SUBMIT_STORAGE = 'CUSTOM_SUMMARY_AUTO_SUBMIT';
 const CUSTOM_COMMANDS_STORAGE = 'CUSTOM_COMMANDS';
 const CUSTOM_COMMAND_USAGE_STORAGE = 'CUSTOM_COMMAND_USAGE';
 const ASKPAGE_SKILLS_STORAGE = 'ASKPAGE_SKILLS';
@@ -7071,6 +7072,7 @@ async function createDialog() {
         await ensureSkillsRuntime();
         const builtInSummaryPrompt = await getValue(CUSTOM_SUMMARY_PROMPT_STORAGE, '');
         const summaryShowVariableLabels = await getValue(CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE, false);
+        const summaryAutoSubmit = await getValue(CUSTOM_SUMMARY_AUTO_SUBMIT_STORAGE, false);
         const summaryTemplate = builtInSummaryPrompt || getLocalizedText('summaryPrompt');
         const builtinValues = getTemplateBuiltinValues();
 
@@ -7078,7 +7080,7 @@ async function createDialog() {
             { cmd: '/clear', desc: getLocalizedText('commandClearHistory') }
         ];
         if (isSummarySkillEnabled()) {
-            builtInCommands.push({ cmd: '/summary', desc: getLocalizedText('commandSummaryPage'), template: summaryTemplate, hasVariables: extractTemplateVariables(summaryTemplate, builtinValues).length > 0, showVariableLabels: summaryShowVariableLabels === true });
+            builtInCommands.push({ cmd: '/summary', desc: getLocalizedText('commandSummaryPage'), template: summaryTemplate, hasVariables: extractTemplateVariables(summaryTemplate, builtinValues).length > 0, showVariableLabels: summaryShowVariableLabels === true, autoSubmit: summaryAutoSubmit === true });
         }
 
         const customCommandsForIntellisense = getUserInvocableSkills().map((skill) => {
@@ -7090,7 +7092,8 @@ async function createDialog() {
                 hasVariables: extractTemplateVariables(skill.instructions, builtinValues).length > 0,
                 mode: skill.askpage.mode,
                 screenshotEnabled: skill.askpage.screenshotEnabled === true,
-                showVariableLabels: skill.askpage.showVariableLabels === true
+                showVariableLabels: skill.askpage.showVariableLabels === true,
+                autoSubmit: skill.askpage.autoSubmit === true
             };
         });
 
@@ -8853,11 +8856,11 @@ async function createDialog() {
             Object.assign(el.style, {
                 padding: '6px 16px'
             });
-            // 滑鼠點選與按 Tab 相同：只補上「/技能名稱 」，不展開提示詞也不送出
+            // 滑鼠點選與按 Tab 相同：預設只補上「/技能名稱 」；若開啟直接送出且無使用中變數，則直接執行
             el.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                completeIntelliCommandName(item);
+                selectIntelliCommandOnTabOrClick(item);
             });
             intelliBox.appendChild(el);
         });
@@ -8908,6 +8911,14 @@ async function createDialog() {
         }
         setInputValue(item.cmd);
         handleAsk();
+    }
+
+    function selectIntelliCommandOnTabOrClick(item) {
+        if (item && item.autoSubmit && !item.hasVariables) {
+            completeIntelliCommand(item);
+            return;
+        }
+        completeIntelliCommandName(item);
     }
 
     // 在 / 選單按 Tab：只補上「/技能名稱 」，不展開提示詞也不送出，使用者可以接著輸入補充文字。
@@ -9509,7 +9520,7 @@ async function createDialog() {
                 showIntelliBox(filtered);
             } else if (e.key === 'Tab') {
                 if (filtered.length) {
-                    completeIntelliCommandName(filtered[intelliIndex]);
+                    selectIntelliCommandOnTabOrClick(filtered[intelliIndex]);
                 } else {
                     input.focus();
                 }

@@ -35,7 +35,8 @@
         command: 'askpage-command',
         mode: 'askpage-mode',
         screenshot: 'askpage-screenshot',
-        showVariableLabels: 'askpage-show-variable-labels'
+        showVariableLabels: 'askpage-show-variable-labels',
+        autoSubmit: 'askpage-auto-submit'
     });
 
     // 這些 frontmatter 欄位由資料模型本身承載，不進 extraFrontmatter。
@@ -316,6 +317,7 @@
         lines.push(`  ${ASKPAGE_METADATA_KEYS.mode}: ${formatYamlScalar(normalized.askpage.mode)}`);
         lines.push(`  ${ASKPAGE_METADATA_KEYS.screenshot}: ${formatYamlScalar(String(normalized.askpage.screenshotEnabled))}`);
         lines.push(`  ${ASKPAGE_METADATA_KEYS.showVariableLabels}: ${formatYamlScalar(String(normalized.askpage.showVariableLabels))}`);
+        lines.push(`  ${ASKPAGE_METADATA_KEYS.autoSubmit}: ${formatYamlScalar(String(normalized.askpage.autoSubmit))}`);
 
         if (normalized.invocation === SKILL_INVOCATION.EXPLICIT) {
             lines.push('disable-model-invocation: true');
@@ -533,7 +535,8 @@
             askpage: {
                 mode: normalizeSkillMode(askpage.mode),
                 screenshotEnabled: askpage.screenshotEnabled === true,
-                showVariableLabels: askpage.showVariableLabels === true
+                showVariableLabels: askpage.showVariableLabels === true,
+                autoSubmit: askpage.autoSubmit === true
             }
         };
     }
@@ -615,7 +618,8 @@
             askpage: {
                 mode: metadata[ASKPAGE_METADATA_KEYS.mode],
                 screenshotEnabled: toBoolean(metadata[ASKPAGE_METADATA_KEYS.screenshot]),
-                showVariableLabels: toBoolean(metadata[ASKPAGE_METADATA_KEYS.showVariableLabels])
+                showVariableLabels: toBoolean(metadata[ASKPAGE_METADATA_KEYS.showVariableLabels]),
+                autoSubmit: toBoolean(metadata[ASKPAGE_METADATA_KEYS.autoSubmit])
             }
         });
         return { skill, error: '' };
@@ -658,7 +662,8 @@
                 askpage: {
                     mode: legacy.mode,
                     screenshotEnabled: legacy.screenshotEnabled === true,
-                    showVariableLabels: legacy.showVariableLabels === true
+                    showVariableLabels: legacy.showVariableLabels === true,
+                    autoSubmit: legacy.autoSubmit === true
                 }
             }));
         });

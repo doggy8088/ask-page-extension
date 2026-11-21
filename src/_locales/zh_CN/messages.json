@@ -97,6 +97,8 @@
     "promptContentBuiltinVariablesHelp": {"message": "${SELECTED_TEXT} 是内置变量，执行时自动替换为打开对话框时选中的文字，不会成为填空字段；可用 ${SELECTED_TEXT:备用文字} 在没有选中文字时改用备用文字。"},
     "showVariableLabels": { "message": "展开提示词时显示变量名称" },
     "showVariableLabelsHelp": { "message": "未选中时，未填写的变量只会以空白提示显示变量名称，输入内容后会消失；选中后会持续显示“变量名称：”标签。" },
+    "autoSubmitSkill": { "message": "自动补全或点击菜单时直接发送" },
+    "autoSubmitSkillHelp": { "message": "选中后，在技能菜单按 Tab 自动补全或用鼠标点击时，会直接发送提示词（默认仅补全技能名称）。提示词中有使用填空变量时无法启用此选项。" },
     "mode": { "message": "模式" },
     "modeUnspecified": { "message": "不指定" },
     "modeAgent": { "message": "代理" },

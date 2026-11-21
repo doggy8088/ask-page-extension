@@ -97,6 +97,8 @@
     "promptContentBuiltinVariablesHelp": {"message": "${SELECTED_TEXT} は組み込み変数です。ダイアログを開いた時点で選択されていたテキストに置き換えられ、入力欄にはなりません。${SELECTED_TEXT:代替テキスト} で未選択時の代替テキストを指定できます。"},
     "showVariableLabels": { "message": "プロンプト展開時に変数名を表示" },
     "showVariableLabelsHelp": { "message": "オフの場合、未入力の変数はプレースホルダーとして表示され、入力すると消えます。オンの場合は「変数名：」ラベルを表示し続けます。" },
+    "autoSubmitSkill": { "message": "オートコンプリートやメニュークリック時にすぐ送信" },
+    "autoSubmitSkillHelp": { "message": "オンにすると、スキルメニューで Tab キーによる補完やクリックを行った際にプロンプトをすぐ送信します（既定ではスキル名のみ入力されます）。入力欄用の変数がある場合は有効にできません。" },
     "mode": { "message": "モード" },
     "modeUnspecified": { "message": "指定なし" },
     "modeAgent": { "message": "エージェント" },

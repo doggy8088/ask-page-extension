@@ -303,7 +303,7 @@ async function probeGeminiApiKeyTier(apiKey = '', options = {}) {
 let resetButton, exportButton, importButton, importFileInput, statusDiv, appVersionSpan;
 let localePreferenceSelect;
 let commandsList, addCommandBtn, commandModal, modalTitle, modalCommandName, modalCommandPrompt;
-let modalCommandModeAgent, modalCommandModeInquiry, modalCommandModeUnspecified, modalCommandScreenshotEnabled, modalCommandShowVariableLabels;
+let modalCommandModeAgent, modalCommandModeInquiry, modalCommandModeUnspecified, modalCommandScreenshotEnabled, modalCommandShowVariableLabels, modalCommandAutoSubmit;
 let modalSave, modalCancel, modalCommandNameError, modalCommandPromptError;
 let modalSkillDescription, modalSkillDescriptionError;
 let modalSkillInvocationAuto, modalSkillInvocationExplicit, modalSkillInstructionsWarning;
@@ -340,6 +340,7 @@ const CUSTOM_COMMAND_USAGE_STORAGE = 'CUSTOM_COMMAND_USAGE';
 const CUSTOM_SUMMARY_ENABLED_STORAGE = 'CUSTOM_SUMMARY_ENABLED';
 const CUSTOM_SUMMARY_PROMPT_STORAGE = 'CUSTOM_SUMMARY_PROMPT';
 const CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE = 'CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS';
+const CUSTOM_SUMMARY_AUTO_SUBMIT_STORAGE = 'CUSTOM_SUMMARY_AUTO_SUBMIT';
 const CUSTOM_SYSTEM_PROMPT_STORAGE = 'CUSTOM_SYSTEM_PROMPT';
 const LAST_ACTIVE_TAB_STORAGE = 'LAST_ACTIVE_TAB';
 const PENDING_OPTIONS_TAB_STORAGE = 'PENDING_OPTIONS_TAB';
@@ -640,6 +641,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCommandModeUnspecified = document.getElementById('modalCommandModeUnspecified');
     modalCommandScreenshotEnabled = document.getElementById('modalCommandScreenshotEnabled');
     modalCommandShowVariableLabels = document.getElementById('modalCommandShowVariableLabels');
+    modalCommandAutoSubmit = document.getElementById('modalCommandAutoSubmit');
     modalSkillDescription = document.getElementById('modalSkillDescription');
     modalSkillDescriptionError = document.getElementById('modalSkillDescriptionError');
     modalSkillInvocationAuto = document.getElementById('modalSkillInvocationAuto');
@@ -754,6 +756,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modalCommandPrompt.addEventListener('input', () => {
         validateCommandPromptInput({ showEmptyError: false });
         updateSkillInstructionsWarning();
+        updateModalAutoSubmitState();
     });
     modalSkillDescription.addEventListener('input', () => {
         validateSkillDescriptionInput({ showEmptyError: false });
@@ -1131,6 +1134,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         return '';
     }
 
+    function hasActiveTemplateVariables(prompt) {
+        const template = String(prompt || '');
+        const pattern = /\$\{([^}]*)\}/g;
+        let match;
+        while ((match = pattern.exec(template)) !== null) {
+            const inner = match[1];
+            const colonIndex = inner.indexOf(':');
+            const rawName = colonIndex === -1 ? inner : inner.slice(0, colonIndex);
+            const name = rawName.normalize('NFC');
+            if (name && name !== 'SELECTED_TEXT') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function updateModalAutoSubmitState() {
+        if (!modalCommandAutoSubmit) {
+            return;
+        }
+        modalCommandAutoSubmit.disabled = hasActiveTemplateVariables(modalCommandPrompt.value);
+    }
+
     function isEditingBuiltIn() {
         return Boolean(currentEditingCommand && currentEditingCommand.builtin);
     }
@@ -1146,6 +1172,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalCommandName.disabled = command.builtin;
             modalCommandPrompt.value = (command.builtin ? command.prompt : command.instructions) || '';
             modalCommandShowVariableLabels.checked = Boolean(command.builtin ? command.showVariableLabels : command.askpage.showVariableLabels);
+            if (modalCommandAutoSubmit) {
+                const rawAutoSubmit = Boolean(command.builtin ? command.autoSubmit : command.askpage.autoSubmit);
+                modalCommandAutoSubmit.checked = rawAutoSubmit && !hasActiveTemplateVariables(modalCommandPrompt.value);
+            }
 
             if (!isBuiltIn) {
                 modalSkillDescription.value = command.description;
@@ -1162,12 +1192,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalCommandName.disabled = false;
             modalCommandPrompt.value = '';
             modalCommandShowVariableLabels.checked = false;
+            if (modalCommandAutoSubmit) {
+                modalCommandAutoSubmit.checked = false;
+            }
             modalSkillDescription.value = '';
             setSkillInvocation(AskPageSkills.SKILL_INVOCATION.AUTO);
             setCustomCommandMode(DEFAULT_CUSTOM_COMMAND_MODE);
             modalCommandScreenshotEnabled.checked = false;
         }
 
+        updateModalAutoSubmitState();
         toggleModalCommandModeInputs(!isBuiltIn);
         commandModal.querySelectorAll('.skill-only-field').forEach((field) => {
             field.style.display = isBuiltIn ? 'none' : '';
@@ -1322,6 +1356,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function saveCommand() {
         const prompt = modalCommandPrompt.value.trim();
         const showVariableLabels = Boolean(modalCommandShowVariableLabels && modalCommandShowVariableLabels.checked);
+        const autoSubmit = !hasActiveTemplateVariables(prompt) && Boolean(modalCommandAutoSubmit && modalCommandAutoSubmit.checked);
 
         if (isEditingBuiltIn()) {
             if (!validateCommandPromptInput({ showEmptyError: true })) {
@@ -1330,10 +1365,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (currentEditingCommand.cmd === '/summary') {
                 chrome.storage.local.set({
                     [CUSTOM_SUMMARY_PROMPT_STORAGE]: prompt,
-                    [CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE]: showVariableLabels
+                    [CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE]: showVariableLabels,
+                    [CUSTOM_SUMMARY_AUTO_SUBMIT_STORAGE]: autoSubmit
                 });
                 currentEditingCommand.prompt = prompt;
                 currentEditingCommand.showVariableLabels = showVariableLabels;
+                currentEditingCommand.autoSubmit = autoSubmit;
             }
             renderCommands();
             closeModal();
@@ -1364,7 +1401,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             askpage: {
                 mode: getCustomCommandMode(),
                 screenshotEnabled: Boolean(modalCommandScreenshotEnabled && modalCommandScreenshotEnabled.checked),
-                showVariableLabels
+                showVariableLabels,
+                autoSubmit
             }
         });
 
@@ -1768,7 +1806,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     chrome.storage.local.get([
         'PROVIDERS', 'ACTIVE_PROVIDER_ID', 'ACTIVE_MODEL',
-        CUSTOM_SUMMARY_PROMPT_STORAGE, CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE,
+        CUSTOM_SUMMARY_PROMPT_STORAGE, CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE, CUSTOM_SUMMARY_AUTO_SUBMIT_STORAGE,
         CUSTOM_COMMANDS_STORAGE, ASKPAGE_SKILLS_STORAGE, CUSTOM_SUMMARY_ENABLED_STORAGE, CUSTOM_SYSTEM_PROMPT_STORAGE,
         LAST_ACTIVE_TAB_STORAGE, PENDING_OPTIONS_TAB_STORAGE, AGENT_GLOW_EFFECT_ENABLED_STORAGE,
         AGENT_CONTEXT_FORMAT_STORAGE, AGENT_SNAPSHOT_TOKEN_BUDGET_STORAGE, TOOL_CALL_MAX_ROUNDS_STORAGE,
@@ -1811,6 +1849,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 summaryCommand.prompt = customSummaryPrompt;
             }
             summaryCommand.showVariableLabels = result[CUSTOM_SUMMARY_SHOW_VARIABLE_LABELS_STORAGE] === true;
+            summaryCommand.autoSubmit = result[CUSTOM_SUMMARY_AUTO_SUBMIT_STORAGE] === true;
             summaryCommand.enabled = result[CUSTOM_SUMMARY_ENABLED_STORAGE] !== false;
         }
 

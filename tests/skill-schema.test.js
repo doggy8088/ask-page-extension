@@ -77,7 +77,7 @@ const tricky = Skills.normalizeSkill({
     compatibility: '123',
     metadata: { author: 'will', version: '1.0', 'askpage-mode': 'agent' },
     extraFrontmatter: { 'custom-flag': 'yes' },
-    askpage: { mode: 'agent', screenshotEnabled: true, showVariableLabels: false }
+    askpage: { mode: 'agent', screenshotEnabled: true, showVariableLabels: false, autoSubmit: true }
 });
 {
     const markdown = Skills.serializeSkillMarkdown(tricky);
@@ -292,7 +292,7 @@ assert.strictEqual(Skills.buildSkillCatalogText([]), '');
     assert.strictEqual(migrated[0].command, '/翻譯');
     assert.strictEqual(migrated[0].description, 'Translate');
     assert.strictEqual(migrated[0].instructions, 'Translate\n${SELECTED_TEXT}');
-    assert.deepStrictEqual(migrated[0].askpage, { mode: 'agent', screenshotEnabled: true, showVariableLabels: true });
+    assert.deepStrictEqual(migrated[0].askpage, { mode: 'agent', screenshotEnabled: true, showVariableLabels: true, autoSubmit: false });
     assert.strictEqual(migrated[0].invocation, 'explicit');
     assert.strictEqual(migrated[0].enabled, true);
     assert.strictEqual(migrated[1].name, 'fix-me');

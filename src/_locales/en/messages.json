@@ -97,6 +97,8 @@
     "promptContentBuiltinVariablesHelp": {"message": "${SELECTED_TEXT} is a built-in variable. It is replaced with the text selected when the dialog opened and never becomes a fill-in field. Use ${SELECTED_TEXT:fallback} to supply text when nothing is selected."},
     "showVariableLabels": { "message": "Show variable names when the prompt is expanded" },
     "showVariableLabelsHelp": { "message": "When unchecked, an empty variable only shows its name as a placeholder and disappears after input. When checked, a “Variable name:” label remains visible." },
+    "autoSubmitSkill": { "message": "Submit immediately on autocomplete or menu click" },
+    "autoSubmitSkillHelp": { "message": "When checked, pressing Tab to autocomplete or clicking the item in the skill menu sends the prompt immediately (by default only the skill name is inserted). Disabled when the prompt uses fill-in variables." },
     "mode": { "message": "Mode" },
     "modeUnspecified": { "message": "Unspecified" },
     "modeAgent": { "message": "Agent" },

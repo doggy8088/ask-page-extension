@@ -111,11 +111,14 @@ function section(start, end) {
 }
 const keydown = section("        if (intelliActive) {\n            const isMenuKey", "            return;\n        }\n        if (snippetState) {");
 assert.ok(keydown.indexOf('e.preventDefault();') < keydown.indexOf('await filterIntelli'), 'Tab／Enter／方向鍵在 await 之前就取消預設行為，Tab 不會移走焦點');
-assert.match(keydown, /e\.key === 'Tab'\) \{\s*if \(filtered\.length\) \{\s*completeIntelliCommandName\(/, 'Tab 只補上技能名稱');
+assert.match(keydown, /e\.key === 'Tab'\) \{\s*if \(filtered\.length\) \{\s*selectIntelliCommandOnTabOrClick\(/, 'Tab 依技能設定決定補名稱或直接送出');
 assert.match(keydown, /e\.key === 'Enter' && !e\.shiftKey\) \{\s*if \(filtered\.length\) \{\s*completeIntelliCommand\(/, 'Enter 維持原本的執行流程');
 const showBox = section('    async function showIntelliBox(', '    function positionIntelliBox() {');
-assert.match(showBox, /addEventListener\('click', \(e\) => \{[\s\S]*?completeIntelliCommandName\(item\);/, '滑鼠點選選單項目與 Tab 相同，只補上技能名稱');
-assert.ok(!/completeIntelliCommand\(item\)/.test(showBox), '點選不再直接執行或展開提示詞');
+assert.match(showBox, /addEventListener\('click', \(e\) => \{[\s\S]*?selectIntelliCommandOnTabOrClick\(item\);/, '滑鼠點選選單項目與 Tab 相同');
+const selectTabOrClick = section('    function selectIntelliCommandOnTabOrClick(item) {', '    function completeIntelliCommandName(item) {');
+assert.ok(selectTabOrClick.includes('item.autoSubmit && !item.hasVariables'), '只有啟用直接送出且沒有使用中變數時才直接執行');
+assert.ok(selectTabOrClick.includes('completeIntelliCommand(item);'), '符合條件時直接執行');
+assert.ok(selectTabOrClick.includes('completeIntelliCommandName(item);'), '否則只補上技能名稱');
 const completeName = section('    function completeIntelliCommandName(item) {', '    function updateSkillArgumentHint() {');
 assert.ok(completeName.includes('setInputValue(`${item.cmd} `);'), '補上名稱與一個空白');
 assert.ok(!completeName.includes('handleAsk'), '不送出');

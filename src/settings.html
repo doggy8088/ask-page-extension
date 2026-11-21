@@ -1362,6 +1362,14 @@
       </div>
 
       <div class="form-group">
+        <label for="modalCommandAutoSubmit">
+          <input type="checkbox" id="modalCommandAutoSubmit" />
+          <span data-i18n="autoSubmitSkill">自動完成或點擊選單時直接送出</span>
+        </label>
+        <small style="color: var(--text-secondary);" data-i18n="autoSubmitSkillHelp">勾選後，在技能選單按 Tab 自動完成或以滑鼠點擊時，會直接送出提示詞（預設僅補上技能名稱）。提示詞中有使用填空變數時無法啟用此選項。</small>
+      </div>
+
+      <div class="form-group">
         <div style="font-weight: 600; margin-bottom: 10px;" data-i18n="mode">模式</div>
         <label style="display: inline-flex; align-items: center; gap: 6px; margin-right: 16px;">
           <input type="radio" name="modalCommandMode" id="modalCommandModeUnspecified" value="unspecified" checked>

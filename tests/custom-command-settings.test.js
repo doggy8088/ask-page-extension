@@ -35,12 +35,20 @@ vm.createContext(sandbox);
 vm.runInContext(
     `${extractFunctionSource(settingsScript, 't', 'escapeHtml')}
 ${extractFunctionSource(settingsScript, 'validateTemplateVariables', 'openModal')}
-globalThis.__askPageSettingsTestExports = { validateTemplateVariables };`,
+globalThis.__askPageSettingsTestExports = { validateTemplateVariables, hasActiveTemplateVariables };`,
     sandbox,
     { filename: 'settings.js' }
 );
 
-const { validateTemplateVariables } = sandbox.__askPageSettingsTestExports;
+const { validateTemplateVariables, hasActiveTemplateVariables } = sandbox.__askPageSettingsTestExports;
+
+assert.strictEqual(hasActiveTemplateVariables(''), false);
+assert.strictEqual(hasActiveTemplateVariables('摘要這篇文章'), false);
+assert.strictEqual(hasActiveTemplateVariables('${}'), false);
+assert.strictEqual(hasActiveTemplateVariables('翻譯：${SELECTED_TEXT}'), false, '內建 SELECTED_TEXT 不算填空變數');
+assert.strictEqual(hasActiveTemplateVariables('翻譯：${SELECTED_TEXT:預設內容}'), false);
+assert.strictEqual(hasActiveTemplateVariables('Hi ${name}'), true);
+assert.strictEqual(hasActiveTemplateVariables('翻譯成 ${lang:英文}：${SELECTED_TEXT}'), true);
 
 assert.strictEqual(validateTemplateVariables('${name:English}'), '');
 assert.strictEqual(validateTemplateVariables('${SELECTED_TEXT}'), '');
@@ -110,7 +118,8 @@ assert.strictEqual(AskPageSkills.serializeSkillMarkdown(toggledSkills[0]), expor
 for (const key of [
     'commandNameRequired', 'commandNameInvalid', 'commandNameTooLong', 'commandNameBuiltinDuplicate',
     'commandNameCustomDuplicate',
-    'skillDescriptionRequired', 'skillDescriptionTooLong'
+    'skillDescriptionRequired', 'skillDescriptionTooLong',
+    'autoSubmitSkill', 'autoSubmitSkillHelp'
 ]) {
     assert.ok(zhTwCatalog[key], `zh_TW 缺少 ${key}`);
 }

@@ -97,6 +97,8 @@
     "promptContentBuiltinVariablesHelp": {"message": "${SELECTED_TEXT}는 내장 변수입니다. 대화 상자를 열 때 선택한 텍스트로 자동 대체되며 입력란이 되지 않습니다. ${SELECTED_TEXT:대체 텍스트}로 선택된 텍스트가 없을 때 사용할 대체 텍스트를 지정할 수 있습니다."},
     "showVariableLabels": { "message": "프롬프트를 펼칠 때 변수 이름 표시" },
     "showVariableLabelsHelp": { "message": "선택하지 않으면 입력하지 않은 변수는 자리 표시자로 이름만 표시되고 입력 후 사라집니다. 선택하면 ‘변수 이름:’ 라벨이 계속 표시됩니다." },
+    "autoSubmitSkill": { "message": "자동 완성 또는 메뉴 클릭 시 바로 전송" },
+    "autoSubmitSkillHelp": { "message": "선택하면 스킬 메뉴에서 Tab 키로 자동 완성하거나 클릭할 때 프롬프트를 바로 전송합니다(기본값은 스킬 이름만 입력). 프롬프트에 입력란 변수가 있으면 활성화할 수 없습니다." },
     "mode": { "message": "모드" },
     "modeUnspecified": { "message": "지정 안 함" },
     "modeAgent": { "message": "에이전트" },

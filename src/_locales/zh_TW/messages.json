@@ -97,6 +97,8 @@
     "promptContentBuiltinVariablesHelp": {"message": "${SELECTED_TEXT} 是內建變數，執行時自動替換成開啟對話框時選取的文字，不會變成填空欄位；可用 ${SELECTED_TEXT:備用文字} 在沒有選取文字時改用備用文字。"},
     "showVariableLabels": { "message": "展開提示詞時顯示變數名稱" },
     "showVariableLabelsHelp": { "message": "未勾選時，未填寫的變數只會以空白提示顯示變數名稱，一旦輸入內容就會消失；勾選後則會持續顯示「變數名稱：」的標籤。" },
+    "autoSubmitSkill": { "message": "自動完成或點擊選單時直接送出" },
+    "autoSubmitSkillHelp": { "message": "勾選後，在技能選單按 Tab 自動完成或以滑鼠點擊時，會直接送出提示詞（預設僅補上技能名稱）。提示詞中有使用填空變數時無法啟用此選項。" },
     "mode": { "message": "模式" },
     "modeUnspecified": { "message": "不指定" },
     "modeAgent": { "message": "代理" },
