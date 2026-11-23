@@ -1023,6 +1023,7 @@ const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
 const AGENT_GLOW_EFFECT_ENABLED_STORAGE = 'AGENT_GLOW_EFFECT_ENABLED';
 const REASONING_EFFORTS_STORAGE = 'ASKPAGE_REASONING_EFFORTS';
+const OPENAI_COMPATIBLE_REQUEST_QUIRKS_STORAGE = 'ASKPAGE_OPENAI_COMPATIBLE_REQUEST_QUIRKS';
 const CUSTOM_COMMAND_MODE_AGENT = 'agent';
 const CUSTOM_COMMAND_MODE_INQUIRY = 'inquiry';
 const CUSTOM_COMMAND_MODE_UNSPECIFIED = 'unspecified';
@@ -6539,6 +6540,105 @@ async function sendRequestWithPromptCacheKeyFallback(sendRequest, requestBody, o
         const fallbackRequestBody = { ...requestBody };
         delete fallbackRequestBody.prompt_cache_key;
         return await sendRequest(fallbackRequestBody, onRetry, streamHandlers);
+    }
+}
+
+const PARAMETER_REJECTION_FRAGMENTS = [
+    'unsupported', 'not supported', 'does not support', 'only the default',
+    'unknown', 'unrecognized', 'not allowed', 'extra field', 'instead'
+];
+
+function normalizeOpenAICompatibleRequestQuirks(value) {
+    return {
+        maxTokensParam: value?.maxTokensParam === 'max_completion_tokens' ? 'max_completion_tokens' : 'max_tokens',
+        omitTemperature: value?.omitTemperature === true
+    };
+}
+
+async function getOpenAICompatibleRequestQuirks(activeConfig) {
+    const settingKey = getReasoningSettingKey(activeConfig);
+    const stored = settingKey ? await getValue(OPENAI_COMPATIBLE_REQUEST_QUIRKS_STORAGE, {}) : {};
+    return normalizeOpenAICompatibleRequestQuirks(stored?.[settingKey]);
+}
+
+async function saveOpenAICompatibleRequestQuirks(activeConfig, quirks) {
+    const settingKey = getReasoningSettingKey(activeConfig);
+    if (!settingKey) {
+        return;
+    }
+
+    const stored = await getValue(OPENAI_COMPATIBLE_REQUEST_QUIRKS_STORAGE, {});
+    const settings = stored && typeof stored === 'object' && !Array.isArray(stored) ? { ...stored } : {};
+    settings[settingKey] = normalizeOpenAICompatibleRequestQuirks(quirks);
+    await setValue(OPENAI_COMPATIBLE_REQUEST_QUIRKS_STORAGE, settings);
+}
+
+function applyOpenAICompatibleRequestQuirks(requestBody, quirks) {
+    const adjustedBody = { ...requestBody };
+    const maxTokens = adjustedBody.max_tokens ?? adjustedBody.max_completion_tokens;
+    if (maxTokens !== undefined) {
+        delete adjustedBody.max_tokens;
+        delete adjustedBody.max_completion_tokens;
+        adjustedBody[quirks.maxTokensParam] = maxTokens;
+    }
+
+    if (quirks.omitTemperature) {
+        delete adjustedBody.temperature;
+    }
+
+    return adjustedBody;
+}
+
+// 依 HTTP 400 的錯誤內容判斷是哪個參數被拒收，回傳修正後的 quirks；認不出來就回傳 null。
+function getOpenAICompatibleQuirkFixForError(error, requestBody, quirks) {
+    if (Number(error?.status) !== 400) {
+        return null;
+    }
+
+    const errorText = `${error?.apiMessage || ''}\n${error?.body || ''}\n${error?.message || ''}`.toLowerCase();
+    const rejectsParameter = (name) => errorText.includes(name)
+        && PARAMETER_REJECTION_FRAGMENTS.some((fragment) => errorText.includes(fragment));
+
+    if ('max_tokens' in requestBody && rejectsParameter('max_tokens')) {
+        return { key: 'maxTokensParam', quirks: { ...quirks, maxTokensParam: 'max_completion_tokens' } };
+    }
+
+    if ('max_completion_tokens' in requestBody && rejectsParameter('max_completion_tokens')) {
+        return { key: 'maxTokensParam', quirks: { ...quirks, maxTokensParam: 'max_tokens' } };
+    }
+
+    if ('temperature' in requestBody && rejectsParameter('temperature')) {
+        return { key: 'omitTemperature', quirks: { ...quirks, omitTemperature: true } };
+    }
+
+    return null;
+}
+
+// OpenAI 相容端點的模型各自拒收不同參數（例如要求 max_completion_tokens）。
+// 遇到可辨識的參數錯誤時自動修正重送，並透過 onLearn 記住結果，下次直接送對的參數。
+async function sendRequestWithOpenAICompatibleQuirks(sendRequest, requestBody, onRetry, streamHandlers, quirkState) {
+    const adjustedKeys = new Set();
+    let adjustedBody = applyOpenAICompatibleRequestQuirks(requestBody, quirkState.quirks);
+
+    for (;;) {
+        try {
+            return await sendRequest(adjustedBody, onRetry, streamHandlers);
+        } catch (error) {
+            const fix = getOpenAICompatibleQuirkFixForError(error, adjustedBody, quirkState.quirks);
+            if (!fix || adjustedKeys.has(fix.key)) {
+                throw error;
+            }
+
+            console.warn(`[AskPage] Provider rejected a request parameter; retrying with adjusted ${fix.key}.`, error?.apiMessage || error?.message);
+            adjustedKeys.add(fix.key);
+            quirkState.quirks = fix.quirks;
+            try {
+                await quirkState.onLearn?.(fix.quirks);
+            } catch (saveError) {
+                console.warn('[AskPage] Failed to save provider request adjustments.', saveError);
+            }
+            adjustedBody = applyOpenAICompatibleRequestQuirks(requestBody, quirkState.quirks);
+        }
     }
 }
 
@@ -15721,6 +15821,10 @@ async function createDialog() {
 
         const selectedModel = activeConfig?.activeModel || '';
         const reasoningEffort = await getActiveReasoningValue(activeConfig);
+        const requestQuirkState = {
+            quirks: await getOpenAICompatibleRequestQuirks(activeConfig),
+            onLearn: (quirks) => saveOpenAICompatibleRequestQuirks(activeConfig, quirks)
+        };
 
         let apiKey = '';
         if (encryptedApiKey) {
@@ -15761,6 +15865,56 @@ async function createDialog() {
             includeSkillTools: true
         };
         console.log(`[AskPage] ${providerLabel} max output tokens:`, maxOutputTokens, 'model:', selectedModel || '(unspecified)', 'responses_api:', useResponsesApi, 'reasoning_effort:', reasoningEffort || 'default', 'streaming:', streamingEnabled);
+
+        const sendRawRequest = async (requestBody, onRetry, streamHandlers = {}) => {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (apiKey && providerType !== 'ollama-cloud') {
+                headers.Authorization = `Bearer ${apiKey}`;
+            }
+
+            const buildHttpError = (response, errorBody) => createHttpError(
+                response.status,
+                response.statusText,
+                errorBody,
+                undefined,
+                { retryAfterMs: getRetryAfterMilliseconds(response) }
+            );
+            if (streamingEnabled) {
+                const streamOptions = {
+                    providerType,
+                    providerLabel: providerLabel,
+                    url,
+                    requestBody,
+                    headers,
+                    buildHttpError,
+                    onRetry,
+                    onAnswerDelta: streamHandlers.onAnswerDelta,
+                    onReasoningDelta: streamHandlers.onReasoningDelta,
+                    fetchImpl: providerFetch,
+                    signal: taskContext?.signal
+                };
+                return useResponsesApi
+                    ? await fetchResponsesApiStream(streamOptions)
+                    : await fetchOpenAIChatCompletionsStream(streamOptions);
+            }
+
+            return await fetchJsonWithRetry({
+                providerLabel: providerLabel,
+                url,
+                options: {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(requestBody)
+                },
+                buildHttpError,
+                onRetry,
+                transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined,
+                fetchImpl: providerFetch,
+                signal: taskContext?.signal
+            });
+        };
 
         try {
             const answer = await runOpenAIStyleToolLoop({
@@ -15824,55 +15978,13 @@ async function createDialog() {
                         promptCacheKey
                     });
                 },
-                sendRequest: async (requestBody, onRetry, streamHandlers = {}) => {
-                    const headers = {
-                        'Content-Type': 'application/json'
-                    };
-                    if (apiKey && providerType !== 'ollama-cloud') {
-                        headers.Authorization = `Bearer ${apiKey}`;
-                    }
-
-                    const buildHttpError = (response, errorBody) => createHttpError(
-                        response.status,
-                        response.statusText,
-                        errorBody,
-                        undefined,
-                        { retryAfterMs: getRetryAfterMilliseconds(response) }
-                    );
-                    if (streamingEnabled) {
-                        const streamOptions = {
-                            providerType,
-                            providerLabel: providerLabel,
-                            url,
-                            requestBody,
-                            headers,
-                            buildHttpError,
-                            onRetry,
-                            onAnswerDelta: streamHandlers.onAnswerDelta,
-                            onReasoningDelta: streamHandlers.onReasoningDelta,
-                            fetchImpl: providerFetch,
-                            signal: taskContext?.signal
-                        };
-                        return useResponsesApi
-                            ? await fetchResponsesApiStream(streamOptions)
-                            : await fetchOpenAIChatCompletionsStream(streamOptions);
-                    }
-
-                    return await fetchJsonWithRetry({
-                        providerLabel: providerLabel,
-                        url,
-                        options: {
-                            method: 'POST',
-                            headers,
-                            body: JSON.stringify(requestBody)
-                        },
-                        buildHttpError,
-                        onRetry,
-                        transformResponse: useResponsesApi ? normalizeResponsesApiResponse : undefined,
-                        fetchImpl: providerFetch,
-                        signal: taskContext?.signal
-                    });
-                },
+                sendRequest: (requestBody, onRetry, streamHandlers = {}) => sendRequestWithOpenAICompatibleQuirks(
+                    sendRawRequest,
+                    requestBody,
+                    onRetry,
+                    streamHandlers,
+                    requestQuirkState
+                ),
                 allowToolFallback: !isGpt56FamilyModel(selectedModel),
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
