@@ -172,6 +172,12 @@ function getProviderDisplayName(provider) {
         : providerName;
 }
 
+// 設定頁清單依顯示名稱升冪排列；只排序副本，不改動儲存的 PROVIDERS 順序。
+function sortProvidersByDisplayName(providerList) {
+    return [...providerList].sort((a, b) => getProviderDisplayName(a)
+        .localeCompare(getProviderDisplayName(b), undefined, { numeric: true, sensitivity: 'base' }));
+}
+
 const GEMINI_KEY_TIERS_STORAGE = 'GEMINI_KEY_TIERS';
 const GEMINI_INTERACTIONS_PROBE_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 const GEMINI_INTERACTIONS_API_REVISION = '2026-05-20';
@@ -1943,7 +1949,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        providers.forEach(p => {
+        sortProvidersByDisplayName(providers).forEach(p => {
             const div = document.createElement('div');
             div.className = 'command-item';
             const providerDisplayName = getProviderDisplayName(p);
