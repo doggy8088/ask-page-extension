@@ -2666,14 +2666,47 @@ async function switchProvider(step = 1) {
     const nextOption = options[nextIndex];
 
     console.log('[AskPage] Switching provider to:', nextOption.providerName, 'Model:', nextOption.model);
-    await setValue('ACTIVE_PROVIDER_ID', nextOption.providerId);
-    await setValue('ACTIVE_MODEL', nextOption.model);
+    await setActiveProviderModel(nextOption.providerId, nextOption.model);
+}
+
+async function setActiveProviderModel(providerId, model) {
+    await setValue('ACTIVE_PROVIDER_ID', providerId);
+    await setValue('ACTIVE_MODEL', model);
 
     // Update dialog UI if visible
     const overlay = getActiveDialogOverlay();
     if (overlay) {
         updateProviderDisplay();
     }
+}
+
+// 模型總數達到此數量時，點標題列的模型按鈕改為打開 mega-menu，而不是循環切換。
+const MODEL_MEGA_MENU_MIN_OPTIONS = 4;
+
+// 依提供者分組，提供者依顯示名稱升冪排序，組內模型維持設定順序。
+function groupModelOptionsForMegaMenu(options) {
+    const groups = new Map();
+    for (const option of options) {
+        if (!groups.has(option.providerId)) {
+            groups.set(option.providerId, {
+                providerId: option.providerId,
+                providerName: getProviderDialogDisplayName({ name: option.providerName, type: option.type }),
+                options: []
+            });
+        }
+        groups.get(option.providerId).options.push(option);
+    }
+
+    return [...groups.values()].sort((a, b) => a.providerName
+        .localeCompare(b.providerName, undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+// 點選模型後的第二步：不支援或鎖定推理強度就直接完成，檔位型用按鈕，預算型用滑桿。
+function getMegaMenuSecondStep(capability) {
+    if (!capability || capability.locked) {
+        return 'none';
+    }
+    return capability.kind === 'budget' ? 'slider' : 'levels';
 }
 
 // Update provider display in dialog
@@ -6848,7 +6881,19 @@ async function createDialog() {
     providerDisplayModel.title = getLocalizedText('switchProviderModel');
     providerDisplayModel.setAttribute('aria-label', getLocalizedText('switchProviderModel'));
     providerDisplayModel.textContent = getLocalizedText('loading');
+    providerDisplayModel.setAttribute('aria-expanded', 'false');
     providerDisplayModel.addEventListener('click', async (event) => {
+        if (isModelMegaMenuOpen()) {
+            closeModelMegaMenu();
+            return;
+        }
+
+        const options = await getEnabledProviderModelOptions();
+        if (options.length >= MODEL_MEGA_MENU_MIN_OPTIONS) {
+            await openModelMegaMenu();
+            return;
+        }
+
         await switchProvider(event.shiftKey ? -1 : 1);
     });
     const reasoningPopover = document.createElement('div');
@@ -6904,6 +6949,174 @@ async function createDialog() {
     reasoningPopover.appendChild(reasoningHint);
     providerModelControl.appendChild(providerDisplayModel);
     providerModelControl.appendChild(reasoningPopover);
+
+    // 模型很多時改用 mega-menu：第一步點模型，第二步點推理強度。
+    const modelMegaMenu = document.createElement('div');
+    modelMegaMenu.id = 'askpage-model-mega-menu';
+    modelMegaMenu.className = 'askpage-model-mega-menu';
+    modelMegaMenu.hidden = true;
+    modelMegaMenu.setAttribute('role', 'dialog');
+    modelMegaMenu.setAttribute('aria-label', getLocalizedText('modelMegaMenuTitle'));
+    modelMegaMenu.setAttribute('data-askpage-nondraggable', 'true');
+    let modelMegaMenuRenderToken = 0;
+
+    function isModelMegaMenuOpen() {
+        return !modelMegaMenu.hidden;
+    }
+
+    function closeModelMegaMenu() {
+        modelMegaMenuRenderToken++;
+        modelMegaMenu.hidden = true;
+        modelMegaMenu.replaceChildren();
+        providerModelControl.removeAttribute('data-mega-menu-open');
+        providerDisplayModel.setAttribute('aria-expanded', 'false');
+    }
+
+    function finishModelMegaMenu() {
+        closeModelMegaMenu();
+        input.focus();
+    }
+
+    async function openModelMegaMenu() {
+        modelMegaMenu.hidden = false;
+        providerModelControl.setAttribute('data-mega-menu-open', 'true');
+        providerDisplayModel.setAttribute('aria-expanded', 'true');
+        await renderModelMegaMenuModels();
+    }
+
+    function createMegaMenuElement(tagName, className, text = '') {
+        const element = document.createElement(tagName);
+        element.className = className;
+        element.textContent = text;
+        if (tagName === 'button') {
+            element.type = 'button';
+        }
+        return element;
+    }
+
+    async function renderModelMegaMenuModels() {
+        const renderToken = ++modelMegaMenuRenderToken;
+        const [options, activeProviderId, activeModel] = await Promise.all([
+            getEnabledProviderModelOptions(),
+            getValue('ACTIVE_PROVIDER_ID', ''),
+            getValue('ACTIVE_MODEL', '')
+        ]);
+        if (renderToken !== modelMegaMenuRenderToken) {
+            return;
+        }
+
+        const title = createMegaMenuElement('div', 'askpage-mega-menu-title', getLocalizedText('modelMegaMenuTitle'));
+        const grid = createMegaMenuElement('div', 'askpage-mega-menu-grid');
+        let activeButton = null;
+        for (const group of groupModelOptionsForMegaMenu(options)) {
+            const column = createMegaMenuElement('div', 'askpage-mega-menu-column');
+            column.appendChild(createMegaMenuElement('div', 'askpage-mega-menu-provider', group.providerName));
+            for (const option of group.options) {
+                const isActive = option.providerId === activeProviderId && option.model === activeModel;
+                const modelLabel = option.model || getLocalizedText('noModelConfigured');
+                const button = createMegaMenuElement(
+                    'button',
+                    `askpage-mega-menu-model${isActive ? ' active' : ''}`,
+                    `${isActive ? '✓ ' : ''}${modelLabel}`
+                );
+                button.title = `${group.providerName} · ${modelLabel}`;
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                button.addEventListener('click', () => selectModelMegaMenuOption(option));
+                column.appendChild(button);
+                if (isActive) {
+                    activeButton = button;
+                }
+            }
+            grid.appendChild(column);
+        }
+
+        modelMegaMenu.replaceChildren(title, grid);
+        (activeButton || grid.querySelector('button'))?.focus();
+    }
+
+    async function selectModelMegaMenuOption(option) {
+        const renderToken = ++modelMegaMenuRenderToken;
+        await setActiveProviderModel(option.providerId, option.model);
+        const activeConfig = await getActiveProviderConfig();
+        if (renderToken !== modelMegaMenuRenderToken) {
+            return;
+        }
+
+        const capability = getReasoningCapability(activeConfig?.type, activeConfig?.activeModel);
+        if (getMegaMenuSecondStep(capability) === 'none') {
+            finishModelMegaMenu();
+            return;
+        }
+
+        await renderModelMegaMenuReasoning(activeConfig, capability);
+    }
+
+    async function renderModelMegaMenuReasoning(activeConfig, capability) {
+        const renderToken = ++modelMegaMenuRenderToken;
+        const selectedValue = await getActiveReasoningValue(activeConfig);
+        if (renderToken !== modelMegaMenuRenderToken) {
+            return;
+        }
+
+        const applyReasoningValue = async (value) => {
+            await setActiveReasoningValue(activeConfig, value);
+            finishModelMegaMenu();
+            updateProviderDisplay();
+        };
+
+        const header = createMegaMenuElement('div', 'askpage-mega-menu-step-header');
+        const backButton = createMegaMenuElement('button', 'askpage-mega-menu-back', `← ${getLocalizedText('modelMegaMenuBack')}`);
+        backButton.addEventListener('click', () => renderModelMegaMenuModels());
+        header.appendChild(backButton);
+        header.appendChild(createMegaMenuElement(
+            'div',
+            'askpage-mega-menu-title',
+            getLocalizedText('modelMegaMenuReasoningTitle', { model: activeConfig.activeModel })
+        ));
+
+        const body = createMegaMenuElement('div', 'askpage-mega-menu-reasoning');
+        let focusTarget = null;
+        if (getMegaMenuSecondStep(capability) === 'levels') {
+            for (const value of capability.options) {
+                const isActive = value === selectedValue;
+                const button = createMegaMenuElement(
+                    'button',
+                    `askpage-mega-menu-level${isActive ? ' active' : ''}`,
+                    getReasoningValueLabel(capability, value)
+                );
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                button.addEventListener('click', () => applyReasoningValue(value));
+                body.appendChild(button);
+                if (isActive) {
+                    focusTarget = button;
+                }
+            }
+        } else {
+            const sliderConfig = getReasoningSliderConfig(capability, selectedValue);
+            const valueLabel = createMegaMenuElement('span', 'askpage-reasoning-value');
+            const slider = document.createElement('input');
+            slider.className = 'askpage-reasoning-slider askpage-mega-menu-slider';
+            slider.type = 'range';
+            slider.min = String(sliderConfig.min);
+            slider.max = String(sliderConfig.max);
+            slider.step = '1';
+            slider.value = String(sliderConfig.index);
+            slider.setAttribute('aria-label', getLocalizedText('reasoningEffort'));
+            slider.addEventListener('input', () => updateReasoningSliderPresentation(slider, valueLabel, capability));
+            updateReasoningSliderPresentation(slider, valueLabel, capability);
+            const doneButton = createMegaMenuElement('button', 'askpage-mega-menu-done', getLocalizedText('modelMegaMenuDone'));
+            doneButton.addEventListener('click', () => applyReasoningValue(
+                getReasoningValueFromSlider(capability, Number(slider.value))
+            ));
+            body.appendChild(slider);
+            body.appendChild(valueLabel);
+            body.appendChild(doneButton);
+            focusTarget = slider;
+        }
+
+        modelMegaMenu.replaceChildren(header, body);
+        (focusTarget || body.querySelector('button'))?.focus();
+    }
 
     const providerActions = document.createElement('div');
     providerActions.className = 'askpage-header-actions';
@@ -7027,6 +7240,7 @@ async function createDialog() {
     providerInfo.appendChild(providerDisplay);
     providerHeader.appendChild(providerInfo);
     providerHeader.appendChild(providerActions);
+    providerHeader.appendChild(modelMegaMenu);
 
     const inputArea = document.createElement('div');
     inputArea.id = 'gemini-qna-input-area';
@@ -7993,6 +8207,7 @@ async function createDialog() {
     function closeDialog() {
         stopDialogDrag();
         hideIntelliBox();
+        closeModelMegaMenu();
         clearDialogDimTimer();
         window.removeEventListener('keydown', escapeKeyListener, true);
         window.removeEventListener('keydown', clearShortcutListener, true);
@@ -8025,12 +8240,26 @@ async function createDialog() {
             return;
         }
 
+        // 用 composedPath 判斷，因為面板內容在點擊後可能已重繪，e.target 不一定還在面板裡。
+        const clickPath = e.composedPath();
+        if (isModelMegaMenuOpen() && !clickPath.includes(modelMegaMenu) && !clickPath.includes(providerModelControl)) {
+            closeModelMegaMenu();
+        }
+
         if (!intelliBox.contains(e.target) && !input.contains(e.target)) {
             hideIntelliBox();
         }
     });
     const escapeKeyListener = (e) => {
         if (e.key !== 'Escape') {
+            return;
+        }
+
+        // 模型 mega-menu 開著時，Esc 只關閉選單，理由同下方的技能提示框。
+        if (isModelMegaMenuOpen()) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            finishModelMegaMenu();
             return;
         }
 

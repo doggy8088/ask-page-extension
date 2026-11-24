@@ -72,6 +72,7 @@ assert.ok(!showSource.includes('.scrollIntoView('), '只捲動提示框本身，
     const calls = [];
     const escSandbox = {
         intelliActive: false,
+        isModelMegaMenuOpen: () => false,
         hideIntelliBox() { calls.push('hideIntelliBox'); escSandbox.intelliActive = false; },
         closeDialog() { calls.push('closeDialog'); },
         shadowRoot: { activeElement: null },
