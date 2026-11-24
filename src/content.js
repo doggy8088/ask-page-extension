@@ -6954,7 +6954,7 @@ async function createDialog() {
     providerModelControl.appendChild(providerDisplayModel);
     providerModelControl.appendChild(reasoningPopover);
 
-    // 模型很多時改用 mega-menu：第一步點模型，第二步點推理強度。
+    // 模型很多時改用 Finder 風格的三欄選單：左欄提供者、中欄模型、右欄推理強度。
     const modelMegaMenu = document.createElement('div');
     modelMegaMenu.id = 'askpage-model-mega-menu';
     modelMegaMenu.className = 'askpage-model-mega-menu';
@@ -6963,6 +6963,11 @@ async function createDialog() {
     modelMegaMenu.setAttribute('aria-label', getLocalizedText('modelMegaMenuTitle'));
     modelMegaMenu.setAttribute('data-askpage-nondraggable', 'true');
     let modelMegaMenuRenderToken = 0;
+    // groups：依提供者分組的模型；providerId：左欄選中的提供者；reasoning：右欄要顯示的推理強度。
+    const modelMegaMenuState = { groups: [], providerId: '', activeProviderId: '', activeModel: '', reasoning: null };
+    const MODEL_MEGA_MENU_MAX_WIDTH = 640;
+    const MODEL_MEGA_MENU_MAX_HEIGHT = 320;
+    const MODEL_MEGA_MENU_EDGE = 12;
 
     function isModelMegaMenuOpen() {
         return !modelMegaMenu.hidden;
@@ -6981,14 +6986,59 @@ async function createDialog() {
         input.focus();
     }
 
+    // 面板從模型按鈕下方展開，但寬高都限制在對話框內（對話框 overflow: hidden，超出會被裁掉）。
+    function positionModelMegaMenu() {
+        const headerRect = providerHeader.getBoundingClientRect();
+        const dialogRect = dialog.getBoundingClientRect();
+        const anchorRect = providerDisplayModel.getBoundingClientRect();
+        const width = Math.min(MODEL_MEGA_MENU_MAX_WIDTH, headerRect.width - MODEL_MEGA_MENU_EDGE * 2);
+        const left = Math.max(
+            MODEL_MEGA_MENU_EDGE,
+            Math.min(anchorRect.left - headerRect.left, headerRect.width - width - MODEL_MEGA_MENU_EDGE)
+        );
+        const height = Math.max(160, Math.min(MODEL_MEGA_MENU_MAX_HEIGHT, dialogRect.bottom - headerRect.bottom - 18));
+        modelMegaMenu.style.width = `${Math.round(width)}px`;
+        modelMegaMenu.style.left = `${Math.round(left)}px`;
+        modelMegaMenu.style.height = `${Math.round(height)}px`;
+    }
+
+    async function loadModelMegaMenuReasoning(activeConfig) {
+        const capability = getReasoningCapability(activeConfig?.type, activeConfig?.activeModel);
+        if (getMegaMenuSecondStep(capability) === 'none') {
+            return null;
+        }
+        return { activeConfig, capability, value: await getActiveReasoningValue(activeConfig) };
+    }
+
     async function openModelMegaMenu() {
-        // 面板在對話框內且對話框 overflow: hidden，高度要限制在標題列下方剩餘的空間，避免底部被裁掉。
-        const availableHeight = dialog.getBoundingClientRect().bottom - providerHeader.getBoundingClientRect().bottom - 18;
-        modelMegaMenu.style.maxHeight = `min(440px, 62vh, ${Math.max(Math.round(availableHeight), 120)}px)`;
+        const renderToken = ++modelMegaMenuRenderToken;
+        positionModelMegaMenu();
         modelMegaMenu.hidden = false;
         providerModelControl.setAttribute('data-mega-menu-open', 'true');
         providerDisplayModel.setAttribute('aria-expanded', 'true');
-        await renderModelMegaMenuModels();
+
+        const [options, activeConfig] = await Promise.all([
+            getEnabledProviderModelOptions(),
+            getActiveProviderConfig()
+        ]);
+        const reasoning = await loadModelMegaMenuReasoning(activeConfig);
+        if (renderToken !== modelMegaMenuRenderToken) {
+            return;
+        }
+
+        const groups = groupModelOptionsForMegaMenu(options);
+        Object.assign(modelMegaMenuState, {
+            groups,
+            activeProviderId: activeConfig?.id || '',
+            activeModel: activeConfig?.activeModel || '',
+            providerId: groups.some((group) => group.providerId === activeConfig?.id)
+                ? activeConfig.id
+                : groups[0]?.providerId || '',
+            reasoning
+        });
+        renderModelMegaMenu();
+        (modelMegaMenu.querySelector('.askpage-mega-menu-model.selected')
+            || modelMegaMenu.querySelector('.askpage-mega-menu-provider.selected'))?.focus();
     }
 
     function createMegaMenuElement(tagName, className, text = '') {
@@ -7001,128 +7051,157 @@ async function createDialog() {
         return element;
     }
 
-    async function renderModelMegaMenuModels() {
-        const renderToken = ++modelMegaMenuRenderToken;
-        const [options, activeProviderId, activeModel] = await Promise.all([
-            getEnabledProviderModelOptions(),
-            getValue('ACTIVE_PROVIDER_ID', ''),
-            getValue('ACTIVE_MODEL', '')
-        ]);
-        if (renderToken !== modelMegaMenuRenderToken) {
-            return;
+    function createMegaMenuColumn(headingKey) {
+        const column = createMegaMenuElement('div', 'askpage-mega-menu-column');
+        const list = createMegaMenuElement('div', 'askpage-mega-menu-list');
+        column.appendChild(createMegaMenuElement('div', 'askpage-mega-menu-heading', getLocalizedText(headingKey)));
+        column.appendChild(list);
+        return { column, list };
+    }
+
+    // 每一列：左側勾選位置、中間文字、右側輔助資訊（數量或 ›）。
+    function createMegaMenuRow(className, { label, selected = false, checked = false, meta = '', onClick }) {
+        const row = createMegaMenuElement('button', `askpage-mega-menu-row ${className}${selected ? ' selected' : ''}`);
+        row.title = label;
+        row.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        row.appendChild(createMegaMenuElement('span', 'askpage-mega-menu-check', checked ? '✓' : ''));
+        row.appendChild(createMegaMenuElement('span', 'askpage-mega-menu-label', label));
+        if (meta) {
+            row.appendChild(createMegaMenuElement('span', 'askpage-mega-menu-meta', meta));
+        }
+        row.addEventListener('click', onClick);
+        return row;
+    }
+
+    function renderModelMegaMenu() {
+        const state = modelMegaMenuState;
+        const providerColumn = createMegaMenuColumn('modelMegaMenuProviders');
+        for (const group of state.groups) {
+            providerColumn.list.appendChild(createMegaMenuRow('askpage-mega-menu-provider', {
+                label: group.providerName,
+                selected: group.providerId === state.providerId,
+                checked: group.providerId === state.activeProviderId,
+                meta: `${group.options.length} ›`,
+                onClick: () => selectModelMegaMenuProvider(group.providerId)
+            }));
         }
 
-        const title = createMegaMenuElement('div', 'askpage-mega-menu-title', getLocalizedText('modelMegaMenuTitle'));
-        const grid = createMegaMenuElement('div', 'askpage-mega-menu-grid');
-        let activeButton = null;
-        for (const group of groupModelOptionsForMegaMenu(options)) {
-            const column = createMegaMenuElement('div', 'askpage-mega-menu-column');
-            column.appendChild(createMegaMenuElement('div', 'askpage-mega-menu-provider', group.providerName));
-            for (const option of group.options) {
-                const isActive = option.providerId === activeProviderId && option.model === activeModel;
-                const modelLabel = option.model || getLocalizedText('noModelConfigured');
-                const button = createMegaMenuElement(
-                    'button',
-                    `askpage-mega-menu-model${isActive ? ' active' : ''}`,
-                    `${isActive ? '✓ ' : ''}${modelLabel}`
-                );
-                button.title = `${group.providerName} · ${modelLabel}`;
-                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-                button.addEventListener('click', () => selectModelMegaMenuOption(option));
-                column.appendChild(button);
-                if (isActive) {
-                    activeButton = button;
-                }
+        const modelColumn = createMegaMenuColumn('modelMegaMenuModels');
+        const selectedGroup = state.groups.find((group) => group.providerId === state.providerId);
+        for (const option of selectedGroup?.options || []) {
+            const isActive = option.providerId === state.activeProviderId && option.model === state.activeModel;
+            modelColumn.list.appendChild(createMegaMenuRow('askpage-mega-menu-model', {
+                label: option.model || getLocalizedText('noModelConfigured'),
+                selected: isActive,
+                checked: isActive,
+                onClick: () => selectModelMegaMenuOption(option)
+            }));
+        }
+
+        const reasoningColumn = createMegaMenuColumn('reasoningEffort');
+        const reasoning = state.providerId === state.activeProviderId ? state.reasoning : null;
+        if (!reasoning) {
+            reasoningColumn.list.appendChild(createMegaMenuElement(
+                'div',
+                'askpage-mega-menu-empty',
+                getLocalizedText(state.providerId === state.activeProviderId && state.activeModel
+                    ? 'modelMegaMenuNoReasoning'
+                    : 'modelMegaMenuPickModel')
+            ));
+        } else if (getMegaMenuSecondStep(reasoning.capability) === 'levels') {
+            for (const value of reasoning.capability.options) {
+                const isActive = value === reasoning.value;
+                reasoningColumn.list.appendChild(createMegaMenuRow('askpage-mega-menu-level', {
+                    label: getReasoningValueLabel(reasoning.capability, value),
+                    selected: isActive,
+                    checked: isActive,
+                    onClick: () => applyModelMegaMenuReasoning(value)
+                }));
             }
-            grid.appendChild(column);
+        } else {
+            reasoningColumn.list.appendChild(createModelMegaMenuSlider(reasoning));
         }
 
-        modelMegaMenu.replaceChildren(title, grid);
-        (activeButton || grid.querySelector('button'))?.focus();
+        // 重繪時保留左欄的捲動位置，再把各欄選中的列捲進可見範圍（只捲動欄位本身，不捲動網頁）。
+        const providerScrollTop = modelMegaMenu.querySelector('.askpage-mega-menu-list')?.scrollTop || 0;
+        modelMegaMenu.replaceChildren(providerColumn.column, modelColumn.column, reasoningColumn.column);
+        providerColumn.list.scrollTop = providerScrollTop;
+        for (const list of [providerColumn.list, modelColumn.list, reasoningColumn.list]) {
+            const selectedRow = list.querySelector('.askpage-mega-menu-row.selected');
+            if (selectedRow) {
+                scrollMegaMenuRowIntoView(list, selectedRow);
+            }
+        }
+    }
+
+    function scrollMegaMenuRowIntoView(list, row) {
+        const rowTop = row.offsetTop - list.offsetTop;
+        const rowBottom = rowTop + row.offsetHeight;
+        if (rowTop < list.scrollTop) {
+            list.scrollTop = rowTop;
+        } else if (rowBottom > list.scrollTop + list.clientHeight) {
+            list.scrollTop = rowBottom - list.clientHeight;
+        }
+    }
+
+    function createModelMegaMenuSlider(reasoning) {
+        const wrapper = createMegaMenuElement('div', 'askpage-mega-menu-slider-wrap');
+        const sliderConfig = getReasoningSliderConfig(reasoning.capability, reasoning.value);
+        const valueLabel = createMegaMenuElement('span', 'askpage-reasoning-value');
+        const slider = document.createElement('input');
+        slider.className = 'askpage-reasoning-slider askpage-mega-menu-slider';
+        slider.type = 'range';
+        slider.min = String(sliderConfig.min);
+        slider.max = String(sliderConfig.max);
+        slider.step = '1';
+        slider.value = String(sliderConfig.index);
+        slider.setAttribute('aria-label', getLocalizedText('reasoningEffort'));
+        slider.addEventListener('input', () => updateReasoningSliderPresentation(slider, valueLabel, reasoning.capability));
+        updateReasoningSliderPresentation(slider, valueLabel, reasoning.capability);
+        const doneButton = createMegaMenuElement('button', 'askpage-mega-menu-done', getLocalizedText('modelMegaMenuDone'));
+        doneButton.addEventListener('click', () => applyModelMegaMenuReasoning(
+            getReasoningValueFromSlider(reasoning.capability, Number(slider.value))
+        ));
+        wrapper.appendChild(valueLabel);
+        wrapper.appendChild(slider);
+        wrapper.appendChild(doneButton);
+        return wrapper;
+    }
+
+    function selectModelMegaMenuProvider(providerId) {
+        modelMegaMenuState.providerId = providerId;
+        renderModelMegaMenu();
+        modelMegaMenu.querySelector('.askpage-mega-menu-provider.selected')?.focus();
     }
 
     async function selectModelMegaMenuOption(option) {
         const renderToken = ++modelMegaMenuRenderToken;
         await setActiveProviderModel(option.providerId, option.model);
         const activeConfig = await getActiveProviderConfig();
+        const reasoning = await loadModelMegaMenuReasoning(activeConfig);
         if (renderToken !== modelMegaMenuRenderToken) {
             return;
         }
 
-        const capability = getReasoningCapability(activeConfig?.type, activeConfig?.activeModel);
-        if (getMegaMenuSecondStep(capability) === 'none') {
+        if (!reasoning) {
             finishModelMegaMenu();
             return;
         }
 
-        await renderModelMegaMenuReasoning(activeConfig, capability);
+        Object.assign(modelMegaMenuState, {
+            activeProviderId: option.providerId,
+            activeModel: option.model,
+            reasoning
+        });
+        renderModelMegaMenu();
+        (modelMegaMenu.querySelector('.askpage-mega-menu-level.selected')
+            || modelMegaMenu.querySelector('.askpage-mega-menu-slider'))?.focus();
     }
 
-    async function renderModelMegaMenuReasoning(activeConfig, capability) {
-        const renderToken = ++modelMegaMenuRenderToken;
-        const selectedValue = await getActiveReasoningValue(activeConfig);
-        if (renderToken !== modelMegaMenuRenderToken) {
-            return;
-        }
-
-        const applyReasoningValue = async (value) => {
-            await setActiveReasoningValue(activeConfig, value);
-            finishModelMegaMenu();
-            updateProviderDisplay();
-        };
-
-        const header = createMegaMenuElement('div', 'askpage-mega-menu-step-header');
-        const backButton = createMegaMenuElement('button', 'askpage-mega-menu-back', `← ${getLocalizedText('modelMegaMenuBack')}`);
-        backButton.addEventListener('click', () => renderModelMegaMenuModels());
-        header.appendChild(backButton);
-        header.appendChild(createMegaMenuElement(
-            'div',
-            'askpage-mega-menu-title',
-            getLocalizedText('modelMegaMenuReasoningTitle', { model: activeConfig.activeModel })
-        ));
-
-        const body = createMegaMenuElement('div', 'askpage-mega-menu-reasoning');
-        let focusTarget = null;
-        if (getMegaMenuSecondStep(capability) === 'levels') {
-            for (const value of capability.options) {
-                const isActive = value === selectedValue;
-                const button = createMegaMenuElement(
-                    'button',
-                    `askpage-mega-menu-level${isActive ? ' active' : ''}`,
-                    getReasoningValueLabel(capability, value)
-                );
-                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-                button.addEventListener('click', () => applyReasoningValue(value));
-                body.appendChild(button);
-                if (isActive) {
-                    focusTarget = button;
-                }
-            }
-        } else {
-            const sliderConfig = getReasoningSliderConfig(capability, selectedValue);
-            const valueLabel = createMegaMenuElement('span', 'askpage-reasoning-value');
-            const slider = document.createElement('input');
-            slider.className = 'askpage-reasoning-slider askpage-mega-menu-slider';
-            slider.type = 'range';
-            slider.min = String(sliderConfig.min);
-            slider.max = String(sliderConfig.max);
-            slider.step = '1';
-            slider.value = String(sliderConfig.index);
-            slider.setAttribute('aria-label', getLocalizedText('reasoningEffort'));
-            slider.addEventListener('input', () => updateReasoningSliderPresentation(slider, valueLabel, capability));
-            updateReasoningSliderPresentation(slider, valueLabel, capability);
-            const doneButton = createMegaMenuElement('button', 'askpage-mega-menu-done', getLocalizedText('modelMegaMenuDone'));
-            doneButton.addEventListener('click', () => applyReasoningValue(
-                getReasoningValueFromSlider(capability, Number(slider.value))
-            ));
-            body.appendChild(slider);
-            body.appendChild(valueLabel);
-            body.appendChild(doneButton);
-            focusTarget = slider;
-        }
-
-        modelMegaMenu.replaceChildren(header, body);
-        (focusTarget || body.querySelector('button'))?.focus();
+    async function applyModelMegaMenuReasoning(value) {
+        await setActiveReasoningValue(modelMegaMenuState.reasoning.activeConfig, value);
+        finishModelMegaMenu();
+        updateProviderDisplay();
     }
 
     const providerActions = document.createElement('div');

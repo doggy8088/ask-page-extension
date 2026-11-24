@@ -36,9 +36,11 @@ function createFakeElement(tagName) {
         addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); },
         async click() { await Promise.all((this.listeners.click || []).map((listener) => listener({}))); },
         focus() { focusedElement = this; },
+        getBoundingClientRect() { return { left: 0, width: 0, bottom: 0 }; },
         querySelector(selector) {
-            assert.strictEqual(selector, 'button');
-            return findAll(this, (node) => node.tagName === 'BUTTON')[0] || null;
+            const classNames = selector.split('.').filter(Boolean);
+            assert.ok(selector.startsWith('.'), `假 DOM 只支援 class 選擇器：${selector}`);
+            return findAll(this, (node) => classNames.every((name) => node.className.split(' ').includes(name)))[0] || null;
         }
     };
     return element;
@@ -166,13 +168,14 @@ vm.runInContext([
         assert.deepStrictEqual(buttonCalls, ['open', ['switch', 1], ['switch', -1], 'close'], '4 個開選單、3 個循環切換、選單開著再點就關閉');
     }
 
-    // ---------- mega-menu 兩步流程 ----------
+    // ---------- 三欄選單：左欄提供者、中欄模型、右欄推理強度 ----------
     const providerModelControl = createFakeElement('div');
     const providerDisplayModel = createFakeElement('button');
+    providerDisplayModel.getBoundingClientRect = () => ({ left: 200 });
     const input = createFakeElement('textarea');
     Object.assign(sandbox, {
         dialog: { getBoundingClientRect: () => ({ bottom: 400 }) },
-        providerHeader: { getBoundingClientRect: () => ({ bottom: 100 }) },
+        providerHeader: { getBoundingClientRect: () => ({ left: 0, width: 900, bottom: 100 }) },
         providerModelControl,
         providerDisplayModel,
         input,
@@ -182,77 +185,124 @@ vm.runInContext([
             storage.ACTIVE_MODEL = model;
         }
     });
-    vm.runInContext(`${section('    // 模型很多時改用 mega-menu', "    const providerActions = document.createElement('div');")}
-globalThis.megaMenu = { modelMegaMenu, isModelMegaMenuOpen, openModelMegaMenu, closeModelMegaMenu };`, sandbox, { filename: 'content.js#mega-menu' });
-    const { modelMegaMenu, isModelMegaMenuOpen, openModelMegaMenu } = sandbox.megaMenu;
-    const findModelButton = (model) => byClass(modelMegaMenu, 'askpage-mega-menu-model')
-        .find((button) => button.textContent.replace('✓ ', '') === model);
+    vm.runInContext(`${section('    // 模型很多時改用 Finder 風格的三欄選單', "    const providerActions = document.createElement('div');")}
+globalThis.megaMenu = { modelMegaMenu, isModelMegaMenuOpen, openModelMegaMenu, closeModelMegaMenu, scrollMegaMenuRowIntoView };`, sandbox, { filename: 'content.js#mega-menu' });
+    const { modelMegaMenu, isModelMegaMenuOpen, openModelMegaMenu, closeModelMegaMenu } = sandbox.megaMenu;
+    const labelOf = (row) => byClass(row, 'askpage-mega-menu-label')[0]?.textContent;
+    const checkOf = (row) => byClass(row, 'askpage-mega-menu-check')[0]?.textContent;
+    const rows = (className) => byClass(modelMegaMenu, className);
+    const rowByLabel = (className, label) => rows(className).find((row) => labelOf(row) === label);
+    const columns = () => byClass(modelMegaMenu, 'askpage-mega-menu-column');
+    const emptyText = () => byClass(modelMegaMenu, 'askpage-mega-menu-empty')[0]?.textContent;
 
     assert.strictEqual(isModelMegaMenuOpen(), false, '預設關閉');
     assert.strictEqual(modelMegaMenu.getAttribute('data-askpage-nondraggable'), 'true', '在面板上按住不會拖動對話框');
 
-    // 第一步：攤開所有提供者與模型，目前模型標 ✓ 並取得焦點。
+    // 開啟時定位到目前的提供者與模型。
     storage = { ACTIVE_PROVIDER_ID: 'p1', ACTIVE_MODEL: 'plain-model' };
     calls = [];
     await openModelMegaMenu();
     assert.strictEqual(isModelMegaMenuOpen(), true);
     assert.strictEqual(providerModelControl.getAttribute('data-mega-menu-open'), 'true', '打開時隱藏 hover 推理強度滑桿');
     assert.strictEqual(providerDisplayModel.getAttribute('aria-expanded'), 'true');
-    assert.strictEqual(modelMegaMenu.style.maxHeight, 'min(440px, 62vh, 282px)', '高度限制在標題列下方剩餘的空間');
     assert.deepStrictEqual(
-        byClass(modelMegaMenu, 'askpage-mega-menu-provider').map((header) => header.textContent),
-        ['alpha', 'Model 2', 'Model 10', 'Zeta']
+        [modelMegaMenu.style.width, modelMegaMenu.style.left, modelMegaMenu.style.height],
+        ['640px', '200px', '282px'],
+        '從模型按鈕下方展開，寬高限制在對話框內'
     );
-    assert.strictEqual(byClass(modelMegaMenu, 'askpage-mega-menu-model').length, 5, '一次列出全部模型');
-    const activeButton = byClass(modelMegaMenu, 'active')[0];
-    assert.strictEqual(activeButton.textContent, '✓ plain-model');
-    assert.strictEqual(focusedElement, activeButton);
+    assert.strictEqual(columns().length, 3, '固定三欄');
+    assert.deepStrictEqual(
+        byClass(modelMegaMenu, 'askpage-mega-menu-heading').map((heading) => heading.textContent),
+        ['modelMegaMenuProviders', 'modelMegaMenuModels', 'reasoningEffort']
+    );
+    assert.deepStrictEqual(rows('askpage-mega-menu-provider').map(labelOf), ['alpha', 'Model 2', 'Model 10', 'Zeta']);
+    const zetaRow = rowByLabel('askpage-mega-menu-provider', 'Zeta');
+    assert.ok(zetaRow.className.includes('selected') && checkOf(zetaRow) === '✓', '目前的提供者被選中並標 ✓');
+    assert.strictEqual(byClass(zetaRow, 'askpage-mega-menu-meta')[0].textContent, '2 ›', '提供者列顯示模型數');
+    assert.deepStrictEqual(rows('askpage-mega-menu-model').map(labelOf), ['level-model', 'plain-model'], '中欄只顯示選中提供者的模型');
+    const plainRow = rowByLabel('askpage-mega-menu-model', 'plain-model');
+    assert.ok(plainRow.className.includes('selected') && checkOf(plainRow) === '✓');
+    assert.strictEqual(focusedElement, plainRow, '焦點在目前的模型');
+    assert.strictEqual(emptyText(), 'modelMegaMenuNoReasoning', '目前模型不支援推理強度時右欄顯示說明');
 
-    // 不支援推理強度：一步完成。
-    await findModelButton('gemini-model').click();
-    assert.deepStrictEqual(calls, [['setActive', 'p4', 'gemini-model']]);
+    // 點提供者只換中欄，不切換模型。
+    rowByLabel('askpage-mega-menu-provider', 'alpha').click();
+    assert.deepStrictEqual(calls, [], '瀏覽提供者不會切換模型');
+    assert.deepStrictEqual(rows('askpage-mega-menu-model').map(labelOf), ['budget-model']);
+    assert.ok(rowByLabel('askpage-mega-menu-provider', 'alpha').className.includes('selected'));
+    assert.strictEqual(emptyText(), 'modelMegaMenuPickModel');
+
+    // 預算型：點模型立即切換，右欄出現滑桿與「完成」。
+    await rowByLabel('askpage-mega-menu-model', 'budget-model').click();
+    assert.deepStrictEqual(calls, [['setActive', 'p2', 'budget-model']]);
+    assert.strictEqual(isModelMegaMenuOpen(), true);
+    const slider = rows('askpage-mega-menu-slider')[0];
+    assert.ok(slider, '預算型顯示滑桿');
+    assert.strictEqual(focusedElement, slider);
+    slider.value = '2';
+    await rows('askpage-mega-menu-done')[0].click();
+    assert.deepStrictEqual(calls, [['setActive', 'p2', 'budget-model'], ['setReasoning', 'budget-model', 3072], 'updateProviderDisplay']);
     assert.strictEqual(isModelMegaMenuOpen(), false);
     assert.strictEqual(providerModelControl.getAttribute('data-mega-menu-open'), null);
     assert.strictEqual(focusedElement, input, '完成後焦點回到輸入框');
 
-    // 推理強度鎖定：一步完成。
+    // 不支援推理強度：點模型就切換並關閉。
     calls = [];
     await openModelMegaMenu();
-    await findModelButton('locked-model').click();
+    assert.ok(rows('askpage-mega-menu-slider')[0], '重新打開時右欄直接顯示目前模型的推理強度');
+    rowByLabel('askpage-mega-menu-provider', 'Model 2').click();
+    await rowByLabel('askpage-mega-menu-model', 'gemini-model').click();
+    assert.deepStrictEqual(calls, [['setActive', 'p4', 'gemini-model']]);
+    assert.strictEqual(isModelMegaMenuOpen(), false);
+
+    // 推理強度鎖定：點模型就切換並關閉。
+    calls = [];
+    await openModelMegaMenu();
+    rowByLabel('askpage-mega-menu-provider', 'Model 10').click();
+    await rowByLabel('askpage-mega-menu-model', 'locked-model').click();
     assert.deepStrictEqual(calls, [['setActive', 'p3', 'locked-model']]);
     assert.strictEqual(isModelMegaMenuOpen(), false);
 
-    // 檔位型：第一步就切換模型，第二步點檔位後套用並關閉。
+    // 檔位型：點模型後右欄列出檔位，目前檔位選中。
     calls = [];
     await openModelMegaMenu();
-    await findModelButton('level-model').click();
-    assert.deepStrictEqual(calls, [['setActive', 'p1', 'level-model']], '第一步點模型就立即切換');
-    assert.strictEqual(isModelMegaMenuOpen(), true, '進入第二步');
-    const levelButtons = byClass(modelMegaMenu, 'askpage-mega-menu-level');
-    assert.deepStrictEqual(levelButtons.map((button) => button.textContent), ['label:low', 'label:medium', 'label:high']);
-    assert.strictEqual(byClass(modelMegaMenu, 'active')[0].textContent, 'label:medium', '目前檔位高亮');
-    await levelButtons[2].click();
+    rowByLabel('askpage-mega-menu-provider', 'Zeta').click();
+    await rowByLabel('askpage-mega-menu-model', 'level-model').click();
+    assert.deepStrictEqual(calls, [['setActive', 'p1', 'level-model']]);
+    assert.deepStrictEqual(rows('askpage-mega-menu-level').map(labelOf), ['label:low', 'label:medium', 'label:high']);
+    const mediumRow = rowByLabel('askpage-mega-menu-level', 'label:medium');
+    assert.ok(mediumRow.className.includes('selected') && checkOf(mediumRow) === '✓', '目前檔位選中');
+    assert.strictEqual(focusedElement, mediumRow);
+    await rowByLabel('askpage-mega-menu-level', 'label:high').click();
     assert.deepStrictEqual(calls.slice(1), [['setReasoning', 'level-model', 'high'], 'updateProviderDisplay']);
     assert.strictEqual(isModelMegaMenuOpen(), false);
 
-    // 第二步可以返回第一步。
-    await openModelMegaMenu();
-    await findModelButton('level-model').click();
-    await byClass(modelMegaMenu, 'askpage-mega-menu-back')[0].click();
-    assert.strictEqual(byClass(modelMegaMenu, 'askpage-mega-menu-model').length, 5, '返回後重新列出模型');
-    assert.strictEqual(isModelMegaMenuOpen(), true);
-    sandbox.megaMenu.closeModelMegaMenu();
-
-    // 預算型：滑桿加「完成」按鈕。
+    // 只改推理強度：打開後直接點右欄，一次完成，不會切換模型。
     calls = [];
     await openModelMegaMenu();
-    await findModelButton('budget-model').click();
-    const slider = byClass(modelMegaMenu, 'askpage-mega-menu-slider')[0];
-    assert.ok(slider, '預算型顯示滑桿');
-    slider.value = '2';
-    await byClass(modelMegaMenu, 'askpage-mega-menu-done')[0].click();
-    assert.deepStrictEqual(calls, [['setActive', 'p2', 'budget-model'], ['setReasoning', 'budget-model', 3072], 'updateProviderDisplay']);
+    await rowByLabel('askpage-mega-menu-level', 'label:low').click();
+    assert.deepStrictEqual(calls, [['setReasoning', 'level-model', 'low'], 'updateProviderDisplay']);
     assert.strictEqual(isModelMegaMenuOpen(), false);
+
+    // 瀏覽別的提供者時，右欄不顯示目前模型的推理強度。
+    await openModelMegaMenu();
+    rowByLabel('askpage-mega-menu-provider', 'alpha').click();
+    assert.strictEqual(rows('askpage-mega-menu-level').length, 0);
+    assert.strictEqual(emptyText(), 'modelMegaMenuPickModel');
+    closeModelMegaMenu();
+    assert.strictEqual(isModelMegaMenuOpen(), false);
+
+    // 選中的列在可見範圍外時，只捲動該欄。
+    {
+        const { scrollMegaMenuRowIntoView } = sandbox.megaMenu;
+        const list = { offsetTop: 30, clientHeight: 200, scrollTop: 0 };
+        scrollMegaMenuRowIntoView(list, { offsetTop: 330, offsetHeight: 30 });
+        assert.strictEqual(list.scrollTop, 130, '在下方時捲到剛好露出');
+        scrollMegaMenuRowIntoView(list, { offsetTop: 100, offsetHeight: 30 });
+        assert.strictEqual(list.scrollTop, 70, '在上方時捲到頂端對齊');
+        scrollMegaMenuRowIntoView(list, { offsetTop: 150, offsetHeight: 30 });
+        assert.strictEqual(list.scrollTop, 70, '已經看得到就不捲動');
+    }
 
     // ---------- Esc：選單開著時只關選單 ----------
     {
@@ -297,7 +347,7 @@ globalThis.escapeKeyListener = escapeKeyListener;`, escSandbox);
     assert.match(section("    overlay.addEventListener('click', (e) => {", '    const escapeKeyListener'), /!clickPath\.includes\(modelMegaMenu\) && !clickPath\.includes\(providerModelControl\)/, '點選單外會關閉選單');
     assert.match(source, /providerHeader\.appendChild\(modelMegaMenu\);/, '面板放在標題列下方');
     assert.match(css, /\.askpage-provider-model-control\[data-mega-menu-open="true"\] \.askpage-reasoning-popover \{\s*display: none;/, '選單開著時隱藏推理強度 popover');
-    assert.match(css, /grid-template-columns: repeat\(auto-fill, minmax\(180px, 1fr\)\)/, '欄數依寬度自動換行');
+    assert.match(css, /\.askpage-model-mega-menu \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1\.2fr\) minmax\(0, 0\.9fr\);/, '固定三欄版面');
 
     console.log('model-mega-menu: ok');
 })().catch((error) => {
