@@ -269,6 +269,7 @@ npm run package      # 同步產出三平台 ZIP 套件於 dist/
 - gemini-4-carbon
 - gemini-4-argon
 - gemini-4-hydrogen
+- gemini-4-neon
 - gemini-3.8-flash
 - gemini-3.6-flash
 - gemini-3.5-flash-lite
