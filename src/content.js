@@ -2510,7 +2510,11 @@ async function getEnabledProviderModelOptions() {
             });
         }
     }
-    return options;
+    // providerName 保留原本的英文預設值；providerDisplayName 與標題列按鈕的名稱一致。
+    return options.map((option) => ({
+        ...option,
+        providerDisplayName: getProviderDialogDisplayName(providers.find((p) => p.id === option.providerId))
+    }));
 }
 
 // Get active provider config details
@@ -2690,7 +2694,7 @@ function groupModelOptionsForMegaMenu(options) {
         if (!groups.has(option.providerId)) {
             groups.set(option.providerId, {
                 providerId: option.providerId,
-                providerName: getProviderDialogDisplayName({ name: option.providerName, type: option.type }),
+                providerName: option.providerDisplayName,
                 options: []
             });
         }
@@ -6978,6 +6982,9 @@ async function createDialog() {
     }
 
     async function openModelMegaMenu() {
+        // 面板在對話框內且對話框 overflow: hidden，高度要限制在標題列下方剩餘的空間，避免底部被裁掉。
+        const availableHeight = dialog.getBoundingClientRect().bottom - providerHeader.getBoundingClientRect().bottom - 18;
+        modelMegaMenu.style.maxHeight = `min(440px, 62vh, ${Math.max(Math.round(availableHeight), 120)}px)`;
         modelMegaMenu.hidden = false;
         providerModelControl.setAttribute('data-mega-menu-open', 'true');
         providerDisplayModel.setAttribute('aria-expanded', 'true');

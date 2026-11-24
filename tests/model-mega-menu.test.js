@@ -73,7 +73,7 @@ const enabledOptions = [
     { providerId: 'p2', providerName: 'alpha', type: 'openai-compatible', model: 'budget-model' },
     { providerId: 'p3', providerName: 'Model 10', type: 'anthropic', model: 'locked-model' },
     { providerId: 'p4', providerName: 'Model 2', type: 'gemini', model: 'gemini-model' }
-];
+].map((option) => ({ ...option, providerDisplayName: option.providerName }));
 
 let storage;
 let calls;
@@ -113,9 +113,14 @@ vm.runInContext([
     );
     assert.deepStrictEqual(Array.from(groups[3].options, (option) => option.model), ['level-model', 'plain-model'], '組內維持設定順序');
     assert.strictEqual(
-        sandbox.groupModelOptionsForMegaMenu([{ providerId: 'x', providerName: '', type: 'gemini', model: 'm' }])[0].providerName,
-        'type:gemini',
-        '沒有自訂名稱時使用類型名稱'
+        sandbox.groupModelOptionsForMegaMenu([{ providerId: 'x', providerName: 'Gemini', providerDisplayName: '型別名稱', type: 'gemini', model: 'm' }])[0].providerName,
+        '型別名稱',
+        '欄位標題使用與標題列按鈕相同的顯示名稱'
+    );
+    assert.match(
+        section('async function getEnabledProviderModelOptions()', '// Get active provider config details'),
+        /providerDisplayName: getProviderDialogDisplayName\(providers\.find\(\(p\) => p\.id === option\.providerId\)\)/,
+        '模型選項帶有標題列使用的顯示名稱'
     );
 
     // ---------- 第二步的類型 ----------
@@ -166,6 +171,8 @@ vm.runInContext([
     const providerDisplayModel = createFakeElement('button');
     const input = createFakeElement('textarea');
     Object.assign(sandbox, {
+        dialog: { getBoundingClientRect: () => ({ bottom: 400 }) },
+        providerHeader: { getBoundingClientRect: () => ({ bottom: 100 }) },
         providerModelControl,
         providerDisplayModel,
         input,
@@ -191,6 +198,7 @@ globalThis.megaMenu = { modelMegaMenu, isModelMegaMenuOpen, openModelMegaMenu, c
     assert.strictEqual(isModelMegaMenuOpen(), true);
     assert.strictEqual(providerModelControl.getAttribute('data-mega-menu-open'), 'true', '打開時隱藏 hover 推理強度滑桿');
     assert.strictEqual(providerDisplayModel.getAttribute('aria-expanded'), 'true');
+    assert.strictEqual(modelMegaMenu.style.maxHeight, 'min(440px, 62vh, 282px)', '高度限制在標題列下方剩餘的空間');
     assert.deepStrictEqual(
         byClass(modelMegaMenu, 'askpage-mega-menu-provider').map((header) => header.textContent),
         ['alpha', 'Model 2', 'Model 10', 'Zeta']
