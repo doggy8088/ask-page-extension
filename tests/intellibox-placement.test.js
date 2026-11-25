@@ -73,6 +73,9 @@ assert.ok(!showSource.includes('.scrollIntoView('), '只捲動提示框本身，
     const escSandbox = {
         intelliActive: false,
         isModelMegaMenuOpen: () => false,
+        screenshotMenuOpen: false,
+        isScreenshotMenuOpen: () => escSandbox.screenshotMenuOpen,
+        closeScreenshotMenu() { calls.push('closeScreenshotMenu'); escSandbox.screenshotMenuOpen = false; },
         hideIntelliBox() { calls.push('hideIntelliBox'); escSandbox.intelliActive = false; },
         closeDialog() { calls.push('closeDialog'); },
         shadowRoot: { activeElement: null },
@@ -110,6 +113,13 @@ globalThis.escapeKeyListener = escapeKeyListener;`, escSandbox, { filename: 'con
     escSandbox.intelliActive = true;
     press('a');
     assert.deepStrictEqual(calls, [], '其他按鍵不處理');
+
+    calls.length = 0;
+    escSandbox.intelliActive = false;
+    escSandbox.screenshotMenuOpen = true;
+    event = press();
+    assert.deepStrictEqual(calls, ['closeScreenshotMenu'], '截圖選單開著：Esc 只關閉選單');
+    assert.ok(event.defaultPrevented && event.stopped, '攔下事件，不關閉對話框');
 }
 
 console.log('intellibox-placement: ok');

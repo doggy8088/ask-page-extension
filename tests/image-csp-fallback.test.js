@@ -21,7 +21,7 @@ function sliceSource(startMarker, endMarker) {
 assert.strictEqual(contentScript.match(/img\.src = imageDataUrl;/g).length, 1, '只有 setImageDataUrlSource 可以把 data URL 指派給 img.src');
 assert.doesNotMatch(contentScript, /img\.src = screenshotDataUrl;/, '截圖不可直接把 data URL 指派給 img.src');
 assert.strictEqual(contentScript.match(/setImageDataUrlSource\(img, imageDataUrl\);/g).length, 2, '輸入區縮圖與訊息縮圖都要使用 setImageDataUrlSource');
-assert.strictEqual(contentScript.match(/setImageDataUrlSource\(img, screenshotDataUrl/g).length, 2, '截圖縮圖與截圖訊息都要使用 setImageDataUrlSource');
+assert.strictEqual(contentScript.match(/setImageDataUrlSource\(img, screenshotDataUrl/g).length, 1, '截圖縮圖要使用 setImageDataUrlSource');
 assert.doesNotMatch(contentScript, /createObjectURL\(new Blob\(\[previewHtml/, '預覽視窗不可再用會繼承頁面 CSP 的 blob HTML');
 [
     /\.askpage-input-image-thumb img,\n\.askpage-input-image-thumb canvas \{/,

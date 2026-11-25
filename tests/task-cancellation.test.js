@@ -80,7 +80,7 @@ assert.match(contentScript, /awaitWithAskTaskCancellation\(chrome\.runtime\.send
 assert.match(contentScript, /signal: webSearchContext\.signal/);
 assert.match(styleSheet, /#gemini-qna-btn\.askpage-submit-stop/);
 assert.match(styleSheet, /linear-gradient\(145deg, #ef4444, #b91c1c\)/);
-assert.match(styleSheet, /#gemini-qna-btn \{\n  width: 48px;\n  height: 48px;\n  min-width: 48px;\n  min-height: 48px;\n  padding: 0;/);
+assert.match(styleSheet, /#gemini-qna-btn \{\n  width: 40px;\n  height: 40px;\n  min-width: 40px;\n  min-height: 40px;\n  padding: 0;/);
 assert.match(styleSheet, /#gemini-qna-btn\.askpage-submit-stop \{[\s\S]*?font-size: 0;[\s\S]*?line-height: 0;/);
 assert.match(styleSheet, /#gemini-qna-btn\.askpage-submit-stop::before/);
 assert.match(styleSheet, /#gemini-qna-btn\.askpage-submit-stop::before \{[\s\S]*?width: 16px;[\s\S]*?height: 16px;[\s\S]*?background: #ffffff;/);

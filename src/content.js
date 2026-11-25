@@ -1029,7 +1029,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 const PROMPT_HISTORY_STORAGE = 'ASKPAGE_PROMPT_HISTORY';
 
 // New storage keys for multi-provider support
-const SCREENSHOT_ENABLED_STORAGE = 'SCREENSHOT_ENABLED';
 const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
 const AGENT_GLOW_EFFECT_ENABLED_STORAGE = 'AGENT_GLOW_EFFECT_ENABLED';
 const REASONING_EFFORTS_STORAGE = 'ASKPAGE_REASONING_EFFORTS';
@@ -2809,22 +2808,6 @@ async function updateProviderDisplay() {
     if (providerDisplayModel) {
         providerDisplayModel.title = getLocalizedText('switchProviderModelWithReasoning');
     }
-}
-
-// Screenshot state management
-async function getScreenshotEnabled() {
-    return await getValue(SCREENSHOT_ENABLED_STORAGE, false);
-}
-
-async function setScreenshotEnabled(enabled) {
-    await setValue(SCREENSHOT_ENABLED_STORAGE, enabled);
-}
-
-async function toggleScreenshotEnabled() {
-    const currentState = await getScreenshotEnabled();
-    const newState = !currentState;
-    await setScreenshotEnabled(newState);
-    return newState;
 }
 
 // HTML mode state management
@@ -6812,29 +6795,6 @@ async function createDialog() {
         pointer-events: none;
     `;
     const modeToggleConfigs = {
-        screenshot: {
-            label: getLocalizedText('screenshotMode'),
-            activeText: getLocalizedText('screenshot'),
-            inactiveText: getLocalizedText('screenshot'),
-            activeStateLabel: getLocalizedText('screenshotEnabledState'),
-            inactiveStateLabel: getLocalizedText('screenshotDisabledState'),
-            activeColor: '#f5fbff',
-            activeBackground: 'linear-gradient(180deg, rgba(31, 130, 255, 0.9), rgba(4, 86, 211, 0.86))',
-            activeBorder: 'rgba(107, 181, 255, 0.95)',
-            activeShadow: '0 0 0 1px rgba(70, 154, 255, 0.2), 0 0 22px rgba(0, 120, 255, 0.34)',
-            inactiveColor: '#899bb2',
-            inactiveBackground: 'rgba(12, 24, 39, 0.66)',
-            inactiveBorder: 'rgba(94, 116, 146, 0.46)',
-            inactiveShadow: 'none',
-            activeIcon: '📸',
-            inactiveIcon: '📷',
-            activeIconFilter: 'none',
-            inactiveIconFilter: 'grayscale(1) saturate(0) opacity(0.62)',
-            iconFontSize: '15px',
-            iconFontWeight: '400',
-            iconFontFamily: '\'Segoe UI Emoji\', \'Apple Color Emoji\', sans-serif',
-            iconTransform: 'translateY(-0.5px)'
-        },
         html: {
             label: getLocalizedText('modeSwitch'),
             activeText: getLocalizedText('modeAgent'),
@@ -7293,17 +7253,10 @@ async function createDialog() {
         }
     }
 
-    const screenshotModeBtn = createModeToggleButton(modeToggleConfigs.screenshot);
     const htmlModeBtn = createModeToggleButton(modeToggleConfigs.html);
 
     async function updateModeToggleButtons() {
-        const [screenshotEnabled, agentModeEnabled] = await Promise.all([
-            getScreenshotEnabled(),
-            getAgentModeEnabled()
-        ]);
-
-        applyModeToggleButtonState(screenshotModeBtn, modeToggleConfigs.screenshot, screenshotEnabled);
-        applyModeToggleButtonState(htmlModeBtn, modeToggleConfigs.html, agentModeEnabled);
+        applyModeToggleButtonState(htmlModeBtn, modeToggleConfigs.html, await getAgentModeEnabled());
     }
 
     const optionsBtn = document.createElement('button');
@@ -7359,7 +7312,6 @@ async function createDialog() {
     clearConversationBtn.appendChild(clearConversationBtnIcon);
     clearConversationBtn.appendChild(clearConversationBtnText);
 
-    providerActions.appendChild(screenshotModeBtn);
     providerActions.appendChild(htmlModeBtn);
     providerActions.appendChild(clearConversationBtn);
     providerActions.appendChild(optionsBtn);
@@ -7401,31 +7353,16 @@ async function createDialog() {
     const inputStack = document.createElement('div');
     inputStack.id = 'gemini-qna-input-stack';
 
-    const inputImageStrip = document.createElement('div');
-    inputImageStrip.id = 'askpage-input-image-strip';
-    inputImageStrip.hidden = true;
+    // 輸入框整併成單一 composer：縮圖列（有圖才出現）→ textarea → 工具列（附加圖片、截圖、張數、送出）
+    const inputImageStripList = document.createElement('div');
+    inputImageStripList.className = 'askpage-input-image-strip-list';
+    inputImageStripList.hidden = true;
 
-    const inputImageStripHeader = document.createElement('div');
-    inputImageStripHeader.className = 'askpage-input-image-strip-header';
-
-    const inputImageStripIcon = document.createElement('div');
-    inputImageStripIcon.className = 'askpage-input-image-strip-icon';
-    inputImageStripIcon.setAttribute('aria-hidden', 'true');
-    inputImageStripIcon.textContent = '🖼️';
-
-    const inputImageStripCopy = document.createElement('div');
-    inputImageStripCopy.className = 'askpage-input-image-strip-copy';
-
-    const inputImageStripTitle = document.createElement('span');
-    inputImageStripTitle.className = 'askpage-input-image-strip-title';
-    inputImageStripTitle.textContent = getLocalizedText('imageContextTitle');
-
-    const inputImageStripMeta = document.createElement('span');
-    inputImageStripMeta.className = 'askpage-input-image-strip-meta';
-    inputImageStripMeta.textContent = getLocalizedText('imageContextMeta');
-
-    const inputImageStripActions = document.createElement('div');
-    inputImageStripActions.className = 'askpage-input-image-strip-actions';
+    const inputImageStripNotice = document.createElement('div');
+    inputImageStripNotice.className = 'askpage-input-image-strip-notice';
+    inputImageStripNotice.setAttribute('role', 'status');
+    inputImageStripNotice.setAttribute('aria-live', 'polite');
+    inputImageStripNotice.hidden = true;
 
     const uploadImageInput = document.createElement('input');
     uploadImageInput.type = 'file';
@@ -7435,37 +7372,60 @@ async function createDialog() {
 
     const uploadImageBtn = document.createElement('button');
     uploadImageBtn.type = 'button';
-    uploadImageBtn.className = 'askpage-upload-image-btn';
-    uploadImageBtn.textContent = getLocalizedText('uploadImage');
-    uploadImageBtn.title = getLocalizedText('uploadImageTitle');
-    uploadImageBtn.setAttribute('aria-label', getLocalizedText('uploadImageTitle'));
+    uploadImageBtn.className = 'askpage-composer-btn askpage-upload-image-btn';
+    uploadImageBtn.textContent = '📎';
 
-    const annotateScreenBtn = document.createElement('button');
-    annotateScreenBtn.type = 'button';
-    annotateScreenBtn.className = 'askpage-annotate-screen-btn';
-    annotateScreenBtn.textContent = getLocalizedText('annotateScreen');
-    annotateScreenBtn.title = getLocalizedText('annotateScreenTitle');
-    annotateScreenBtn.setAttribute('aria-label', getLocalizedText('annotateScreenTitle'));
-    annotateScreenBtn.hidden = true;
+    const screenshotBtn = document.createElement('button');
+    const screenshotBtnIcon = document.createElement('span');
+    const screenshotBtnText = document.createElement('span');
+    screenshotBtn.type = 'button';
+    screenshotBtn.className = 'askpage-composer-btn askpage-screenshot-btn';
+    screenshotBtn.setAttribute('aria-haspopup', 'menu');
+    screenshotBtn.setAttribute('aria-expanded', 'false');
+    screenshotBtnIcon.setAttribute('aria-hidden', 'true');
+    screenshotBtnIcon.textContent = '📷';
+    screenshotBtn.appendChild(screenshotBtnIcon);
+    screenshotBtn.appendChild(screenshotBtnText);
 
-    inputImageStripCopy.appendChild(inputImageStripTitle);
-    inputImageStripCopy.appendChild(inputImageStripMeta);
-    inputImageStripHeader.appendChild(inputImageStripIcon);
-    inputImageStripHeader.appendChild(inputImageStripCopy);
-    inputImageStripActions.appendChild(annotateScreenBtn);
-    inputImageStripActions.appendChild(uploadImageBtn);
-    inputImageStripHeader.appendChild(inputImageStripActions);
+    const screenshotMenu = document.createElement('div');
+    screenshotMenu.className = 'askpage-screenshot-menu';
+    screenshotMenu.setAttribute('role', 'menu');
+    screenshotMenu.hidden = true;
+    const screenshotMenuItems = [
+        { action: 'capture', icon: '📷', labelKey: 'captureScreenshot' },
+        { action: 'annotate', icon: '✏️', labelKey: 'annotateScreen' },
+        { action: 'cancel', icon: '', labelKey: 'cancel' }
+    ].map((item) => {
+        const menuItem = document.createElement('button');
+        menuItem.type = 'button';
+        menuItem.className = 'askpage-screenshot-menu-item';
+        menuItem.setAttribute('role', 'menuitem');
+        menuItem.dataset.action = item.action;
+        menuItem.dataset.labelKey = item.labelKey;
+        menuItem.dataset.icon = item.icon;
+        screenshotMenu.appendChild(menuItem);
+        return menuItem;
+    });
 
-    const inputImageStripList = document.createElement('div');
-    inputImageStripList.className = 'askpage-input-image-strip-list';
+    const inputImageCount = document.createElement('span');
+    inputImageCount.className = 'askpage-input-image-count';
+    inputImageCount.hidden = true;
 
-    const inputImageStripNotice = document.createElement('div');
-    inputImageStripNotice.className = 'askpage-input-image-strip-notice';
+    const composerToolbar = document.createElement('div');
+    composerToolbar.className = 'askpage-composer-toolbar';
 
-    inputImageStrip.appendChild(inputImageStripHeader);
-    inputImageStrip.appendChild(inputImageStripList);
-    inputImageStrip.appendChild(inputImageStripNotice);
-    inputImageStrip.appendChild(uploadImageInput);
+    function applyComposerLabels() {
+        inputStack.dataset.dropLabel = getLocalizedText('dropImageHint');
+        screenshotBtnText.textContent = getLocalizedText('screenshot');
+        screenshotBtn.title = getLocalizedText('screenshotButtonTitle');
+        screenshotBtn.setAttribute('aria-label', getLocalizedText('screenshotButtonTitle'));
+        screenshotMenu.setAttribute('aria-label', getLocalizedText('screenshotButtonTitle'));
+        screenshotMenuItems.forEach((menuItem) => {
+            const label = getLocalizedText(menuItem.dataset.labelKey);
+            menuItem.textContent = menuItem.dataset.icon ? `${menuItem.dataset.icon} ${label}` : label;
+        });
+    }
+    applyComposerLabels();
 
     const inputRow = document.createElement('div');
     inputRow.id = 'gemini-qna-input-row';
@@ -7562,11 +7522,21 @@ async function createDialog() {
     btn.textContent = getLocalizedText('ask');
     setAskTaskButtonState(btn, Boolean(activeAskTask));
 
+    const composerSpacer = document.createElement('span');
+    composerSpacer.className = 'askpage-composer-spacer';
+    composerToolbar.appendChild(uploadImageBtn);
+    composerToolbar.appendChild(screenshotBtn);
+    composerToolbar.appendChild(composerSpacer);
+    composerToolbar.appendChild(inputImageCount);
+    composerToolbar.appendChild(btn);
     inputRow.appendChild(inputWrapper);
-    inputRow.appendChild(btn);
-    inputStack.appendChild(inputImageStrip);
+    inputStack.appendChild(inputImageStripList);
     inputStack.appendChild(inputRow);
+    inputStack.appendChild(composerToolbar);
+    inputStack.appendChild(screenshotMenu);
     inputArea.appendChild(inputStack);
+    inputArea.appendChild(inputImageStripNotice);
+    inputArea.appendChild(uploadImageInput);
     dialog.appendChild(providerHeader);
     dialog.appendChild(messagesEl);
     dialog.appendChild(inputArea);
@@ -7678,11 +7648,6 @@ async function createDialog() {
     }
     if (typeof AskPageI18n !== 'undefined' && typeof AskPageI18n.onLocaleChanged === 'function') {
         removeDialogLocaleListener = AskPageI18n.onLocaleChanged(() => {
-            modeToggleConfigs.screenshot.label = getLocalizedText('screenshotMode');
-            modeToggleConfigs.screenshot.activeText = getLocalizedText('screenshot');
-            modeToggleConfigs.screenshot.inactiveText = getLocalizedText('screenshot');
-            modeToggleConfigs.screenshot.activeStateLabel = getLocalizedText('screenshotEnabledState');
-            modeToggleConfigs.screenshot.inactiveStateLabel = getLocalizedText('screenshotDisabledState');
             modeToggleConfigs.html.label = getLocalizedText('modeSwitch');
             modeToggleConfigs.html.activeText = getLocalizedText('modeAgent');
             modeToggleConfigs.html.inactiveText = getLocalizedText('modeInquiry');
@@ -7697,14 +7662,7 @@ async function createDialog() {
             clearConversationBtn.setAttribute('aria-label', getLocalizedText('clearConversationTitle'));
             clearConversationBtnText.textContent = getLocalizedText('clearConversation');
             input.placeholder = getLocalizedText('inputPlaceholder');
-            inputImageStripTitle.textContent = getLocalizedText('imageContextTitle');
-            inputImageStripMeta.textContent = getLocalizedText('imageContextMeta');
-            uploadImageBtn.textContent = getLocalizedText('uploadImage');
-            uploadImageBtn.title = getLocalizedText('uploadImageTitle');
-            uploadImageBtn.setAttribute('aria-label', getLocalizedText('uploadImageTitle'));
-            annotateScreenBtn.textContent = getLocalizedText('annotateScreen');
-            annotateScreenBtn.title = getLocalizedText('annotateScreenTitle');
-            annotateScreenBtn.setAttribute('aria-label', getLocalizedText('annotateScreenTitle'));
+            applyComposerLabels();
             btn.textContent = getLocalizedText('ask');
             setAskTaskButtonState(btn, Boolean(activeAskTask));
             updateModeToggleButtons();
@@ -7761,8 +7719,9 @@ async function createDialog() {
     let inputContextImageNotice = '';
     let inputContextImageNoticeSource = null;
     let inputContextImageNoticeLevel = 'info';
-    let pendingAnnotatedScreenshotDataUrl = '';
-    let isScreenshotAnnotationAvailable = false;
+    // 截圖（直接或標注）是一次性附件：記錄哪些縮圖是截圖，詢問模式下只保留這些，送出後一併清掉
+    const screenshotImageKinds = new Map();
+    let skillScreenshotRequested = false;
     let dragEnterDepth = 0;
     let intelliActive = false;
     let intelliIndex = 0;
@@ -8046,29 +8005,16 @@ async function createDialog() {
     }
 
     function buildUsageModeNotice(options = {}) {
-        const screenshotEnabled = options.screenshotEnabled === true;
         const agentModeEnabled = options.agentModeEnabled === true;
-        const notices = [
-            screenshotEnabled
-                ? getLocalizedText('screenshotModeNoticeEnabled')
-                : getLocalizedText('screenshotModeNoticeDisabled'),
-            agentModeEnabled
-                ? getLocalizedText('agentModeNoticeEnabled')
-                : getLocalizedText('inquiryModeNoticeEnabled')
-        ];
+        const notice = agentModeEnabled
+            ? getLocalizedText('agentModeNoticeEnabled')
+            : getLocalizedText('inquiryModeNoticeEnabled');
 
-        return `\n\n${notices.join('\n\n')}`;
+        return `\n\n${notice}`;
     }
 
     function buildUsageModeSectionsHtml(options = {}) {
-        const screenshotEnabled = options.screenshotEnabled === true;
         const agentModeEnabled = options.agentModeEnabled === true;
-        const screenshotTitle = screenshotEnabled
-            ? getLocalizedText('screenshotEnabledTitle')
-            : getLocalizedText('screenshotDisabledTitle');
-        const screenshotText = screenshotEnabled
-            ? getLocalizedText('screenshotEnabledDescription')
-            : getLocalizedText('screenshotDisabledDescription');
         const agentTitle = agentModeEnabled
             ? getLocalizedText('agentEnabledTitle')
             : getLocalizedText('inquiryEnabledTitle');
@@ -8079,8 +8025,8 @@ async function createDialog() {
         return `
             <div class="askpage-usage-mode-grid">
             <section class="askpage-usage-section askpage-usage-mode">
-                <div class="askpage-usage-section-title"><span aria-hidden="true">📝</span><strong>${escapeHtml(screenshotTitle)}</strong></div>
-                <p>${escapeHtml(screenshotText)}</p>
+                <div class="askpage-usage-section-title"><span aria-hidden="true">📷</span><strong>${escapeHtml(getLocalizedText('screenshotTipTitle'))}</strong></div>
+                <p>${escapeHtml(getLocalizedText('screenshotTipDescription'))}</p>
             </section>
             <section class="askpage-usage-section askpage-usage-mode">
                 <div class="askpage-usage-section-title"><span aria-hidden="true">🤖</span><strong>${escapeHtml(agentTitle)}</strong></div>
@@ -8221,7 +8167,6 @@ async function createDialog() {
 
     async function buildUsagePromptMessage(options = {}) {
         const showUsageTipOnly = options.showUsageTipOnly || false;
-        const screenshotEnabled = await getScreenshotEnabled();
         const agentModeEnabled = await getAgentModeEnabled();
         await ensureSkillsRuntime();
         const summaryEnabled = isSummarySkillEnabled();
@@ -8232,10 +8177,9 @@ async function createDialog() {
         const customCommandUsageMap = await getCustomCommandUsageMap();
         const customCommandsCopyText = buildCustomCommandListCopyText(customCommands);
         const activeSelectedText = showUsageTipOnly ? '' : getActiveSelectedText(capturedSelectedText);
-        const modeNotice = buildUsageModeNotice({ screenshotEnabled, agentModeEnabled });
+        const modeNotice = buildUsageModeNotice({ agentModeEnabled });
         const builtInCommandsCopyText = buildPromptCommandListCopyText({ summaryEnabled });
         const renderedHtml = buildUsagePromptHtml({
-            screenshotEnabled,
             agentModeEnabled,
             summaryEnabled,
             customCommands,
@@ -8378,12 +8322,24 @@ async function createDialog() {
             closeModelMegaMenu();
         }
 
+        if (isScreenshotMenuOpen() && !clickPath.includes(screenshotMenu) && !clickPath.includes(screenshotBtn)) {
+            closeScreenshotMenu({ restoreFocus: false });
+        }
+
         if (!intelliBox.contains(e.target) && !input.contains(e.target)) {
             hideIntelliBox();
         }
     });
     const escapeKeyListener = (e) => {
         if (e.key !== 'Escape') {
+            return;
+        }
+
+        // 截圖選單開著時，Esc 只關閉選單並把焦點還給截圖按鈕。
+        if (isScreenshotMenuOpen()) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            closeScreenshotMenu();
             return;
         }
 
@@ -8519,10 +8475,9 @@ async function createDialog() {
     }
 
     function clearInputContextImages(options = {}) {
-        inputContextImageDataUrls = [];
-        if (options.preserveAnnotated !== true) {
-            pendingAnnotatedScreenshotDataUrl = '';
-        }
+        inputContextImageDataUrls = options.preserveScreenshots === true
+            ? inputContextImageDataUrls.filter((imageDataUrl) => screenshotImageKinds.has(imageDataUrl))
+            : [];
         if (options.preserveNotice !== true) {
             inputContextImageNotice = '';
             inputContextImageNoticeSource = null;
@@ -8531,28 +8486,13 @@ async function createDialog() {
         renderInputContextImages();
     }
 
-    function hasPendingAnnotatedScreenshotContext(imageDataUrls = inputContextImageDataUrls) {
-        return Boolean(pendingAnnotatedScreenshotDataUrl && imageDataUrls.includes(pendingAnnotatedScreenshotDataUrl));
-    }
-
     async function refreshInputImageContextAvailability(options = {}) {
-        const [agentModeEnabled, screenshotEnabled] = await Promise.all([
-            getAgentModeEnabled(),
-            getScreenshotEnabled()
-        ]);
-        isScreenshotAnnotationAvailable = screenshotEnabled;
+        const agentModeEnabled = await getAgentModeEnabled();
         inputStack.dataset.askpageImageContextEnabled = agentModeEnabled ? 'true' : 'false';
-        inputStack.dataset.askpageScreenshotEnabled = screenshotEnabled ? 'true' : 'false';
-        annotateScreenBtn.hidden = !screenshotEnabled;
-        annotateScreenBtn.disabled = !screenshotEnabled;
 
-        if (!agentModeEnabled && !screenshotEnabled) {
-            clearInputContextImages();
-        } else if (!agentModeEnabled && !hasPendingAnnotatedScreenshotContext()) {
-            clearInputContextImages({ preserveAnnotated: true });
-        } else if (!agentModeEnabled) {
-            inputContextImageDataUrls = [pendingAnnotatedScreenshotDataUrl];
-            renderInputContextImages();
+        if (!agentModeEnabled) {
+            // 詢問模式不接受上傳、貼上、拖曳的圖片，但截圖附件照樣保留
+            clearInputContextImages({ preserveScreenshots: true, preserveNotice: options.clearNotice === false });
         } else if (!inputContextImageDataUrls.length && options.clearNotice !== false) {
             inputContextImageNotice = '';
             inputContextImageNoticeSource = null;
@@ -8639,25 +8579,23 @@ async function createDialog() {
     function renderInputContextImages() {
         const normalizedImages = normalizeInputImageDataUrls(inputContextImageDataUrls);
         inputContextImageDataUrls = normalizedImages;
-        if (pendingAnnotatedScreenshotDataUrl && !normalizedImages.includes(pendingAnnotatedScreenshotDataUrl)) {
-            pendingAnnotatedScreenshotDataUrl = '';
-        }
+        Array.from(screenshotImageKinds.keys()).forEach((imageDataUrl) => {
+            if (!normalizedImages.includes(imageDataUrl)) {
+                screenshotImageKinds.delete(imageDataUrl);
+            }
+        });
         inputImageStripList.innerHTML = '';
-        inputImageStripTitle.textContent = isScreenshotAnnotationAvailable
-            ? getLocalizedText('imageContextTitleWithAnnotation')
-            : getLocalizedText('imageContextTitle');
-        inputImageStripMeta.textContent = normalizedImages.length
-            ? getLocalizedText('imageContextMetaWithCount', {
-                count: normalizedImages.length,
-                max: MAX_INPUT_CONTEXT_IMAGES
-            })
-            : getLocalizedText('imageContextMeta');
+        inputImageStripList.hidden = !normalizedImages.length;
+        inputImageCount.hidden = !normalizedImages.length;
+        inputImageCount.textContent = `${normalizedImages.length} / ${MAX_INPUT_CONTEXT_IMAGES}`;
         inputImageStripNotice.textContent = inputContextImageNotice;
         inputImageStripNotice.dataset.level = inputContextImageNoticeLevel;
-        uploadImageBtn.hidden = inputStack.dataset.askpageImageContextEnabled !== 'true';
-        uploadImageBtn.disabled = inputStack.dataset.askpageImageContextEnabled !== 'true';
-        annotateScreenBtn.hidden = !isScreenshotAnnotationAvailable;
-        annotateScreenBtn.disabled = !isScreenshotAnnotationAvailable;
+        inputImageStripNotice.hidden = !inputContextImageNotice;
+        const imageContextEnabled = inputStack.dataset.askpageImageContextEnabled === 'true';
+        // 詢問模式下不隱藏 📎，點下去會說明要先切到代理模式
+        uploadImageBtn.setAttribute('aria-disabled', imageContextEnabled ? 'false' : 'true');
+        uploadImageBtn.title = getLocalizedText(imageContextEnabled ? 'uploadImageTitle' : 'agentModeRequiredForImages');
+        uploadImageBtn.setAttribute('aria-label', uploadImageBtn.title);
 
         normalizedImages.forEach((imageDataUrl, index) => {
             const item = document.createElement('div');
@@ -8710,10 +8648,16 @@ async function createDialog() {
 
             item.appendChild(link);
             item.appendChild(removeBtn);
+            const screenshotKind = screenshotImageKinds.get(imageDataUrl);
+            if (screenshotKind) {
+                const badge = document.createElement('span');
+                badge.className = 'askpage-input-image-badge';
+                badge.setAttribute('aria-hidden', 'true');
+                badge.textContent = screenshotKind === 'annotated' ? '✏️' : '📷';
+                item.appendChild(badge);
+            }
             inputImageStripList.appendChild(item);
         });
-
-        inputImageStrip.hidden = !normalizedImages.length && !inputContextImageNotice && !isScreenshotAnnotationAvailable;
     }
 
     function setInputDropActive(active) {
@@ -8869,14 +8813,34 @@ async function createDialog() {
         setLocalizedInputImageNotice('imagesAdded', { count: inputContextImageDataUrls.length }, 'info');
     }
 
-    async function handleAnnotateScreenClick() {
-        const screenshotEnabled = await getScreenshotEnabled();
-        if (!screenshotEnabled) {
-            setLocalizedInputImageNotice('screenshotRequiredForAnnotation', undefined, 'warning');
-            await refreshInputImageContextAvailability({ clearNotice: false });
+    // 截圖不受代理模式限制；加入後與其他圖片一起顯示，送出後清掉（一次性）
+    async function addScreenshotToInputContext(screenshotDataUrl, kind) {
+        await appendInputContextImages([screenshotDataUrl], {
+            emptyMessageSource: { key: kind === 'annotated' ? 'annotationEmpty' : 'screenshotCaptureFailed' }
+        });
+        if (!inputContextImageDataUrls.includes(screenshotDataUrl)) {
             return;
         }
+        screenshotImageKinds.set(screenshotDataUrl, kind);
+        setLocalizedInputImageNotice(kind === 'annotated' ? 'annotationAdded' : 'screenshotAdded', undefined, 'info');
+    }
 
+    async function handleCaptureScreenshotClick() {
+        let screenshotDataUrl = null;
+        try {
+            screenshotDataUrl = await captureViewportScreenshot();
+        } catch (error) {
+            console.error('[AskPage] Failed to capture screenshot:', error);
+        }
+        input.focus();
+        if (!screenshotDataUrl) {
+            setLocalizedInputImageNotice('screenshotCaptureFailed', undefined, 'error');
+            return;
+        }
+        await addScreenshotToInputContext(screenshotDataUrl, 'viewport');
+    }
+
+    async function handleAnnotateScreenClick() {
         setLocalizedInputImageNotice('annotationStarted', undefined, 'info');
         const annotatedScreenshotDataUrl = await captureAnnotatedViewportScreenshot();
         input.focus();
@@ -8884,13 +8848,36 @@ async function createDialog() {
             setLocalizedInputImageNotice('annotationCancelled', undefined, 'info');
             return;
         }
+        await addScreenshotToInputContext(annotatedScreenshotDataUrl, 'annotated');
+    }
 
-        await appendInputContextImages([annotatedScreenshotDataUrl], {
-            emptyMessageSource: { key: 'annotationEmpty' }
-        });
-        if (inputContextImageDataUrls.includes(annotatedScreenshotDataUrl)) {
-            pendingAnnotatedScreenshotDataUrl = annotatedScreenshotDataUrl;
-            setLocalizedInputImageNotice('annotationAdded', undefined, 'info');
+    function isScreenshotMenuOpen() {
+        return !screenshotMenu.hidden;
+    }
+
+    function openScreenshotMenu() {
+        screenshotMenu.hidden = false;
+        screenshotBtn.setAttribute('aria-expanded', 'true');
+        screenshotMenuItems[0].focus();
+    }
+
+    function closeScreenshotMenu(options = {}) {
+        if (!isScreenshotMenuOpen()) {
+            return;
+        }
+        screenshotMenu.hidden = true;
+        screenshotBtn.setAttribute('aria-expanded', 'false');
+        if (options.restoreFocus !== false) {
+            screenshotBtn.focus();
+        }
+    }
+
+    async function handleScreenshotMenuAction(action) {
+        closeScreenshotMenu({ restoreFocus: action === 'cancel' });
+        if (action === 'capture') {
+            await handleCaptureScreenshotClick();
+        } else if (action === 'annotate') {
+            await handleAnnotateScreenClick();
         }
     }
 
@@ -8932,6 +8919,7 @@ async function createDialog() {
         event.stopPropagation();
 
         if (inputStack.dataset.askpageImageContextEnabled !== 'true') {
+            setLocalizedInputImageNotice('agentModeRequiredForImages', undefined, 'warning');
             return;
         }
 
@@ -8953,6 +8941,7 @@ async function createDialog() {
         setInputDropActive(false);
 
         if (inputStack.dataset.askpageImageContextEnabled !== 'true') {
+            setLocalizedInputImageNotice('agentModeRequiredForImages', undefined, 'warning');
             return;
         }
 
@@ -9052,20 +9041,15 @@ async function createDialog() {
 
     async function applyCustomCommandExecutionMode(customCommand) {
         const targetMode = normalizeCustomCommandMode(customCommand.mode);
-        const targetScreenshotEnabled = customCommand.screenshotEnabled === true;
+        // 技能設定「附帶截圖」時，只在這次送出自動截一張，不改變任何會被記住的狀態
+        skillScreenshotRequested = customCommand.screenshotEnabled === true;
 
-        const [currentAgentMode, currentScreenshotEnabled] = await Promise.all([
-            getAgentModeEnabled(),
-            getScreenshotEnabled()
-        ]);
+        const currentAgentMode = await getAgentModeEnabled();
 
         const updates = [];
         if (targetMode !== CUSTOM_COMMAND_MODE_UNSPECIFIED && currentAgentMode !== (targetMode === CUSTOM_COMMAND_MODE_AGENT)) {
             const targetAgentMode = targetMode === CUSTOM_COMMAND_MODE_AGENT;
             updates.push(setHtmlModeEnabled(targetAgentMode));
-        }
-        if (currentScreenshotEnabled !== targetScreenshotEnabled) {
-            updates.push(setScreenshotEnabled(targetScreenshotEnabled));
         }
 
         if (!updates.length) {
@@ -9079,45 +9063,6 @@ async function createDialog() {
             refreshInputImageContextAvailability(),
             refreshUsagePromptMessage()
         ]);
-    }
-
-    async function handleScreenshotModeToggle(options = {}) {
-        const feedbackMode = options.feedback || 'none';
-
-        return await toggleModeWithUi(toggleScreenshotEnabled, async (newState) => {
-            if (feedbackMode === 'brief') {
-                appendMessage('assistant', newState
-                    ? getLocalizedText('screenshotModeBriefEnabled')
-                    : getLocalizedText('screenshotModeBriefDisabled'));
-                return;
-            }
-
-            if (feedbackMode !== 'detailed') {
-                return;
-            }
-
-            if (newState) {
-                appendMessage('assistant', getLocalizedText('screenshotTestStarting'));
-                const screenshotDataUrl = await captureViewportScreenshot();
-
-                if (screenshotDataUrl) {
-                    const imageSize = Math.round(screenshotDataUrl.length / 1024);
-                    const debugMessage = getLocalizedText('screenshotTestSucceeded', {
-                        imageSize,
-                        dataLength: screenshotDataUrl.length,
-                        base64Length: screenshotDataUrl.split(',')[1]?.length || 0
-                    });
-
-                    appendMessage('assistant', debugMessage);
-                    appendScreenshotMessage(screenshotDataUrl);
-                    appendMessage('assistant', getLocalizedText('screenshotEnabledDetailed'));
-                } else {
-                    appendMessage('assistant', getLocalizedText('screenshotTestFailed'));
-                }
-            } else {
-                appendMessage('assistant', getLocalizedText('screenshotDisabledDetailed'));
-            }
-        });
     }
 
     async function handleAgentModeToggle(options = {}) {
@@ -9142,10 +9087,6 @@ async function createDialog() {
             }
         });
     }
-
-    screenshotModeBtn.addEventListener('click', async () => {
-        await handleScreenshotModeToggle();
-    });
 
     htmlModeBtn.addEventListener('click', async () => {
         await handleAgentModeToggle();
@@ -9177,6 +9118,7 @@ async function createDialog() {
         if (activeAskTask) {
             return;
         }
+        skillScreenshotRequested = false;
 
         hideIntelliBox();
         const executeSnippetCommand = getSnippetExecution(snippetState);
@@ -9292,12 +9234,16 @@ async function createDialog() {
 
             throwIfAskTaskCancelled(task);
             const activeSelectedText = getActiveSelectedText(capturedSelectedText);
-            const screenshotEnabled = await getScreenshotEnabled();
-            const hasAnnotatedScreenshotContext = hasPendingAnnotatedScreenshotContext(inputImageDataUrls);
-            throwIfAskTaskCancelled(task);
-            const screenshotDataUrl = screenshotEnabled && !hasAnnotatedScreenshotContext
-                ? await captureViewportScreenshot(task.signal)
-                : null;
+            // 第一張直接截圖以「目前可視範圍截圖」送出，其餘（含標注圖）當成附加圖片；
+            // 技能要求截圖且使用者沒有自己附截圖時，才在送出當下自動截一張。
+            const attachedViewportScreenshot = inputImageDataUrls.find((imageDataUrl) => screenshotImageKinds.get(imageDataUrl) === 'viewport') || null;
+            const hasAttachedScreenshot = inputImageDataUrls.some((imageDataUrl) => screenshotImageKinds.has(imageDataUrl));
+            if (attachedViewportScreenshot) {
+                inputImageDataUrls.splice(inputImageDataUrls.indexOf(attachedViewportScreenshot), 1);
+            }
+            const screenshotDataUrl = attachedViewportScreenshot
+                || (skillScreenshotRequested && !hasAttachedScreenshot ? await captureViewportScreenshot(task.signal) : null);
+            skillScreenshotRequested = false;
             throwIfAskTaskCancelled(task);
             const userTurn = addConversationTurn('user', question, displayedQuestion, { screenshotDataUrl, inputImageDataUrls });
             appendMessage('user', displayedQuestion, { screenshotDataUrl, inputImageDataUrls, turn: userTurn });
@@ -9889,8 +9835,31 @@ async function createDialog() {
         isInputComposing = false;
         armCompositionEndGuard();
     });
-    annotateScreenBtn.addEventListener('click', async () => {
-        await handleAnnotateScreenClick();
+    screenshotBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (isScreenshotMenuOpen()) {
+            closeScreenshotMenu();
+        } else {
+            openScreenshotMenu();
+        }
+    });
+    screenshotMenuItems.forEach((menuItem) => {
+        menuItem.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            await handleScreenshotMenuAction(menuItem.dataset.action);
+        });
+    });
+    screenshotMenu.addEventListener('keydown', (event) => {
+        const currentIndex = screenshotMenuItems.indexOf(shadowRoot.activeElement);
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            event.stopPropagation();
+            const offset = event.key === 'ArrowDown' ? 1 : -1;
+            const nextIndex = (currentIndex + offset + screenshotMenuItems.length) % screenshotMenuItems.length;
+            screenshotMenuItems[nextIndex].focus();
+        } else if (event.key === 'Tab') {
+            closeScreenshotMenu({ restoreFocus: false });
+        }
     });
     uploadImageBtn.addEventListener('click', () => {
         if (inputStack.dataset.askpageImageContextEnabled !== 'true') {
@@ -9906,7 +9875,7 @@ async function createDialog() {
         input.focus();
     });
     input.addEventListener('paste', handleInputImagePaste, true);
-    input.addEventListener('dragenter', (event) => {
+    inputStack.addEventListener('dragenter', (event) => {
         if (!doesDataTransferContainImage(event.dataTransfer)) {
             return;
         }
@@ -9923,7 +9892,7 @@ async function createDialog() {
         event.preventDefault();
         event.stopPropagation();
     }, true);
-    input.addEventListener('dragover', (event) => {
+    inputStack.addEventListener('dragover', (event) => {
         if (!doesDataTransferContainImage(event.dataTransfer)) {
             return;
         }
@@ -9945,7 +9914,7 @@ async function createDialog() {
         }
         setInputDropActive(true);
     }, true);
-    input.addEventListener('dragleave', (event) => {
+    inputStack.addEventListener('dragleave', (event) => {
         if (!doesDataTransferContainImage(event.dataTransfer)) {
             return;
         }
@@ -9964,7 +9933,7 @@ async function createDialog() {
         event.preventDefault();
         event.stopPropagation();
     }, true);
-    input.addEventListener('drop', handleInputImageDrop, true);
+    inputStack.addEventListener('drop', handleInputImageDrop, true);
     await refreshInputImageContextAvailability();
     dialogLocaleReady = true;
 
@@ -11225,101 +11194,6 @@ async function createDialog() {
     function appendErrorMessageAndStore(errorMessage) {
         globalThis.AskPageDebug?.record('task-error', { message: errorMessage });
         appendPersistentMessage('assistant', errorMessage);
-    }
-
-    function appendScreenshotMessage(screenshotDataUrl) {
-        const div = document.createElement('div');
-        div.className = 'gemini-msg-assistant';
-
-        // 建立截圖容器
-        const screenshotContainer = document.createElement('div');
-        screenshotContainer.style.cssText = `
-            margin: 10px 0;
-            padding: 10px;
-            border: 2px dashed #ccc;
-            border-radius: 8px;
-            background: #f9f9f9;
-            text-align: center;
-        `;
-
-        // 建立截圖圖片元素
-        const img = document.createElement('img');
-        img.style.cssText = `
-            max-width: 100%;
-            max-height: 300px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            cursor: pointer;
-        `;
-        img.dataset.askpageI18nTitle = 'viewOriginalSize';
-        img.title = getLocalizedText('viewOriginalSize');
-
-        // 點擊圖片時在新視窗中開啟
-        const openPreview = () => openScreenshotPreviewWindow(screenshotDataUrl);
-        img.addEventListener('click', openPreview);
-
-        screenshotContainer.appendChild(img);
-
-        // 添加截圖資訊
-        const info = document.createElement('div');
-        info.style.cssText = `
-            margin-top: 8px;
-            font-size: 12px;
-            color: #666;
-        `;
-        info.textContent = getLocalizedText('screenshotInfo', {
-            width: img.naturalWidth || getLocalizedText('loading'),
-            height: img.naturalHeight || getLocalizedText('loading'),
-            size: Math.round(screenshotDataUrl.length / 1024)
-        });
-
-        // 當圖片載入完成時更新尺寸資訊
-        const updateScreenshotInfo = (width, height) => {
-            info.textContent = getLocalizedText('screenshotInfo', {
-                width,
-                height,
-                size: Math.round(screenshotDataUrl.length / 1024)
-            });
-        };
-        img.onload = () => updateScreenshotInfo(img.naturalWidth, img.naturalHeight);
-        setImageDataUrlSource(img, screenshotDataUrl, {
-            maxEdge: 1280,
-            onCanvas: (canvas, { width, height }) => {
-                canvas.addEventListener('click', openPreview);
-                updateScreenshotInfo(width, height);
-            }
-        });
-
-        screenshotContainer.appendChild(info);
-        div.appendChild(screenshotContainer);
-
-        // 添加複製按鈕
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'copy-btn';
-        copyBtn.dataset.askpageI18nTitle = 'copyScreenshotBase64';
-        copyBtn.innerHTML = '📋';
-        copyBtn.title = getLocalizedText('copyScreenshotBase64');
-        copyBtn.setAttribute('aria-label', getLocalizedText('copyScreenshotBase64'));
-        copyBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            try {
-                await navigator.clipboard.writeText(screenshotDataUrl);
-                copyBtn.innerHTML = '✅';
-                setTimeout(() => {
-                    copyBtn.innerHTML = '📋';
-                }, 1000);
-            } catch (err) {
-                console.error('複製失敗:', err);
-                copyBtn.innerHTML = '❌';
-                setTimeout(() => {
-                    copyBtn.innerHTML = '📋';
-                }, 1000);
-            }
-        });
-        div.appendChild(copyBtn);
-
-        appendNodeToActiveMessages(div, messagesEl);
     }
 
     function sleep(ms, signal = null) {

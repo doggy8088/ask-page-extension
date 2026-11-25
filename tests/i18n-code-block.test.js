@@ -154,7 +154,7 @@ vm.runInContext(i18nScript, sandbox, { filename: 'i18n.js' });
     assert.strictEqual(i18n.locale, 'en');
     assert.strictEqual(i18n.direction, 'ltr');
     assert.strictEqual(i18n.t('systemPromptLanguageInstruction'), catalogs.en.systemPromptLanguageInstruction.message);
-    assert.strictEqual(i18n.t('screenshotDisabledTitle'), 'Screenshot: Off');
+    assert.strictEqual(i18n.t('screenshotTipTitle'), 'Screenshot');
     assert.strictEqual(i18n.t('agentEnabledTitle'), 'Agent: On');
     assert.strictEqual(i18n.t('characterCount', { count: 7 }), '7 characters');
     assert.strictEqual(i18n.t('modeToggleAria', { label: 'Mode', current: 'inquiry', next: 'agent' }), 'Mode: currently inquiry; click to switch to agent');

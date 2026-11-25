@@ -311,6 +311,7 @@ globalThis.megaMenu = { modelMegaMenu, isModelMegaMenuOpen, openModelMegaMenu, c
         const escSandbox = {
             intelliActive: false,
             isModelMegaMenuOpen: () => menuOpen,
+            isScreenshotMenuOpen: () => false,
             finishModelMegaMenu() { escCalls.push('finishModelMegaMenu'); menuOpen = false; },
             hideIntelliBox() { escCalls.push('hideIntelliBox'); },
             closeDialog() { escCalls.push('closeDialog'); },
