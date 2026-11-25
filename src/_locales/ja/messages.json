@@ -162,6 +162,8 @@
     "askPage": { "message": "頁問" },
     "dragTitleBar": { "message": "タイトルバーをドラッグしてダイアログを移動" },
     "openPreferences": { "message": "設定を開く" },
+    "clearConversation": { "message": "クリア" },
+    "clearConversationTitle": { "message": "現在の会話をクリア（質問履歴は保持）" },
     "inputPlaceholder": { "message": "質問を入力して Enter。最大 4 枚の画像を貼り付けまたはドラッグしてコンテキストに追加できます" },
     "imageContextTitle": { "message": "画像コンテキスト（Ctrl+V またはドラッグで参考画像を追加）" },
     "imageContextMeta": { "message": "PNG / JPG / WebP などに対応。1 ファイルの上限は 10MB" },

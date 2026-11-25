@@ -289,6 +289,15 @@ function refreshActiveAskTaskButton() {
         getActiveDialogElementById('gemini-qna-btn'),
         Boolean(activeAskTask)
     );
+    refreshClearConversationButton();
+}
+
+// 沒有對話可清、或回答生成中（handleAsk 會直接 return）時停用清除按鈕
+function refreshClearConversationButton() {
+    const clearButton = getActiveDialogElementById('askpage-clear-conversation-btn');
+    if (clearButton) {
+        clearButton.disabled = Boolean(activeAskTask) || conversationHistory.length === 0;
+    }
 }
 
 function beginAskTask() {
@@ -6703,6 +6712,7 @@ function addConversationTurn(role, content, displayContent = content, options = 
         ...(options.anthropicBlocks ? { anthropicBlocks: options.anthropicBlocks } : {})
     };
     conversationHistory.push(turn);
+    refreshClearConversationButton();
     return turn;
 }
 
@@ -6737,6 +6747,7 @@ function clearConversationHistory() {
     // 對話已清空，舊 ref 不會再被引用；重新編號也讓相同頁面的快照內容一致，有利提示詞快取。
     resetAgentSnapshotRefRegistry();
     setAgentSnapshotSelectionRange(null);
+    refreshClearConversationButton();
 }
 
 function requestOpenOptionsPage(targetTab = '') {
@@ -7326,8 +7337,31 @@ async function createDialog() {
         }
     });
 
+    const clearConversationBtn = document.createElement('button');
+    const clearConversationBtnIcon = document.createElement('span');
+    const clearConversationBtnText = document.createElement('span');
+    clearConversationBtn.type = 'button';
+    clearConversationBtn.id = 'askpage-clear-conversation-btn';
+    clearConversationBtn.className = 'askpage-toolbar-btn askpage-toolbar-btn-clear';
+    clearConversationBtn.style.cssText = modeToggleButtonBaseStyle;
+    clearConversationBtn.title = getLocalizedText('clearConversationTitle');
+    clearConversationBtn.setAttribute('aria-label', getLocalizedText('clearConversationTitle'));
+    clearConversationBtn.disabled = Boolean(activeAskTask) || conversationHistory.length === 0;
+    clearConversationBtnIcon.setAttribute('aria-hidden', 'true');
+    clearConversationBtnIcon.textContent = '🧹';
+    clearConversationBtnIcon.style.cssText = `
+        ${modeToggleIconBaseStyle}
+        font-size: 15px;
+        font-family: 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif;
+    `;
+    clearConversationBtnText.textContent = getLocalizedText('clearConversation');
+    clearConversationBtnText.style.cssText = modeToggleTextBaseStyle;
+    clearConversationBtn.appendChild(clearConversationBtnIcon);
+    clearConversationBtn.appendChild(clearConversationBtnText);
+
     providerActions.appendChild(screenshotModeBtn);
     providerActions.appendChild(htmlModeBtn);
+    providerActions.appendChild(clearConversationBtn);
     providerActions.appendChild(optionsBtn);
     providerDisplay.appendChild(providerBrandMark);
     providerDisplay.appendChild(providerDisplayName);
@@ -7659,6 +7693,9 @@ async function createDialog() {
             reasoningLabel.textContent = getLocalizedText('reasoningEffort');
             optionsBtn.title = getLocalizedText('openPreferences');
             optionsBtn.setAttribute('aria-label', getLocalizedText('openPreferences'));
+            clearConversationBtn.title = getLocalizedText('clearConversationTitle');
+            clearConversationBtn.setAttribute('aria-label', getLocalizedText('clearConversationTitle'));
+            clearConversationBtnText.textContent = getLocalizedText('clearConversation');
             input.placeholder = getLocalizedText('inputPlaceholder');
             inputImageStripTitle.textContent = getLocalizedText('imageContextTitle');
             inputImageStripMeta.textContent = getLocalizedText('imageContextMeta');
@@ -9114,6 +9151,28 @@ async function createDialog() {
         await handleAgentModeToggle();
     });
 
+    clearConversationBtn.addEventListener('click', async () => {
+        if (activeAskTask || !conversationHistory.length) {
+            return;
+        }
+        await resetConversation();
+    });
+
+    // /clear 與 Ctrl+L 連提問紀錄一起清；清除按鈕只清對話，保留 ↑ 鍵回溯，也不動輸入框裡的草稿。
+    async function resetConversation(options = {}) {
+        if (options.clearPromptHistory === true) {
+            promptHistory.length = 0;
+            historyIndex = 0;
+            await setValue(PROMPT_HISTORY_STORAGE, '[]');
+        }
+        clearConversationHistory();
+        capturedSelectedText = '';
+        messagesEl.innerHTML = '';
+        await appendUsagePromptMessage({ showUsageTipOnly: true });
+        clearInputContextImages();
+        input.focus();
+    }
+
     async function handleAsk() {
         if (activeAskTask) {
             return;
@@ -9138,16 +9197,8 @@ async function createDialog() {
             resumeActiveMessagesAutoScroll(messagesEl);
 
             if (question === '/clear') {
-                promptHistory.length = 0;
-                historyIndex = 0;
-                await setValue(PROMPT_HISTORY_STORAGE, '[]');
-                clearConversationHistory();
-                capturedSelectedText = '';
-                messagesEl.innerHTML = '';
-                await appendUsagePromptMessage({ showUsageTipOnly: true });
-                clearInputContextImages();
+                await resetConversation({ clearPromptHistory: true });
                 setInputValue('', { resetToSingleLine: true });
-                input.focus();
                 return;
             }
 

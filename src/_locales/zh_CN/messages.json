@@ -162,6 +162,8 @@
     "askPage": { "message": "页问" },
     "dragTitleBar": { "message": "拖动标题栏移动对话框" },
     "openPreferences": { "message": "打开选项" },
+    "clearConversation": { "message": "清除" },
+    "clearConversationTitle": { "message": "清除当前对话（保留提问记录）" },
     "inputPlaceholder": { "message": "输入问题后按 Enter；也可以粘贴或拖动最多 4 张图片作为上下文" },
     "imageContextTitle": { "message": "图片上下文（可通过 Ctrl+V 或拖动粘贴参考图片）" },
     "imageContextMeta": { "message": "支持 PNG / JPG / WebP 等图片，单个文件大小上限为 10MB" },

@@ -162,6 +162,8 @@
     "askPage": { "message": "AskPage" },
     "dragTitleBar": { "message": "Drag the title bar to move the dialog" },
     "openPreferences": { "message": "Open preferences" },
+    "clearConversation": { "message": "Clear" },
+    "clearConversationTitle": { "message": "Clear the current conversation (keeps question history)" },
     "inputPlaceholder": { "message": "Enter a question and press Enter. You can also paste or drag up to four images as context." },
     "imageContextTitle": { "message": "Image context (paste with Ctrl+V or drag reference images here)" },
     "imageContextMeta": { "message": "PNG, JPG, WebP, and other image formats are supported. Maximum size: 10 MB per file" },

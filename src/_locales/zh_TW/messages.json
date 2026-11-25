@@ -162,6 +162,8 @@
     "askPage": { "message": "頁問" },
     "dragTitleBar": { "message": "拖曳標題列可移動對話框" },
     "openPreferences": { "message": "開啟選項" },
+    "clearConversation": { "message": "清除" },
+    "clearConversationTitle": { "message": "清除目前對話（保留提問紀錄）" },
     "inputPlaceholder": { "message": "輸入問題後按 Enter；也可貼上或拖曳最多 4 張圖片作為上下文" },
     "imageContextTitle": { "message": "圖片上下文（可透過 Ctrl+V 或拖曳貼上參考圖片）" },
     "imageContextMeta": { "message": "支援 PNG / JPG / WebP 等圖片，單檔大小上限 10MB" },
