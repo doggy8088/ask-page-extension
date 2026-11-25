@@ -13,18 +13,22 @@
 - **技能啟用開關**：技能清單每一列都有啟用開關，切換立即生效；停用的技能不進模型清單、`/` 自動完成與使用說明，輸入 `/技能名稱` 只會顯示「技能已停用」。開關是本機偏好。
 - **匯入 SKILL.md**：技能頁可匯入其他支援 Agent Skills 的工具建立的 `SKILL.md`。
 - **詢問模式的工具邊界**：模型在詢問模式呼叫頁面工具時直接拒絕不執行；OpenAI、Azure OpenAI 在詢問模式因技能而開啟工具時，若模型不支援工具會退回純聊天。
+- **標題列新增「🧹 清除」按鈕**：一鍵清除目前對話，保留按 ↑ 回溯的提問紀錄與輸入框草稿；沒有對話或回答生成中時停用。`/clear` 與 `Ctrl+L` 行為不變，仍會一併清除提問紀錄。
+- **輸入區整併成單一輸入框**：拿掉常駐的「圖片上下文」區塊。縮圖列只在有圖時出現在輸入框內頂端，工具列（📎 附加圖片、📷 截圖、張數、送出鍵）收在輸入框底部，提示訊息改為輸入框下方一行。拖曳圖片時整個輸入框都是放置區。
+- **詢問模式附圖提示**：詢問模式下貼上、拖曳或按 📎 附加圖片時，會提示先切換到代理模式，不再無聲忽略。
 - **測試與文件**：新增 `tests/skill-schema.test.js`、`tests/skill-runtime.test.js`、`tests/builtin-skills.test.js`，擴充 `tests/custom-command-settings.test.js`；新增 `docs/AGENT_SKILLS.md`，更新 `README.md`、`docs/TOOLS.md`、`docs/頁問-詢問模式與代理模式.html` 與 `docs/目前提示詞管理邏輯與提問動態結構.md`。
 
 ### 變更
 
 - **既有技能自動遷移**：升級後第一次開啟設定頁時，舊版 `CUSTOM_COMMANDS` 會轉成「僅明確調用」的技能，技能名稱、提示內容、模式、截圖與變數標籤設定都不變；`CUSTOM_COMMANDS` 原值保留不刪。匯入只含 `CUSTOM_COMMANDS` 的舊版設定備份時也會一併轉換。
+- **截圖改為一次性附件**：移除標題列的截圖開關與 `SCREENSHOT_ENABLED` 記憶狀態，預設不截圖、重新整理後也不記憶。按輸入框的「📷 截圖」可選擇「直接截圖」或「標注畫面」，截圖立即以縮圖加入輸入框，送出後清掉；標注不再需要先開啟截圖模式，詢問模式也能使用。技能的「附帶截圖」設定改為只在該次執行自動截一張。舊的 `SCREENSHOT_ENABLED` 值會留在 storage 中但不再讀取。
 - **`/summary` 可停用**：技能管理頁的內建 `/summary` 新增啟用開關（`CUSTOM_SUMMARY_ENABLED`），停用後不出現在 `/` 自動完成、使用說明與複製文字中，輸入 `/summary` 只會顯示「技能已停用」；自訂的摘要提示詞不受影響。`/clear` 維持不變，沒有停用開關。
 - **技能名稱允許 Unicode**：技能名稱可使用各語言文字、數字、底線與連字號，不可包含空白。輸入時開頭的 `/` 或全形 `／` 可有可無，都會存成 `/名稱`。
 - **舊格式自動修正**：開啟設定頁時，`ASKPAGE_SKILLS` 中缺少開頭 `/` 的技能名稱、不符規則或重複的 `name` 會自動修正並寫回；`name` 重複時加上 `-2` 等後綴，不會丟掉技能。內容腳本以同樣的規則在記憶體中容錯，不寫回 storage。匯入的 `SKILL.md` 若 `metadata.askpage-command` 沒有 `/` 也會接受，`name` 與既有技能重複時自動加後綴。
 
 ### 移除
 
-- **`/screenshot`、`/agent` 斜線技能**：截圖模式與代理模式本身不變，改用對話框工具列的截圖按鈕與模式切換按鈕切換。輸入 `/screenshot` 或 `/agent` 現在會當成一般提問送出。對應的語系字串 `commandScreenshot`、`commandAgent`、`enableScreenshot`、`disableScreenshot`、`switchToInquiryMode`、`switchToAgentMode`、`builtInCommandCopyText` 一併移除。
+- **`/screenshot`、`/agent` 斜線技能**：代理模式改用對話框標題列的模式切換按鈕，截圖改用輸入框的「📷 截圖」按鈕。輸入 `/screenshot` 或 `/agent` 現在會當成一般提問送出。對應的語系字串 `commandScreenshot`、`commandAgent`、`enableScreenshot`、`disableScreenshot`、`switchToInquiryMode`、`switchToAgentMode`、`builtInCommandCopyText` 一併移除。
 
 ### 修正
 

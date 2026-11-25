@@ -9884,6 +9884,10 @@ async function createDialog() {
             event.preventDefault();
             event.stopPropagation();
             setInputDropActive(false);
+            // dragover 設成 dropEffect = 'none' 後不會觸發 drop，所以在拖進來時就先提示
+            if (inputContextImageNoticeSource?.key !== 'agentModeRequiredForImages') {
+                setLocalizedInputImageNotice('agentModeRequiredForImages', undefined, 'warning');
+            }
             return;
         }
 
