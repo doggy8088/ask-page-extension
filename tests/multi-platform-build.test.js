@@ -148,6 +148,7 @@ function createBackgroundSandbox({ userAgent, userScripts, hasSessionStorage = t
         'icons/icon128.png',
         'lib/marked.min.js',
         'lib/purify.min.js',
+        'lib/context-compaction.js',
         'lib/skill-schema.js',
         '_locales/zh_TW/messages.json',
         '_locales/en/messages.json'

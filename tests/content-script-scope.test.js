@@ -81,6 +81,7 @@ for (const file of contentScriptFiles) {
 assert.ok(sandbox.AskPageToolPolicy, 'tool-policy 模組應掛到全域');
 assert.ok(sandbox.AskPageToolGovernance, 'tool-governance 模組應掛到全域');
 assert.ok(sandbox.AskPageAnthropicTools, 'anthropic-tools 模組應掛到全域');
+assert.ok(sandbox.AskPageContextCompaction, 'context-compaction 模組應掛到全域');
 assert.ok(sandbox.AskPageSkills, 'skill-schema 模組應掛到全域');
 
 console.log('content-script-scope: ok');

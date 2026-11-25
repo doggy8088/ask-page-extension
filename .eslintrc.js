@@ -18,6 +18,7 @@ module.exports = {
     DOMPurify: 'readonly',
     AskPageEndpoint: 'readonly',
     AskPageSkills: 'readonly',
+    AskPageContextCompaction: 'readonly',
     hljs: 'readonly',
     renderMathInElement: 'readonly'
   },
@@ -87,7 +88,7 @@ module.exports = {
     },
     {
       // 治理層同時在瀏覽器（content script）與 Node（測試）中使用
-      files: ['src/lib/tool-policy.js', 'src/lib/tool-governance.js', 'src/lib/anthropic-tools.js', 'src/lib/skill-schema.js'],
+      files: ['src/lib/tool-policy.js', 'src/lib/tool-governance.js', 'src/lib/anthropic-tools.js', 'src/lib/context-compaction.js', 'src/lib/skill-schema.js'],
       env: {
         browser: true,
         node: true

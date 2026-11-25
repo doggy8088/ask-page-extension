@@ -10,6 +10,7 @@ console.log('[AskPage] Document ready state:', document.readyState);
 // Global state to prevent multiple dialogs
 let isDialogVisible = false;
 let conversationHistory = [];
+let conversationCompactionState = null;
 let conversationSelectedText = '';
 let inquiryConversationContext = null;
 let inquiryConversationContextPromise = null;
@@ -1033,6 +1034,7 @@ const HTML_MODE_ENABLED_STORAGE = 'HTML_MODE_ENABLED';
 const AGENT_GLOW_EFFECT_ENABLED_STORAGE = 'AGENT_GLOW_EFFECT_ENABLED';
 const REASONING_EFFORTS_STORAGE = 'ASKPAGE_REASONING_EFFORTS';
 const OPENAI_COMPATIBLE_REQUEST_QUIRKS_STORAGE = 'ASKPAGE_OPENAI_COMPATIBLE_REQUEST_QUIRKS';
+const MODEL_CONTEXT_WINDOWS_STORAGE = 'ASKPAGE_MODEL_CONTEXT_WINDOWS';
 const CUSTOM_COMMAND_MODE_AGENT = 'agent';
 const CUSTOM_COMMAND_MODE_INQUIRY = 'inquiry';
 const CUSTOM_COMMAND_MODE_UNSPECIFIED = 'unspecified';
@@ -2611,6 +2613,109 @@ async function recordGeminiApiKeyTier(apiKey = '', tier = '') {
     } catch (storageError) {
         console.warn('[AskPage] Failed to persist Gemini API key tier:', storageError);
     }
+}
+
+async function getCachedModelContextWindows() {
+    try {
+        if (typeof chrome === 'undefined' || !chrome?.storage?.local?.get) {
+            return {};
+        }
+        const storageKey = globalThis.AskPageContextCompaction?.MODEL_CONTEXT_WINDOWS_STORAGE || MODEL_CONTEXT_WINDOWS_STORAGE;
+        const result = await chrome.storage.local.get([storageKey]);
+        const stored = result?.[storageKey];
+        return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+    } catch {
+        return {};
+    }
+}
+
+async function saveLearnedModelContextWindow(providerType = '', model = '', contextWindow = 0, providerId = '') {
+    const compactor = globalThis.AskPageContextCompaction;
+    if (!compactor || !Number.isFinite(Number(contextWindow)) || Number(contextWindow) <= 0) {
+        return;
+    }
+    try {
+        if (typeof chrome === 'undefined' || !chrome?.storage?.local?.get || !chrome?.storage?.local?.set) {
+            return;
+        }
+        const storageKey = compactor.MODEL_CONTEXT_WINDOWS_STORAGE || MODEL_CONTEXT_WINDOWS_STORAGE;
+        const typeKey = compactor.buildContextWindowCacheKey(providerType, model, '');
+        const idKey = providerId ? compactor.buildContextWindowCacheKey(providerType, model, providerId) : '';
+        if (!typeKey && !idKey) {
+            return;
+        }
+        const result = await chrome.storage.local.get([storageKey]);
+        const existing = result?.[storageKey];
+        const nextLimits = existing && typeof existing === 'object' && !Array.isArray(existing)
+            ? { ...existing }
+            : {};
+        const normalizedLimit = Math.floor(Number(contextWindow));
+        if (idKey) {
+            nextLimits[idKey] = normalizedLimit;
+        }
+        if (typeKey && !providerId) {
+            nextLimits[typeKey] = normalizedLimit;
+        }
+        await chrome.storage.local.set({ [storageKey]: nextLimits });
+    } catch (storageError) {
+        console.warn('[AskPage] Failed to persist learned model context window:', storageError);
+    }
+}
+
+async function resolveActiveModelContextWindow(providerType = '', model = '', providerId = '') {
+    const compactor = globalThis.AskPageContextCompaction;
+    if (!compactor) {
+        return null;
+    }
+    const cachedLimits = await getCachedModelContextWindows();
+    return compactor.resolveModelContextWindow(providerType, model, {
+        cachedLimits,
+        providerId
+    });
+}
+
+function applyConversationCompactionState(summaryText = '', compactedTurnCount = 0) {
+    const cleaned = String(summaryText || '').trim();
+    const validCount = Number.isInteger(compactedTurnCount) && compactedTurnCount > 0 ? compactedTurnCount : 0;
+    if (!cleaned || validCount <= 0) {
+        return;
+    }
+    conversationCompactionState = {
+        summaryText: cleaned,
+        compactedTurnCount: Math.min(validCount, conversationHistory.length),
+        updatedAt: Date.now()
+    };
+}
+
+async function createLoopCompactionOptions({
+    providerType = '',
+    providerId = '',
+    model = '',
+    format = 'openai',
+    systemPrompt = '',
+    maxOutputTokens = 0,
+    sendCompactionRequest = null,
+    onResetStreamedAnswer = null
+} = {}) {
+    const compactor = typeof globalThis !== 'undefined' ? globalThis.AskPageContextCompaction : null;
+    if (!compactor) {
+        return null;
+    }
+    const resolved = await resolveActiveModelContextWindow(providerType, model, providerId);
+    const historyPayload = buildHistoryPayloadWithEndCounts(format);
+    return {
+        providerType,
+        providerId,
+        model,
+        systemPrompt,
+        maxOutputTokens,
+        contextWindow: resolved?.contextWindow || 0,
+        initialItemHistoryEndCounts: historyPayload.endCounts,
+        sendCompactionRequest,
+        onCompactedHistory: (summaryText, compactedTurnCount) => applyConversationCompactionState(summaryText, compactedTurnCount),
+        onContextWindowLearned: (learnedLimit) => saveLearnedModelContextWindow(providerType, model, learnedLimit, providerId),
+        onResetStreamedAnswer
+    };
 }
 
 function appendGeminiFreeTierSearchWarning(error) {
@@ -6441,69 +6546,153 @@ function buildTextProviderUserContent(question, screenshotDataUrl = null, inputI
     ];
 }
 
-function getConversationMessagesForTextProviders() {
-    return conversationHistory
-        .filter((turn) => turn.includeInModelContext !== false)
-        .map((turn) => ({
+function getUncompactedConversationEntries() {
+    const hasCompaction = Boolean(
+        conversationCompactionState
+        && conversationCompactionState.summaryText
+        && Number.isInteger(conversationCompactionState.compactedTurnCount)
+        && conversationCompactionState.compactedTurnCount > 0
+        && conversationCompactionState.compactedTurnCount <= conversationHistory.length
+    );
+    const startIndex = hasCompaction ? conversationCompactionState.compactedTurnCount : 0;
+    const entries = [];
+    for (let index = startIndex; index < conversationHistory.length; index++) {
+        const turn = conversationHistory[index];
+        if (turn && turn.includeInModelContext !== false) {
+            entries.push({ turn, endCount: index + 1 });
+        }
+    }
+    return {
+        hasCompaction,
+        baseCompactedCount: startIndex,
+        summaryText: hasCompaction ? conversationCompactionState.summaryText : '',
+        entries
+    };
+}
+
+function buildTextProviderTurnMessage(turn) {
+    return {
+        role: turn.role,
+        content: turn.role === 'user'
+            ? buildTextProviderUserContent(turn.content, turn.screenshotDataUrl, turn.inputImageDataUrls)
+            : turn.content
+    };
+}
+
+function buildAnthropicTurnMessage(turn) {
+    if (turn.role === 'assistant' && Array.isArray(turn.anthropicBlocks) && turn.anthropicBlocks.length) {
+        return {
             role: turn.role,
-            content: turn.role === 'user'
-                ? buildTextProviderUserContent(turn.content, turn.screenshotDataUrl, turn.inputImageDataUrls)
-                : turn.content
-        }));
+            content: turn.anthropicBlocks
+        };
+    }
+
+    return buildTextProviderTurnMessage(turn);
+}
+
+function buildGeminiTurnSteps(turn) {
+    if (turn.role === 'assistant' && Array.isArray(turn.geminiSteps)) {
+        return turn.geminiSteps;
+    }
+    const content = [{ type: 'text', text: turn.content }];
+    if (turn.role === 'user') {
+        normalizeInputImageDataUrls(turn.inputImageDataUrls).forEach((imageDataUrl) => {
+            content.push({
+                type: 'image',
+                mime_type: getImageMimeTypeFromDataUrl(imageDataUrl),
+                data: imageDataUrl.split(',')[1]
+            });
+        });
+        if (turn.screenshotDataUrl) {
+            content.push({
+                type: 'image',
+                mime_type: getImageMimeTypeFromDataUrl(turn.screenshotDataUrl),
+                data: turn.screenshotDataUrl.split(',')[1]
+            });
+        }
+    }
+
+    return [{
+        type: turn.role === 'assistant' ? 'model_output' : 'user_input',
+        content
+    }];
+}
+
+function buildHistoryPayloadWithEndCounts(format = 'openai') {
+    const { hasCompaction, baseCompactedCount, summaryText, entries } = getUncompactedConversationEntries();
+    const compactor = globalThis.AskPageContextCompaction;
+
+    if (!hasCompaction) {
+        if (format === 'gemini') {
+            const items = [];
+            const endCounts = [];
+            for (const entry of entries) {
+                const steps = buildGeminiTurnSteps(entry.turn);
+                items.push(...steps);
+                steps.forEach(() => endCounts.push(entry.endCount));
+            }
+            return { items, endCounts };
+        }
+        const mapper = format === 'anthropic' ? buildAnthropicTurnMessage : buildTextProviderTurnMessage;
+        return {
+            items: entries.map((entry) => mapper(entry.turn)),
+            endCounts: entries.map((entry) => entry.endCount)
+        };
+    }
+
+    if (format === 'gemini') {
+        const tailItems = [];
+        const tailEndCounts = [];
+        for (const entry of entries) {
+            const steps = buildGeminiTurnSteps(entry.turn);
+            tailItems.push(...steps);
+            steps.forEach(() => tailEndCounts.push(entry.endCount));
+        }
+        const items = compactor
+            ? compactor.assembleCompactedMessages({ format: 'gemini', summaryText, keptTailItems: tailItems })
+            : tailItems;
+        const prefixCount = Math.max(0, items.length - tailItems.length);
+        return {
+            items,
+            endCounts: [...Array(prefixCount).fill(baseCompactedCount), ...tailEndCounts]
+        };
+    }
+
+    if (format === 'anthropic') {
+        const tailItems = entries.map((entry) => buildAnthropicTurnMessage(entry.turn));
+        const items = compactor
+            ? compactor.assembleCompactedMessages({ format: 'anthropic', summaryText, keptTailItems: tailItems })
+            : tailItems;
+        const prefixCount = Math.max(0, items.length - tailItems.length);
+        return {
+            items,
+            endCounts: [...Array(prefixCount).fill(baseCompactedCount), ...entries.map((entry) => entry.endCount)]
+        };
+    }
+
+    const tailItems = entries.map((entry) => buildTextProviderTurnMessage(entry.turn));
+    const items = compactor
+        ? compactor.assembleCompactedMessages({ format: 'openai', summaryText, keptTailItems: tailItems })
+        : tailItems;
+    const prefixCount = Math.max(0, items.length - tailItems.length);
+    return {
+        items,
+        endCounts: [...Array(prefixCount).fill(baseCompactedCount), ...entries.map((entry) => entry.endCount)]
+    };
+}
+
+function getConversationMessagesForTextProviders() {
+    return buildHistoryPayloadWithEndCounts('openai').items;
 }
 
 // Anthropic 的 thinking block 必須原封不動回傳，多輪對話才接得起來。
 // 助理回合改用保存下來的 block 內容，thinking 與其簽章才不會遺失。
 function buildAnthropicConversationMessages() {
-    return conversationHistory
-        .filter((turn) => turn.includeInModelContext !== false)
-        .map((turn) => {
-            if (turn.role === 'assistant' && Array.isArray(turn.anthropicBlocks) && turn.anthropicBlocks.length) {
-                return {
-                    role: turn.role,
-                    content: turn.anthropicBlocks
-                };
-            }
-
-            return {
-                role: turn.role,
-                content: turn.role === 'user'
-                    ? buildTextProviderUserContent(turn.content, turn.screenshotDataUrl, turn.inputImageDataUrls)
-                    : turn.content
-            };
-        });
+    return buildHistoryPayloadWithEndCounts('anthropic').items;
 }
 
 function buildGeminiConversationSteps() {
-    return conversationHistory
-        .filter((turn) => turn.includeInModelContext !== false)
-        .flatMap((turn) => {
-            if (turn.role === 'assistant' && Array.isArray(turn.geminiSteps)) {
-                return turn.geminiSteps;
-            }
-            const content = [{ type: 'text', text: turn.content }];
-            if (turn.role === 'user') {
-                normalizeInputImageDataUrls(turn.inputImageDataUrls).forEach((imageDataUrl) => {
-                    content.push({
-                        type: 'image',
-                        mime_type: getImageMimeTypeFromDataUrl(imageDataUrl),
-                        data: imageDataUrl.split(',')[1]
-                    });
-                });
-                if (turn.screenshotDataUrl) {
-                    content.push({
-                        type: 'image',
-                        mime_type: getImageMimeTypeFromDataUrl(turn.screenshotDataUrl),
-                        data: turn.screenshotDataUrl.split(',')[1]
-                    });
-                }
-            }
-
-            return {
-                type: turn.role === 'assistant' ? 'model_output' : 'user_input',
-                content
-            };
-        });
+    return buildHistoryPayloadWithEndCounts('gemini').items;
 }
 
 function doesOpenRouterModelNeedExplicitCacheControl(model = '') {
@@ -6705,6 +6894,9 @@ function truncateConversationFromTurn(turn, newContent, newDisplayContent = newC
         conversationHistory.length = turnIndex + 1;
         turn.content = newContent;
         turn.displayContent = newDisplayContent;
+        if (typeof conversationCompactionState !== 'undefined' && conversationCompactionState && turnIndex < conversationCompactionState.compactedTurnCount) {
+            conversationCompactionState = null;
+        }
         return turn;
     }
 
@@ -6713,6 +6905,9 @@ function truncateConversationFromTurn(turn, newContent, newDisplayContent = newC
         : -1;
     if (beforeTurnIndex !== -1) {
         conversationHistory.length = beforeTurnIndex;
+        if (typeof conversationCompactionState !== 'undefined' && conversationCompactionState && beforeTurnIndex <= conversationCompactionState.compactedTurnCount) {
+            conversationCompactionState = null;
+        }
     }
 
     return addConversationTurn('user', newContent, newDisplayContent, fallbackOptions);
@@ -6727,6 +6922,7 @@ const USER_MESSAGE_EDIT_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" 
 
 function clearConversationHistory() {
     conversationHistory = [];
+    conversationCompactionState = null;
     conversationSelectedText = '';
     clearInquiryConversationContext();
     // 對話已清空，舊 ref 不會再被引用；重新編號也讓相同頁面的快照內容一致，有利提示詞快取。
@@ -11388,15 +11584,18 @@ async function createDialog() {
             })
             : '';
         const errorContent = `${error?.message || ''}\n${apiMessage}\n${error?.body || ''}`.toLowerCase();
-        const isContextWindowExceeded = [
-            'context_length_exceeded',
-            'maximum context length',
-            'context window',
-            'prompt is too long',
-            'too many tokens',
-            'input token count exceeds',
-            'exceeds the model\'s maximum context'
-        ].some((keyword) => errorContent.includes(keyword));
+        const isContextWindowExceeded = typeof AskPageContextCompaction !== 'undefined'
+            && typeof AskPageContextCompaction.isContextWindowExceededError === 'function'
+            ? AskPageContextCompaction.isContextWindowExceededError(error)
+            : [
+                'context_length_exceeded',
+                'maximum context length',
+                'context window',
+                'prompt is too long',
+                'too many tokens',
+                'input token count exceeds',
+                'exceeds the model\'s maximum context'
+            ].some((keyword) => errorContent.includes(keyword));
 
         if (error?.name === 'AbortError') {
             return {
@@ -15113,18 +15312,83 @@ async function createDialog() {
         onAnswerDelta = () => {},
         onReasoningDelta = () => {},
         initialMaxOutputTokens = DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS,
-        retryMaxOutputTokens = DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS
+        retryMaxOutputTokens = DEFAULT_OPENAI_STYLE_MAX_OUTPUT_TOKENS,
+        compaction = null
     }) {
         const messages = initialMessages.map((message) => ({ ...message }));
         let useTools = initialUseTools;
         let fallbackUsed = false;
         let maxOutputTokens = initialMaxOutputTokens;
         let emptyResponseRetryCount = 0;
+        const compactor = typeof globalThis !== 'undefined' ? globalThis.AskPageContextCompaction : null;
+        let effectiveContextWindow = Number(compaction?.contextWindow || 0);
+        let itemHistoryEndCounts = Array.isArray(compaction?.initialItemHistoryEndCounts)
+            ? [...compaction.initialItemHistoryEndCounts]
+            : [];
+        let lastReportedInputTokens = 0;
+        let estimatedTokensAtLastReport = 0;
+        let totalCompactions = 0;
+        let overflowRetryCount = 0;
         const cancellationContext = task || signal;
         const reportStatus = (status) => {
             throwIfAskTaskCancelled(cancellationContext);
             onStatusUpdate(status);
             onTrace({ type: 'status', text: status });
+        };
+
+        const runContextCompaction = async (round, { isOverflowRecovery = false, overflowAttempt = 1 } = {}) => {
+            const prefixItem = messages[0]?.role === 'system' ? messages[0] : null;
+            const nonPrefixItems = prefixItem ? messages.slice(1) : messages.slice();
+            while (itemHistoryEndCounts.length < nonPrefixItems.length) {
+                itemHistoryEndCounts.push(null);
+            }
+
+            const compacted = await compactor.compactWorkingContext({
+                format: 'openai',
+                items: nonPrefixItems,
+                prefixItem,
+                effectiveContextWindow,
+                maxOutputTokens,
+                useTools,
+                isOverflowRecovery,
+                overflowAttempt,
+                throwIfCancelled: () => throwIfAskTaskCancelled(cancellationContext),
+                requestSummary: async ({ systemPrompt: summarySystemPrompt, userPrompt: summaryUserPrompt, maxOutputTokens: summaryMaxTokens }) => {
+                    const summaryMessages = [
+                        { role: 'system', content: summarySystemPrompt },
+                        { role: 'user', content: summaryUserPrompt }
+                    ];
+                    const summaryResponse = await sendRequestWithPromptCacheKeyFallback(
+                        sendRequest,
+                        buildRequestBody(summaryMessages, false, summaryMaxTokens),
+                        () => {},
+                        { signal }
+                    );
+                    const summaryChoice = getOpenAIPrimaryChoice(summaryResponse);
+                    return getAssistantMessageText(summaryChoice?.message, summaryChoice) || '';
+                }
+            });
+
+            messages.splice(0, messages.length, ...compacted.items);
+            maxOutputTokens = compacted.maxOutputTokens;
+            lastReportedInputTokens = 0;
+            estimatedTokensAtLastReport = 0;
+            totalCompactions++;
+
+            const historyAdvance = compactor.advanceHistoryEndCounts(
+                itemHistoryEndCounts,
+                compacted.compactableItemCount,
+                compacted.newSummaryPrefixCount
+            );
+            itemHistoryEndCounts = historyAdvance.nextEndCounts;
+            if (historyAdvance.compactedTurnCount > 0 && compacted.summaryText) {
+                compaction?.onCompactedHistory?.(compacted.summaryText, historyAdvance.compactedTurnCount);
+            }
+
+            reportStatus(formatRoundStatus(round, getLocalizedText('statusContextCompacted', {
+                before: compacted.beforeTokens.toLocaleString('en-US'),
+                after: compacted.afterTokens.toLocaleString('en-US')
+            })));
         };
 
         const maxToolCallRounds = await getToolCallMaxRounds();
@@ -15140,11 +15404,40 @@ async function createDialog() {
                         : getLocalizedText('statusAnsweringWithProvider', { provider: providerLabel })
                 ));
             }
+
+            const canCompact = Boolean(compactor && compaction && effectiveContextWindow > 0);
+            let currentEstimatedTokens = 0;
+            if (canCompact) {
+                currentEstimatedTokens = compactor.estimatePayloadTokens({
+                    format: 'openai',
+                    messages,
+                    useTools
+                });
+                const effectiveTokens = lastReportedInputTokens > 0
+                    ? Math.max(currentEstimatedTokens, lastReportedInputTokens + Math.max(0, currentEstimatedTokens - estimatedTokensAtLastReport))
+                    : currentEstimatedTokens;
+                const thresholdTokens = Math.floor(effectiveContextWindow * compactor.AUTO_COMPACTION_THRESHOLD_RATIO);
+                if (effectiveTokens >= thresholdTokens && totalCompactions < compactor.MAX_COMPACTIONS_PER_TASK && messages.length > 2) {
+                    const percent = Math.min(99, Math.round((effectiveTokens / effectiveContextWindow) * 100));
+                    reportStatus(formatRoundStatus(round, getLocalizedText('statusContextCompacting', { percent })));
+                    await runContextCompaction(round, { isOverflowRecovery: false });
+                    currentEstimatedTokens = compactor.estimatePayloadTokens({
+                        format: 'openai',
+                        messages,
+                        useTools
+                    });
+                }
+            }
+
+            const requestMaxOutputTokens = canCompact
+                ? compactor.computeSafeMaxOutputTokens(maxOutputTokens, effectiveContextWindow, currentEstimatedTokens, overflowRetryCount > 0)
+                : maxOutputTokens;
+
             let responseData;
             try {
                 responseData = await sendRequestWithPromptCacheKeyFallback(
                     sendRequest,
-                    buildRequestBody(messages, useTools, maxOutputTokens),
+                    buildRequestBody(messages, useTools, requestMaxOutputTokens),
                     (retryInfo) => reportStatus(formatRoundStatus(
                         round,
                         getLocalizedText('statusRetrying', {
@@ -15163,6 +15456,27 @@ async function createDialog() {
                 );
                 throwIfAskTaskCancelled(cancellationContext);
             } catch (error) {
+                if (canCompact && compactor.isContextWindowExceededError(error)
+                    && overflowRetryCount < compactor.MAX_OVERFLOW_RECOVERY_ATTEMPTS_PER_ROUND
+                    && totalCompactions < compactor.MAX_COMPACTIONS_PER_TASK) {
+                    overflowRetryCount++;
+                    compaction.onResetStreamedAnswer?.();
+                    const learnedLimit = compactor.parseContextWindowLimitFromError(error, currentEstimatedTokens);
+                    if (learnedLimit) {
+                        effectiveContextWindow = Math.min(effectiveContextWindow || Infinity, learnedLimit);
+                        await compaction.onContextWindowLearned?.(effectiveContextWindow);
+                    } else {
+                        const baseline = Math.min(
+                            effectiveContextWindow || currentEstimatedTokens || compactor.DEFAULT_FALLBACK_CONTEXT_WINDOW,
+                            currentEstimatedTokens || effectiveContextWindow || compactor.DEFAULT_FALLBACK_CONTEXT_WINDOW
+                        );
+                        effectiveContextWindow = Math.max(compactor.MIN_EFFECTIVE_CONTEXT_WINDOW, Math.floor(baseline * 0.68));
+                    }
+                    reportStatus(formatRoundStatus(round, getLocalizedText('statusContextOverflowCompacting')));
+                    await runContextCompaction(round, { isOverflowRecovery: true, overflowAttempt: overflowRetryCount });
+                    round--;
+                    continue;
+                }
                 if (useTools && allowToolFallback && isLikelyToolUnsupportedError(error)) {
                     console.warn(`[AskPage] ${providerLabel} does not appear to support tool calling, falling back to plain chat.`, error);
                     useTools = false;
@@ -15171,6 +15485,15 @@ async function createDialog() {
                     continue;
                 }
                 throw error;
+            }
+
+            overflowRetryCount = 0;
+            if (canCompact) {
+                const reportedInput = compactor.extractReportedInputTokens(compaction.providerType, responseData?.usage);
+                if (reportedInput !== null && reportedInput > 0) {
+                    lastReportedInputTokens = reportedInput;
+                    estimatedTokensAtLastReport = currentEstimatedTokens;
+                }
             }
 
             onTrace({ type: 'usage', round, usage: responseData?.usage || null });
@@ -15287,6 +15610,8 @@ async function createDialog() {
         onAnswerDelta = () => {},
         onReasoningDelta = () => {},
         providerLabel = 'Gemini',
+        providerId = '',
+        onResetStreamedAnswer = null,
         signal = null,
         task = null,
         toolContext = {}
@@ -15301,7 +15626,7 @@ async function createDialog() {
         console.log('[AskPage] Gemini context mode:', pageConversationContext.contextMode);
         const providerFetch = createGeminiServiceWorkerFetch(apiKey);
         console.log('[AskPage] Conversation history messages:', conversationHistory.length);
-        const maxOutputTokens = getGeminiMaxOutputTokens(selectedModel);
+        let maxOutputTokens = getGeminiMaxOutputTokens(selectedModel);
         let emptyResponseRetryCount = 0;
         const reportStatus = (status) => {
             throwIfAskTaskCancelled(cancellationContext);
@@ -15316,6 +15641,116 @@ async function createDialog() {
         }, ...buildGeminiConversationSteps()];
         const generatedSteps = [];
 
+        const compactor = typeof globalThis !== 'undefined' ? globalThis.AskPageContextCompaction : null;
+        const resolvedWindowInfo = (compactor && typeof resolveActiveModelContextWindow === 'function')
+            ? await resolveActiveModelContextWindow('gemini', selectedModel, providerId)
+            : null;
+        let effectiveContextWindow = resolvedWindowInfo?.contextWindow || 0;
+        let workingSystemPrompt = pageConversationContext.systemPrompt;
+        const initialHistoryPayload = typeof buildHistoryPayloadWithEndCounts === 'function'
+            ? buildHistoryPayloadWithEndCounts('gemini')
+            : null;
+        let itemHistoryEndCounts = Array.isArray(initialHistoryPayload?.endCounts)
+            ? [...initialHistoryPayload.endCounts]
+            : [];
+        let lastReportedInputTokens = 0;
+        let estimatedTokensAtLastReport = 0;
+        let totalCompactions = 0;
+        let overflowRetryCount = 0;
+
+        const buildGeminiHttpError = (response, errorBody) => {
+            const retryAfterMs = getRetryAfterMilliseconds(response);
+            if (response.status === 401) {
+                return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('invalidProviderApiKey', { provider: providerLabel }), { retryAfterMs });
+            }
+            if (response.status === 403) {
+                return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerRequestForbidden', { provider: providerLabel }), { retryAfterMs });
+            }
+            if (response.status === 404) {
+                return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerModelNotFound', { provider: providerLabel }), { retryAfterMs });
+            }
+            if (response.status === 429) {
+                return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerRateLimited', { provider: providerLabel }), { retryAfterMs });
+            }
+            if (response.status >= 500) {
+                return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerUnavailable', { provider: providerLabel }), { retryAfterMs });
+            }
+            return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
+        };
+
+        const runGeminiCompaction = async (round, { isOverflowRecovery = false, overflowAttempt = 1 } = {}) => {
+            const prefixItem = input[0] || null;
+            const nonPrefixItems = prefixItem ? input.slice(1) : input.slice();
+            while (itemHistoryEndCounts.length < nonPrefixItems.length) {
+                itemHistoryEndCounts.push(null);
+            }
+
+            const compacted = await compactor.compactWorkingContext({
+                format: 'gemini',
+                items: nonPrefixItems,
+                prefixItem,
+                systemPrompt: workingSystemPrompt,
+                effectiveContextWindow,
+                maxOutputTokens,
+                useTools: enableTools,
+                isOverflowRecovery,
+                overflowAttempt,
+                throwIfCancelled: () => throwIfAskTaskCancelled(cancellationContext),
+                requestSummary: async ({ systemPrompt: summarySystemPrompt, userPrompt: summaryUserPrompt, maxOutputTokens: summaryMaxTokens }) => {
+                    const summaryBody = {
+                        model: selectedModel,
+                        store: false,
+                        input: [{ type: 'user_input', content: [{ type: 'text', text: summaryUserPrompt }] }],
+                        system_instruction: summarySystemPrompt,
+                        generation_config: {
+                            max_output_tokens: summaryMaxTokens
+                        }
+                    };
+                    const summaryResponse = await fetchJsonWithRetry({
+                        providerLabel,
+                        url: GEMINI_INTERACTIONS_URL,
+                        fetchImpl: providerFetch,
+                        options: {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-goog-api-key': apiKey,
+                                'Api-Revision': GEMINI_API_REVISION
+                            },
+                            body: JSON.stringify(summaryBody)
+                        },
+                        buildHttpError: buildGeminiHttpError,
+                        onRetry: () => {},
+                        signal
+                    });
+                    return getGeminiInteractionText(summaryResponse) || '';
+                }
+            });
+
+            input.splice(0, input.length, ...compacted.items);
+            workingSystemPrompt = compacted.systemPrompt;
+            maxOutputTokens = compacted.maxOutputTokens;
+            generatedSteps.length = 0;
+            lastReportedInputTokens = 0;
+            estimatedTokensAtLastReport = 0;
+            totalCompactions++;
+
+            const historyAdvance = compactor.advanceHistoryEndCounts(
+                itemHistoryEndCounts,
+                compacted.compactableItemCount,
+                compacted.newSummaryPrefixCount
+            );
+            itemHistoryEndCounts = historyAdvance.nextEndCounts;
+            if (historyAdvance.compactedTurnCount > 0 && compacted.summaryText && typeof applyConversationCompactionState === 'function') {
+                applyConversationCompactionState(compacted.summaryText, historyAdvance.compactedTurnCount);
+            }
+
+            reportStatus(formatRoundStatus(round, getLocalizedText('statusContextCompacted', {
+                before: compacted.beforeTokens.toLocaleString('en-US'),
+                after: compacted.afterTokens.toLocaleString('en-US')
+            })));
+        };
+
         const maxToolCallRounds = await getToolCallMaxRounds();
         await loadAgentToolOutputLimits();
         for (let round = 0; round < maxToolCallRounds; round++) {
@@ -15329,13 +15764,44 @@ async function createDialog() {
                         : getLocalizedText('statusAnsweringWithProvider', { provider: providerLabel })
                 ));
             }
+
+            const canCompact = Boolean(compactor && effectiveContextWindow > 0);
+            let currentEstimatedTokens = 0;
+            if (canCompact) {
+                currentEstimatedTokens = compactor.estimatePayloadTokens({
+                    format: 'gemini',
+                    systemPrompt: workingSystemPrompt,
+                    messages: input,
+                    useTools: enableTools
+                });
+                const effectiveTokens = lastReportedInputTokens > 0
+                    ? Math.max(currentEstimatedTokens, lastReportedInputTokens + Math.max(0, currentEstimatedTokens - estimatedTokensAtLastReport))
+                    : currentEstimatedTokens;
+                const thresholdTokens = Math.floor(effectiveContextWindow * compactor.AUTO_COMPACTION_THRESHOLD_RATIO);
+                if (effectiveTokens >= thresholdTokens && totalCompactions < compactor.MAX_COMPACTIONS_PER_TASK && input.length > 2) {
+                    const percent = Math.min(99, Math.round((effectiveTokens / effectiveContextWindow) * 100));
+                    reportStatus(formatRoundStatus(round, getLocalizedText('statusContextCompacting', { percent })));
+                    await runGeminiCompaction(round, { isOverflowRecovery: false });
+                    currentEstimatedTokens = compactor.estimatePayloadTokens({
+                        format: 'gemini',
+                        systemPrompt: workingSystemPrompt,
+                        messages: input,
+                        useTools: enableTools
+                    });
+                }
+            }
+
+            const requestMaxOutputTokens = canCompact
+                ? compactor.computeSafeMaxOutputTokens(maxOutputTokens, effectiveContextWindow, currentEstimatedTokens, overflowRetryCount > 0)
+                : maxOutputTokens;
+
             const requestBody = {
                 model: selectedModel,
                 store: false,
                 input,
-                system_instruction: pageConversationContext.systemPrompt,
+                system_instruction: workingSystemPrompt,
                 generation_config: {
-                    max_output_tokens: maxOutputTokens,
+                    max_output_tokens: requestMaxOutputTokens,
                     ...buildGeminiThinkingConfig(selectedModel, reasoningValue, true)
                 }
             };
@@ -15345,25 +15811,6 @@ async function createDialog() {
                 requestBody.tools = tools;
             }
 
-            const buildGeminiHttpError = (response, errorBody) => {
-                const retryAfterMs = getRetryAfterMilliseconds(response);
-                if (response.status === 401) {
-                    return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('invalidProviderApiKey', { provider: providerLabel }), { retryAfterMs });
-                }
-                if (response.status === 403) {
-                    return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerRequestForbidden', { provider: providerLabel }), { retryAfterMs });
-                }
-                if (response.status === 404) {
-                    return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerModelNotFound', { provider: providerLabel }), { retryAfterMs });
-                }
-                if (response.status === 429) {
-                    return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerRateLimited', { provider: providerLabel }), { retryAfterMs });
-                }
-                if (response.status >= 500) {
-                    return createHttpError(response.status, response.statusText, errorBody, getLocalizedText('providerUnavailable', { provider: providerLabel }), { retryAfterMs });
-                }
-                return createHttpError(response.status, response.statusText, errorBody, undefined, { retryAfterMs });
-            };
             const handleRetry = (retryInfo) => reportStatus(formatRoundStatus(
                 round,
                 getLocalizedText('statusRetrying', {
@@ -15406,6 +15853,29 @@ async function createDialog() {
                         signal
                     });
             } catch (error) {
+                if (canCompact && compactor.isContextWindowExceededError(error)
+                    && overflowRetryCount < compactor.MAX_OVERFLOW_RECOVERY_ATTEMPTS_PER_ROUND
+                    && totalCompactions < compactor.MAX_COMPACTIONS_PER_TASK) {
+                    overflowRetryCount++;
+                    onResetStreamedAnswer?.();
+                    const learnedLimit = compactor.parseContextWindowLimitFromError(error, currentEstimatedTokens);
+                    if (learnedLimit) {
+                        effectiveContextWindow = Math.min(effectiveContextWindow || Infinity, learnedLimit);
+                        if (typeof saveLearnedModelContextWindow === 'function') {
+                            await saveLearnedModelContextWindow('gemini', selectedModel, effectiveContextWindow, providerId);
+                        }
+                    } else {
+                        const baseline = Math.min(
+                            effectiveContextWindow || currentEstimatedTokens || compactor.DEFAULT_FALLBACK_CONTEXT_WINDOW,
+                            currentEstimatedTokens || effectiveContextWindow || compactor.DEFAULT_FALLBACK_CONTEXT_WINDOW
+                        );
+                        effectiveContextWindow = Math.max(compactor.MIN_EFFECTIVE_CONTEXT_WINDOW, Math.floor(baseline * 0.68));
+                    }
+                    reportStatus(formatRoundStatus(round, getLocalizedText('statusContextOverflowCompacting')));
+                    await runGeminiCompaction(round, { isOverflowRecovery: true, overflowAttempt: overflowRetryCount });
+                    round--;
+                    continue;
+                }
                 if (isGeminiFreeTierQuotaError(error)) {
                     await recordGeminiApiKeyTier(apiKey, 'free');
                     if (hasGoogleSearchTool) {
@@ -15413,6 +15883,14 @@ async function createDialog() {
                     }
                 }
                 throw error;
+            }
+            overflowRetryCount = 0;
+            if (canCompact) {
+                const reportedInput = compactor.extractReportedInputTokens('gemini', responseData?.usage);
+                if (reportedInput !== null && reportedInput > 0) {
+                    lastReportedInputTokens = reportedInput;
+                    estimatedTokensAtLastReport = currentEstimatedTokens;
+                }
             }
             if (hasGoogleSearchTool) {
                 await recordGeminiApiKeyTier(apiKey, 'paid');
@@ -15558,6 +16036,8 @@ async function createDialog() {
                 onAnswerDelta: streamedAnswer ? (delta) => streamedAnswer.append(delta) : () => {},
                 onReasoningDelta: (delta) => handleExecutionTraceEvent(traceReporter, providerLabel, { type: 'reasoning-delta', text: delta }),
                 providerLabel,
+                providerId: activeConfig?.id || '',
+                onResetStreamedAnswer: streamedAnswer ? () => streamedAnswer.discard() : null,
                 signal: taskContext?.signal,
                 task: taskContext,
                 toolContext: {
@@ -15651,9 +16131,17 @@ async function createDialog() {
         console.log('[AskPage] OpenAI max output tokens:', maxOutputTokens, 'model:', selectedModel, 'responses_api:', useResponsesApi, 'reasoning_effort:', reasoningEffort || 'default', 'streaming:', streamingEnabled);
 
         try {
+            const compactionConfig = await createLoopCompactionOptions({
+                providerType: 'openai',
+                providerId: activeConfig?.id || '',
+                model: selectedModel,
+                format: 'openai',
+                onResetStreamedAnswer: streamedAnswer ? () => streamedAnswer.discard() : null
+            });
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
+                compaction: compactionConfig,
                 initialUseTools: agentModeEnabled || hasAutoSkills(),
                 // 詢問模式的工具只為了技能而開啟，模型不支援工具時退回純聊天
                 allowToolFallback: !agentModeEnabled,
@@ -15880,9 +16368,17 @@ async function createDialog() {
             : `${azureEndpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
 
         try {
+            const compactionConfig = await createLoopCompactionOptions({
+                providerType: 'azure',
+                providerId: activeConfig?.id || '',
+                model: deployment,
+                format: 'openai',
+                onResetStreamedAnswer: streamedAnswer ? () => streamedAnswer.discard() : null
+            });
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
+                compaction: compactionConfig,
                 initialUseTools: agentModeEnabled || hasAutoSkills(),
                 // 詢問模式的工具只為了技能而開啟，模型不支援工具時退回純聊天
                 allowToolFallback: !agentModeEnabled,
@@ -16171,9 +16667,17 @@ async function createDialog() {
         };
 
         try {
+            const compactionConfig = await createLoopCompactionOptions({
+                providerType,
+                providerId: activeConfig?.id || '',
+                model: selectedModel,
+                format: 'openai',
+                onResetStreamedAnswer: streamedAnswer ? () => streamedAnswer.discard() : null
+            });
             const answer = await runOpenAIStyleToolLoop({
                 providerLabel: providerLabel,
                 initialMessages: buildTextProviderMessages(pageConversationContext),
+                compaction: compactionConfig,
                 initialUseTools: agentModeEnabled || webSearchEnabled || hasAutoSkills(),
                 signal: taskContext?.signal,
                 task: taskContext,
@@ -16454,12 +16958,24 @@ async function createDialog() {
         allowToolFallback = false,
         initialUseTools = true,
         onStatusUpdate = () => {},
-        onTrace = () => {}
+        onTrace = () => {},
+        compaction = null
     }) {
         const messages = initialMessages.map((message) => ({ ...message }));
         let useTools = initialUseTools;
         let fallbackUsed = false;
         let pauseTurnCount = 0;
+        const compactor = typeof globalThis !== 'undefined' ? globalThis.AskPageContextCompaction : null;
+        let effectiveContextWindow = Number(compaction?.contextWindow || 0);
+        let workingSystemPrompt = String(compaction?.systemPrompt || '');
+        let workingMaxOutputTokens = Number(compaction?.maxOutputTokens || 0);
+        let itemHistoryEndCounts = Array.isArray(compaction?.initialItemHistoryEndCounts)
+            ? [...compaction.initialItemHistoryEndCounts]
+            : [];
+        let lastReportedInputTokens = 0;
+        let estimatedTokensAtLastReport = 0;
+        let totalCompactions = 0;
+        let overflowRetryCount = 0;
         const collectedCitations = [];
         const collectedCitationUrls = new Set();
         const serverToolUseBlocks = new Map();
@@ -16468,6 +16984,58 @@ async function createDialog() {
             throwIfAskTaskCancelled(cancellationContext);
             onStatusUpdate(status);
             onTrace({ type: 'status', text: status });
+        };
+
+        const runAnthropicCompaction = async (round, { isOverflowRecovery = false, overflowAttempt = 1 } = {}) => {
+            while (itemHistoryEndCounts.length < messages.length) {
+                itemHistoryEndCounts.push(null);
+            }
+
+            const compacted = await compactor.compactWorkingContext({
+                format: 'anthropic',
+                items: messages,
+                prefixItem: null,
+                systemPrompt: workingSystemPrompt,
+                effectiveContextWindow,
+                maxOutputTokens: workingMaxOutputTokens || 4096,
+                useTools,
+                isOverflowRecovery,
+                overflowAttempt,
+                throwIfCancelled: () => throwIfAskTaskCancelled(cancellationContext),
+                requestSummary: typeof compaction?.sendCompactionRequest === 'function'
+                    ? async ({ systemPrompt: summarySystemPrompt, userPrompt: summaryUserPrompt, maxOutputTokens: summaryMaxTokens }) => (
+                        await compaction.sendCompactionRequest(
+                            [{ role: 'user', content: summaryUserPrompt }],
+                            summarySystemPrompt,
+                            summaryMaxTokens
+                        )
+                    )
+                    : null
+            });
+
+            messages.splice(0, messages.length, ...compacted.items);
+            workingSystemPrompt = compacted.systemPrompt;
+            if (workingMaxOutputTokens > 0) {
+                workingMaxOutputTokens = compacted.maxOutputTokens;
+            }
+            lastReportedInputTokens = 0;
+            estimatedTokensAtLastReport = 0;
+            totalCompactions++;
+
+            const historyAdvance = compactor.advanceHistoryEndCounts(
+                itemHistoryEndCounts,
+                compacted.compactableItemCount,
+                compacted.newSummaryPrefixCount
+            );
+            itemHistoryEndCounts = historyAdvance.nextEndCounts;
+            if (historyAdvance.compactedTurnCount > 0 && compacted.summaryText) {
+                compaction?.onCompactedHistory?.(compacted.summaryText, historyAdvance.compactedTurnCount);
+            }
+
+            reportStatus(formatRoundStatus(round, getLocalizedText('statusContextCompacted', {
+                before: compacted.beforeTokens.toLocaleString('en-US'),
+                after: compacted.afterTokens.toLocaleString('en-US')
+            })));
         };
 
         const maxToolCallRounds = await getToolCallMaxRounds();
@@ -16484,11 +17052,74 @@ async function createDialog() {
                 ));
             }
 
+            const canCompact = Boolean(compactor && compaction && effectiveContextWindow > 0);
+            let currentEstimatedTokens = 0;
+            if (canCompact) {
+                currentEstimatedTokens = compactor.estimatePayloadTokens({
+                    format: 'anthropic',
+                    systemPrompt: workingSystemPrompt,
+                    messages,
+                    useTools
+                });
+                const effectiveTokens = lastReportedInputTokens > 0
+                    ? Math.max(currentEstimatedTokens, lastReportedInputTokens + Math.max(0, currentEstimatedTokens - estimatedTokensAtLastReport))
+                    : currentEstimatedTokens;
+                const thresholdTokens = Math.floor(effectiveContextWindow * compactor.AUTO_COMPACTION_THRESHOLD_RATIO);
+                if (effectiveTokens >= thresholdTokens && totalCompactions < compactor.MAX_COMPACTIONS_PER_TASK && messages.length > 1) {
+                    const percent = Math.min(99, Math.round((effectiveTokens / effectiveContextWindow) * 100));
+                    reportStatus(formatRoundStatus(round, getLocalizedText('statusContextCompacting', { percent })));
+                    await runAnthropicCompaction(round, { isOverflowRecovery: false });
+                    currentEstimatedTokens = compactor.estimatePayloadTokens({
+                        format: 'anthropic',
+                        systemPrompt: workingSystemPrompt,
+                        messages,
+                        useTools
+                    });
+                }
+            }
+
+            const requestOverrides = canCompact
+                ? {
+                    systemPrompt: workingSystemPrompt,
+                    maxOutputTokens: compactor.computeSafeMaxOutputTokens(
+                        workingMaxOutputTokens || 4096,
+                        effectiveContextWindow,
+                        currentEstimatedTokens,
+                        overflowRetryCount > 0
+                    )
+                }
+                : undefined;
+
             let responseData;
             try {
-                responseData = await sendRequest(buildRequestBody(messages, useTools));
+                if (requestOverrides) {
+                    responseData = await sendRequest(buildRequestBody(messages, useTools, requestOverrides));
+                } else {
+                    responseData = await sendRequest(buildRequestBody(messages, useTools));
+                }
                 throwIfAskTaskCancelled(cancellationContext);
             } catch (error) {
+                if (canCompact && compactor.isContextWindowExceededError(error)
+                    && overflowRetryCount < compactor.MAX_OVERFLOW_RECOVERY_ATTEMPTS_PER_ROUND
+                    && totalCompactions < compactor.MAX_COMPACTIONS_PER_TASK) {
+                    overflowRetryCount++;
+                    compaction.onResetStreamedAnswer?.();
+                    const learnedLimit = compactor.parseContextWindowLimitFromError(error, currentEstimatedTokens);
+                    if (learnedLimit) {
+                        effectiveContextWindow = Math.min(effectiveContextWindow || Infinity, learnedLimit);
+                        await compaction.onContextWindowLearned?.(effectiveContextWindow);
+                    } else {
+                        const baseline = Math.min(
+                            effectiveContextWindow || currentEstimatedTokens || compactor.DEFAULT_FALLBACK_CONTEXT_WINDOW,
+                            currentEstimatedTokens || effectiveContextWindow || compactor.DEFAULT_FALLBACK_CONTEXT_WINDOW
+                        );
+                        effectiveContextWindow = Math.max(compactor.MIN_EFFECTIVE_CONTEXT_WINDOW, Math.floor(baseline * 0.68));
+                    }
+                    reportStatus(formatRoundStatus(round, getLocalizedText('statusContextOverflowCompacting')));
+                    await runAnthropicCompaction(round, { isOverflowRecovery: true, overflowAttempt: overflowRetryCount });
+                    round--;
+                    continue;
+                }
                 if (useTools && allowToolFallback && isLikelyToolUnsupportedError(error)) {
                     console.warn(`[AskPage] ${providerLabel} does not appear to support tool calling, falling back to plain chat.`, error);
                     useTools = false;
@@ -16497,6 +17128,15 @@ async function createDialog() {
                     continue;
                 }
                 throw error;
+            }
+
+            overflowRetryCount = 0;
+            if (canCompact) {
+                const reportedInput = compactor.extractReportedInputTokens(compaction.providerType, responseData?.usage);
+                if (reportedInput !== null && reportedInput > 0) {
+                    lastReportedInputTokens = reportedInput;
+                    estimatedTokensAtLastReport = currentEstimatedTokens;
+                }
             }
 
             onTrace({ type: 'usage', round, usage: responseData?.usage || null });
@@ -16724,27 +17364,67 @@ async function createDialog() {
         const url = 'https://api.anthropic.com/v1/messages';
 
         try {
+            const compactionConfig = await createLoopCompactionOptions({
+                providerType: 'anthropic',
+                providerId: activeConfig?.id || '',
+                model: selectedModel,
+                format: 'anthropic',
+                systemPrompt,
+                maxOutputTokens,
+                onResetStreamedAnswer: streamedAnswer ? () => streamedAnswer.discard() : null,
+                sendCompactionRequest: async (summaryMessages, summarySystemPrompt, summaryMaxTokens) => {
+                    const summaryBody = {
+                        model: selectedModel,
+                        messages: formatMessagesForAnthropic(summaryMessages),
+                        max_tokens: summaryMaxTokens
+                    };
+                    if (summarySystemPrompt) {
+                        summaryBody.system = summarySystemPrompt;
+                    }
+                    const summaryResponse = await fetchJsonWithRetry({
+                        providerLabel,
+                        url,
+                        options: {
+                            method: 'POST',
+                            headers,
+                            body: JSON.stringify(summaryBody)
+                        },
+                        buildHttpError,
+                        onRetry: () => {},
+                        fetchImpl: providerFetch,
+                        signal: taskContext?.signal
+                    });
+                    const summaryBlocks = Array.isArray(summaryResponse?.content) ? summaryResponse.content : [];
+                    return summaryBlocks
+                        .filter((block) => block?.type === 'text')
+                        .map((block) => block.text || '')
+                        .join('');
+                }
+            });
             const answer = await runAnthropicToolLoop({
                 providerLabel,
                 initialMessages: messages,
                 initialUseTools: agentModeEnabled || anthropicWebSearchEnabled || hasAutoSkills(),
                 signal: taskContext?.signal,
                 task: taskContext,
+                compaction: compactionConfig,
                 toolContext: {
                     selectedText: capturedSelectedText,
                     agentModeEnabled
                 },
                 onStatusUpdate: handleStatusUpdate,
                 onTrace: (traceEvent) => handleExecutionTraceEvent(traceReporter, providerLabel, traceEvent),
-                buildRequestBody: (currentMessages, useTools) => {
+                buildRequestBody: (currentMessages, useTools, requestOverrides = {}) => {
+                    const effectiveSystemPrompt = requestOverrides.systemPrompt ?? systemPrompt;
+                    const effectiveMaxTokens = requestOverrides.maxOutputTokens ?? maxOutputTokens;
                     const requestBody = {
                         model: selectedModel,
                         messages: currentMessages,
-                        max_tokens: maxOutputTokens
+                        max_tokens: effectiveMaxTokens
                     };
 
-                    if (systemPrompt) {
-                        requestBody.system = systemPrompt;
+                    if (effectiveSystemPrompt) {
+                        requestBody.system = effectiveSystemPrompt;
                     }
 
                     const anthropicThinkingConfig = buildAnthropicThinkingConfig(selectedModel, reasoningValue);

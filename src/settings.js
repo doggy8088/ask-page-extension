@@ -245,6 +245,45 @@ async function setCachedGeminiApiKeyTier(apiKey = '', tier = '') {
     await chrome.storage.local.set({ [GEMINI_KEY_TIERS_STORAGE]: nextTiers });
 }
 
+async function saveDiscoveredModelContextWindows(providerType = '', rawModels = []) {
+    const compactor = typeof globalThis !== 'undefined' ? globalThis.AskPageContextCompaction : null;
+    if (!compactor || !Array.isArray(rawModels) || !rawModels.length) {
+        return;
+    }
+    if (typeof chrome === 'undefined' || !chrome?.storage?.local?.get || !chrome?.storage?.local?.set) {
+        return;
+    }
+
+    const discovered = {};
+    for (const entry of rawModels) {
+        if (!entry || typeof entry !== 'object') {
+            continue;
+        }
+        const rawModelName = entry.id || entry.name || '';
+        const cacheKey = compactor.buildContextWindowCacheKey(providerType, rawModelName);
+        const contextWindow = compactor.extractContextWindowFromModelEntry(providerType, entry);
+        if (cacheKey && contextWindow) {
+            discovered[cacheKey] = contextWindow;
+        }
+    }
+
+    if (!Object.keys(discovered).length) {
+        return;
+    }
+
+    try {
+        const storageKey = compactor.MODEL_CONTEXT_WINDOWS_STORAGE;
+        const result = await chrome.storage.local.get([storageKey]);
+        const existing = result?.[storageKey];
+        const nextLimits = existing && typeof existing === 'object' && !Array.isArray(existing)
+            ? { ...existing, ...discovered }
+            : discovered;
+        await chrome.storage.local.set({ [storageKey]: nextLimits });
+    } catch (storageError) {
+        console.warn('[AskPage] Failed to cache model context windows:', storageError);
+    }
+}
+
 async function probeGeminiApiKeyTier(apiKey = '', options = {}) {
     const { forceRefresh = false, fetchImpl = typeof fetch === 'function' ? fetch : null } = options;
     const trimmed = String(apiKey || '').trim();
@@ -2953,9 +2992,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const data = await response.json();
         let models = [];
+        let rawModelEntries = [];
 
         if (providerType === 'gemini') {
             if (data.models && Array.isArray(data.models)) {
+                rawModelEntries = data.models;
                 models = data.models
                     .filter(m => m.name)
                     .map(m => m.name.replace(/^models\//, ''));
@@ -2963,6 +3004,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (['openai', 'deepseek', 'openrouter', 'groq', 'anthropic', 'mistral', 'meta', 'ollama-cloud'].includes(providerType)) {
             const list = data.data || data.models || [];
             if (Array.isArray(list)) {
+                rawModelEntries = list;
                 models = list.map(m => m.id || m.name).filter(Boolean);
             }
         }
@@ -2970,6 +3012,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (models.length === 0) {
             throw new Error(t('noModelsFound'));
         }
+
+        await saveDiscoveredModelContextWindows(providerType, rawModelEntries);
 
         // Get container
         const container = getModelListContainer(providerType);
@@ -3085,6 +3129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await response.json();
             const list = data.data || data.models || [];
             if (Array.isArray(list)) {
+                await saveDiscoveredModelContextWindows(providerType, list);
                 models = list.map(m => m.id || m.name).filter(Boolean);
             }
         }
