@@ -174,7 +174,6 @@
     "screenshotCaptureFailed": { "message": "截图失败，请确认浏览器已允许截取此页面。" },
     "screenshotTipTitle": { "message": "截图" },
     "screenshotTipDescription": { "message": "点击输入框的「📷 截图」，可附带当前画面，或先标注再发送；只作用于这一次提问。" },
-    "ask": { "message": "提问" },
     "reasoningEffort": { "message": "推理强度" },
     "switchProviderModel": { "message": "切换 AI 提供商和模型" },
     "noModelConfigured": { "message": "尚未配置模型" },

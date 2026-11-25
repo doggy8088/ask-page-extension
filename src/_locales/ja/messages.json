@@ -174,7 +174,6 @@
     "screenshotCaptureFailed": { "message": "スクリーンショットに失敗しました。ブラウザがこのページの撮影を許可しているか確認してください。" },
     "screenshotTipTitle": { "message": "スクリーンショット" },
     "screenshotTipDescription": { "message": "入力欄の「📷 スクリーンショット」で現在の画面を添付、または注釈を付けてから送信できます。今回の質問にのみ適用されます。" },
-    "ask": { "message": "質問" },
     "reasoningEffort": { "message": "推論の強度" },
     "switchProviderModel": { "message": "AI プロバイダーとモデルを切り替え" },
     "noModelConfigured": { "message": "モデル未設定" },

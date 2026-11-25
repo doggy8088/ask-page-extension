@@ -2638,6 +2638,29 @@
   box-shadow: 0 16px 34px rgba(0, 104, 240, 0.42), 0 0 26px rgba(0, 132, 255, 0.3);
 }
 
+#gemini-qna-btn .askpage-submit-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* 紙飛機的視覺重心偏右上，往左下微調才會看起來置中 */
+  transform: translate(-1px, 1px);
+  transition: transform 0.18s ease;
+  pointer-events: none;
+}
+
+#gemini-qna-btn:hover .askpage-submit-icon {
+  transform: translate(1px, -1px);
+}
+
+#gemini-qna-btn.askpage-submit-stop .askpage-submit-icon {
+  display: none;
+}
+
 #gemini-qna-btn.askpage-submit-stop {
   color: transparent;
   font-size: 0;
@@ -2779,6 +2802,7 @@
   #gemini-qna-dialog,
   .askpage-toolbar-btn,
   #gemini-qna-btn,
+  #gemini-qna-btn .askpage-submit-icon,
   #gemini-qna-input,
   #gemini-qna-messages .gemini-msg-assistant .askpage-tool-trace summary,
   #gemini-qna-messages .gemini-msg-assistant .askpage-tool-trace-chevron {

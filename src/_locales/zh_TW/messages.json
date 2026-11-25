@@ -174,7 +174,6 @@
     "screenshotCaptureFailed": { "message": "截圖失敗，請確認瀏覽器已允許擷取此頁面。" },
     "screenshotTipTitle": { "message": "截圖" },
     "screenshotTipDescription": { "message": "按輸入框的「📷 截圖」，可附帶目前畫面，或先標注再送出；只套用在這一次提問。" },
-    "ask": { "message": "問" },
     "reasoningEffort": { "message": "推理強度" },
     "switchProviderModel": { "message": "切換 AI 提供者與模型" },
     "noModelConfigured": { "message": "尚未設定模型" },

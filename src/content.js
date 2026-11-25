@@ -6721,6 +6721,8 @@ function truncateConversationFromTurn(turn, newContent, newDisplayContent = newC
 const USER_MESSAGE_COPY_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4.5A2.5 2.5 0 0 1 2 12.5v-8A2.5 2.5 0 0 1 4.5 2h8A2.5 2.5 0 0 1 15 4.5V5"/></svg>';
 const USER_MESSAGE_COPIED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"/></svg>';
 const USER_MESSAGE_FAILED_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+// 送出鍵的紙飛機圖示；按鈕名稱由 aria-label（送出提問／終止任務）提供
+const SUBMIT_QUESTION_ICON_SVG = '<svg class="askpage-submit-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>';
 const USER_MESSAGE_EDIT_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><path d="m15 5 4 4"/></svg>';
 
 function clearConversationHistory() {
@@ -7519,7 +7521,7 @@ async function createDialog() {
     const btn = document.createElement('button');
     btn.id = 'gemini-qna-btn';
     btn.type = 'button';
-    btn.textContent = getLocalizedText('ask');
+    btn.innerHTML = SUBMIT_QUESTION_ICON_SVG;
     setAskTaskButtonState(btn, Boolean(activeAskTask));
 
     const composerSpacer = document.createElement('span');
@@ -7663,7 +7665,6 @@ async function createDialog() {
             clearConversationBtnText.textContent = getLocalizedText('clearConversation');
             input.placeholder = getLocalizedText('inputPlaceholder');
             applyComposerLabels();
-            btn.textContent = getLocalizedText('ask');
             setAskTaskButtonState(btn, Boolean(activeAskTask));
             updateModeToggleButtons();
             updateProviderDisplay();

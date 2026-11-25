@@ -174,7 +174,6 @@
     "screenshotCaptureFailed": { "message": "Screenshot failed. Make sure the browser allows capturing this page." },
     "screenshotTipTitle": { "message": "Screenshot" },
     "screenshotTipDescription": { "message": "Click “📷 Screenshot” in the input box to attach the current view, or annotate it first. It applies to this question only." },
-    "ask": { "message": "Ask" },
     "reasoningEffort": { "message": "Reasoning effort" },
     "switchProviderModel": { "message": "Switch AI provider and model" },
     "noModelConfigured": { "message": "No model configured" },
