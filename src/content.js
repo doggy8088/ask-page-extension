@@ -6876,6 +6876,7 @@ function addConversationTurn(role, content, displayContent = content, options = 
         displayContent,
         renderedHtml: options.renderedHtml || '',
         includeInModelContext: options.includeInModelContext !== false,
+        hiddenFromUi: options.hiddenFromUi === true,
         suppressCopyButton: options.suppressCopyButton === true,
         extraClassName: options.extraClassName || '',
         screenshotDataUrl: options.screenshotDataUrl || '',
@@ -8422,6 +8423,9 @@ async function createDialog() {
     if (conversationHistory.length > 0) {
         messagesEl.innerHTML = '';
         conversationHistory.forEach((turn) => {
+            if (turn.hiddenFromUi) {
+                return;
+            }
             appendMessage(turn.role, turn.displayContent || turn.content, {
                 renderedHtml: turn.renderedHtml || '',
                 suppressCopyButton: turn.suppressCopyButton,
@@ -11394,7 +11398,23 @@ async function createDialog() {
 
     function appendErrorMessageAndStore(errorMessage) {
         globalThis.AskPageDebug?.record('task-error', { message: errorMessage });
-        appendPersistentMessage('assistant', errorMessage);
+        // 錯誤是給使用者看的提示，不進模型上下文，否則下一輪會把錯誤當成助理回答。
+        appendPersistentMessage('assistant', errorMessage, {}, { includeInModelContext: false });
+    }
+
+    // 使用者終止回合後，問題會留在對話紀錄但沒有答案；補一則不顯示的助理回合，
+    // 下一輪才知道這一輪是被中止，而不是模型沒有回應。
+    function appendCancelledTurnNotice() {
+        const lastTurn = conversationHistory[conversationHistory.length - 1];
+        if (!lastTurn || lastTurn.role !== 'user') {
+            return null;
+        }
+        const notice = getLocalizedText('turnCancelledNotice');
+        return addConversationTurn('assistant', notice, notice, {
+            includeInModelContext: true,
+            suppressCopyButton: true,
+            hiddenFromUi: true
+        });
     }
 
     function sleep(ms, signal = null) {
@@ -14618,6 +14638,18 @@ async function createDialog() {
         return !['content_filter'].includes(finishReason);
     }
 
+    // 空回覆的重試策略：輸出上限情境只有在上限真的能放大時才重試，
+    // 否則同一個請求會以相同上限再失敗一次，只是多花一次額度。
+    function planOpenAIStyleEmptyResponseRetry(finishReason, currentMaxOutputTokens, raisedMaxOutputTokens) {
+        if (finishReason === 'length') {
+            return raisedMaxOutputTokens > currentMaxOutputTokens
+                ? 'retry-with-larger-limit'
+                : 'fail-output-limit';
+        }
+
+        return 'retry-empty';
+    }
+
     function buildOpenAIStyleEmptyResponseMessage(providerLabel, responseData) {
         const choices = Array.isArray(responseData?.choices) ? responseData.choices : [];
         const choice = getOpenAIPrimaryChoice(responseData);
@@ -15510,19 +15542,37 @@ async function createDialog() {
             }
 
             if (!toolCalls.length && !answerText) {
+                const finishReason = getOpenAIFinishReason(responseChoice);
                 logDiagnostic('warn', `${providerLabel} returned an empty non-text response.`, {
                     id: responseData?.id || null,
                     model: responseData?.model || null,
-                    finishReason: getOpenAIFinishReason(responseChoice) || null,
+                    finishReason: finishReason || null,
                     refusal: getOpenAIRefusalText(assistantMessage) || null,
                     usage: responseData?.usage || null
                 });
 
-                if (emptyResponseRetryCount < OPENAI_STYLE_EMPTY_RESPONSE_RETRY_LIMIT && isOpenAIStyleRetriableEmptyResponse(responseData)) {
+                // 重試前先算實際會送出的上限；被視窗比例夾住而無法放大時就不重試。
+                const raisedMaxOutputTokens = Math.max(maxOutputTokens, retryMaxOutputTokens);
+                const raisedRequestMaxOutputTokens = canCompact
+                    ? compactor.computeSafeMaxOutputTokens(
+                        raisedMaxOutputTokens,
+                        effectiveContextWindow,
+                        currentEstimatedTokens,
+                        overflowRetryCount > 0
+                    )
+                    : raisedMaxOutputTokens;
+                const retryPlan = planOpenAIStyleEmptyResponseRetry(
+                    finishReason,
+                    requestMaxOutputTokens,
+                    raisedRequestMaxOutputTokens
+                );
+                if (retryPlan !== 'fail-output-limit'
+                    && emptyResponseRetryCount < OPENAI_STYLE_EMPTY_RESPONSE_RETRY_LIMIT
+                    && isOpenAIStyleRetriableEmptyResponse(responseData)) {
                     emptyResponseRetryCount++;
-                    maxOutputTokens = Math.max(maxOutputTokens, retryMaxOutputTokens);
+                    maxOutputTokens = raisedMaxOutputTokens;
                     reportStatus(
-                        getOpenAIFinishReason(responseChoice) === 'length'
+                        retryPlan === 'retry-with-larger-limit'
                             ? getLocalizedText('statusEmptyResponseOutputLimitRetry', { provider: providerLabel })
                             : getLocalizedText('statusEmptyResponseRetryDetailed', { provider: providerLabel })
                     );
@@ -16063,6 +16113,7 @@ async function createDialog() {
                 if (streamedAnswer) {
                     streamedAnswer.discard();
                 }
+                appendCancelledTurnNotice();
                 if (canUpdateAskTaskUi(taskContext)) {
                     traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats()));
                 }
@@ -16276,6 +16327,7 @@ async function createDialog() {
                 if (streamedAnswer) {
                     streamedAnswer.discard();
                 }
+                appendCancelledTurnNotice();
                 if (canUpdateAskTaskUi(taskContext)) {
                     traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats()));
                 }
@@ -16515,6 +16567,7 @@ async function createDialog() {
                 if (streamedAnswer) {
                     streamedAnswer.discard();
                 }
+                appendCancelledTurnNotice();
                 if (canUpdateAskTaskUi(taskContext)) {
                     traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats()));
                 }
@@ -16773,6 +16826,7 @@ async function createDialog() {
                 if (streamedAnswer) {
                     streamedAnswer.discard();
                 }
+                appendCancelledTurnNotice();
                 if (canUpdateAskTaskUi(taskContext)) {
                     traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats()));
                 }
@@ -17522,6 +17576,7 @@ async function createDialog() {
                 if (streamedAnswer) {
                     streamedAnswer.discard();
                 }
+                appendCancelledTurnNotice();
                 if (canUpdateAskTaskUi(taskContext)) {
                     traceReporter.reportCompletion(logAgentExecutionCompletion(false, traceReporter.getStats()));
                 }
