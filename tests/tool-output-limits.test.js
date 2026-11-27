@@ -50,6 +50,7 @@ vm.runInContext([
     section(source, 'function normalizeToolCallMaxRounds(', 'function setValue('),
     section(source, 'function normalizeReadPageMaxChars(', 'function '),
     section(source, '    function getJsonPreview(', '    function escapeSelectorValue('),
+    section(source, 'const TOOL_SUMMARY_MAX_ENTRIES = 12;', 'function buildTextProviderTurnMessage('),
     section(source, '    async function runOpenAIStyleToolLoop(', '    async function runGeminiToolLoop(')
 ].join('\n'), sandbox);
 

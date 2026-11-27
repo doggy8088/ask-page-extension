@@ -35,6 +35,7 @@ vm.runInContext([
     section(source, 'function isPromptCacheKeyUnsupportedError(', 'function addConversationTurn('),
     // runOpenAIStyleToolLoop 的依賴，用來確認參數錯誤不會被誤判成不支援 tool calling。
     section(source, '    function isLikelyToolUnsupportedError(', '    function buildTextProviderMessages('),
+    section(source, 'const TOOL_SUMMARY_MAX_ENTRIES = 12;', 'function buildTextProviderTurnMessage('),
     section(source, '    async function runOpenAIStyleToolLoop(', '    async function askGemini(')
 ].join('\n'), sandbox);
 

@@ -206,6 +206,7 @@ const loopSandbox = {
 loopSandbox.globalThis = loopSandbox;
 vm.createContext(loopSandbox);
 vm.runInContext(`
+${sliceSource('const TOOL_SUMMARY_MAX_ENTRIES = 12;', 'function buildTextProviderTurnMessage(')}
 ${sliceSource('    function buildAnthropicWebSearchTool()', '    async function askAnthropic(')}
 this.runAnthropicToolLoop = runAnthropicToolLoop;
 `, loopSandbox, { filename: 'content.js' });

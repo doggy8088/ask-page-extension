@@ -69,6 +69,7 @@ const sandbox = {
 vm.createContext(sandbox);
 vm.runInContext([
     section(source, 'function normalizeToolCallMaxRounds(', 'function setValue('),
+    section(source, 'const TOOL_SUMMARY_MAX_ENTRIES = 12;', 'function buildTextProviderTurnMessage('),
     section(source, '    async function runOpenAIStyleToolLoop(', '    async function askGemini(')
 ].join('\n'), sandbox);
 

@@ -243,7 +243,10 @@ globalThis.__compactionContentExports = {
         loopSandbox.globalThis = loopSandbox;
         vm.createContext(loopSandbox);
         vm.runInContext(
-            sliceBetween(contentSource, '    async function runOpenAIStyleToolLoop(', '    async function runGeminiToolLoop('),
+            [
+                sliceBetween(contentSource, 'const TOOL_SUMMARY_MAX_ENTRIES = 12;', 'function buildTextProviderTurnMessage('),
+                sliceBetween(contentSource, '    async function runOpenAIStyleToolLoop(', '    async function runGeminiToolLoop(')
+            ].join('\n'),
             loopSandbox
         );
 
@@ -360,7 +363,10 @@ globalThis.__compactionContentExports = {
         loopSandbox.globalThis = loopSandbox;
         vm.createContext(loopSandbox);
         vm.runInContext(
-            sliceBetween(contentSource, '    async function runOpenAIStyleToolLoop(', '    async function runGeminiToolLoop('),
+            [
+                sliceBetween(contentSource, 'const TOOL_SUMMARY_MAX_ENTRIES = 12;', 'function buildTextProviderTurnMessage('),
+                sliceBetween(contentSource, '    async function runOpenAIStyleToolLoop(', '    async function runGeminiToolLoop(')
+            ].join('\n'),
             loopSandbox
         );
 
@@ -445,7 +451,10 @@ globalThis.__compactionContentExports = {
         anthropicSandbox.globalThis = anthropicSandbox;
         vm.createContext(anthropicSandbox);
         vm.runInContext(
-            sliceBetween(contentSource, '    async function runAnthropicToolLoop(', '    async function askAnthropic('),
+            [
+                sliceBetween(contentSource, 'const TOOL_SUMMARY_MAX_ENTRIES = 12;', 'function buildTextProviderTurnMessage('),
+                sliceBetween(contentSource, '    async function runAnthropicToolLoop(', '    async function askAnthropic(')
+            ].join('\n'),
             anthropicSandbox
         );
 
@@ -606,7 +615,10 @@ globalThis.__runGeminiToolLoop = runGeminiToolLoop;
         cancellationSandbox.globalThis = cancellationSandbox;
         vm.createContext(cancellationSandbox);
         vm.runInContext(
-            sliceBetween(contentSource, '    async function runOpenAIStyleToolLoop(', '    async function runGeminiToolLoop('),
+            [
+                sliceBetween(contentSource, 'const TOOL_SUMMARY_MAX_ENTRIES = 12;', 'function buildTextProviderTurnMessage('),
+                sliceBetween(contentSource, '    async function runOpenAIStyleToolLoop(', '    async function runGeminiToolLoop(')
+            ].join('\n'),
             cancellationSandbox
         );
 

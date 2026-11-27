@@ -6570,12 +6570,40 @@ function getUncompactedConversationEntries() {
     };
 }
 
+const TOOL_SUMMARY_MAX_ENTRIES = 12;
+const TOOL_SUMMARY_MESSAGE_MAX_CHARS = 200;
+
+// 工具結果只存在單輪請求內；回合結束時留下一段摘要，下一輪才不會完全失去
+// 「上一輪做了什麼」。只記工具名稱、成敗與結果訊息，不記 tool_call id 或頁面 ref，
+// 避免重播失效的參照。
+function buildToolExecutionSummary(toolResults = []) {
+    const entries = (Array.isArray(toolResults) ? toolResults : [])
+        .filter((entry) => entry && entry.name)
+        .slice(-TOOL_SUMMARY_MAX_ENTRIES);
+    if (!entries.length) {
+        return '';
+    }
+
+    const lines = entries.map((entry) => {
+        const succeeded = entry.result ? entry.result.success !== false : false;
+        const message = String(entry.result?.message || '').trim().replace(/\s+/g, ' ');
+        const trimmedMessage = message.length > TOOL_SUMMARY_MESSAGE_MAX_CHARS
+            ? `${message.slice(0, TOOL_SUMMARY_MESSAGE_MAX_CHARS)}...`
+            : message;
+        return `- ${entry.name}: ${succeeded ? 'success' : 'failed'}${trimmedMessage ? ` - ${trimmedMessage}` : ''}`;
+    });
+    return `[Tool execution summary]\n${lines.join('\n')}`;
+}
+
 function buildTextProviderTurnMessage(turn) {
+    const content = turn.role === 'user'
+        ? buildTextProviderUserContent(turn.content, turn.screenshotDataUrl, turn.inputImageDataUrls)
+        : turn.content;
     return {
         role: turn.role,
-        content: turn.role === 'user'
-            ? buildTextProviderUserContent(turn.content, turn.screenshotDataUrl, turn.inputImageDataUrls)
-            : turn.content
+        content: turn.role === 'assistant' && turn.toolSummary && typeof content === 'string'
+            ? `${content}\n\n${turn.toolSummary}`
+            : content
     };
 }
 
@@ -6583,7 +6611,9 @@ function buildAnthropicTurnMessage(turn) {
     if (turn.role === 'assistant' && Array.isArray(turn.anthropicBlocks) && turn.anthropicBlocks.length) {
         return {
             role: turn.role,
-            content: turn.anthropicBlocks
+            content: turn.toolSummary
+                ? [...turn.anthropicBlocks, { type: 'text', text: turn.toolSummary }]
+                : turn.anthropicBlocks
         };
     }
 
@@ -6882,7 +6912,8 @@ function addConversationTurn(role, content, displayContent = content, options = 
         screenshotDataUrl: options.screenshotDataUrl || '',
         inputImageDataUrls: normalizeInputImageDataUrls(options.inputImageDataUrls),
         ...(options.geminiSteps ? { geminiSteps: options.geminiSteps } : {}),
-        ...(options.anthropicBlocks ? { anthropicBlocks: options.anthropicBlocks } : {})
+        ...(options.anthropicBlocks ? { anthropicBlocks: options.anthropicBlocks } : {}),
+        ...(options.toolSummary ? { toolSummary: String(options.toolSummary) } : {})
     };
     conversationHistory.push(turn);
     refreshClearConversationButton();
@@ -10376,6 +10407,9 @@ async function createDialog() {
                 if (historyOptions.anthropicBlocks) {
                     streamedTurn.anthropicBlocks = historyOptions.anthropicBlocks;
                 }
+                if (historyOptions.toolSummary) {
+                    streamedTurn.toolSummary = historyOptions.toolSummary;
+                }
             }
 
             streamedTurn.content = contentText;
@@ -10971,6 +11005,7 @@ async function createDialog() {
                 screenshotDataUrl: historyOptions.screenshotDataUrl ?? options.screenshotDataUrl,
                 geminiSteps: historyOptions.geminiSteps,
                 anthropicBlocks: historyOptions.anthropicBlocks,
+                toolSummary: historyOptions.toolSummary,
                 inputImageDataUrls: historyOptions.inputImageDataUrls ?? options.inputImageDataUrls
             }
         );
@@ -15352,6 +15387,7 @@ async function createDialog() {
         let fallbackUsed = false;
         let maxOutputTokens = initialMaxOutputTokens;
         let emptyResponseRetryCount = 0;
+        const executedToolResults = [];
         const compactor = typeof globalThis !== 'undefined' ? globalThis.AskPageContextCompaction : null;
         let effectiveContextWindow = Number(compaction?.contextWindow || 0);
         let itemHistoryEndCounts = Array.isArray(compaction?.initialItemHistoryEndCounts)
@@ -15586,7 +15622,8 @@ async function createDialog() {
                 console.debug(`[AskPage] ${providerLabel} 已取得最終回覆，正在整理答案...`);
                 return {
                     answer: answerText,
-                    fallbackUsed
+                    fallbackUsed,
+                    toolSummary: buildToolExecutionSummary(executedToolResults)
                 };
             }
 
@@ -15637,6 +15674,7 @@ async function createDialog() {
                     content: getModelToolResultText(toolResult.result)
                 });
             });
+            executedToolResults.push(...toolResults);
         }
 
         throw new Error(getLocalizedText('toolCallLimitExceeded'));
@@ -16312,13 +16350,13 @@ async function createDialog() {
 
             throwIfAskTaskCancelled(taskContext);
             if (streamedAnswer) {
-                streamedAnswer.finalize(answer.answer);
+                streamedAnswer.finalize(answer.answer, { toolSummary: answer.toolSummary });
             } else {
                 appendPersistentMessage('assistant', answer.answer, {
                     autoScrollMode: 'message-top',
                     autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
                     autoScrollForce: true
-                });
+                }, { toolSummary: answer.toolSummary });
             }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
@@ -16552,13 +16590,13 @@ async function createDialog() {
 
             throwIfAskTaskCancelled(taskContext);
             if (streamedAnswer) {
-                streamedAnswer.finalize(answer.answer);
+                streamedAnswer.finalize(answer.answer, { toolSummary: answer.toolSummary });
             } else {
                 appendPersistentMessage('assistant', answer.answer, {
                     autoScrollMode: 'message-top',
                     autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
                     autoScrollForce: true
-                });
+                }, { toolSummary: answer.toolSummary });
             }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
@@ -16811,13 +16849,13 @@ async function createDialog() {
                 })
                 : answer.answer;
             if (streamedAnswer) {
-                streamedAnswer.finalize(finalAnswer);
+                streamedAnswer.finalize(finalAnswer, { toolSummary: answer.toolSummary });
             } else {
                 appendPersistentMessage('assistant', finalAnswer, {
                     autoScrollMode: 'message-top',
                     autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
                     autoScrollForce: true
-                });
+                }, { toolSummary: answer.toolSummary });
             }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
@@ -17019,6 +17057,7 @@ async function createDialog() {
         let useTools = initialUseTools;
         let fallbackUsed = false;
         let pauseTurnCount = 0;
+        const executedToolResults = [];
         const compactor = typeof globalThis !== 'undefined' ? globalThis.AskPageContextCompaction : null;
         let effectiveContextWindow = Number(compaction?.contextWindow || 0);
         let workingSystemPrompt = String(compaction?.systemPrompt || '');
@@ -17275,6 +17314,7 @@ async function createDialog() {
                     // 最終回合沒有後續的 client tool_result；保留搜尋結果區塊與 citations，
                     // 讓下一輪對話能原樣帶回 encrypted_content 與 encrypted_index。
                     assistantBlocks,
+                    toolSummary: buildToolExecutionSummary(executedToolResults),
                     fallbackUsed
                 };
             }
@@ -17327,6 +17367,7 @@ async function createDialog() {
                 provider: providerLabel
             })));
 
+            executedToolResults.push(...toolResults);
             messages.push({
                 role: 'user',
                 content: toolResults.map((toolResult) => buildAnthropicToolResultBlock(toolResult))
@@ -17561,13 +17602,13 @@ async function createDialog() {
             const finalAnswer = appendAnthropicWebSearchSources(answer.answer, answer.citations);
             const anthropicBlocks = answer.assistantBlocks || [];
             if (streamedAnswer) {
-                streamedAnswer.finalize(finalAnswer, { anthropicBlocks });
+                streamedAnswer.finalize(finalAnswer, { anthropicBlocks, toolSummary: answer.toolSummary });
             } else {
                 appendPersistentMessage('assistant', finalAnswer, {
                     autoScrollMode: 'message-top',
                     autoScrollOffset: ASSISTANT_FINAL_MESSAGE_SCROLL_OFFSET_PX,
                     autoScrollForce: true
-                }, { anthropicBlocks });
+                }, { anthropicBlocks, toolSummary: answer.toolSummary });
             }
             conversationSelectedText = capturedSelectedText;
             traceReporter.reportCompletion(logAgentExecutionCompletion(true, traceReporter.getStats()));
