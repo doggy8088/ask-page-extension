@@ -11433,8 +11433,12 @@ async function createDialog() {
 
     function appendErrorMessageAndStore(errorMessage) {
         globalThis.AskPageDebug?.record('task-error', { message: errorMessage });
-        // 錯誤是給使用者看的提示，不進模型上下文，否則下一輪會把錯誤當成助理回答。
-        appendPersistentMessage('assistant', errorMessage, {}, { includeInModelContext: false });
+        // 錯誤原文只給使用者看。若這一輪有未回答的問題，模型只看到中性的失敗標記，
+        // 才知道上一輪沒有答案，又不會把錯誤訊息當成自己的回覆。
+        const hasPendingUserTurn = conversationHistory[conversationHistory.length - 1]?.role === 'user';
+        appendPersistentMessage('assistant', errorMessage, {}, hasPendingUserTurn
+            ? { content: getLocalizedText('turnFailedNotice') }
+            : { includeInModelContext: false });
     }
 
     // 使用者終止回合後，問題會留在對話紀錄但沒有答案；補一則不顯示的助理回合，
@@ -11613,6 +11617,21 @@ async function createDialog() {
             ? ''
             : ` ${typeof details === 'string' ? details : getJsonPreview(details)}`;
         console[level](`[AskPage] ${message}${detailText}`);
+    }
+
+    // 壓縮對使用者是黑箱：只看到百分比，無法判斷這次是否真的用了 LLM 摘要、
+    // 摘要是否被截斷。把關鍵數據留在診斷記錄裡，方便回報問題時對照。
+    function logCompactionDiagnostic(format, compacted = {}, { isOverflowRecovery = false, overflowAttempt = 1 } = {}) {
+        logDiagnostic('info', 'Context compaction applied.', {
+            format,
+            beforeTokens: Number(compacted.beforeTokens) || 0,
+            afterTokens: Number(compacted.afterTokens) || 0,
+            usedLlmSummary: compacted.usedLlmSummary === true,
+            compactableItemCount: Number(compacted.compactableItemCount) || 0,
+            summaryChars: String(compacted.summaryText || '').length,
+            isOverflowRecovery,
+            overflowAttempt
+        });
     }
 
     function shouldSuppressStreamingRetryDiagnostic(providerLabel, analysis, error, url = '') {
@@ -15442,6 +15461,7 @@ async function createDialog() {
             lastReportedInputTokens = 0;
             estimatedTokensAtLastReport = 0;
             totalCompactions++;
+            logCompactionDiagnostic('openai', compacted, { isOverflowRecovery, overflowAttempt });
 
             const historyAdvance = compactor.advanceHistoryEndCounts(
                 itemHistoryEndCounts,
@@ -15822,6 +15842,7 @@ async function createDialog() {
             lastReportedInputTokens = 0;
             estimatedTokensAtLastReport = 0;
             totalCompactions++;
+            logCompactionDiagnostic('gemini', compacted, { isOverflowRecovery, overflowAttempt });
 
             const historyAdvance = compactor.advanceHistoryEndCounts(
                 itemHistoryEndCounts,
@@ -17114,6 +17135,7 @@ async function createDialog() {
             lastReportedInputTokens = 0;
             estimatedTokensAtLastReport = 0;
             totalCompactions++;
+            logCompactionDiagnostic('anthropic', compacted, { isOverflowRecovery, overflowAttempt });
 
             const historyAdvance = compactor.advanceHistoryEndCounts(
                 itemHistoryEndCounts,

@@ -379,6 +379,7 @@
     "statusEmptyResponseOutputLimitRetry": { "message": "$provider$가 내용을 반환하지 않았고 출력 한도에 도달했을 수 있어 한도를 늘려 다시 시도합니다...", "placeholders": { "provider": { "content": "$1" } } },
     "statusEmptyResponseRetryDetailed": { "message": "$provider$가 내용을 반환하지 않아 자동으로 다시 시도합니다...", "placeholders": { "provider": { "content": "$1" } } },
     "turnCancelledNotice": { "message": "(이 턴은 중단되어 답변이 없습니다.)" },
+    "turnFailedNotice": { "message": "(이 턴은 오류가 발생해 답변이 없습니다.)" },
     "statusToolSelected": { "message": "$provider$가 도구 $tools$을(를) 선택했습니다. 실행을 준비하는 중...", "placeholders": { "provider": { "content": "$1" }, "tools": { "content": "$2" } } },
     "statusToolExecuting": { "message": "도구 $tool$ 실행 중($index$/$total$)...", "placeholders": { "tool": { "content": "$1" }, "index": { "content": "$2" }, "total": { "content": "$3" } } },
     "statusToolResults": { "message": "도구 $tools$을(를) 실행했으며 결과를 $provider$에 반환하는 중...", "placeholders": { "tools": { "content": "$1" }, "provider": { "content": "$2" } } },

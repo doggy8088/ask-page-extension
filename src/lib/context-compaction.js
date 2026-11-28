@@ -8,7 +8,6 @@ const AskPageContextCompaction = (() => {
 
     const MODEL_CONTEXT_WINDOWS_STORAGE = 'ASKPAGE_MODEL_CONTEXT_WINDOWS';
     const AUTO_COMPACTION_THRESHOLD_RATIO = 0.8;
-    const COMPACTION_TARGET_RATIO = 0.45;
     const TAIL_KEEP_RATIO = 0.2;
     const COMPACTION_INPUT_BUDGET_RATIO = 0.65;
     const DEFAULT_FALLBACK_CONTEXT_WINDOW = 131072;
@@ -1136,12 +1135,17 @@ const AskPageContextCompaction = (() => {
         const systemPrompt = [
             'You are a conversation context compactor.',
             'Summarize the provided conversation history and tool-execution trace into a concise, accurate continuity summary so the assistant can seamlessly resume work.',
-            'Preserve:',
+            'Preserve, quoting values verbatim:',
             '1. The user\'s core goals, constraints, and instructions.',
-            '2. Important facts discovered from the page, extracted values, URLs, and active element refs (e.g., e12) if relevant.',
-            '3. Completed tool calls and their key outcomes or failures.',
-            '4. Pending steps or current state.',
-            'Keep the same language as the user conversation. Output ONLY the summary without preamble.'
+            '2. Facts discovered from the page, extracted values, URLs, and active element refs (e.g., e12).',
+            '3. Completed tool calls with their names, key arguments, and outcomes or failures.',
+            '4. Pending steps, blockers, and current state.',
+            'Rules:',
+            '- Never invent or infer details. If the transcript does not show something, write "unknown".',
+            '- Keep tool names, argument values, URLs, and element refs exactly as written.',
+            '- Use short bullet sections: Goals, Facts, Tool calls, Pending.',
+            '- Do not mention the compaction, the transcript, or yourself; output only the summary.',
+            'Write in the same language as the user conversation.'
         ].join(' ');
 
         const userPrompt = `Compact the following earlier conversation and tool execution history:\n\n${transcript}`;
@@ -1161,6 +1165,11 @@ const AskPageContextCompaction = (() => {
             }
         }
         const combined = lines.join('\n');
+        if (!combined) {
+            // 抽取後沒有任何可摘要文字（例如只剩 thinking 或圖片）。仍要留下說明，
+            // 否則重組訊息時舊回合會無聲消失，模型也不知道有內容被丟棄。
+            return `(Earlier ${units.length} turn(s) contained no summarizable text and were omitted.)`;
+        }
         return trimTextToTokenBudget(combined, Math.max(256, maxSummaryTokens), '...[earlier summary lines condensed]...');
     }
 
@@ -1565,7 +1574,6 @@ const AskPageContextCompaction = (() => {
     return Object.freeze({
         MODEL_CONTEXT_WINDOWS_STORAGE,
         AUTO_COMPACTION_THRESHOLD_RATIO,
-        COMPACTION_TARGET_RATIO,
         TAIL_KEEP_RATIO,
         COMPACTION_INPUT_BUDGET_RATIO,
         DEFAULT_FALLBACK_CONTEXT_WINDOW,

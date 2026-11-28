@@ -52,6 +52,7 @@ function createContentSandbox(initialStorage = {}) {
     const storageMock = createStorageMock(initialStorage);
     const sandbox = {
         console: { log() {}, debug() {}, warn() {}, error() {}, info() {} },
+        logCompactionDiagnostic() {},
         TextDecoder,
         TextEncoder,
         AbortController,
@@ -224,6 +225,7 @@ globalThis.__compactionContentExports = {
             getToolCallMaxRounds: async () => 10,
             loadAgentToolOutputLimits: async () => {},
             throwIfAskTaskCancelled() {},
+            logCompactionDiagnostic() {},
             getLocalizedText: (key, params = {}) => `${key}:${JSON.stringify(params)}`,
             formatRoundStatus: (_r, msg) => msg,
             formatToolNameList: (names) => names.join(', '),
@@ -350,6 +352,7 @@ globalThis.__compactionContentExports = {
             getToolCallMaxRounds: async () => 5,
             loadAgentToolOutputLimits: async () => {},
             throwIfAskTaskCancelled() {},
+            logCompactionDiagnostic() {},
             getLocalizedText: (key) => key,
             formatRoundStatus: (_r, msg) => msg,
             formatToolNameList: (names) => names.join(', '),
@@ -432,6 +435,7 @@ globalThis.__compactionContentExports = {
             getToolCallMaxRounds: async () => 5,
             loadAgentToolOutputLimits: async () => {},
             throwIfAskTaskCancelled() {},
+            logCompactionDiagnostic() {},
             getLocalizedText: (key) => key,
             formatRoundStatus: (_r, msg) => msg,
             formatToolDisplayName: (name) => name,
@@ -607,6 +611,7 @@ globalThis.__runGeminiToolLoop = runGeminiToolLoop;
                 }
             },
             getLocalizedText: (key) => key,
+            logCompactionDiagnostic() {},
             formatRoundStatus: (_r, msg) => msg,
             sendRequestWithPromptCacheKeyFallback: (send, body, onRetry, handlers) => send(body, onRetry, handlers),
             getOpenAIPrimaryChoice: (data) => data.choices[0],

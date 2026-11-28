@@ -379,6 +379,7 @@
     "statusEmptyResponseOutputLimitRetry": { "message": "$provider$ returned no content and may have reached the output limit; retrying with a higher limit...", "placeholders": { "provider": { "content": "$1" } } },
     "statusEmptyResponseRetryDetailed": { "message": "$provider$ returned no content; retrying automatically...", "placeholders": { "provider": { "content": "$1" } } },
     "turnCancelledNotice": { "message": "(This turn was cancelled without an answer.)" },
+    "turnFailedNotice": { "message": "(This turn failed without an answer.)" },
     "statusToolSelected": { "message": "$provider$ selected tools: $tools$; preparing to run them...", "placeholders": { "provider": { "content": "$1" }, "tools": { "content": "$2" } } },
     "statusToolExecuting": { "message": "Running tool $tool$ ($index$/$total$)...", "placeholders": { "tool": { "content": "$1" }, "index": { "content": "$2" }, "total": { "content": "$3" } } },
     "statusToolResults": { "message": "Ran tools $tools$; returning the results to $provider$...", "placeholders": { "tools": { "content": "$1" }, "provider": { "content": "$2" } } },

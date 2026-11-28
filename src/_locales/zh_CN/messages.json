@@ -379,6 +379,7 @@
     "statusEmptyResponseOutputLimitRetry": { "message": "$provider$ 返回内容为空，疑似达到输出上限，正在提高输出上限后自动重试……", "placeholders": { "provider": { "content": "$1" } } },
     "statusEmptyResponseRetryDetailed": { "message": "$provider$ 返回内容为空，正在自动重试……", "placeholders": { "provider": { "content": "$1" } } },
     "turnCancelledNotice": { "message": "（这一轮已终止，没有回复。）" },
+    "turnFailedNotice": { "message": "（这一轮发生错误，没有回复。）" },
     "statusToolSelected": { "message": "$provider$ 已选择工具 $tools$，准备执行……", "placeholders": { "provider": { "content": "$1" }, "tools": { "content": "$2" } } },
     "statusToolExecuting": { "message": "正在执行工具 $tool$（$index$/$total$）……", "placeholders": { "tool": { "content": "$1" }, "index": { "content": "$2" }, "total": { "content": "$3" } } },
     "statusToolResults": { "message": "已执行工具 $tools$，正在将结果返回给 $provider$……", "placeholders": { "tools": { "content": "$1" }, "provider": { "content": "$2" } } },

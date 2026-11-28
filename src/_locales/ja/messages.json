@@ -379,6 +379,7 @@
     "statusEmptyResponseOutputLimitRetry": { "message": "$provider$ から内容が返らず、出力上限に達した可能性があるため、上限を増やして再試行します…", "placeholders": { "provider": { "content": "$1" } } },
     "statusEmptyResponseRetryDetailed": { "message": "$provider$ から内容が返らないため、自動的に再試行します…", "placeholders": { "provider": { "content": "$1" } } },
     "turnCancelledNotice": { "message": "（このターンは中止され、回答はありません。）" },
+    "turnFailedNotice": { "message": "（このターンはエラーになり、回答はありません。）" },
     "statusToolSelected": { "message": "$provider$ がツール $tools$ を選択しました。実行を準備しています…", "placeholders": { "provider": { "content": "$1" }, "tools": { "content": "$2" } } },
     "statusToolExecuting": { "message": "ツール $tool$ を実行しています（$index$/$total$）…", "placeholders": { "tool": { "content": "$1" }, "index": { "content": "$2" }, "total": { "content": "$3" } } },
     "statusToolResults": { "message": "ツール $tools$ を実行しました。結果を $provider$ に返しています…", "placeholders": { "tools": { "content": "$1" }, "provider": { "content": "$2" } } },

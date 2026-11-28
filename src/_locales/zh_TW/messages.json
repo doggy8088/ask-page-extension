@@ -379,6 +379,7 @@
     "statusEmptyResponseOutputLimitRetry": { "message": "$provider$ 回傳內容為空且疑似達到輸出上限，正在放寬輸出限制後自動重試一次...", "placeholders": { "provider": { "content": "$1" } } },
     "statusEmptyResponseRetryDetailed": { "message": "$provider$ 回傳內容為空，正在自動重試一次...", "placeholders": { "provider": { "content": "$1" } } },
     "turnCancelledNotice": { "message": "（已終止這一輪，沒有回覆。）" },
+    "turnFailedNotice": { "message": "（這一輪發生錯誤，沒有回覆。）" },
     "statusToolSelected": { "message": "$provider$ 已選擇工具 $tools$，準備執行...", "placeholders": { "provider": { "content": "$1" }, "tools": { "content": "$2" } } },
     "statusToolExecuting": { "message": "正在執行工具 $tool$（$index$/$total$）...", "placeholders": { "tool": { "content": "$1" }, "index": { "content": "$2" }, "total": { "content": "$3" } } },
     "statusToolResults": { "message": "已執行工具 $tools$，正在把結果交回 $provider$...", "placeholders": { "tools": { "content": "$1" }, "provider": { "content": "$2" } } },
