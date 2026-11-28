@@ -19,6 +19,9 @@ const AskPageContextCompaction = (() => {
     const MAX_OVERFLOW_RECOVERY_ATTEMPTS_PER_ROUND = 3;
     const MAX_COMPACTIONS_PER_TASK = 8;
     const COMPACTION_SUMMARY_HEADER = '[AskPage Context Summary]';
+    // 摘要訊息的內部標記：不可列舉，序列化成 API payload 時不會出現。
+    // 用來辨識「這則是上一輪摘要」，避免靠開頭字串猜測而被一般對話誤判。
+    const COMPACTION_SUMMARY_MARKER = Symbol.for('askpage.compactionSummary');
     const COMPACTION_SUMMARY_NOTICE = '(Earlier conversation and intermediate tool outputs were automatically compacted to stay within the model\'s context window.)';
     const COMPACTION_ACK_TEXT = 'Understood. I will continue based on this context summary.';
     const IMAGE_OMITTED_TEXT = '[Image omitted to fit context window]';
@@ -1131,8 +1134,111 @@ const AskPageContextCompaction = (() => {
         return joined;
     }
 
-    function buildCompactionPrompt(transcript = '') {
-        const systemPrompt = [
+    function readCompactionSummaryBody(format, item) {
+        if (!item || typeof item !== 'object') {
+            return null;
+        }
+
+        // 優先信任內部標記；只有在訊息被 JSON 複製過（標記遺失）時才退回字串比對。
+        const marked = item[COMPACTION_SUMMARY_MARKER];
+        if (typeof marked === 'string') {
+            return marked.trim();
+        }
+
+        let raw = '';
+        if (format === 'gemini') {
+            if (item.type !== 'user_input' || !Array.isArray(item.content)) {
+                return null;
+            }
+            raw = item.content.map((part) => (part && part.type === 'text' ? part.text || '' : '')).join('');
+        } else {
+            if (item.role !== 'user' || typeof item.content !== 'string') {
+                return null;
+            }
+            raw = item.content;
+        }
+
+        if (!raw.trim().startsWith(COMPACTION_SUMMARY_HEADER)) {
+            return null;
+        }
+        return stripCompactionSummaryBlock(raw);
+    }
+
+    function markCompactionSummaryItem(item, summaryText) {
+        if (!item || typeof item !== 'object') {
+            return item;
+        }
+        Object.defineProperty(item, COMPACTION_SUMMARY_MARKER, {
+            value: String(summaryText || ''),
+            enumerable: false,
+            configurable: true
+        });
+        return item;
+    }
+
+    function stripCompactionSummaryBlock(text = '') {
+        let body = String(text || '').trim();
+        if (body.startsWith(COMPACTION_SUMMARY_HEADER)) {
+            body = body.slice(COMPACTION_SUMMARY_HEADER.length);
+        }
+        const noticeIndex = body.indexOf(COMPACTION_SUMMARY_NOTICE);
+        if (noticeIndex !== -1) {
+            body = body.slice(noticeIndex + COMPACTION_SUMMARY_NOTICE.length);
+        }
+        return body.trim();
+    }
+
+    function isCompactionAckItem(format, item) {
+        if (!item || typeof item !== 'object') {
+            return false;
+        }
+
+        let text = '';
+        if (format === 'gemini') {
+            if (item.type !== 'model_output' || !Array.isArray(item.content)) {
+                return false;
+            }
+            text = item.content.map((part) => (part && part.type === 'text' ? part.text || '' : '')).join('');
+        } else {
+            if (item.role !== 'assistant' || typeof item.content !== 'string') {
+                return false;
+            }
+            text = item.content;
+        }
+        return text.trim() === COMPACTION_ACK_TEXT;
+    }
+
+    // 上一輪產生的摘要會以一般訊息身分留在對話裡。若把它當成普通 user 訊息再摘要，
+    // 就會變成「摘要的摘要」並逐步失真；這裡先把它抽出來，改成與新內容合併。
+    function extractCompactionSummaryItem(format, items = []) {
+        const keptItems = [];
+        const bodies = [];
+        let afterSummary = false;
+
+        for (const item of items) {
+            const body = readCompactionSummaryBody(format, item);
+            if (body !== null) {
+                if (body) {
+                    bodies.push(body);
+                }
+                afterSummary = true;
+                continue;
+            }
+            // 摘要後面的確認訊息是壓縮時補的，不是真實對話，一併略過避免進轉錄稿。
+            if (afterSummary && isCompactionAckItem(format, item)) {
+                afterSummary = false;
+                continue;
+            }
+            afterSummary = false;
+            keptItems.push(item);
+        }
+
+        return { items: keptItems, summaryText: bodies.join('\n\n').trim() };
+    }
+
+    function buildCompactionPrompt(transcript = '', previousSummary = '') {
+        const trimmedPrevious = String(previousSummary || '').trim();
+        const rules = [
             'You are a conversation context compactor.',
             'Summarize the provided conversation history and tool-execution trace into a concise, accurate continuity summary so the assistant can seamlessly resume work.',
             'Preserve, quoting values verbatim:',
@@ -1144,12 +1250,21 @@ const AskPageContextCompaction = (() => {
             '- Never invent or infer details. If the transcript does not show something, write "unknown".',
             '- Keep tool names, argument values, URLs, and element refs exactly as written.',
             '- Use short bullet sections: Goals, Facts, Tool calls, Pending.',
-            '- Do not mention the compaction, the transcript, or yourself; output only the summary.',
-            'Write in the same language as the user conversation.'
-        ].join(' ');
+            '- Do not mention the compaction, the transcript, or yourself; output only the summary.'
+        ];
+        if (trimmedPrevious) {
+            rules.push(
+                '- A previous summary is given. Merge it with the new history into ONE summary:',
+                'keep details that are still relevant, update anything that changed,',
+                'never repeat the same fact twice, and never drop an earlier goal or constraint that still applies.'
+            );
+        }
+        rules.push('Write in the same language as the user conversation.');
 
-        const userPrompt = `Compact the following earlier conversation and tool execution history:\n\n${transcript}`;
-        return { systemPrompt, userPrompt };
+        const userPrompt = trimmedPrevious
+            ? `Previous summary to merge:\n\n${trimmedPrevious}\n\nNew conversation and tool execution history:\n\n${transcript}`
+            : `Compact the following earlier conversation and tool execution history:\n\n${transcript}`;
+        return { systemPrompt: rules.join(' '), userPrompt };
     }
 
     function buildDeterministicCompactionSummary(format, units = [], maxSummaryTokens = 2000) {
@@ -1241,7 +1356,7 @@ const AskPageContextCompaction = (() => {
 
         if (format === 'anthropic') {
             return normalizeAnthropicMessages([
-                { role: 'user', content: formattedSummary },
+                markCompactionSummaryItem({ role: 'user', content: formattedSummary }, summaryText),
                 ...keptTailItems
             ]);
         }
@@ -1251,10 +1366,10 @@ const AskPageContextCompaction = (() => {
             if (prefixItem) {
                 steps.push(prefixItem);
             }
-            steps.push({
+            steps.push(markCompactionSummaryItem({
                 type: 'user_input',
                 content: [{ type: 'text', text: formattedSummary }]
-            });
+            }, summaryText));
             if (firstItemNeedsAssistantAck('gemini', keptTailItems)) {
                 steps.push({
                     type: 'model_output',
@@ -1269,10 +1384,10 @@ const AskPageContextCompaction = (() => {
         if (prefixItem) {
             messages.push(prefixItem);
         }
-        messages.push({
+        messages.push(markCompactionSummaryItem({
             role: 'user',
             content: formattedSummary
-        });
+        }, summaryText));
         if (firstItemNeedsAssistantAck('openai', keptTailItems)) {
             messages.push({
                 role: 'assistant',
@@ -1414,9 +1529,12 @@ const AskPageContextCompaction = (() => {
             useTools
         });
 
+        const summaryExtraction = extractCompactionSummaryItem(format, items);
+        const previousSummaryText = summaryExtraction.summaryText;
+
         const cleanedItems = stripImagesAndShrinkToolOutputs(
             format,
-            items,
+            summaryExtraction.items,
             isOverflowRecovery ? Math.max(500, Math.floor(3000 / Math.max(1, overflowAttempt))) : 4500,
             { stripAllImages: isOverflowRecovery && overflowAttempt >= 2 }
         );
@@ -1442,7 +1560,7 @@ const AskPageContextCompaction = (() => {
             const transcript = buildCompactionTranscript(format, partition.compactableUnits, transcriptBudget);
 
             if (typeof requestSummary === 'function' && safeWindow >= MIN_EFFECTIVE_CONTEXT_WINDOW && overflowAttempt <= 2 && transcript) {
-                const { systemPrompt: compactionSystemPrompt, userPrompt: compactionUserPrompt } = buildCompactionPrompt(transcript);
+                const { systemPrompt: compactionSystemPrompt, userPrompt: compactionUserPrompt } = buildCompactionPrompt(transcript, previousSummaryText);
                 const summaryMaxOutputTokens = Math.min(4096, Math.max(512, Math.floor(safeWindow * 0.18)));
                 try {
                     if (typeof throwIfCancelled === 'function') {
@@ -1469,8 +1587,15 @@ const AskPageContextCompaction = (() => {
             }
 
             if (!summaryText) {
-                summaryText = buildDeterministicCompactionSummary(format, partition.compactableUnits, maxSummaryTokens);
+                const deterministic = buildDeterministicCompactionSummary(format, partition.compactableUnits, maxSummaryTokens);
+                // 退回規則式摘要時仍要保留舊摘要，否則每次 LLM 失敗都會丟掉先前累積的脈絡。
+                summaryText = previousSummaryText
+                    ? `${previousSummaryText}\n\n${deterministic}`
+                    : deterministic;
             }
+        } else if (previousSummaryText) {
+            // 沒有新的可壓縮內容：舊摘要原樣保留，不可因重組而消失。
+            summaryText = previousSummaryText;
         }
 
         let nextPrefix = prefixItem;
